@@ -2,7 +2,7 @@
 CONDA_ENVNAME='pcds-0.5.2'
 CONDA_BASE='/reg/g/pcds/pyps/conda/py36'
 
-HERE=`readlink -f $(dirname $0)`
+HERE=`dirname $(readlink -f $0)`
 
 export PYTHONPATH="${HERE}:${HERE}/dev/devpath"
 export LD_LIBRARY_PATH=''

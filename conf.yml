@@ -7,7 +7,7 @@ load:
 
 # Create experiment-specific objects
 experiment:
-  proposal: LS21
+  proposal: LS50
   run: 16
   import: experiment.User() as x
 
