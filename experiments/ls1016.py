@@ -215,7 +215,8 @@ class User:
             Comment for ELog
 
         post: bool, optional
-            Whether to post to the experimental ELog or not
+            Whether to post to the experimental ELog or not. Will not post if
+            not recording
 
         kwargs:
             Used to control the laser shutters. See ``configure_shutters`` for more
@@ -229,20 +230,19 @@ class User:
         # Configure the shutters
         self.configure_shutters(**kwargs)
         # time.sleep(3) / a leftover from original script
-        # Post information to elog
-        if not daq.configured:  # Won't have runnumber without configuration
-            daq.configure()
-        runnum = daq.__control.runnumber()
+        # Create descriptive message
         comment = comment or ''
-        info = (runnum, events, record, comment, self.delay)
-        info.extend(self.shutter_status)
-        post_msg = post_template.format(info)
-        print(post)
-        if post:
-            elog.post(post_msg, runnum=runnum)
         # Start recording
         logger.info("Starting DAQ run, -> record=%s", record)
         daq.begin(events=events, record=record)
+        # Post to ELog if desired
+        runnum = daq._control.runnumber()
+        info = [runnum, events, self.current_rate, self.delay]
+        info.extend(self.shutter_status)
+        post_msg = post_template.format(*info)
+        print(post_msg)
+        if post and record:
+            elog.post(post_msg, run=runnum)
         time.sleep(2)  # Wait for the DAQ to get spinnign before sending events
         logger.debug("Starting EventSequencer ...")
         sequencer.start()
@@ -258,7 +258,7 @@ class User:
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
              pulse3=False, light_events=3000, dark_events=None, rate='10Hz',
-             **kwargs):
+             record=True, comment='', post=True):
         """
         Loop through a number of delays a number of times while running the DAQ
 
@@ -288,9 +288,14 @@ class User:
         rate : str, optional
             "10Hz" or "30Hz"
 
-        kwargs:
-            Remainder of the kwargs are passed to ``perform_run`` to setup the DAQ
-            and ELog. This includes ``record``, ``comment``, and ``post``
+        record: bool, optional
+            Choice to record or not
+
+        comment: str, optional
+            Comment for ELog
+
+        post : bool, optional
+            Whether to post to ELog or not. Will not post if not recording.
         """
         # Stop the EventSequencer
         sequencer.stop()
@@ -312,12 +317,14 @@ class User:
                         # Perform the light run
                         self.perform_run(light_events, pulse1=pulse1,
                                          pulse2=pulse2, pulse3=pulse3,
-                                         opo=bool(delay), **kwargs)
+                                         opo=bool(delay), record=record,
+                                         post=post, comment=comment)
                     # Estimated time for completion
                     # Perform the dark run
                     # No shutter information means all closed!
                     if dark_events:
-                        self.perform_run(events=dark_events, **kwargs)
+                        self.perform_run(events=dark_events, record=record,
+                                         post=post, comment=comment)
             logger.info("All requested scans completed!")
         except KeyboardInterrupt:
             logger.warning("Scan interrupted by user request!")
@@ -352,16 +359,17 @@ class User:
         subprocess.call(args)
 
 
-post_template = """"\
-Run {}. Acquiring {} events (record = {})
+post_template = """\
+Run Number: {}
 
-{}
+Acquiring {} events at {}
 
-Laser delay is set to {}. While the laser shutters are:
+Laser delay is set to {} ns
 
-EVO Pulse 1    ->     {}
-EVO Pulse 2    ->     {}
-EVO Pulse 3    ->     {}
-OPO Shutter    ->     {}
+While the laser shutters are:
+EVO Pulse 1 ->  {}
+EVO Pulse 2 ->  {}
+EVO Pulse 3 ->  {}
+OPO Shutter ->  {}
 """
 
