@@ -126,9 +126,16 @@ class User:
         logger.info("Configure EventSequencer ...")
         # Setup sequencer
         sequencer.sync_marker.put(rate)
+        if rate == '10Hz':
+            delta0 = 10
+        elif rate == '30Hz':
+            delta0 = 2
+        else: 
+            delta0 = 2
+
         sequencer.sequence_length.put(5)
         # Set sequence
-        seq_steps[0].configure({'eventcode': 197, 'delta_beam': 2,
+        seq_steps[0].configure({'eventcode': 197, 'delta_beam': delta0,
                                 'fiducial': 0, 'comment': 'PulsePicker'})
         seq_steps[1].configure({'eventcode': 212, 'delta_beam': 0,
                                 'fiducial': 0, 'comment': 'Delay > 7 ms'})
@@ -328,6 +335,8 @@ class User:
             logger.info("All requested scans completed!")
         except KeyboardInterrupt:
             logger.warning("Scan interrupted by user request!")
+            logger.info("Stopping DAQ ...")
+            daq.stop()
         # Return the DAQ to the original state
         finally:
             logger.info("Disconnecting from DAQ ...")
