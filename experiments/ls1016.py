@@ -46,6 +46,7 @@ inhibit = Trigger('MFX:LAS:EVR:01:TRIG6', name='inhibit_trigger')
 # Laser parameter
 opo_time_zero = 748935
 base_inhibit_delay = 500000
+evo_time_zero = 800000
 
 ###########################
 # Configuration Functions #
@@ -60,6 +61,7 @@ class User:
     sequencer = sequencer
     inhibit = inhibit
     pacemaker = pacemaker
+    evo = evo
 
     @property
     def current_rate(self):
@@ -87,12 +89,15 @@ class User:
             status.append(shutter.state.get())
         return status
 
-    def configure_shutters(self, pulse1=False, pulse2=False, pulse3=False, opo=False):
+    def configure_shutters(self, pulse1=False, pulse2=False, pulse3=False, opo=None):
         """
         Configure all four laser shutters
 
         True means that the pulse will be used and the shutter is removed.
-        False means that the pulse will be blocked and the shutter is inserted
+        False means that the pulse will be blocked and the shutter is inserted 
+           - default for evo laser pulse1, pulse2, pulse3
+        None means that the shutter will not be changed
+           - default for opo laser
 
         Parameters
         ----------
@@ -111,8 +116,11 @@ class User:
         for state, shutter in zip((pulse1, pulse2, pulse3, opo),
                                   (evo_shutter1, evo_shutter2,
                                    evo_shutter3, opo_shutter)):
-            logger.debug("Using %s : %s", shutter.name, state)
-            shutter.move(int(state) + 1)
+            if state is not None:
+                logger.debug("Using %s : %s", shutter.name, state)
+                shutter.move(int(state) + 1)
+        
+        time.sleep(1)
 
     def configure_sequencer(self, rate='10Hz'):
         """
@@ -149,7 +157,6 @@ class User:
         for i in range(5, 20):
             seq_steps[i].clear()
 
-
     def configure_evr(self):
         """
         Configure the Pacemaker and Inhibit EVR
@@ -165,7 +172,17 @@ class User:
         # Inhibit Trigger
         inhibit.configure({'polarity': 1, 'width': 2000000.})
         inhibit.enable()
+        time.sleep(0.5)
 
+    @property
+    def _delaystr(self):
+        """
+        OPO delay string
+        """
+        if self.opo_shutter.state.value == 'IN':
+            return 'No OPO Laser'
+        else:
+            return 'Laser delay is set to {} ns'.format(self.delay)
 
     def set_delay(self, delay):
         """
@@ -194,13 +211,44 @@ class User:
             raise ValueError("Invalid input %s ns, must be < 15.5 ms")
         # Determine relative delays
         pulse_delay = ipulse*1.e9/120 - delay # Convert to ns
-        # Configure Inhibit pulse
-        inhibit_delay = opo_time_zero - base_inhibit_delay + pulse_delay
-        inhibit.configure({"eventcode": inhibit_ec, "ns_delay": inhibit_delay})
         # Conifgure Pacemaker pulse
         pacemaker_delay = opo_time_zero + pulse_delay
         pacemaker.configure({"ns_delay": pacemaker_delay})
+        # Configure Inhibit pulse
+        inhibit_delay = opo_time_zero - base_inhibit_delay + pulse_delay
+        inhibit.configure({"eventcode": inhibit_ec, "ns_delay": inhibit_delay})
+        time.sleep(0.5)
 
+#    def set_evo_delay(self, delay):
+#        """
+#        Set the evolution laser triggers delay
+#
+#        Parameters
+#        ----------
+#        delay: float
+#            Requested evo laser delay in nanoseconds. Must be less that 15.5 ms
+#        """
+#        # Determine event code of evo pulse
+#        logger.info("Setting evo delay %s ns (%s us)", delay, delay/1000.)
+#        if delay <= 0.16e6:
+#            logger.debug("Triggering on simultaneous event code")
+#            evo_ec = 210
+#            ipulse = 0
+#        elif delay <= 7.e6:
+#            logger.debug("Triggering on one event code prior")
+#            evo_ec = 211
+#            ipulse = 1
+#        elif delay <= 15.5e6:
+#            logger.debug("Triggering two event codes prior")
+#            evo_ec = 212
+#            ipulse = 2
+#        else:
+#            raise ValueError("Invalid input %s ns, must be < 15.5 ms")
+#        # Determine relative delay
+#        pulse_delay = ipulse*1.e9/120 - delay # Convert to ns
+#        # Configure Inhibit pulse
+#        evo_delay = evo_time_zero + pulse_delay
+#        evo.configure({"eventcode": evo_ec, "ns_delay": evo_delay})
 
     ######################
     # Scanning Functions #
@@ -242,17 +290,18 @@ class User:
         # Start recording
         logger.info("Starting DAQ run, -> record=%s", record)
         daq.begin(events=events, record=record)
+        time.sleep(2)  # Wait for the DAQ to get spinnign before sending events
+        logger.debug("Starting EventSequencer ...")
+        sequencer.start()
+        time.sleep(1)
         # Post to ELog if desired
         runnum = daq._control.runnumber()
-        info = [runnum, events, self.current_rate, self.delay]
+        info = [runnum, comment, events, self.current_rate, self._delaystr]
         info.extend(self.shutter_status)
         post_msg = post_template.format(*info)
         print(post_msg)
         if post and record:
             elog.post(post_msg, run=runnum)
-        time.sleep(2)  # Wait for the DAQ to get spinnign before sending events
-        logger.debug("Starting EventSequencer ...")
-        sequencer.start()
         # Wait for the DAQ to finish
         logger.info("Waiting or DAQ to complete %s events ...", events)
         daq.wait()
@@ -260,7 +309,8 @@ class User:
         daq.end_run()
         logger.debug("Stopping Sequencer ...")
         sequencer.stop()
-        # time.sleep(3) / a leftover from original script
+        # allow short time after sequencer stops
+        time.sleep(0.5) 
 
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
@@ -273,6 +323,12 @@ class User:
         ----------
         delays: list, optional
             Requested laser delays in nanoseconds
+            close opo_shutter if False or None, 
+            i.e., delays=[None, 1000, 1e6, 1e7] loop through:
+            - close opo shutter
+            - 1 us delay
+            - 1 ms delay
+            - 10 ms delay
 
         nruns: int, optional
             Number of iterations to run requested delays
@@ -317,19 +373,27 @@ class User:
                 logger.info("Beginning run %s of %s", run, nruns)
                 for delay in delays:
                     if light_events:
-                        logger.info("Beginning light events using delay %s", delay)
                         # Set the laser delay if it exists
-                        if delay:
+                        if delay is None or delay is False:
+                            logger.info("Beginning light events with opo shutter closed")
+                            # Close state = 1
+                            opo_shutter.move(1)
+                        else:
+                            logger.info("Beginning light events using delay %s", delay)
+                            # Open state = 2
+                            opo_shutter.move(2)
                             self.set_delay(delay)
+
                         # Perform the light run
                         self.perform_run(light_events, pulse1=pulse1,
                                          pulse2=pulse2, pulse3=pulse3,
-                                         opo=bool(delay), record=record,
+                                         record=record,
                                          post=post, comment=comment)
                     # Estimated time for completion
                     # Perform the dark run
                     # No shutter information means all closed!
                     if dark_events:
+                        opo_shutter.move(1)
                         self.perform_run(events=dark_events, record=record,
                                          post=post, comment=comment)
             logger.info("All requested scans completed!")
@@ -367,13 +431,12 @@ class User:
         # Execute
         subprocess.call(args)
 
-
 post_template = """\
-Run Number: {}
+Run Number: {} {}
 
 Acquiring {} events at {}
 
-Laser delay is set to {} ns
+{}
 
 While the laser shutters are:
 EVO Pulse 1 ->  {}
