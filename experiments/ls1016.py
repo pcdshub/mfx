@@ -226,10 +226,14 @@ class User:
         logger.info("Setting pacemaker delay %s ns", pacemaker_delay)
         # Configure Inhibit pulse
         inhibit_delay = opo_time_zero - base_inhibit_delay + pulse_delay
+        inhibit.disable()
+        time.sleep(0.1)
         inhibit.configure({"ns_delay": inhibit_delay})
         logger.info("Setting inhibit delay %s ns", inhibit_delay)
         inhibit.configure({"eventcode": inhibit_ec})
         logger.info("Setting inhibit ec %s", inhibit_ec)
+        time.sleep(0.1)
+        inhibit.enable()
         time.sleep(0.2)
         logger.info(self._delaystr)
 
