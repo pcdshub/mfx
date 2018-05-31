@@ -179,10 +179,17 @@ class User:
         """
         OPO delay string
         """
+        delay = self.delay
         if self.opo_shutter.state.value == 'IN':
             return 'No OPO Laser'
+        elif delay >= 1e6:
+            return 'Laser delay is set to {:10.6f} ms'.format(delay/1.e6)
+        elif delay >= 1e3:
+            return 'Laser delay is set to {:7.3f} us'.format(delay/1.e3)
+        elif delay >= 0:
+            return 'Laser delay is set to {:4.0f} ns'.format(delay)
         else:
-            return 'Laser delay is set to {} ns'.format(self.delay)
+            return 'Laser delay is set to {:8.0f} ns (AFTER X-ray pulse)'.format(delay)
 
     def set_delay(self, delay):
         """
@@ -196,6 +203,8 @@ class User:
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
         if delay <= 0.16e6:
+            if delay > 0 and delay < 1:
+                logger.info("WARNING:  Read the doc string -- delay is in ns not sec") 
             logger.debug("Triggering on simultaneous event code")
             inhibit_ec = 210
             ipulse = 0
@@ -214,10 +223,15 @@ class User:
         # Conifgure Pacemaker pulse
         pacemaker_delay = opo_time_zero + pulse_delay
         pacemaker.configure({"ns_delay": pacemaker_delay})
+        logger.info("Setting pacemaker delay %s ns", pacemaker_delay)
         # Configure Inhibit pulse
         inhibit_delay = opo_time_zero - base_inhibit_delay + pulse_delay
-        inhibit.configure({"eventcode": inhibit_ec, "ns_delay": inhibit_delay})
-        time.sleep(0.5)
+        inhibit.configure({"ns_delay": inhibit_delay})
+        logger.info("Setting inhibit delay %s ns", inhibit_delay)
+        inhibit.configure({"eventcode": inhibit_ec})
+        logger.info("Setting inhibit ec %s", inhibit_ec)
+        time.sleep(0.2)
+        logger.info(self._delaystr)
 
 #    def set_evo_delay(self, delay):
 #        """
@@ -369,7 +383,8 @@ class User:
         delays = delays or [False]
         # Estimated time for completion
         try:
-            for run in range(nruns):
+            for irun in range(nruns):
+                run = irun+1
                 logger.info("Beginning run %s of %s", run, nruns)
                 for delay in delays:
                     if light_events:
@@ -406,7 +421,7 @@ class User:
             logger.info("Disconnecting from DAQ ...")
             daq.disconnect()
             logger.info("Closing all laser shutters ...")
-            self.configure_shutters()
+            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
             logger.info("Restarting the EventSequencer ...")
             sequencer.start()
 
