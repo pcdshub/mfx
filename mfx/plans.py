@@ -1,5 +1,5 @@
 from ophyd.status import wait as status_wait
-from mfx.db import (mfx_reflaser, slits,
+from mfx.db import (mfx_reflaser,
                     mfx_dg1_slits,
                     mfx_dg1_wave8_motor,
                     mfx_dg2_upstream_slits,
@@ -73,3 +73,11 @@ def laser_out(wait=False, timeout=10):
     if wait:
         status_wait(ref & w8 & dg1 & dg2_us & dg2_ms & dg2_ds,
                     timeout=timeout)
+
+
+def mfxslits(pos):
+    """Set all the slits to specific position"""
+    dg1 = mfx_dg1_slits.move(pos, wait=False)
+    dg2_us = mfx_dg2_upstream_slits.move(pos, wait=False)
+    dg2_ms = mfx_dg2_midstream_slits.move(pos, wait=False)
+    dg2_ds = mfx_dg2_downstream_slits.move(pos, wait=False)
