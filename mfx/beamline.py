@@ -18,3 +18,6 @@ with safe_load('mfx_prefocus'):
 
 with safe_load('beam_suspender'):
     beam_suspender = BeamEnergySuspendFloor(0.6)
+
+with safe_load('plans'):
+    from mfx.plans import *
