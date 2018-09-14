@@ -37,7 +37,8 @@ def laser_in(wait=False, timeout=10):
     dg2_ds = mfx_dg2_downstream_slits.move(1., wait=False)
     # Combine status and wait for completion
     if wait:
-        status_wait(ref & w8 & dg1 & dg2_us & dg2_ms & dg2_ds)
+        status_wait(ref & w8 & dg1 & dg2_us & dg2_ms & dg2_ds,
+                    timeout=timeout)
 
 
 def laser_out(wait=False, timeout=10):
@@ -70,4 +71,5 @@ def laser_out(wait=False, timeout=10):
     dg2_ds = mfx_dg2_downstream_slits.move(0.7, wait=False)
     # Combine status and wait for completion
     if wait:
-        status_wait(ref & w8 & dg1 & dg2_us & dg2_ms & dg2_ds)
+        status_wait(ref & w8 & dg1 & dg2_us & dg2_ms & dg2_ds,
+                    timeout=timeout)
