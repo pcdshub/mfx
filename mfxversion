@@ -3,7 +3,7 @@
 # This is referenced by the three launcher scripts.
 
 # edit this line only
-export CONDA_ENVNAME='pcds-1.1.0'
+export CONDA_ENVNAME='pcds-1.2.5'
 
 export CONDA_BASE='/reg/g/pcds/pyps/conda/py36'
 export CONDA_ENV="${CONDA_BASE}/envs/${CONDA_ENVNAME}"
