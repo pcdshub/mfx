@@ -8,3 +8,7 @@ load: mfx.beamline
 
 daq_platform:
     default: 4
+
+experiment:
+  proposal: lu34
+  run: 17
