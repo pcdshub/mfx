@@ -1,6 +1,5 @@
 #!/bin/bash
 # Launch hutch-python with all devices
 HERE=`dirname $(readlink -f $0)`
-source "${HERE}/mfxversion"
-pathmunge "${CONDA_BIN}"
+source "${HERE}/mfxenv"
 hutch-python --cfg "${HERE}/conf.yml" $@

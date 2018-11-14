@@ -1,8 +1,0 @@
-#!/bin/bash
-# Use this to run arbitrary scripts in the same environment as hutch python
-# without loading the databases, beamline files, e.g. mfxrun script.py.
-# This skips loading the full conda environment which can be slow.
-HERE=`dirname $(readlink -f $0)`
-source "${HERE}/mfxversion"
-pathmunge "${CONDA_BIN}"
-run-in python $@

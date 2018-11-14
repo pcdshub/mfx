@@ -1,6 +1,7 @@
 dev
+logs
 
-# Last load information
+# Ignore generated database file
 mfx/db.txt
 
 # Byte-compiled / optimized / DLL files
