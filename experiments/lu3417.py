@@ -4,9 +4,11 @@ import os.path
 import logging
 import subprocess
 
+import numpy as np
+
 from mfx.devices import LaserShutter
 from mfx.db import daq, elog
-from pcdsdevices.sequencer import EventSequencer, EventStep
+from pcdsdevices.sequencer import EventSequencer
 from pcdsdevices.evr import Trigger
 
 #########
@@ -26,8 +28,8 @@ logger = logging.getLogger(__name__)
 # Declare shutter objects
 opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
 evo_shutter1 = LaserShutter('MFX:USR:ao1:7', name='evo_shutter1')
-evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter1')
-evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter1')
+evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
+evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
 
 # Sequencer object
 sequencer = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
@@ -35,8 +37,6 @@ sequencer = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
 # Sequencer steps
 seq_prefix = 'MFX:ECS:IOC:01'
 seq_no = 7
-seq_steps = [EventStep(seq_prefix, seq_no, step, name='step_{}'.format(step))
-             for step in range(0, 20)]
 
 # Trigger objects
 evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
@@ -122,40 +122,48 @@ class User:
         
         time.sleep(1)
 
-    def configure_sequencer(self, rate='10Hz'):
+    def configure_sequencer(self, rate=20):
         """
         Setup laser triggers and EventSequencer
 
         Parameters
         ----------
-        rate : str, optional
-            "10Hz" or "30Hz"
+        rate : int or str, optional
+            Any of the following rates
+            30Hz, 24Hz, 20Hz, 15Hz, 12Hz, 10Hz,
+            8Hz, 6Hz, 5Hz, 4Hz, 3Hz, 2Hz, 1Hz
         """
         logger.info("Configure EventSequencer ...")
-        # Setup sequencer
-        sequencer.sync_marker.put(rate)
-        if rate == '10Hz':
-            delta0 = 10
-        elif rate == '30Hz':
-            delta0 = 2
-        else: 
-            delta0 = 2
+        valid_rate = (30, 24, 20, 15, 12, 10, 8, 6, 5, 4, 3, 2, 1)
 
-        sequencer.sequence_length.put(5)
-        # Set sequence
-        seq_steps[0].configure({'eventcode': 197, 'delta_beam': delta0,
-                                'fiducial': 0, 'comment': 'PulsePicker'})
-        seq_steps[1].configure({'eventcode': 212, 'delta_beam': 0,
-                                'fiducial': 0, 'comment': 'Delay > 7 ms'})
-        seq_steps[2].configure({'eventcode': 211, 'delta_beam': 1,
-                                'fiducial': 0, 'comment': 'Delay > 160 us'})
-        seq_steps[3].configure({'eventcode': 210, 'delta_beam': 1,
-                                'fiducial': 0, 'comment': 'Delay < 160 us'})
-        seq_steps[4].configure({'eventcode': 198, 'delta_beam': 0,
-                                'fiducial': 0, 'comment': 'DAQ Readout'})
-        # Clear other sequence steps 
-        for i in range(5, 20):
-            seq_steps[i].clear()
+        if isinstance(rate, str):
+            rate = int(rate[:-2])
+        if rate not in valid_rate:
+            raise RuntimeError('Invalid rate, must be one of '
+                               '{}'.format(valid_rates))
+
+        # Use sequence to regulate rate, not sync marker
+        sequencer.sync_marker.put('120Hz')
+
+        # Construct the sequence and submit
+        delta = 120/rate - 3
+        sequence = [[213, 197, 212, 211, 210, 198],
+                    [delta, 1, 0, 1, 1, 0],
+                    [0, 0, 0, 0, 0, 0],
+                    [0, 1, 0, 0, 0, 0]]
+        retries = 5
+        success = False
+        for i in range(retries):
+            sequencer.sequence.put_seq(sequence)
+            read_seq = [list(s) for s in sequencer.sequence.get_seq()]
+            if read_seq == sequence:
+                success = True
+                break
+        sequencer.sequence.show()
+        if success:
+            logger.info('Successfully configured sequencer')
+        else:
+            logger.error('Putting to sequencer failed!')
 
     def configure_evr(self):
         """
