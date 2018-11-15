@@ -7,7 +7,7 @@ import subprocess
 import numpy as np
 
 from mfx.devices import LaserShutter
-from mfx.db import daq, elog
+from mfx.db import daq, elog, sequencer, rayonix
 from pcdsdevices.sequencer import EventSequencer
 from pcdsdevices.evr import Trigger
 
@@ -30,9 +30,6 @@ opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
 evo_shutter1 = LaserShutter('MFX:USR:ao1:7', name='evo_shutter1')
 evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
 evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
-
-# Sequencer object
-sequencer = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
 
 # Trigger objects
 evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
@@ -59,12 +56,13 @@ class User:
     pacemaker = pacemaker
     evo = evo
 
+    # Use our standard Rayonix sequences
+    configure_sequencer = rayonix.configure_sequencer
+
     @property
     def current_rate(self):
         """Current configured EventSequencer rate"""
-        delta = sequencer.sequence.get_seq()[1][0]
-        rate = 120/(delta + 3)
-        return int(rate)
+        return rayonix.current_rate
 
     @property
     def delay(self):
@@ -119,53 +117,6 @@ class User:
                 shutter.move(int(state) + 1)
 
         time.sleep(1)
-
-    def configure_sequencer(self, rate=20):
-        """
-        Setup laser triggers and EventSequencer
-
-        Parameters
-        ----------
-        rate : int or str, optional
-            Any of the following rates
-            30Hz, 24Hz, 20Hz, 15Hz, 12Hz, 10Hz,
-            8Hz, 6Hz, 5Hz, 4Hz, 3Hz, 2Hz, 1Hz
-        """
-        logger.info("Configure EventSequencer ...")
-        valid_rates = (30, 24, 20, 15, 12, 10, 8, 6, 5, 4, 3, 2, 1)
-
-        if isinstance(rate, str):
-            rate = int(rate[:-2])
-        elif isinstance(rate, float):
-            if rate.is_integer():
-                rate = int(rate)
-
-        if rate not in valid_rates:
-            raise RuntimeError('Invalid rate, recieved {} but must be one of '
-                               '{}'.format(rate, valid_rates))
-
-        # Use sequence to regulate rate, not sync marker
-        sequencer.sync_marker.put('120Hz')
-
-        # Construct the sequence and submit
-        delta = 120/rate - 3
-        sequence = [[213, 197, 212, 211, 210, 198],
-                    [delta, 1, 0, 1, 1, 0],
-                    [0, 0, 0, 0, 0, 0],
-                    [0, 1, 0, 0, 0, 0]]
-        retries = 5
-        success = False
-        for i in range(retries):
-            sequencer.sequence.put_seq(sequence)
-            read_seq = [list(s) for s in sequencer.sequence.get_seq()]
-            if read_seq == sequence:
-                success = True
-                break
-        sequencer.sequence.show()
-        if success:
-            logger.info('Successfully configured sequencer')
-        else:
-            logger.error('Putting to sequencer failed!')
 
     def configure_evr(self):
         """
