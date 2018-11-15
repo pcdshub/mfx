@@ -34,10 +34,6 @@ evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
 # Sequencer object
 sequencer = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
 
-# Sequencer steps
-seq_prefix = 'MFX:ECS:IOC:01'
-seq_no = 7
-
 # Trigger objects
 evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 pacemaker = Trigger('MFX:LAS:EVR:01:TRIG4', name='pacemaker_trigger')
@@ -66,7 +62,9 @@ class User:
     @property
     def current_rate(self):
         """Current configured EventSequencer rate"""
-        return sequencer.sync_marker.get(as_string=True)
+        delta = sequencer.sequence.get_seq()[1][0]
+        rate = 120/(delta + 3)
+        return int(rate)
 
     @property
     def delay(self):
@@ -119,7 +117,7 @@ class User:
             if state is not None:
                 logger.debug("Using %s : %s", shutter.name, state)
                 shutter.move(int(state) + 1)
-        
+
         time.sleep(1)
 
     def configure_sequencer(self, rate=20):
@@ -134,13 +132,17 @@ class User:
             8Hz, 6Hz, 5Hz, 4Hz, 3Hz, 2Hz, 1Hz
         """
         logger.info("Configure EventSequencer ...")
-        valid_rate = (30, 24, 20, 15, 12, 10, 8, 6, 5, 4, 3, 2, 1)
+        valid_rates = (30, 24, 20, 15, 12, 10, 8, 6, 5, 4, 3, 2, 1)
 
         if isinstance(rate, str):
             rate = int(rate[:-2])
-        if rate not in valid_rate:
-            raise RuntimeError('Invalid rate, must be one of '
-                               '{}'.format(valid_rates))
+        elif isinstance(rate, float):
+            if rate.is_integer():
+                rate = int(rate)
+
+        if rate not in valid_rates:
+            raise RuntimeError('Invalid rate, recieved {} but must be one of '
+                               '{}'.format(rate, valid_rates))
 
         # Use sequence to regulate rate, not sync marker
         sequencer.sync_marker.put('120Hz')
@@ -174,11 +176,13 @@ class User:
         """
         logger.debug("Configuring triggers to defaults ...")
         # Pacemaker Trigger
-        pacemaker.configure({'eventcode': 40, 'polarity': 0,
-                             'width': 50000.})
+        pacemaker.eventcode.put(40)
+        pacemaker.polarity.put(0)
+        pacemaker.width.put(50000.)
         pacemaker.enable()
         # Inhibit Trigger
-        inhibit.configure({'polarity': 1, 'width': 2000000.})
+        inhibit.polarity.put(1)
+        inhibit.width.put(2000000.)
         inhibit.enable()
         time.sleep(0.5)
 
@@ -230,15 +234,15 @@ class User:
         pulse_delay = ipulse*1.e9/120 - delay # Convert to ns
         # Conifgure Pacemaker pulse
         pacemaker_delay = opo_time_zero + pulse_delay
-        pacemaker.configure({"ns_delay": pacemaker_delay})
+        pacemaker.ns_delay.put(pacemaker_delay)
         logger.info("Setting pacemaker delay %s ns", pacemaker_delay)
         # Configure Inhibit pulse
         inhibit_delay = opo_time_zero - base_inhibit_delay + pulse_delay
         inhibit.disable()
         time.sleep(0.1)
-        inhibit.configure({"ns_delay": inhibit_delay})
+        inhibit.ns_delay.put(inhibit_delay)
         logger.info("Setting inhibit delay %s ns", inhibit_delay)
-        inhibit.configure({"eventcode": inhibit_ec})
+        inhibit.eventcode.put(inhibit_ec)
         logger.info("Setting inhibit ec %s", inhibit_ec)
         time.sleep(0.1)
         inhibit.enable()
@@ -274,7 +278,8 @@ class User:
 #        pulse_delay = ipulse*1.e9/120 - delay # Convert to ns
 #        # Configure Inhibit pulse
 #        evo_delay = evo_time_zero + pulse_delay
-#        evo.configure({"eventcode": evo_ec, "ns_delay": evo_delay})
+#        evo.eventcode.put(evo_ec)
+#        evo.ns_delay.put(evo_delay)
 
     ######################
     # Scanning Functions #
