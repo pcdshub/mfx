@@ -46,7 +46,7 @@ class Rayonix:
         sequence = [[213, 197, 212, 211, 210, 198],
                     [delta, 1, 0, 1, 1, 0],
                     [0, 0, 0, 0, 0, 0],
-                    [0, 1, 0, 0, 0, 0]]
+                    [0, 0, 0, 0, 0, 0]]
         retries = 5
         success = False
         for i in range(retries):
