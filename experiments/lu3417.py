@@ -8,6 +8,7 @@ import numpy as np
 
 from mfx.devices import LaserShutter
 from mfx.db import daq, elog, sequencer, rayonix
+from ophyd.status import wait as status_wait
 from pcdsdevices.sequencer import EventSequencer
 from pcdsdevices.evr import Trigger
 
@@ -273,12 +274,16 @@ class User:
         # time.sleep(3) / a leftover from original script
         # Create descriptive message
         comment = comment or ''
+        # Setup Event Sequencer
+        sequencer.stop()
+        sequencer.rep_count.put(events)
+        sequencer.play_mode.put(1)  # Run N Times
         # Start recording
         logger.info("Starting DAQ run, -> record=%s", record)
-        daq.begin(events=events, record=record)
-        time.sleep(2)  # Wait for the DAQ to get spinnign before sending events
+        daq.begin(events=0, record=record)
+        time.sleep(5)  # Wait for the DAQ to get spinnign before sending events
         logger.debug("Starting EventSequencer ...")
-        sequencer.start()
+        sequencer.kickoff()
         time.sleep(1)
         # Post to ELog if desired
         runnum = daq._control.runnumber()
@@ -289,14 +294,19 @@ class User:
         if post and record:
             elog.post(post_msg, run=runnum)
         # Wait for the DAQ to finish
-        logger.info("Waiting or DAQ to complete %s events ...", events)
-        daq.wait()
+        #logger.info("Waiting or DAQ to complete %s events ...", events)
+        #daq.wait()
+        #logger.info("Run complete!")
+        #daq.end_run()
+        #logger.debug("Stopping Sequencer ...")
+        #sequencer.stop()
+        logger.info("Waiting for Sequencer to complete")
+        status_wait(sequencer.complete())
         logger.info("Run complete!")
+        logger.debug("Stopping DAQ")
         daq.end_run()
-        logger.debug("Stopping Sequencer ...")
-        sequencer.stop()
         # allow short time after sequencer stops
-        time.sleep(0.5) 
+        time.sleep(0.5)
 
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
@@ -398,6 +408,7 @@ class User:
             logger.info("Closing all laser shutters ...")
             self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
             logger.info("Restarting the EventSequencer ...")
+            sequencer.play_mode.put(2)  # Run Forever!
             sequencer.start()
 
 
