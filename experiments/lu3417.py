@@ -424,7 +424,7 @@ class User:
 post_template = """\
 Run Number: {} {}
 
-Acquiring {} events at {}
+Acquiring {} events at {} Hz
 
 {}
 
