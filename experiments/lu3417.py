@@ -342,9 +342,12 @@ class User:
         post : bool, optional
             Whether to post to ELog or not. Will not post if not recording.
         """
+        # Accept a single int or float
+        if isinstance(delays, (float, int)):
+            delays = [delays]
         # Stop the EventSequencer
         sequencer.stop()
-        self.configure_sequencer(rate=rate)
+        #self.configure_sequencer(rate=rate)
         self.configure_evr()
         # Preserve the original state of DAQ
         logger.info("Running delays %r, %s times ...", delays, nruns)
