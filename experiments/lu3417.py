@@ -11,6 +11,10 @@ from mfx.db import daq, elog, sequencer, rayonix
 from pcdsdevices.sequencer import EventSequencer
 from pcdsdevices.evr import Trigger
 
+# WAIT A WHILE FOR THE DAQ TO START
+import pcdsdaq.daq
+pcdsdaq.daq.BEGIN_TIMEOUT = 5
+
 #########
 # TODO  #
 #########
