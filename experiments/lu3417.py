@@ -400,26 +400,6 @@ class User:
             logger.info("Restarting the EventSequencer ...")
             sequencer.start()
 
-    def take_pedestals(self, nevents, record=True):
-        """
-        Take a set of pedestals with the Jungfrau
-
-        Parameters
-        ----------
-        nevents: int
-            Number of events
-
-        record: bool, optional
-            Whether to record or not
-        """
-        # Create subprocess call
-        cwd = '/reg/g/pcds/pyps/apps/hutch-python/mfx'
-        script = os.path.join(cwd, 'scripts/jungfrau/take_pedestal.sh')
-        args = [script, str(nevents)]
-        if record:
-            args.append('--record')
-        # Execute
-        subprocess.call(args)
 
 post_template = """\
 Run Number: {} {}
