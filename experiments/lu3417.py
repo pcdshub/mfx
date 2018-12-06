@@ -275,15 +275,15 @@ class User:
         # Create descriptive message
         comment = comment or ''
         # Setup Event Sequencer
-        sequencer.stop()
-        sequencer.rep_count.put(events)
-        sequencer.play_mode.put(1)  # Run N Times
+        #sequencer.stop()
+        #sequencer.rep_count.put(events)
+        #sequencer.play_mode.put(1)  # Run N Times
         # Start recording
         logger.info("Starting DAQ run, -> record=%s", record)
-        daq.begin(events=0, record=record)
-        time.sleep(5)  # Wait for the DAQ to get spinnign before sending events
-        logger.debug("Starting EventSequencer ...")
-        sequencer.kickoff()
+        daq.begin(events=events, record=record)
+        #time.sleep(5)  # Wait for the DAQ to get spinnign before sending events
+        #logger.debug("Starting EventSequencer ...")
+        #sequencer.kickoff()
         time.sleep(1)
         # Post to ELog if desired
         runnum = daq._control.runnumber()
@@ -294,23 +294,23 @@ class User:
         if post and record:
             elog.post(post_msg, run=runnum)
         # Wait for the DAQ to finish
-        #logger.info("Waiting or DAQ to complete %s events ...", events)
-        #daq.wait()
-        #logger.info("Run complete!")
-        #daq.end_run()
-        #logger.debug("Stopping Sequencer ...")
-        #sequencer.stop()
-        logger.info("Waiting for Sequencer to complete")
-        status_wait(sequencer.complete())
+        logger.info("Waiting or DAQ to complete %s events ...", events)
+        daq.wait()
         logger.info("Run complete!")
-        logger.debug("Stopping DAQ")
         daq.end_run()
+        logger.debug("Stopping Sequencer ...")
+        #sequencer.stop()
+        #logger.info("Waiting for Sequencer to complete")
+        #status_wait(sequencer.complete())
+        #logger.info("Run complete!")
+        #logger.debug("Stopping DAQ")
+        #daq.end_run()
         # allow short time after sequencer stops
         time.sleep(0.5)
 
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
-             pulse3=False, light_events=3000, dark_events=None, rate='10Hz',
+             pulse3=False, light_events=3000, dark_events=None,
              record=True, comment='', post=True):
         """
         Loop through a number of delays a number of times while running the DAQ
@@ -344,9 +344,6 @@ class User:
         dark_events: int, optional
             Number of events to sample with all lasers shuttered
 
-        rate : str, optional
-            "10Hz" or "30Hz"
-
         record: bool, optional
             Choice to record or not
 
@@ -360,7 +357,7 @@ class User:
         if isinstance(delays, (float, int)):
             delays = [delays]
         # Stop the EventSequencer
-        sequencer.stop()
+        #sequencer.stop()
         #self.configure_sequencer(rate=rate)
         self.configure_evr()
         # Preserve the original state of DAQ
@@ -407,9 +404,9 @@ class User:
             daq.disconnect()
             logger.info("Closing all laser shutters ...")
             self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
-            logger.info("Restarting the EventSequencer ...")
-            sequencer.play_mode.put(2)  # Run Forever!
-            sequencer.start()
+#            logger.info("Restarting the EventSequencer ...")
+#            sequencer.play_mode.put(2)  # Run Forever!
+#            sequencer.start()
 
 
 post_template = """\
