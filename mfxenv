@@ -2,7 +2,7 @@
 # Source this to load the full environment that hutch python uses
 
 # edit this line only
-export CONDA_ENVNAME="pcds-2.0.3"
+export CONDA_ENVNAME="pcds-3.2.0"
 export CONDA_BASE="/reg/g/pcds/pyps/conda/py36"
 export HUTCH="mfx"
 
@@ -12,6 +12,6 @@ unset LD_LIBRARY_PATH
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENVNAME}"
 HERE=`dirname $(readlink -f $0)`
-export PYTHONPATH="${HERE}:${HERE}/dev/devpath"
+export PYTHONPATH="${HERE}:${HERE}/dev/devpath:${HERE}/../common/dev/devpath"
 source pcdsdaq_lib_setup
 export CONDA_PROMPT_MODIFIER="(${HUTCH}-${CONDA_ENVNAME})"
