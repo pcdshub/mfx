@@ -43,7 +43,7 @@ class Watchman:
 def main():
     watcher = Watchman(
         'PPS:FEH1:45:DOORA',
-        'MFX:USR:ai1:0',
+        'MFX:USR:ai1:1',
         'MFX:USR:ao1:0')
 
     # If door already open, maybe we crashed? Let's be safe and turn it off.
