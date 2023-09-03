@@ -117,6 +117,32 @@ class MFX_Timing:
         self.seq.sequence.put_seq(sequence)
         self.seq.start()
         return
+    def set_30hz_laser(self, laser_evt_list=None):
+        sync_mark = self.sync_markers[60]
+        self.seq.sync_marker.put(sync_mark)
+        sequence = []
+        for ii in range(15):
+            sequence.append(self.zeros)
+        self.seq.sequence.put_seq(sequence)
+        time.sleep(1)
+        sequence_block = []
+        sequence_block.append(self.ray1)
+        sequence_block.append(self.pp_trig)
+        sequence_block.append(self.ray2)
+        sequence_block.append(self.ray_readout)
+        sequence_block.append(self.daq_readout)
+        sequence_block.append(self.ray3)
+        try:
+            sequence = []
+            for evt in laser_evt_list:
+                sequence.extend(sequence_block)
+                sequence.append(evt)
+        except:
+            sequence = sequence_block
+        self.seq.sequence.put_seq(sequence)
+        self.seq.start()
+        print(sequence)
+        return    
     def set_20hz(self):
         sync_mark = self.sync_markers[60]
         self.seq.sync_marker.put(sync_mark)
@@ -128,7 +154,6 @@ class MFX_Timing:
         sequence = []
         sequence.append(self.ray3)
         sequence.append(self.ray2)
-        sequence.append(self.ray1)
         sequence.append(self.ray1)
         sequence.append(self.pp_trig)
         sequence.append(self.ray2)
@@ -280,3 +305,31 @@ def attenuator_scan_single_run(events=240, record=False, transmissions=[0.01,0.0
         daq.end_run()
         pp.close()
         daq.disconnect()
+
+def focus_scan(camera):
+    """
+    Runs through transfocator Z to find the best focus
+
+    Parameters
+    ----------
+    camera: str, required
+        camera where you want to focus
+
+    Examples:
+    mfx dg1 yag is MFX:DG1:P6740
+    mfx dg2 yag is MFX:DG2:P6740
+    mfx dg3 yag is MFX:GIGE:02:IMAGE1
+
+    Operations
+    ----------
+
+    """
+    # cd /reg/g/pcds/pyps/apps/hutch-python/mfx/mfx
+    # from mfx.transfocator_scan import *
+    import transfocator_scan
+    import numpy as np
+    from mfx.db import tfs
+
+    trf_align = transfocator_scan.transfocator_aligner(camera)
+    trf_pos = np.arange(1,299,1)
+    trf_align.scan_transfocator(tfs.translation,trf_pos,1)

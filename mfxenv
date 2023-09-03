@@ -2,16 +2,32 @@
 # Source this to load the full environment that hutch python uses
 
 # edit this line only
-export CONDA_ENVNAME="pcds-3.2.0"
-export CONDA_BASE="/reg/g/pcds/pyps/conda/py36"
-export HUTCH="mfx"
+USE_LOCAL="1"
+#export CONDA_ENVNAME="pcds-5.5.1"
+export CONDA_ENVNAME="pcds-5.7.2"
 
+export HUTCH="mfx"
+export LOCAL_BASE="/u1/mfxopr/conda_envs"
+export NFS_BASE="/cds/group/pcds/pyps/conda/py39"
+
+if [ -n "${USE_LOCAL}" ] && [ -d "${LOCAL_BASE}" ]; then
+  echo "Loading local disk python env ${CONDA_ENVNAME}"
+  source "${LOCAL_BASE}/${CONDA_ENVNAME}/bin/activate"
+else
+  echo "Loading NFS python env ${CONDA_ENVNAME}"
+  source "${NFS_BASE}/etc/profile.d/conda.sh"
+  conda activate "${CONDA_ENVNAME}"
+fi
+          
 unset PYTHONPATH
 unset LD_LIBRARY_PATH
 
-source "${CONDA_BASE}/etc/profile.d/conda.sh"
-conda activate "${CONDA_ENVNAME}"
-HERE=`dirname $(readlink -f $0)`
+HERE=`dirname $(readlink -f $BASH_SOURCE)`
+
+if [ -f "${HERE}/dev/hutch-python/bin/hutch-python" ]; then
+    export PATH="${HERE}/dev/hutch-python/bin:${PATH}"
+fi
+
 export PYTHONPATH="${HERE}:${HERE}/dev/devpath:${HERE}/../common/dev/devpath"
 source pcdsdaq_lib_setup
 export CONDA_PROMPT_MODIFIER="(${HUTCH}-${CONDA_ENVNAME})"
