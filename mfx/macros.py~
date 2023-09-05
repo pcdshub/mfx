@@ -117,32 +117,6 @@ class MFX_Timing:
         self.seq.sequence.put_seq(sequence)
         self.seq.start()
         return
-    def set_30hz_laser(self, laser_evt_list=None):
-        sync_mark = self.sync_markers[60]
-        self.seq.sync_marker.put(sync_mark)
-        sequence = []
-        for ii in range(15):
-            sequence.append(self.zeros)
-        self.seq.sequence.put_seq(sequence)
-        time.sleep(1)
-        sequence_block = []
-        sequence_block.append(self.ray1)
-        sequence_block.append(self.pp_trig)
-        sequence_block.append(self.ray2)
-        sequence_block.append(self.ray_readout)
-        sequence_block.append(self.daq_readout)
-        sequence_block.append(self.ray3)
-        try:
-            sequence = []
-            for evt in laser_evt_list:
-                sequence.extend(sequence_block)
-                sequence.append(evt)
-        except:
-            sequence = sequence_block
-        self.seq.sequence.put_seq(sequence)
-        self.seq.start()
-        print(sequence)
-        return    
     def set_20hz(self):
         sync_mark = self.sync_markers[60]
         self.seq.sync_marker.put(sync_mark)
@@ -154,6 +128,7 @@ class MFX_Timing:
         sequence = []
         sequence.append(self.ray3)
         sequence.append(self.ray2)
+        sequence.append(self.ray1)
         sequence.append(self.ray1)
         sequence.append(self.pp_trig)
         sequence.append(self.ray2)
@@ -196,7 +171,7 @@ def quote():
     return _res
 
 
-def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspire=False):
+def inspirational_autorun(sample='?', run_length=300, record=True, iterations=5, inspire=True):
     """
     Try to automate runs.... With quotes
 
@@ -211,11 +186,11 @@ def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspi
     record: bool, optional
         set True to record
 
-    runs: int, optional
+    iterations: int, optional
         number of runs 5 is default
 
     inspire: bool, optional
-        Set false by default because it makes Sandra sad. Set True to inspire
+        set True to inspire
 
     Operations
     ----------
@@ -223,120 +198,13 @@ def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspi
     """
 
     from time import sleep
-    from mfx.db import daq, elog, pp
-    import sys
-    try:
-        for i in range(runs):
-            print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-            daq.begin(duration = run_length, record = record, wait = True, end_run = True)
-            if inspire:
-                elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
-            else:
-                elog.post(f"Running {sample}", run=(daq.run_number()))
-            sleep(5)
-        pp.close()
-        daq.disconnect()
-
-    except KeyboardInterrupt:
-        print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
-        pp.close()
-        daq.disconnect()
-        sys.exit()
-
-
-def attenuator_scan_separate_runs(events=240, record=False, config=True, transmissions=[0.01,0.02,0.03]):
-    """
-    Runs through attenuator conditions and records each as an individual run
-
-    Parameters
-    ----------
-    events: int, optional
-        number of events. default 240
-
-    record: bool, optional
-        set True to record
-
-    transmissions: list of floats, optional
-        list of transmissions to run through. default [0.01,0.02,0.03]
-
-    Operations
-    ----------
-
-    """
-    from time import sleep
-    from mfx.db import daq, att, pp
-
-    pp.open()
-    for i in transmissions:
-        att(i)
-        time.sleep(3)
-        daq.begin(events=events,record=record,wait=True, use_l3t=False)
-        daq.end_run()
+    from mfx.db import daq, elog
+    for i in range(iterations):
+        daq.begin(duration = run_length, record = record, wait = True, end_run = True)
+        if inspire:
+            elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
+        else:
+            elog.post(f"Running {sample}", run=(daq.run_number()))
+        sleep(5)
+    daq.disconnect()
     pp.close()
-    daq.disconnect()
-
-
-def attenuator_scan_single_run(events=240, record=False, transmissions=[0.01,0.02,0.03]):
-    """
-    Runs through attenuator conditions and records them all as one continuous run
-
-    Parameters
-    ----------
-    events: int, optional
-        number of events. default 240
-
-    record: bool, optional
-        set True to record
-
-    transmissions: list of floats, optional
-        list of transmissions to run through. default [0.01,0.02,0.03]
-
-    Operations
-    ----------
-
-    """
-    from time import sleep
-    from mfx.db import daq, att, pp
-
-    daq.end_run()
-    daq.disconnect()
-    try:
-        pp.open()
-        daq.configure(record=record)
-        time.sleep(3)
-        for i in transmissions:
-            att(i,wait=True)
-            time.sleep(3)
-            daq.begin(events=events,record=record,wait=True, use_l3t=False)
-    finally:
-        daq.end_run()
-        pp.close()
-        daq.disconnect()
-
-def focus_scan(camera):
-    """
-    Runs through transfocator Z to find the best focus
-
-    Parameters
-    ----------
-    camera: str, required
-        camera where you want to focus
-
-    Examples:
-    mfx dg1 yag is MFX:DG1:P6740
-    mfx dg2 yag is MFX:DG2:P6740
-    mfx dg3 yag is MFX:GIGE:02:IMAGE1
-
-    Operations
-    ----------
-
-    """
-    # cd /reg/g/pcds/pyps/apps/hutch-python/mfx/mfx
-    # from mfx.transfocator_scan import *
-    import transfocator_scan
-    import numpy as np
-    from mfx.db import tfs
-
-    trf_align = transfocator_scan.transfocator_aligner(camera)
-    trf_pos = np.arange(1,299,1)
-    trf_align.scan_transfocator(tfs.translation,trf_pos,1)

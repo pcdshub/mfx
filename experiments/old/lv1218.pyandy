@@ -1,0 +1,39 @@
+from epics import caget, caput
+import numpy as np
+from pcdsdaq.daq import BEGIN_TIMEOUT
+BEGIN_TIMEOUT = 15
+
+def flame_scan(x_start, x_stop, x_step, y_start, y_stop, y_step, duration=300):
+    issue = False
+    counter = 0
+    for x in np.arange(x_start, x_stop, x_step):
+        for y in np.arange(y_start, y_stop, y_step):
+            caput('MFX:USR:MMN:31.VAL', x, wait=True)
+            caput('MFX:USR:MMN:32.VAL', y, wait=True)
+            x_val = caget('MFX:USR:MMN:31')
+            y_val = caget('MFX:USR:MMN:32')
+            print("scanning point x = ", x_val, "y = ", y_val);
+            try:            
+                print("starting daq")               
+                daq.connect()               
+                daq.begin(record=True, duration=duration, wait=False, end_run=True)
+                daq.wait()
+                counter = 0 #succes 
+                print("scan point finished correctly")
+            except TimeoutError:
+                daq.end_run()
+                daq.disconnect()
+                print("TimeoutError on previous run, starting the next run")
+                counter += 1
+                if counter > 3:
+                    print("Multiple timeout errors exiting script")
+                    issue = True
+            except KeyboardInterrupt:
+                print("Experiment stopped by user")
+                daq.end_run()
+                daq.disconnect()
+                issue = True
+            if issue: break
+        if issue: break
+    print("script is finished, have a nice day!")
+
