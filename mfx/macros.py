@@ -88,50 +88,64 @@ class MFX_Timing:
             self.seq=seq
         else:
             self.seq = sequencer
-        self.ray3 = [213,1,0,0]
-        self.ray2 = [212,1,0,0]
-        self.ray1 = [211,1,0,0]
-        self.ray_readout = [210,1,0,0]
-        self.pp_trig = [197,0,0,0]
-        self.daq_readout = [198,0,0,0]
-        self.wait1 = [0,1,0,0]
-        self.zeros = [0,0,0,0]
-        self.laser_on = [203,0,0,0]
-        self.laser_off = [204,0,0,0]
+        self.evt_code_names = ['wait','pp_trig','daq_readout',
+                               'laser_on','laser_off',
+                               'ray_readout','ray1','ray2','ray3']
+        self.evt_code_ids = [0,197,198,
+                             203,204,
+                             210,211,212,213]
+        #self.ray3 = [213,1,0,0]
+        #self.ray2 = [212,1,0,0]
+        #self.ray1 = [211,1,0,0]
+        #self.ray_readout = [210,1,0,0]
+        #self.pp_trig = [197,0,0,0]
+        #self.daq_readout = [198,0,0,0]
+        #self.wait1 = [0,1,0,0]
+        #self.zeros = [0,0,0,0]
+        #self.laser_on = [203,0,0,0]
+        #self.laser_off = [204,0,0,0]
         self.sync_markers = {0.5:0, 1:1, 5:2, 10:3, 30:4, 60:5, 120:6, 360:7}
+    def _step(self, evt_code_name=None, delta_beam=0):
+        try:
+            evt_code_id = self.evt_code_ids[self.evt_code_names.index(evt_code_name)]
+            return [evt_code_id, delta_beam, 0, 0]
+        except:
+            print('event sequencer step not recognized.')
     def set_30hz(self):
-        sync_mark = self.sync_markers[60]
+        sync_mark = self.sync_markers[30]
         self.seq.sync_marker.put(sync_mark)
         sequence = []
         for ii in range(15):
-            sequence.append(self.zeros)
+            sequence.append(self._step('wait',0))
         self.seq.sequence.put_seq(sequence)
         time.sleep(1)
         sequence = []
-        sequence.append(self.ray1)
-        sequence.append(self.pp_trig)
-        sequence.append(self.ray2)
-        sequence.append(self.ray_readout)
-        sequence.append(self.daq_readout)
-        sequence.append(self.ray3)
+        sequence.append(self._step('laser_on',0))
+        sequence.append(self._step('daq_readout',0))
+        sequence.append(self._step('ray3',1))
+        sequence.append(self._step('ray_readout',1))
+        sequence.append(self._step('pp_trigger',0))
+        sequence.append(self._step('ray1',1))
+        sequence.append(self._step('ray2', 1))
         self.seq.sequence.put_seq(sequence)
         self.seq.start()
         return
     def set_30hz_laser(self, laser_evt_list=None):
-        sync_mark = self.sync_markers[60]
+        sync_mark = self.sync_markers[30]
         self.seq.sync_marker.put(sync_mark)
         sequence = []
         for ii in range(15):
-            sequence.append(self.zeros)
+            sequence.append(self._step('wait',0))
         self.seq.sequence.put_seq(sequence)
         time.sleep(1)
         sequence_block = []
-        sequence_block.append(self.ray1)
-        sequence_block.append(self.pp_trig)
-        sequence_block.append(self.ray2)
-        sequence_block.append(self.ray_readout)
-        sequence_block.append(self.daq_readout)
-        sequence_block.append(self.ray3)
+        sequence_block.append(self._step('laser_on', 0))
+        sequence_block.append(self._step('daq_readout', 0))
+        sequence_block.append(self._step('ray3', 1))
+        sequence_block.append(self._step('ray_readout', 1))
+        sequence_block.append(self._step('pp_trigger', 0))
+        sequence_block.append(self._step('ray1', 1))
+        sequence_block.append(self._step('ray2', 1))
         try:
             sequence = []
             for evt in laser_evt_list:
@@ -148,18 +162,18 @@ class MFX_Timing:
         self.seq.sync_marker.put(sync_mark)
         sequence = []
         for ii in range(15):
-            sequence.append(self.zeros)
+            sequence.append(self._step('wait',0))
         self.seq.sequence.put_seq(sequence)
         time.sleep(1)
         sequence = []
-        sequence.append(self.ray3)
-        sequence.append(self.ray2)
-        sequence.append(self.ray1)
-        sequence.append(self.pp_trig)
-        sequence.append(self.ray2)
-        sequence.append(self.ray1)
-        sequence.append(self.ray_readout)
-        sequence.append(self.daq_readout)
+        sequence.append(self._step('ray3',1))
+        sequence.append(self._step('ray2',1))
+        sequence.append(self._step('ray_readout',1))
+        sequence.append(self._step('pp_trig',1))
+        sequence.append(self._step('ray2',0))
+        sequence.append(self._step('ray1',1))
+        sequence.append(self._step('ray_readout',1))
+        sequence.append(self._step('daq_readout',0))
         self.seq.sequence.put_seq(sequence)
         self.seq.start()
         return 
@@ -168,18 +182,18 @@ class MFX_Timing:
         self.seq.sync_marker.put(sync_mark)
         sequence = []
         for ii in range(15):
-            sequence.append(self.zeros)
+            sequence.append(self._step('wait',0))
         self.seq.sequence.put_seq(sequence)
         time.sleep(1)
         sequence = []
-        sequence.append(self.ray3)
-        sequence.append(self.daq_readout)
-        sequence.append(self.ray2)
-        sequence.append(self.daq_readout)
-        sequence.append(self.ray1)
-        sequence.append(self.daq_readout)
-        sequence.append(self.ray_readout)
-        sequence.append(self.daq_readout)
+        sequence.append(self._step('ray3',1))
+        sequence.append(self._step('daq_readout',0))
+        sequence.append(self._step('ray2',1))
+        sequence.append(self._step('daq_readout',0))
+        sequence.append(self._step('ray1',1))
+        sequence.append(self._step('daq_readout',0))
+        sequence.append(self._step('ray_readout',1))
+        sequence.append(self._step('daq_readout',0))
         self.seq.sequence.put_seq(sequence)
         self.seq.start()
         return
