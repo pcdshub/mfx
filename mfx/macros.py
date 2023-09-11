@@ -202,7 +202,7 @@ class FakeDetector:
         except:
             print('Detector not implemented.')
     def _energy_keV_to_wavelength_A(self, energy_keV):
-        return 0.12398 / energy_keV
+        return 12.398 / energy_keV
     def _pixel_index_to_radius_mm(self, pixel_index):
         return pixel_index * self.pixel_size_mm
     def _pixel_radius_mm_to_theta_radian(self, pixel_radius_mm, det_dist_mm):
