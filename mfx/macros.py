@@ -223,11 +223,17 @@ class FakeDetector:
                 self._pixel_index_to_radius_mm(self.pixel_per_side/2), det_dist_mm
             ), self._energy_keV_to_wavelength_A(energy_keV)
         )
+        highest_q_invA = self._pixel_theta_radian_to_q_invA(
+            self._pixel_radius_mm_to_theta_radian(
+                self._pixel_index_to_radius_mm(self.pixel_per_side / np.sqrt(2)), det_dist_mm
+            ), self._energy_keV_to_wavelength_A(energy_keV)
+        )
         print(f"### FakeDetector {self.detname} resolution range:")
         print(f"### - Energy: {energy_keV} keV")
         print(f"### - Distance: {det_dist_mm} mm")
-        print(f">>> Low q:  {low_q_invA:.2f} A-1 | {1/low_q_invA:.2f} A")
-        print(f">>> High q: {high_q_invA:.2f} A-1 | {1/high_q_invA:.2f} A (detector edge)")
+        print(f">>> Low q    : {low_q_invA:.2f} A-1 | {1/low_q_invA:.2f} A")
+        print(f">>> High q   : {high_q_invA:.2f} A-1 | {1/high_q_invA:.2f} A (detector edge)")
+        print(f">>> Highest q: {highest_q_invA:.2f} A-1 | {1/highest_q_invA:.2f} A (detector corner)")
 
 def quote():
     import json,random
