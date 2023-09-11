@@ -5,6 +5,7 @@ from mfx.db import (mfx_reflaser,
                     mfx_dg2_upstream_slits,
                     mfx_dg2_midstream_slits,
                     mfx_dg2_downstream_slits)
+import numpy as np
 import time
 def laser_in(wait=False, timeout=10):
     """
