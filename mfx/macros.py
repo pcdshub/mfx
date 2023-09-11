@@ -227,7 +227,7 @@ class FakeDetector:
         print(f"### - Energy: {energy_keV} keV")
         print(f"### - Distance: {det_dist_mm} mm")
         print(f">>> Low q:  {low_q_invA:.2f} A-1 | {1/low_q_invA:.2f} A")
-        print(f">>> High q: {high_q_invA:.2f} A-1 | {1/high_q_invA:2f} A (detector edge)")
+        print(f">>> High q: {high_q_invA:.2f} A-1 | {1/high_q_invA:.2f} A (detector edge)")
 
 def quote():
     import json,random
