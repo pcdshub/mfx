@@ -207,7 +207,7 @@ class FakeDetector:
         return pixel_index * self.pixel_size_mm
     def _pixel_radius_mm_to_theta_radian(self, pixel_radius_mm, det_dist_mm):
         # angle between incident and outgoing wavevectors: 2*theta
-        return np.arctan2(pixel_radius_mm / det_dist_mm) / 2
+        return np.arctan2(pixel_radius_mm, det_dist_mm) / 2
     def _pixel_theta_radian_to_q_invA(self, pixel_theta_radian, wavelength_A):
         return 2 * np.sin(pixel_theta_radian) / wavelength_A
     def _pixel_q_invA_to_resol_A(self, pixel_q_invA):
