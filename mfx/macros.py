@@ -187,7 +187,7 @@ def quote():
     return _res
 
 
-def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspire=False):
+def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5):
     """
     Try to automate runs.... With quotes
 
@@ -208,6 +208,9 @@ def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspi
     inspire: bool, optional
         Set false by default because it makes Sandra sad. Set True to inspire
 
+    delay: int, optional
+        delay time between runs. Default is 5 second but increase is the DAQ is being slow.
+
     Operations
     ----------
 
@@ -224,7 +227,7 @@ def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspi
                 elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
             else:
                 elog.post(f"Running {sample}", run=(daq.run_number()))
-            sleep(5)
+            sleep(delay)
         pp.close()
         daq.disconnect()
 
