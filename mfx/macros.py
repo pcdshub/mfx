@@ -233,6 +233,7 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
                     elog.post(f"Running {sample}", run=(daq.run_number()))
             sleep(delay)
         pp.close()
+        daq.end_run()
         daq.disconnect()
 
     except KeyboardInterrupt:
