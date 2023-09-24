@@ -222,9 +222,8 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     from time import sleep
     from mfx.db import daq, elog, pp
     import sys
-
-    for i in range(runs):
-        try:
+    try:
+        for i in range(runs):
             print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
             daq.begin(duration = run_length, record = record, wait = True, end_run = True)
             if record:
@@ -233,15 +232,16 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
                 else:
                     elog.post(f"Running {sample}", run=(daq.run_number()))
             sleep(delay)
-        except KeyboardInterrupt:
-            print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
-            pp.close()
-            daq.end_run()
-            daq.disconnect()
-            sys.exit()
-    pp.close()
-    daq.end_run()
-    daq.disconnect()
+        pp.close()
+        daq.end_run()
+        daq.disconnect()
+
+    except KeyboardInterrupt:
+        print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
+        pp.close()
+        daq.end_run()
+        daq.disconnect()
+        sys.exit()
 
 
 def attenuator_scan_separate_runs(events=240, record=False, config=True, transmissions=[0.01,0.02,0.03]):
