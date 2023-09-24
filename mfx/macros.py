@@ -223,8 +223,8 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     from mfx.db import daq, elog, pp
     import sys
 
-    if lower(sample)==water or lower(sample)==h2o:
-        inspire=False
+    if sample.lower()=='water' or sample.lower()=='h2o':
+        inspire=True
     try:
         for i in range(runs):
             print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
