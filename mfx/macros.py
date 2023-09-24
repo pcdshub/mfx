@@ -29,8 +29,10 @@ def laser_in(wait=False, timeout=10):
     """
     # Command motion and collect status objects
     ref = mfx_reflaser.insert(wait=False)
-    w8 = mfx_dg1_wave8_motor.move(35, wait=False)
+# Removing wave8 dg1 until target positions have been fixed
+#    w8 = mfx_dg1_wave8_motor.move(35, wait=False)
     dg1 = mfx_dg1_slits.move(6., wait=False)
+    dg2 = mfx_dg2_ipm.target.remove()
     dg2_us = mfx_dg2_upstream_slits.move(6., wait=False)
     dg2_ms = mfx_dg2_midstream_slits.move(1., wait=False)
     dg2_ds = mfx_dg2_downstream_slits.move(1., wait=False)
@@ -63,7 +65,8 @@ def laser_out(wait=False, timeout=10):
     """
     # Command motion and collect status objects
     ref = mfx_reflaser.remove(wait=False)
-    w8 = mfx_dg1_wave8_motor.move(5.5, wait=False)
+# Removing dg1 wave8 movement for now, until wave8 target positions have been fixed
+#    w8 = mfx_dg1_wave8_motor.move(5.5, wait=False)
     dg1 = mfx_dg1_slits.move(0.7, wait=False)
     dg2_us = mfx_dg2_upstream_slits.move(0.7, wait=False)
     dg2_ms = mfx_dg2_midstream_slits.move(0.7, wait=False)
@@ -187,9 +190,9 @@ def quote():
     return _res
 
 
-def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5):
+def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5):
     """
-    Try to automate runs.... With quotes
+    Automate runs.... With optional quotes
 
     Parameters
     ----------
@@ -223,10 +226,11 @@ def inspirational_autorun(sample='?', run_length=300, record=True, runs=5, inspi
         for i in range(runs):
             print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
             daq.begin(duration = run_length, record = record, wait = True, end_run = True)
-            if inspire:
-                elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
-            else:
-                elog.post(f"Running {sample}", run=(daq.run_number()))
+            if record:
+                if inspire:
+                    elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
+                else:
+                    elog.post(f"Running {sample}", run=(daq.run_number()))
             sleep(delay)
         pp.close()
         daq.disconnect()
@@ -307,7 +311,7 @@ def attenuator_scan_single_run(events=240, record=False, transmissions=[0.01,0.0
         pp.close()
         daq.disconnect()
 
-def focus_scan(camera):
+def focus_scan(camera, start=1, end=299, step=1):
     """
     Runs through transfocator Z to find the best focus
 
@@ -315,6 +319,15 @@ def focus_scan(camera):
     ----------
     camera: str, required
         camera where you want to focus
+
+    step: int, optional
+	step size of transfocator movements
+
+    start: int, optional
+	starting transfocator position
+
+    end: int, optional
+	final transfocator position
 
     Examples:
     mfx dg1 yag is MFX:DG1:P6740
@@ -332,5 +345,5 @@ def focus_scan(camera):
     from mfx.db import tfs
 
     trf_align = transfocator_scan.transfocator_aligner(camera)
-    trf_pos = np.arange(1,299,1)
+    trf_pos = np.arange(start, end, step)
     trf_align.scan_transfocator(tfs.translation,trf_pos,1)
