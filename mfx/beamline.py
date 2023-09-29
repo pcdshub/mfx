@@ -45,6 +45,9 @@ with safe_load('autorun'):
 with safe_load('attenuator_scan'):
     from mfx.attenuator_scan import *
 
+with safe_load('focus_scan'):
+    from mfx.focus_scan import *
+
 with safe_load('plans'):
     from mfx.plans import *
 
