@@ -38,13 +38,25 @@ with safe_load('beam_suspender'):
 with safe_load('macros'):
     from mfx.macros import *
     mfx_timing = MFX_Timing(sequencer)
+
+with safe_load('autorun'):
+    from mfx.autorun import *
+
+with safe_load('attenuator_scan'):
+    from mfx.attenuator_scan import *
+
+with safe_load('focus_scan'):
+    from mfx.focus_scan import *
+
 with safe_load('plans'):
     from mfx.plans import *
+
 with safe_load('Mesh Voltage Control'):
     from pcdsdevices.analog_signals import Mesh
     mesh = Mesh('MFX:USR', 0, 1)
-# with safe_load('transfocator_scan')
-#     from mfx.transfocator_scan import *
+
+with safe_load('transfocator_scan'):
+    from mfx.transfocator_scan import *
 
 #
 #
