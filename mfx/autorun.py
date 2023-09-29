@@ -1,8 +1,4 @@
 
-from time import sleep
-from mfx.db import daq, elog, pp
-import sys
-
 def quote():
     import json,random
     from os import path
@@ -42,6 +38,9 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     ----------
 
     """
+    from time import sleep
+    from mfx.db import daq, elog, pp
+    import sys
 
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
