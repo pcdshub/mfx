@@ -27,7 +27,7 @@ def focus_scan(camera, start=1, end=299, step=1):
     """
     # cd /reg/g/pcds/pyps/apps/hutch-python/mfx/mfx
     # from mfx.transfocator_scan import *
-    import transfocator_scan
+    from mfx.transfocator_scan import *
     import numpy as np
     from mfx.db import tfs
 
