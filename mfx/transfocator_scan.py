@@ -7,6 +7,7 @@ from IPython import display
 #mfx dg1 yag is MFX:DG1:P6740
 #mfx dg2 yag is MFX:DG2:P6740
 #mfx dg3 yag is MFX:GIGE:02:IMAGE1
+#lbl inline gige is MFX:GIGE:LBL:01
 #trf_pos=np.linspace(225,230,10)
 #range for tfs is 0,300
 #trf_align.scan_transfocator(tfs.translation,trf_pos,5)
@@ -14,8 +15,32 @@ class gigE_camera_accessor:
     def __init__(self,camera_pv):
         self.camera_pv=camera_pv
         self.get_markers()
+        self.check_color_mode()
         pass
+    def check_color_mode(self):
+        color_mode = caget(self.camera_pv + ':ColorMode_RBV')
+        if color_mode != 0:
+            color = True
+        else:
+            color = False
+        self.color=color
     def get_image(self):
+        image = caget(self.camera_pv + ':IMAGE1:ArrayData')#some cameras can be image2 need to consider.
+        if len(image)==0:
+            print(" [!] Can't read camera", PV + ".", "Exiting...", '\n')
+            sys.exit(1)
+        if self.color:
+            ArraySizeX=caget(self.camera_pv +':IMAGE1:ArraySize1_RBV')
+            ArraySizeY=caget(self.camera_pv +':IMAGE1:ArraySize2_RBV')
+            img=np.reshape(image,(ArraySizeY,ArraySizeX,3))
+            img_array = np.array(img)
+            grey_image=img_array[:,:,0]*299/1000+img_array[:,:,1]*587/1000+img_array[:,:,2]*114/1000
+        else:
+            ArraySizeX = caget(self.camera_pv + ':IMAGE1:ArraySize0_RBV')
+            ArraySizeY = caget(self.camera_pv + ':IMAGE1:ArraySize1_RBV')
+            grey_image = np.reshape(image, (ArraySizeY, ArraySizeX))
+        return grey_image
+    def get_image_old(self):
         image = caget(self.camera_pv + ':IMAGE1:ArrayData')#some cameras can be image2 need to consider.
         if len(image) == 0:
             print(" [!] Can't read camera", PV + ".", "Exiting...", '\n')
