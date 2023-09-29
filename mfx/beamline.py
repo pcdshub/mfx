@@ -132,3 +132,4 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
+    from mfx.transfocator_scan import *
