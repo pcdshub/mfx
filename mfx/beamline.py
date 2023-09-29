@@ -55,8 +55,8 @@ with safe_load('Mesh Voltage Control'):
     from pcdsdevices.analog_signals import Mesh
     mesh = Mesh('MFX:USR', 0, 1)
 
-# with safe_load('transfocator_scan')
-#     from mfx.transfocator_scan import *
+with safe_load('transfocator_scan'):
+    from mfx.transfocator_scan import *
 
 #
 #
