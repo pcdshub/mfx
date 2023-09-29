@@ -42,6 +42,9 @@ with safe_load('macros'):
 with safe_load('autorun'):
     from mfx.autorun import *
 
+with safe_load('attenuator_scan'):
+    from mfx.attenuator_scan import *
+
 with safe_load('plans'):
     from mfx.plans import *
 
