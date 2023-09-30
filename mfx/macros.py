@@ -177,3 +177,13 @@ class MFX_Timing:
         self._seq_put(steps)
         self.seq.start()
         return
+
+
+def get_exp():
+    import requests
+    ws_url = "https://pswww.slac.stanford.edu/ws/lgbk"
+    resp = requests.get(
+        ws_url + "/lgbk/ws/activeexperiment_for_instrument_station",
+        {"instrument_name": 'mfx', "station": 0})
+    exp = resp.json().get("value", {}).get("name")
+    print(exp)
