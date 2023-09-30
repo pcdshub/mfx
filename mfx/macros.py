@@ -181,10 +181,9 @@ class MFX_Timing:
 
 def get_exp():
     import requests
-    import logging
     ws_url = "https://pswww.slac.stanford.edu/ws/lgbk"
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    resp = requests.get(ws_url + "/lgbk/ws/activeexperiment_for_instrument_station", {"instrument_name": hutch, "station": station})
+    resp = requests.get(
+        ws_url + "/lgbk/ws/activeexperiment_for_instrument_station",
+        {"instrument_name": 'mfx', "station": 0})
     exp = resp.json().get("value", {}).get("name")
     print(exp)
