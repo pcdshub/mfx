@@ -58,9 +58,6 @@ with safe_load('Mesh Voltage Control'):
 with safe_load('transfocator_scan'):
     from mfx.transfocator_scan import *
 
-with safe_load('get_info'):
-    from mfx.get_info import *
-
 #
 #
 # preparation for fine timing beamline python.

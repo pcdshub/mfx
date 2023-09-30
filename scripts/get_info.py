@@ -1,5 +1,6 @@
+import sys
 
-def get_info(args):
+def get_info(argv):
     import argparse
     import socket
     import os
@@ -214,3 +215,6 @@ def get_info(args):
                     if tfilename.find('c00')>=0 and tfilename.find('-s8')<0:
                         nFiles=nFiles+1
                 print('%d %d'%(nFiles,len(file_list)))
+
+if __name__ == "__main__":
+   get_info(sys.argv[1:])
