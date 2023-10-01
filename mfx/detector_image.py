@@ -18,7 +18,7 @@ parser.add_argument('-d', '--detname', default='Rayonix', required=False,
                     help='Detector name.')
 parser.add_argument('-c', '--calibdir', default=None, required=False,
                     help='(optional) path to calib directory.')
-parser.add_argument('-a', '--averaging', default=1, required=False,
+parser.add_argument('-a', '--averaging', default=1, type=int, required=False,
                     help='Average over this number of events.')
 args = parser.parse_args()
 
