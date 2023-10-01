@@ -187,3 +187,9 @@ def get_exp():
         {"instrument_name": 'mfx', "station": 0})
     exp = resp.json().get("value", {}).get("name")
     print(exp)
+
+def xfel_gui():
+    import subprocess
+    subprocess.Popen(["pwd"])
+    subprocess.Popen([". /reg/g/cctbx/brewster/working/build/conda_setpaths.sh;cctbx.xfel &"], shell=True)
+    
