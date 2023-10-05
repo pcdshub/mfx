@@ -37,19 +37,23 @@ evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
 evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
 
 # Trigger objects
-evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
-# pacemaker = Trigger('MFX:LAS:EVR:01:TRIG4', name='pacemaker_trigger')
-inhibit = Trigger('MFX:LAS:EVR:01:TRIG6', name='inhibit_trigger')
-# pacemaker = Trigger('MFX:DG2:BMMON:EVR:TRIG4', name='pacemaker_trigger')
-# inhibit = Trigger('MFX:DG2:BMMON:EVR:TRIG6', name='inhibit_trigger')
+opo = Trigger('MFX:LAS:EVR:01:TRIG8', name='opo_trigger')
+evo = Trigger('MFX:LAS:EVR:01:TRIG6', name='evo_trigger')
 
 # Laser parameter
-opo_time_zero = -230000-2000
-xfel_time_zero = 894808
-base_inhibit_delay = 500000
-evo_time_zero = 800000
-min_evr_delay = 9280 #may depend on evr. min_evr_delay = 0 ticks for code 40
+opo_time_zero = 671669.1 # -230000-2000
+#xfel_time_zero = 894857.1 # 894808
+#base_inhibit_delay = 500000
+#evo_time_zero = 800000
+#min_evr_delay = 9280 #may depend on evr. min_evr_delay = 0 ticks for code 40
+#diode_delay = xfel_time_zero - opo_time_zero
 
+# Event code switch logic for longer delay
+min_evr_delay = 669800
+opo_ec_short = 211
+opo_ec_long  = 212
+
+rep_rate = 20
 ###########################
 # Configuration Functions #
 ###########################
@@ -61,19 +65,20 @@ class User:
     evo_shutter2 = evo_shutter2
     evo_shutter3 = evo_shutter3
     sequencer = sequencer
-    inhibit = inhibit
+    # inhibit = inhibit
     # pacemaker = pacemaker
+    opo = opo
     evo = evo
     def __init__(self):
     	self.delay = None
 
     # Use our standard Rayonix sequences
-    configure_sequencer = rayonix.configure_sequencer
+    #configure_sequencer = rayonix.configure_sequencer
 
-    @property
-    def current_rate(self):
-        """Current configured EventSequencer rate"""
-        return rayonix.current_rate
+    #@property
+    #def current_rate(self):
+    #    """Current configured EventSequencer rate"""
+    #    return rayonix.current_rate
 
     # @property
     # def delay(self):
@@ -130,24 +135,24 @@ class User:
 
         time.sleep(1)
 
-    def configure_evr(self):
-        """
-        Configure the Pacemaker and Inhibit EVR
-
-        This handles setting the correct polarity and widths. However this
-        **does not** handle configuring the delay between the two EVR triggers.
-        """
-        logger.debug("Configuring triggers to defaults ...")
+    #def configure_evr(self):
+    #    """
+    #    Configure the Pacemaker and Inhibit EVR
+    #
+    #    This handles setting the correct polarity and widths. However this
+    #    **does not** handle configuring the delay between the two EVR triggers.
+    #    """
+    #    logger.debug("Configuring triggers to defaults ...")
         # Pacemaker Trigger
         # pacemaker.eventcode.put(40)
         # pacemaker.polarity.put(0)
         # pacemaker.width.put(50000.)
         # pacemaker.enable()
         # Inhibit Trigger
-        inhibit.polarity.put(0)
+    #    inhibit.polarity.put(0)
         # inhibit.width.put(2000000.)
-        inhibit.enable()
-        time.sleep(0.5)
+    #    inhibit.enable()
+    #    time.sleep(0.5)
 
     @property
     def _delaystr(self):
@@ -200,7 +205,7 @@ class User:
 
     def set_delay(self, delay):
         """
-        Set the relative delay between the pacemaker and inhibit triggers
+        Set the delay
 
         Parameters
         ----------
@@ -210,20 +215,25 @@ class User:
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
         self.delay = delay
-        if delay > 0 and delay < 1:
-                logger.info("WARNING:  Read the doc string -- delay is in ns not sec")
-        if delay < 0:
-        	raise ValueError("delay must be positive")
-        if  (1e9/120 + opo_time_zero - delay) >= min_evr_delay:
-            logger.debug("Triggering on simultaneous event code")
-            inhibit_ec = 211
-            ipulse = 1
-        elif (2e9/120 + opo_time_zero - delay) >= min_evr_delay:
-            logger.debug("Triggering on one event code prior")
-            inhibit_ec = 212
-            ipulse = 2
-        else:
-            raise ValueError("Invalid input. Your delay is too big")
+        opo_delay = opo_time_zero - delay
+        opo_ec = opo_ec_short
+        if delay > min_evr_delay:
+            opo_delay += 1e9/120
+            opo_ec = opo_ec_switch
+        #if delay > 0 and delay < 1:
+        #        logger.info("WARNING:  Read the doc string -- delay is in ns not sec")
+        #if delay < 0:
+        #	raise ValueError("delay must be positive")
+        #if  (1e9/120 + opo_time_zero - delay) >= min_evr_delay:
+        #    logger.debug("Triggering on simultaneous event code")
+        #    opo_ec = 211
+        #    ipulse = 1
+        #elif (2e9/120 + opo_time_zero - delay) >= min_evr_delay:
+        #    logger.debug("Triggering on one event code prior")
+        #    opo_ec = 212
+        #    ipulse = 2
+        #else:
+        #    raise ValueError("Invalid input. Your delay is too big")
 
         # if delay <= (opo_time_zero - min_evr_delay): 
             # pacemaker_delay = opo_time_zero - delay
@@ -234,26 +244,26 @@ class User:
         # else:
             # raise ValueError("Invalid input %s ns, must be < 15.5 ms")
 
-        # Determine relative delays
-        # pulse_delay = ipulse*1.e9/120 - delay # Convert to ns
-        # Conifgure Pacemaker pulse
-        # pacemaker_delay = opo_time_zero + pulse_delay
-        # pacemaker.ns_delay.put(pacemaker_delay)
-        # logger.info("Setting pacemaker delay %s ns", pacemaker_delay)
-        # Configure Inhibit pulse
-        inhibit_delay = ipulse*1.e9/120 + opo_time_zero - delay
-        inhibit.disable()
-        time.sleep(0.1)
-        inhibit.ns_delay.put(inhibit_delay)
-        logger.info("Setting inhibit delay %s ns", inhibit_delay)
-        inhibit.eventcode.put(inhibit_ec)
-        logger.info("Setting inhibit ec %s", inhibit_ec)
-        time.sleep(0.1)
-        inhibit.enable()
-        time.sleep(0.2)
+#        # Determine relative delays
+#        # pulse_delay = ipulse*1.e9/120 - delay # Convert to ns
+#        # Conifgure Pacemaker pulse
+#        # pacemaker_delay = opo_time_zero + pulse_delay
+#        # pacemaker.ns_delay.put(pacemaker_delay)
+#        # logger.info("Setting pacemaker delay %s ns", pacemaker_delay)
+#        # Configure Inhibit pulse
+        #opo_delay = ipulse*1.e9/120 + opo_time_zero - delay
+        #opo.disable()
+        #time.sleep(0.1)
+        opo.ns_delay.put(opo_delay)
+        logger.info("Setting OPO delay %s ns", opo_delay)
+        opo.eventcode.put(opo_ec)
+        logger.info("Setting OPO ec %s", opo_ec)
+        #time.sleep(0.1)
+        #opo.enable()
+        #time.sleep(0.2)
         logger.info(self._delaystr)
-        # logger.info("The laser delay is set to %s ns (%s us)", delay, delay/1000.)
-
+#        # logger.info("The laser delay is set to %s ns (%s us)", delay, delay/1000.)
+#
 #    def set_evo_delay(self, delay):
 #        """
 #        Set the evolution laser triggers delay
@@ -285,7 +295,7 @@ class User:
 #        evo_delay = evo_time_zero + pulse_delay
 #        evo.eventcode.put(evo_ec)
 #        evo.ns_delay.put(evo_delay)
-
+#
     ######################
     # Scanning Functions #
     ######################
@@ -336,7 +346,7 @@ class User:
         time.sleep(1)
         # Post to ELog if desired
         runnum = daq._control.runnumber()
-        info = [runnum, comment, events, self.current_rate, self._delaystr]
+        info = [runnum, comment, events, rep_rate, self._delaystr]
         info.extend(self.shutter_status)
         post_msg = post_template.format(*info)
         print(post_msg)
@@ -408,7 +418,7 @@ class User:
         # Stop the EventSequencer
         #sequencer.stop()
         #self.configure_sequencer(rate=rate)
-        self.configure_evr()
+        #self.configure_evr()
         # Preserve the original state of DAQ
         logger.info("Running delays %r, %s times ...", delays, nruns)
         delays = delays or [False]
