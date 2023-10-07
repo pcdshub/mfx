@@ -219,7 +219,7 @@ class User:
         opo_ec = opo_ec_short
         if delay > min_evr_delay:
             opo_delay += 1e9/120
-            opo_ec = opo_ec_switch
+            opo_ec = opo_ec_long
         #if delay > 0 and delay < 1:
         #        logger.info("WARNING:  Read the doc string -- delay is in ns not sec")
         #if delay < 0:
