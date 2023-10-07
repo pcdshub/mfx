@@ -41,7 +41,7 @@ opo = Trigger('MFX:LAS:EVR:01:TRIG8', name='opo_trigger')
 evo = Trigger('MFX:LAS:EVR:01:TRIG6', name='evo_trigger')
 
 # Laser parameter
-opo_time_zero = 671669.1 # -230000-2000
+opo_time_zero = 671740 # -230000-2000
 #xfel_time_zero = 894857.1 # 894808
 #base_inhibit_delay = 500000
 #evo_time_zero = 800000
