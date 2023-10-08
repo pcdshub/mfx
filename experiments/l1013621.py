@@ -7,7 +7,7 @@ import subprocess
 import numpy as np
 
 from mfx.devices import LaserShutter
-from mfx.db import daq, elog, sequencer, rayonix
+from mfx.db import daq, elog, sequencer, rayonix, pp
 from ophyd.status import wait as status_wait
 from pcdsdevices.sequencer import EventSequencer
 from pcdsdevices.evr import Trigger
@@ -459,6 +459,8 @@ class User:
             daq.stop()
         # Return the DAQ to the original state
         finally:
+            logger.info("Closing pulse picker ...")
+            pp.close()
             logger.info("Disconnecting from DAQ ...")
             daq.disconnect()
             logger.info("Closing all laser shutters ...")

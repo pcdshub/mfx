@@ -61,6 +61,6 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     except KeyboardInterrupt:
         print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
         pp.close()
-        daq.end_run()
+        daq.stop()
         daq.disconnect()
         sys.exit()
