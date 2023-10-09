@@ -40,9 +40,6 @@ def autorun(
         inspire: bool = False,
         delay: int = 5
 ) -> None:
-    logging.basicConfig(level=logging.INFO)
-    logger: logging.Logger = logging.getLogger(__name__)
-
     RE: RunEngine = RunEngine({})
     bec: BestEffortCallback = BestEffortCallback()
     RE.subscribe(bec)
