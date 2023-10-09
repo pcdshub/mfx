@@ -1,3 +1,19 @@
+import logging
+import time
+from typing import Iterable
+
+import bluesky.plan_stubs as bps
+import bluesky.plans as bp
+from bluesky import RunEngine
+from bluesky.callbacks import BestEffortCallback
+from pcdsdaq.daq import Daq
+from nabs.plans import daq_count
+from nabs.preprocessors import daq_step_scan_decorator
+from mfx.db import pp, elog
+
+logging.basicConfig(level=logging.INFO)
+logger: logging.Logger = logging.getLogger(__name__)
+
 def quote():
     import json
     import random
@@ -9,6 +25,13 @@ def quote():
     _res = {'quote':_quote['text'],"author":_quote['from']}
     return _res
 
+def elog_post_trigger_and_read(
+        detectors: Iterable,
+        msg: str="DAQ Acquiring Sample"
+):
+    elog.post(msg)
+    return (yield from bps.trigger_and_read(detectors))
+
 def autorun(
         sample: str = "?",
         run_length: int = 300,
@@ -17,20 +40,10 @@ def autorun(
         inspire: bool = False,
         delay: int = 5
 ) -> None:
-    import logging
-    from time import sleep
-
-    from bluesky import RunEngine
-    from bluesky.callbacks import BestEffortCallback
-    from pcdsdaq.daq import Daq
-    from mfx.db import pp, elog
-
     logging.basicConfig(level=logging.INFO)
     logger: logging.Logger = logging.getLogger(__name__)
 
     RE: RunEngine = RunEngine({})
-    # Follow subscription model - this does nothing for the DAQ
-    # since there is no data/Msg/etc. through the instance...
     bec: BestEffortCallback = BestEffortCallback()
     RE.subscribe(bec)
 
@@ -44,25 +57,15 @@ def autorun(
     )
     logger.debug(f"Old configuration:\n{old_config}")
     daq.config_info(config=new_config)
+    logger.info(f"Attempting DAQ {runs} runs for sample {sample}")
 
-    for i in range(runs):
-        try:
-            logger.debug(f"Autorun run {i+1} of {runs}")
-            logger.info(f"Beginning Run {daq.run_number() + 1}\n"
-                        f"---------------------------\n"
-                        f"Running sample {sample}")
-            daq.begin()
-            if record:
-                msg: str = f"Running sample {sample}"
-                if inspire:
-                    msg += f"......{quote()['quote']}"
-
-                elog.post(msg, run=(daq.run_number()))
-
-            sleep(delay)
-        except KeyboardInterrupt as e:
-            logger.info(f"Run {daq.run_number()} stopped. Closing PP.")
-            break
+    RE(daq_count(
+        detectors=[daq],
+        num=runs,
+        delay=delay,
+        duration=run_length,
+        record=record
+    ))
 
     pp.close()
     daq.disconnect()
