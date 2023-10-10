@@ -370,7 +370,7 @@ class User:
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
              pulse3=False, light_events=3000, dark_events=None,
-             record=True, comment='', post=True):
+             record=True, comment='', post=True, picker=None):
         """
         Loop through a number of delays a number of times while running the DAQ
 
@@ -411,6 +411,9 @@ class User:
 
         post : bool, optional
             Whether to post to ELog or not. Will not post if not recording.
+        
+        picker: str, optional
+            If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
         """
         # Accept a single int or float
         if isinstance(delays, (float, int)):
@@ -441,6 +444,10 @@ class User:
                             self.set_delay(delay)
 
                         # Perform the light run
+                        if picker=='open':
+                            pp.open()
+                        if picker=='flip':
+                            pp.flipflop()
                         self.perform_run(light_events, pulse1=pulse1,
                                          pulse2=pulse2, pulse3=pulse3,
                                          record=record,
