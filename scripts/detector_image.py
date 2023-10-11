@@ -7,7 +7,6 @@ import time
 from psana import *
 from psmon import publish
 from psmon.plots import Image
-from mfx.macros import get_exp
 
 logging.basicConfig(filename='detector_image.log', level=logging.INFO)
 
