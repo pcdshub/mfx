@@ -1,66 +1,37 @@
-# ssh daq-mfx-mon05
-# source /reg/g/psdm/sw/conda1/manage/bin/psconda.sh -py3
-import argparse
-import logging
-import time
+def detector_image(node=5, det='Rayonix', calibdir=None, ave=1):
+    """
+    Launches detector monitor
+    Parameters
+    ----------
+    node: int, optional
+        Node to run detector monitor 1-9 only
 
-from psana import *
-from psmon import publish
-from psmon.plots import Image
+    det: str, optional
+        Detector name. Example 'Rayonix'
 
-logging.basicConfig(filename='detector_image.log', level=logging.INFO)
+    calibdir: str, optional
+        path to calib directory
 
+    ave: int, optional
+        Average over this number of events
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-e', '--experiment', default='mfxl1001521', required=False,
-                    help='Experiment name.')
-parser.add_argument('-d', '--detname', default='Rayonix', required=False,
-                    help='Detector name.')
-parser.add_argument('-c', '--calibdir', default=None, required=False,
-                    help='(optional) path to calib directory.')
-parser.add_argument('-a', '--averaging', default=1, type=int, required=False,
-                    help='Average over this number of events.')
-args = parser.parse_args()
+    Operations
+    ----------
 
+    """
+    import logging
+    import subprocess
+    from mfx.macros import get_exp
 
-if args.calibdir is None:
-    calibdir=f'/sdf/data/lcls/ds/mfx/{args.experiment}/calib'
-else:
-    calibdir=args.calibdir
-setOption('psana.calib-dir', calibdir)
-logging.info(f'calibration directory used: {calibdir}')
+    proc = [
+        f"ssh -YAC daq-mfx-mon0{node} "
+        f". /reg/g/psdm/sw/conda1/manage/bin/psconda.sh -py3; "
+        f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/"
+        f"detector_image.py -e {get_exp()} -d {det} -c {calibdir} -a {ave} &"
+        ]
+    
+    logging.info(proc)
 
-ds = DataSource('shmem=psana.0:stop=no')
-det = Detector(args.detname)
-
-publish.local = True
-publish.plot_opts.aspect = 1
-img_arr = None
-lastupdate = 0
-
-i_ave = 0
-
-for nevent, evt in enumerate(ds.events()):
-    img = det.image(evt)
-    if img is None:
-        logging.warning('*** no detector image')
-        continue
-
-    if i_ave == 0:
-        image = img
-    else:
-        image += img
-    i_ave += 1
-    if i_ave < args.averaging:
-        continue
-
-    if nevent % 10 == 0:
-        logging.info('event', nevent)
-
-    if time.time() - lastupdate >= 0.4:
-        logging.info('update')
-        img_arr = image
-        lastupdate = time.time()
-        imgsend = Image(nevent, args.detname, img_arr)
-        publish.send('image', imgsend)
-        i_ave = 0
+    subprocess.Popen(
+        [proc], shell=True, 
+        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
