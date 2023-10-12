@@ -1,6 +1,6 @@
 """
-Collection of Bluesky plans involving the DAQ but not requiring motors or other
-devices.
+Collection of Bluesky plans involving the DAQ and potentially devices related
+to acquisition (pulse-picker, etc.), but not involving any motor scans.
 
 Functions
 ---------
@@ -12,17 +12,12 @@ daq_multicount(detectors: List, sample: str, run_length: int, record: bool,
 """
 
 import logging
-import time
-from typing import Iterable, List, Any
+from typing import List, Any, Generator
 
 import bluesky.plan_stubs as bps
-import bluesky.plans as bp
-from bluesky import RunEngine
-from bluesky.callbacks import BestEffortCallback
 from pcdsdaq.daq import Daq
 from nabs.plans import daq_count
-from nabs.preprocessors import daq_step_scan_decorator
-from mfx.db import pp, elog
+from mfx.db import elog
 
 logging.basicConfig(level=logging.INFO)
 logger: logging.Logger = logging.getLogger(__name__)
@@ -47,7 +42,7 @@ def daq_multicount(
         runs: int = 5,
         inspire: bool = False,
         delay: int = 5
-) -> None:
+) -> Generator:
     """
     Bluesky plan to collect multiple DAQ runs with information posted to the
     eLog in between. Each DAQ run corresponds to a single Bluesky run.
@@ -75,24 +70,20 @@ def daq_multicount(
         for run in range(runs):
             logger.info(f"Beginning DAQ run {daq.run_number() + 1}")
             msg: str = (
-                f"Beginning run {run + 1} of {runs} - Running sample {sample}"
+                f"Run {run + 1} of {runs} - Running sample {sample}"
             )
             if inspire:
                 msg += f"......{quote()['quote']}"
-            elog.post(msg, run=detectors[0].run_number())
-            logger.info(
-                f"Beginning run {run + 1} of {runs} - Running sample {sample}"
-            )
+            logger.info(msg)
             yield from daq_count(
                 detectors=detectors,
-                num=runs,
+                num=1,
                 delay=0,
                 duration=run_length,
                 record=record
             )
+            elog.post(msg, run=daq.run_number())
             logger.debug(f"Ending run {run + 1} of {runs} - DAQ run {daq.run_number()}")
-            yield from bps.sleep(delay)
 
-    pp.close()
-    daq.disconnect()
+            yield from bps.sleep(delay)
     return (yield from inner())
