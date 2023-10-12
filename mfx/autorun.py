@@ -41,7 +41,7 @@ def autorun(
     delay : int, optional
         Time (in seconds) to wait between successive runs. Default: 5 s.
     """
-    from mfx.plans import daq_multicount
+    from mfx.plans.basic_daq import daq_multicount
     logger.info(f"Attempting {runs} DAQ runs of sample {sample}.")
     logger.debug(f"Adjusting DAQ configuration.")
     old_config, new_config = daq.configure(duration=run_length, record=record)
