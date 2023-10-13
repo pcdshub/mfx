@@ -11,9 +11,12 @@ attenuator_scan_single_run()
     attenuator configuration.
 """
 
+__all__ = ["attenuator_scan_multi_run", "attenuator_scan_single_run"]
+
 import logging
 from typing import Generator, List, Any
 
+import numpy as np
 import bluesky.plan_stubs as bps
 from pcdsdaq.preprocessors import daq_during_decorator
 from nabs.plans import daq_count
@@ -51,7 +54,7 @@ def determine_num_events(
 def split_run_time_per_step(
         transmissions: List[float],
         run_length: int
-) -> List[float]:
+) -> np.ndarray:
     """
     Split the total time of a single run into appropriate durations per step of
     an attenuator scan.
@@ -60,19 +63,24 @@ def split_run_time_per_step(
     ----------
     transmissions : List[float]
         List of all transmission levels to be acquired during the attenuator
-        scan.
+        scan. Assumed to be sorted in descending order.
     run_length : int
         Total duration, in seconds, of the DAQ run during which the attenuator
         scan will occur.
 
     Returns
     -------
-    step_durations : List[float]
+    step_durations : np.ndarray[float]
         Given the total run length, a list of durations to spend at each
         transmission level. There is one-to-one correspondence.
         E.g. spend durations[0] seconds at transmissions[0].
     """
-    ...
+    # `transmissions` assumed to be in descending order
+    multipliers: np.ndarray = np.array(transmissions)
+    multipliers = multipliers[0]/multipliers
+    shortest_time: float = run_length/multipliers.sum()
+    step_durations: np.ndarray = multipliers*shortest_time
+    return step_durations
 
 def attenuator_scan_multi_run(
         detectors: List[Any],
@@ -137,6 +145,7 @@ def attenuator_scan_single_run(
         between the various steps so that the integrated statistics per step
         are comparable.
     """
+    transmissions = sorted(transmissions, reverse=True)
     step_durations = split_run_time_per_step(
         transmissions,
         run_length=run_length

@@ -11,6 +11,8 @@ daq_multicount(detectors: List, sample: str, run_length: int, record: bool,
     Plan for collecting multiple DAQ runs with logging to the eLog in between.
 """
 
+__all__ = ["daq_multicount"]
+
 import logging
 from typing import List, Any, Generator
 
