@@ -99,7 +99,7 @@ def attenuator_scan_multi_run(
         List of detector objects.
     attenuator : Any
         Attenuator to scan.
-    Transmissions : List[float]
+    transmissions : List[float]
         Transmission levels to step the attenuator through
     max_evts : float
         Number of events for the maximum transmission level.
@@ -138,7 +138,7 @@ def attenuator_scan_single_run(
         List of detector objects.
     attenuator : Any
         Attenuator to scan.
-    Transmissions : List[float]
+    transmissions : List[float]
         Transmission levels to step the attenuator through
     run_length : int
         Total duration of the single DAQ run to collect. The time will be split
