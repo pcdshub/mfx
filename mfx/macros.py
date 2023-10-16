@@ -186,4 +186,4 @@ def get_exp():
         ws_url + "/lgbk/ws/activeexperiment_for_instrument_station",
         {"instrument_name": 'mfx', "station": 0})
     exp = resp.json().get("value", {}).get("name")
-    print(exp)
+    return exp
