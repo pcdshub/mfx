@@ -41,7 +41,7 @@ def is_good_measurement(
         fwhm_threshs: Tuple[float, float]
 ):
     timetool_amp: float = tt_data[2]
-    ipm_dg2: float = tt_data[8]
+    ipm_dg2: float = tt_data[9]
     fwhm: float = tt_data[5]
 
     if timetool_amp < amplitude_thresh:
