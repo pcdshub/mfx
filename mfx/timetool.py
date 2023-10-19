@@ -13,15 +13,12 @@ correct_timing_drift(amplitude_thresh: float, ipm_thresh: float,
 
 __all__ = ["correct_timing_drift"]
 
-import sys
-import os
-import socket
 import logging
 import time
-import json
 from typing import Tuple
 
 import numpy as np
+from ophyd.signal import EpicsSignal
 
 logging.basicConfig(level=logging.INFO)
 logger: logging.Logger = logging.getLogger(__name__)
@@ -109,7 +106,7 @@ def correct_timing_drift(
                 # EVENTBUILD PV contains 10 fields. TTALL makes up the first 8.
                 # (indices 0-7), and IPM DG1 and DG2 makeup the final 2.
                 # See `is_good_measurement` function for more accesses.
-                timetool: EpicsSignal = EpicsSignal("MFX:TT:01:EVENTBUILD")
+                timetool: EpicsSignal = EpicsSignal("MFX:TT:01:EVENTBUILD.VALA")
                 tt_data: np.ndarray = timetool.get()
 
                 timetool_edge_ps: float = tt_data[1]
