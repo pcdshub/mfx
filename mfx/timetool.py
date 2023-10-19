@@ -26,6 +26,18 @@ logger: logging.Logger = logging.getLogger(__name__)
 def write_log(msg: str, logfile: str = "") -> None:
     """
     Log messages both via the standard logger and optionally to a file.
+
+    All messages will be timestamped.
+
+    Parameters
+    ----------
+    msg : str
+        Message to log. A timestamp will be prepended to the beginning of the
+        message - do NOT include one.
+    logfile : str, optional
+        A logfile to also write the message to. Will append if the logfile
+        already exists. If the empty string is passed, no logfile is written
+        to. Default: "", i.e. do not write to a logfile.
     """
     timestamped_msg: str =f"[{time.ctime()}] {msg}"
     logger.info(timestamped_msg)
@@ -40,6 +52,29 @@ def is_good_measurement(
         ipm_thresh: float,
         fwhm_threshs: Tuple[float, float]
 ):
+    """
+    Determine whether a specific detected edge on the timetool camera is "good"
+
+    Good/bad is defined by whether the timetool data shows the detected edge
+    has a reasonable amplitude and a FWHM that falls within a specified range.
+    A minimum X-ray intensity, as measured at IPM DG2, is also required for us
+    to accept a measurement as accurate.
+
+    Parameters
+    ----------
+    tt_data : np.ndarray
+        Data read from the new timetool/EBUILD IOC which includes the TTALL
+        data as well as ipm readings.
+    amplitude_thresh : float
+        Minimum amplitude extracted from timetool camera processing for the
+        measurement to be considered "good."
+    ipm_thresh : float
+        Minimum reading at ipm DG2 for a timetool measurement to be considered
+        "good."
+    fwhm_threshs : Tuple[float, float]
+        Minimum and maximum FWHM from the processed timetool signal to consider
+        a measurement to be "good."
+    """
     timetool_amp: float = tt_data[2]
     ipm_dg2: float = tt_data[9]
     fwhm: float = tt_data[5]
@@ -82,8 +117,8 @@ def correct_timing_drift(
         center is off by 50 fs in either direction it will compensate. Default:
         0.05 ps.
     fwhm_threshs : Tuple[float, float], optional
-        Minimum and maximum FWHM of detected edge to consider for a timetool
-        measurement as "good."
+        Minimum and maximum FWHM from the processed timetool signal to consider
+        a measurement to be "good."
     num_events : int, optional
         The number of "good" timetool edge measurements to include in the
         rolling average. Ideally a prime number to remove effects from
