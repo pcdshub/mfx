@@ -39,7 +39,7 @@ def write_log(msg: str, logfile: str = "") -> None:
         already exists. If the empty string is passed, no logfile is written
         to. Default: "", i.e. do not write to a logfile.
     """
-    timestamped_msg: str =f"[{time.ctime()}] {msg}"
+    timestamped_msg: str = f"[{time.ctime()}] {msg}"
     logger.info(timestamped_msg)
 
     if logfile:
