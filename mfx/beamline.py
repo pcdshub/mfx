@@ -61,6 +61,9 @@ with safe_load('transfocator_scan'):
 with safe_load('detector_image'):
     from mfx.detector_image import *
 
+with safe_load("drift_correct"):
+    from mfx.timetool import *
+
 #
 #
 # preparation for fine timing beamline python.
