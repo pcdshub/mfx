@@ -118,7 +118,7 @@ class MFX_Timing:
         time.sleep(1)
     def _seq_put(self, steps):
         for step in steps:
-            self.sequence.append(self._step(step[0], step[1]))
+            self.sequence.append(self._seq_step(step[0], step[1]))
         self.seq.sequence.put_seq(self.sequence)
 
     def _seq_30hz(self):
