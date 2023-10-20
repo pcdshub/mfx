@@ -113,7 +113,7 @@ class MFX_Timing:
         self.seq.sync_marker.put(self.sync_markers[sync_mark])
         sequence = []
         for ii in range(15):
-            sequence.append(self._step('wait', 0))
+            sequence.append(self._seq_step('wait', 0))
         self.seq.sequence.put_seq(sequence)
         time.sleep(1)
     def _seq_put(self, steps):
