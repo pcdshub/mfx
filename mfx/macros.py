@@ -120,48 +120,46 @@ class MFX_Timing:
         for step in steps:
             self.sequence.append(self._step(step[0], step[1]))
         self.seq.sequence.put_seq(self.sequence)
+
+    def _seq_30hz(self):
+        steps = [['ray1', 1],
+                 ['pp_trigger', 0],
+                 ['ray2', 1],
+                 ['ray_readout', 1],
+                 ['daq_readout', 0],
+                 ['ray3', 1]]
+        return steps
+
+    def _seq_20hz(self):
+        steps = [['ray3', 1],
+                 ['pp_trigger', 0],
+                 ['ray2', 1],
+                 ['ray1', 1],
+                 ['daq_readout', 0],
+                 ['ray_readout', 1],
+                 ['ray3', 1],
+                 ['ray_readout', 1]]
+        return steps
     def set_30hz(self):
         self._seq_init(sync_mark=30)
-        steps = [['laser_on',0],
-                 ['daq_readout',0],
-                 ['ray3',1],
-                 ['ray_readout',1],
-                 ['pp_trigger',0],
-                 ['ray1',1],
-                 ['ray2', 1]]
-        self._seq_put(steps)
+        self._seq_put(self._seq_30hz())
         self.seq.start()
         return
     def set_30hz_laser(self, laser_evt_list=None):
         self._seq_init(sync_mark=30)
-        steps = [['laser_on', 0],
-                 ['daq_readout', 0],
-                 ['ray3', 1],
-                 ['ray_readout', 1],
-                 ['pp_trigger', 0],
-                 ['ray1', 1],
-                 ['ray2', 1]]
         try:
             for laser_evt in laser_evt_list:
-                block = steps
+                block = self._seq_30hz()
                 block.append(laser_evt)
                 self._seq_put(block)
         except:
-            self._seq_put(steps)
+            self._seq_put(self._seq_30hz())
         self.seq.start()
         print(self.sequence)
         return    
     def set_20hz(self):
         self._seq_init(sync_mark=60)
-        steps = [['ray3',1],
-                 ['ray2',1],
-                 ['ray_readout',1],
-                 ['pp_trig',1],
-                 ['ray2',0],
-                 ['ray1', 1],
-                 ['ray_readout',1],
-                 ['daq_readout',0]]
-        self._seq_put(steps)
+        self._seq_put(self._seq_20hz())
         self.seq.start()
         return
     def set_120hz(self):
