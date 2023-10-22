@@ -10,7 +10,7 @@ def quote():
     return _res
 
 
-def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5):
+def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5, picker=None):
     """
     Automate runs.... With optional quotes
 
@@ -34,6 +34,9 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     delay: int, optional
         delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
+    picker: str, optional
+        If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+
     Operations
     ----------
 
@@ -44,6 +47,10 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
 
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
+    if picker=='open':
+        pp.open()
+    if picker=='flip':
+        pp.flipflop()
     try:
         for i in range(runs):
             print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
@@ -61,6 +68,6 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     except KeyboardInterrupt:
         print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
         pp.close()
-        daq.end_run()
+        daq.stop()
         daq.disconnect()
         sys.exit()

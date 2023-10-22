@@ -7,7 +7,7 @@ import subprocess
 import numpy as np
 
 from mfx.devices import LaserShutter
-from mfx.db import daq, elog, sequencer, rayonix
+from mfx.db import daq, elog, sequencer, rayonix, pp
 from ophyd.status import wait as status_wait
 from pcdsdevices.sequencer import EventSequencer
 from pcdsdevices.evr import Trigger
@@ -41,7 +41,7 @@ opo = Trigger('MFX:LAS:EVR:01:TRIG8', name='opo_trigger')
 evo = Trigger('MFX:LAS:EVR:01:TRIG6', name='evo_trigger')
 
 # Laser parameter
-opo_time_zero = 671669.1 # -230000-2000
+opo_time_zero = 671740 # -230000-2000
 #xfel_time_zero = 894857.1 # 894808
 #base_inhibit_delay = 500000
 #evo_time_zero = 800000
@@ -219,7 +219,7 @@ class User:
         opo_ec = opo_ec_short
         if delay > min_evr_delay:
             opo_delay += 1e9/120
-            opo_ec = opo_ec_switch
+            opo_ec = opo_ec_long
         #if delay > 0 and delay < 1:
         #        logger.info("WARNING:  Read the doc string -- delay is in ns not sec")
         #if delay < 0:
@@ -370,7 +370,7 @@ class User:
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
              pulse3=False, light_events=3000, dark_events=None,
-             record=True, comment='', post=True):
+             record=True, comment='', post=True, picker=None):
         """
         Loop through a number of delays a number of times while running the DAQ
 
@@ -411,6 +411,9 @@ class User:
 
         post : bool, optional
             Whether to post to ELog or not. Will not post if not recording.
+        
+        picker: str, optional
+            If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
         """
         # Accept a single int or float
         if isinstance(delays, (float, int)):
@@ -441,6 +444,10 @@ class User:
                             self.set_delay(delay)
 
                         # Perform the light run
+                        if picker=='open':
+                            pp.open()
+                        if picker=='flip':
+                            pp.flipflop()
                         self.perform_run(light_events, pulse1=pulse1,
                                          pulse2=pulse2, pulse3=pulse3,
                                          record=record,
@@ -459,6 +466,8 @@ class User:
             daq.stop()
         # Return the DAQ to the original state
         finally:
+            logger.info("Closing pulse picker ...")
+            pp.close()
             logger.info("Disconnecting from DAQ ...")
             daq.disconnect()
             logger.info("Closing all laser shutters ...")
