@@ -58,6 +58,12 @@ with safe_load('Mesh Voltage Control'):
 with safe_load('transfocator_scan'):
     from mfx.transfocator_scan import *
 
+with safe_load('detector_image'):
+    from mfx.detector_image import *
+
+with safe_load("drift_correct"):
+    from mfx.timetool import *
+
 #
 #
 # preparation for fine timing beamline python.
