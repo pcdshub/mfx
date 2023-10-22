@@ -3,10 +3,12 @@ Wrapper functions for Bluesky attenuator scans with DAQ support.
 
 Functions
 ---------
-scan_attenuator_multiple_runs(daq, RE, transmissions, max_events, record,
-                              config)
+scan_attenuator_multiple_runs(max_events, transmissions)
     Scan the attenuator through multiple steps collecting a DAQ run at each
     transmission level.
+scan_attenuator_single_runs(max_events, run_length, record)
+    Scan the attenuator through multiple transmission levels over a single DAQ
+    run.
 """
 
 import logging
@@ -19,26 +21,21 @@ logging.basicConfig(level=logging.INFO)
 logger: logging.Logger = logging.getLogger(__name__)
 
 def scan_attenuator_multiple_runs(
-        daq: Daq,
-        RE: RunEngine,
-        att: Any,
         max_events: int = 240,
-        transmissions: List[float] = []
+        transmissions: List[float] = [],
+        record: bool = True
 ) -> None:
     """
     Scan the attenuator through multiple steps recording a DAQ run at each
     transmission level. The number of events collected at each step is adjusted
     so the final statistics are similar at all transmission levels.
 
+    NOTE: the `daq`, `att` and `RE` objects used by this function are assumed
+    to be in the namespace. This function only works when called from a
+    succesfully setup hutch Python environment.
+
     Parameters
     ----------
-    daq : Daq
-        The PCDS Daq interface object. It should be available upon launching
-        hutch Python.
-    att : Any
-        The attenuator.
-    RE : RunEngine
-        The RunEngine available in hutch Python.
     max_events : int
         Number of events to record for the highest transmission level. Steps at
         lower transmission levels will have proportionally more events.
@@ -55,7 +52,7 @@ def scan_attenuator_multiple_runs(
         f"{len(transmissions)} transmission levels chosen: {transmissions}."
     )
     logger.debug(f"Adjusting DAQ configuration.")
-    old_config, new_config = daq.configure(events=max_events, record=True)
+    old_config, new_config = daq.configure(events=max_events, record=record)
 
     transmissions = sorted(transmissions, reverse=True)
     RE(attenuator_scan_multi_run(
@@ -68,9 +65,6 @@ def scan_attenuator_multiple_runs(
 
 
 def scan_attenuator_single_run(
-        daq: Daq,
-        att: Any,
-        RE: RunEngine,
         run_length: int = 30,
         transmissions: List[float] =[],
         record: bool = True
@@ -80,15 +74,12 @@ def scan_attenuator_single_run(
     The number of events collected at each step is adjusted so the final
     statistics are similar at all transmission levels.
 
+    NOTE: the `daq`, `att` and `RE` objects used by this function are assumed
+    to be in the namespace. This function only works when called from a
+    succesfully setup hutch Python environment.
+
     Parameters
     ----------
-    daq : Daq
-        The PCDS Daq interface object. It should be available upon launching
-        hutch Python.
-    att : Any
-        The attenuator.
-    RE : RunEngine
-        The RunEngine available in hutch Python.
     run_length : int
         Total run length to acquire at all transmission levels. The time spent
         on each step is adjusted proportionally. Unit: seconds.

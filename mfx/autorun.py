@@ -3,7 +3,7 @@ Wrapper functions for collecting DAQ runs with Bluesky.
 
 Functions
 ---------
-autorun(daq, RE, sample, run_length, record, runs, inspire, delay)
+autorun(*, sample, run_length, record, runs, inspire, delay)
 """
 import logging
 
@@ -26,13 +26,12 @@ def autorun(
     Run the Bluesky RunEngine to collect multiple DAQ runs and log progress to
     the eLog.
 
+    NOTE: the `daq` and `RE` objects used by this function are assumed to be in
+    the namespace. This function only works when called from a succesfully
+    setup hutch Python environment.
+
     Parameters
     ----------
-    daq : Daq
-        The PCDS Daq interface object. It should be available upon launching
-        hutch Python.
-    RE : RunEngine
-        The RunEngine available in hutch Python.
     sample : str
         Sample name to include in the eLog posts.
     run_length : int, optional
