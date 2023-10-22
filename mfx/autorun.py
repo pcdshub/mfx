@@ -14,8 +14,6 @@ logging.basicConfig(level=logging.INFO)
 logger: logging.Logger = logging.getLogger(__name__)
 
 def autorun(
-        daq: Daq,
-        RE: RunEngine,
         *,
         sample: str = "?",
         run_length: int = 300,
@@ -40,7 +38,7 @@ def autorun(
     run_length : int, optional
         Length of the DAQ run in seconds. Default: 300 s.
     record : bool, optional
-        Whether to record the DAQ run data. Default: True.
+        Whether to record the DAQ run data and post to eLog. Default: True.
     runs : int, optional
         Number of DAQ runs
     inspire : bool, optional

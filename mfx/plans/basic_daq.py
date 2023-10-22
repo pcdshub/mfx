@@ -59,7 +59,7 @@ def daq_multicount(
     run_length : int, optional
         Length of the DAQ run in seconds. Default: 300 s.
     record : bool, optional
-        Whether to record the DAQ run data. Default: True.
+        Whether to record the DAQ run data and post to eLog. Default: True.
     runs : int, optional
         Number of DAQ runs
     inspire : bool, optional
@@ -84,7 +84,8 @@ def daq_multicount(
                 duration=run_length,
                 record=record
             )
-            elog.post(msg, run=daq.run_number())
+            if record:
+                elog.post(msg, run=daq.run_number())
             logger.debug(f"Ending run {run + 1} of {runs} - DAQ run {daq.run_number()}")
 
             yield from bps.sleep(delay)
