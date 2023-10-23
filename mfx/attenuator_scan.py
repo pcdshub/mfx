@@ -23,7 +23,7 @@ def attenuator_scan_separate_runs(events=240, record=False, config=True, transmi
     pp.open()
     for i in transmissions:
         att(i)
-        time.sleep(3)
+        sleep(3)
         daq.begin(events=events,record=record,wait=True, use_l3t=False)
         daq.end_run()
     pp.close()
@@ -57,10 +57,10 @@ def attenuator_scan_single_run(events=240, record=False, transmissions=[0.01,0.0
     try:
         pp.open()
         daq.configure(record=record)
-        time.sleep(3)
+        sleep(3)
         for i in transmissions:
             att(i,wait=True)
-            time.sleep(3)
+            sleep(3)
             daq.begin(events=events,record=record,wait=True, use_l3t=False)
     finally:
         daq.end_run()
