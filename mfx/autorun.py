@@ -47,6 +47,8 @@ def autorun(
     """
     from mfx.plans import daq_multicount
 
+    RE = RunEngine({})
+    daq = Daq(RE=RE)
     daq.connect()
     logger.info(f"Attempting {runs} DAQ runs of sample {sample}.")
     logger.debug(f"Adjusting DAQ configuration.")

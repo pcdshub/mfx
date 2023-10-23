@@ -46,6 +46,9 @@ def scan_attenuator_multiple_runs(
     """
     from mfx.plans import attenuator_scan_multi_run
 
+    RE = RunEngine({})
+    daq = Daq(RE=RE)
+
     daq.connect()
     logger.info(
         f"Beginning attenuator scan across multiple DAQ runs.\n"
@@ -89,6 +92,9 @@ def scan_attenuator_single_run(
         Whether to record the data.
     """
     from mfx.plans import attenuator_scan_one_run
+
+    RE = RunEngine({})
+    daq = Daq(RE=RE)
 
     daq.connect()
     logger.info(
