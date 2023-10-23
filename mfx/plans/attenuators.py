@@ -87,7 +87,8 @@ def attenuator_scan_multi_run(
         attenuator: Any,
         transmissions: List[float],
         max_evts: int,
-        record: bool = True
+        record: bool = True,
+        flat: bool = False
 ) -> Generator:
     """
     Collect individual runs at different transmission levels by adjusting the
@@ -106,12 +107,22 @@ def attenuator_scan_multi_run(
         Number of events for the maximum transmission level.
     record : bool
         Whether to record the data.
+    flat : bool
+        Whether to acquire homogeneous statistics or not. If False all
+        transmission levels will have `max_events` acquired.
     """
     transmissions = sorted(transmissions, reverse=True)
 
     def inner():
         for transmission in transmissions:
-            n_evts = determine_num_events(transmission, transmissions[0], max_evts)
+            if flat:
+                n_evts: float = determine_num_events(
+                    transmission,
+                    transmissions[0],
+                    max_evts
+                )
+            else:
+                n_evts: float = max_evts
             logger.info(f"Acquiring {n_evts} events at transmission {transmission}")
             yield from bps.mv(attenuator, transmission)
             yield from daq_count(
@@ -130,7 +141,8 @@ def attenuator_scan_one_run(
         transmissions: List[float],
         max_evts: int,
         record: bool = True,
-        acq_freq: int = 120
+        acq_freq: int = 120,
+        flat: bool = False
 ) -> Generator:
     """
     Collect a single run while adjusting transmission level by changing the
@@ -151,12 +163,18 @@ def attenuator_scan_one_run(
         Whether to record the data.
     acq_freq : int
         DAQ acquisition frequency.
+    flat : bool
+        Whether to acquire homogeneous statistics or not. If False all
+        transmission levels will have `max_events` acquired.
     """
     transmissions = sorted(transmissions, reverse=True)
     max_t: float = transmissions[0]
-    n_evts_per_step: List[float] = [
-        determine_num_events(t, max_t, max_evts) for t in transmissions
-    ]
+    if flat:
+        n_evts_per_step: List[float] = [
+            determine_num_events(t, max_t, max_evts) for t in transmissions
+        ]
+    else:
+        n_evts_per_step: List[float] = [max_evts for t in transmissions]
 
     def inner():
         for idx, transmission in enumerate(transmissions):
