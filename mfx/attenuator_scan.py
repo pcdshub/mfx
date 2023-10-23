@@ -88,7 +88,7 @@ def scan_attenuator_single_run(
     record : bool
         Whether to record the data.
     """
-    from mfx.plans import attenuator_scan_single_run
+    from mfx.plans import attenuator_scan_one_run
 
     daq.connect()
     logger.info(
@@ -100,8 +100,7 @@ def scan_attenuator_single_run(
     logger.debug(f"{daq.config_info(config=new_config)}")
 
     transmissions = sorted(transmissions, reverse=True)
-    RE(attenuator_scan_one_run(
-        detectors=[daq],
+    RE(attenuator_scan_one       detectors=[daq],
         attenuator=att,
         transmissions=transmissions,
         run_length=run_length
@@ -134,7 +133,7 @@ def attenuator_scan_separate_runs(events=240, record=False, config=True, transmi
     pp.open()
     for i in transmissions:
         att(i)
-        time.sleep(3)
+        sleep(3)
         daq.begin(events=events,record=record,wait=True, use_l3t=False)
         daq.end_run()
     pp.close()
@@ -171,7 +170,7 @@ def attenuator_scan_single_run(events=240, record=False, transmissions=[0.01,0.0
         time.sleep(3)
         for i in transmissions:
             att(i,wait=True)
-            time.sleep(3)
+            sleep(3)
             daq.begin(events=events,record=record,wait=True, use_l3t=False)
     finally:
         daq.end_run()
