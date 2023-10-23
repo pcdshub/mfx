@@ -11,7 +11,7 @@ attenuator_scan_single_run()
     attenuator configuration.
 """
 
-__all__ = ["attenuator_scan_multi_run", "attenuator_scan_single_run"]
+__all__ = ["attenuator_scan_multi_run", "attenuator_scan_one_run"]
 
 import logging
 from typing import Generator, List, Any
