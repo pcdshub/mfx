@@ -18,7 +18,7 @@ from typing import Generator, List, Any
 
 import numpy as np
 import bluesky.plan_stubs as bps
-from pcdsdaq.preprocessors import daq_during_decorator
+from nabs.preprocessors import daq_during_decorator
 from nabs.plans import daq_count
 
 logging.basicConfig(level=logging.INFO)
@@ -170,11 +170,11 @@ def attenuator_scan_one_run(
     transmissions = sorted(transmissions, reverse=True)
     max_t: float = transmissions[0]
     if flat:
-        n_evts_per_step: List[float] = [
+        n_evts_per_step: List[int] = [
             determine_num_events(t, max_t, max_evts) for t in transmissions
         ]
     else:
-        n_evts_per_step: List[float] = [max_evts for t in transmissions]
+        n_evts_per_step: List[int] = [max_evts for t in transmissions]
 
     def inner():
         for idx, transmission in enumerate(transmissions):

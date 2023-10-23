@@ -74,7 +74,7 @@ def scan_attenuator_single_run(
         transmissions: List[float] =[],
         record: bool = True,
         acq_freq: int = 120,
-        flat: bool = True
+        flat: bool = False
 ) -> None:
     """
     Scan the attenuator through multiple steps over a single DAQ run.
