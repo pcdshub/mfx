@@ -86,7 +86,8 @@ def attenuator_scan_multi_run(
         detectors: List[Any],
         attenuator: Any,
         transmissions: List[float],
-        max_evts: int
+        max_evts: int,
+        record: bool = True
 ) -> Generator:
     """
     Collect individual runs at different transmission levels by adjusting the
@@ -103,6 +104,8 @@ def attenuator_scan_multi_run(
         Transmission levels to step the attenuator through
     max_evts : float
         Number of events for the maximum transmission level.
+    record : bool
+        Whether to record the data.
     """
     transmissions = sorted(transmissions, reverse=True)
 
@@ -116,7 +119,7 @@ def attenuator_scan_multi_run(
                 num=1,
                 delay=0,
                 events=n_evts,
-                record=True
+                record=record
             )
     return (yield from inner())
 
@@ -125,7 +128,9 @@ def attenuator_scan_one_run(
         detectors: List[Any],
         attenuator: Any,
         transmissions: List[float],
-        run_length: int
+        max_evts: int,
+        record: bool = True,
+        acq_freq: int = 120
 ) -> Generator:
     """
     Collect a single run while adjusting transmission level by changing the
@@ -140,20 +145,22 @@ def attenuator_scan_one_run(
         Attenuator to scan.
     transmissions : List[float]
         Transmission levels to step the attenuator through
-    run_length : int
-        Total duration of the single DAQ run to collect. The time will be split
-        between the various steps so that the integrated statistics per step
-        are comparable.
+    max_evts : float
+        Number of events for the maximum transmission level.
+    record : bool
+        Whether to record the data.
+    acq_freq : int
+        DAQ acquisition frequency.
     """
     transmissions = sorted(transmissions, reverse=True)
-    step_durations = split_run_time_per_step(
-        transmissions,
-        run_length=run_length
-    )
+    max_t: float = transmissions[0]
+    n_evts_per_step: List[float] = [
+        determine_num_events(t, max_t, max_evts) for t in transmissions
+    ]
 
     def inner():
         for idx, transmission in enumerate(transmissions):
             yield from bps.mv(attenuator, transmission)
-            yield from bps.sleep(step_durations[idx])
+            yield from bps.sleep(n_evts_per_step[idx]/acq_freq)
 
     return (yield from inner())

@@ -30,10 +30,6 @@ def scan_attenuator_multiple_runs(
     transmission level. The number of events collected at each step is adjusted
     so the final statistics are similar at all transmission levels.
 
-    NOTE: the `daq`, `att` and `RE` objects used by this function are assumed
-    to be in the namespace. This function only works when called from a
-    succesfully setup hutch Python environment.
-
     Parameters
     ----------
     max_events : int
@@ -60,34 +56,34 @@ def scan_attenuator_multiple_runs(
         detectors=[daq],
         attenuator=att,
         transmissions=transmissions,
-        max_evts=max_events
+        max_evts=max_events,
+        record=record
     ))
     daq.disconnect()
 
 
 def scan_attenuator_single_run(
-        run_length: int = 30,
+        max_events: int = 240,
         transmissions: List[float] =[],
-        record: bool = True
+        record: bool = True,
+        acq_freq: int = 120
 ) -> None:
     """
     Scan the attenuator through multiple steps over a single DAQ run.
     The number of events collected at each step is adjusted so the final
     statistics are similar at all transmission levels.
 
-    NOTE: the `daq`, `att` and `RE` objects used by this function are assumed
-    to be in the namespace. This function only works when called from a
-    succesfully setup hutch Python environment.
-
     Parameters
     ----------
-    run_length : int
-        Total run length to acquire at all transmission levels. The time spent
-        on each step is adjusted proportionally. Unit: seconds.
+    max_events : int
+        Number of events to record for the highest transmission level. Steps at
+        lower transmission levels will have proportionally more events.
     transmissions: List[float]
         List of transmission levels to step through
     record : bool
         Whether to record the data.
+    acq_freq : int
+        DAQ acquisition frequency.
     """
     from mfx.plans import attenuator_scan_one_run
     from mfx.db import daq, att, RE
@@ -98,7 +94,7 @@ def scan_attenuator_single_run(
         f"{len(transmissions)} transmission levels chosen: {transmissions}."
     )
     logger.debug(f"Adjusting DAQ configuration.")
-    old_config, new_config = daq.configure(duration=run_length, record=record)
+    old_config, new_config = daq.configure(events=max_events, record=record)
     logger.debug(f"{daq.config_info(config=new_config)}")
 
     transmissions = sorted(transmissions, reverse=True)
@@ -106,7 +102,9 @@ def scan_attenuator_single_run(
         detectors=[daq],
         attenuator=att,
         transmissions=transmissions,
-        run_length=run_length
+        max_evts=max_events,
+        record=record,
+        acq_freq=acq_freq
     ))
     daq.disconnect()
 

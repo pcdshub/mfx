@@ -26,10 +26,6 @@ def autorun(
     Run the Bluesky RunEngine to collect multiple DAQ runs and log progress to
     the eLog.
 
-    NOTE: the `daq` and `RE` objects used by this function are assumed to be in
-    the namespace. This function only works when called from a succesfully
-    setup hutch Python environment.
-
     Parameters
     ----------
     sample : str
