@@ -121,7 +121,7 @@ def attenuator_scan_multi_run(
     return (yield from inner())
 
 @daq_during_decorator
-def attenuator_scan_single_run(
+def attenuator_scan_one_run(
         detectors: List[Any],
         attenuator: Any,
         transmissions: List[float],

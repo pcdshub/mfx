@@ -100,7 +100,7 @@ def scan_attenuator_single_run(
     logger.debug(f"{daq.config_info(config=new_config)}")
 
     transmissions = sorted(transmissions, reverse=True)
-    RE(attenuator_scan_single_run(
+    RE(attenuator_scan_one_run(
         detectors=[daq],
         attenuator=att,
         transmissions=transmissions,
