@@ -46,9 +46,8 @@ def autorun(
         Time (in seconds) to wait between successive runs. Default: 5 s.
     """
     from mfx.plans import daq_multicount
+    from mfx.db import daq, RE
 
-    RE = RunEngine({})
-    daq = Daq(RE=RE)
     daq.connect()
     logger.info(f"Attempting {runs} DAQ runs of sample {sample}.")
     logger.debug(f"Adjusting DAQ configuration.")
