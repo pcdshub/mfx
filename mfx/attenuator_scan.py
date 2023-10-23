@@ -100,7 +100,8 @@ def scan_attenuator_single_run(
     logger.debug(f"{daq.config_info(config=new_config)}")
 
     transmissions = sorted(transmissions, reverse=True)
-    RE(attenuator_scan_one       detectors=[daq],
+    RE(attenuator_scan_one_run(
+        detectors=[daq],
         attenuator=att,
         transmissions=transmissions,
         run_length=run_length
@@ -167,7 +168,7 @@ def attenuator_scan_single_run(events=240, record=False, transmissions=[0.01,0.0
     try:
         pp.open()
         daq.configure(record=record)
-        time.sleep(3)
+        sleep(3)
         for i in transmissions:
             att(i,wait=True)
             sleep(3)
