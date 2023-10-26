@@ -126,6 +126,8 @@ def correct_timing_drift(
     will_log : bool, optional
         Log timing corrections to a file.
     """
+    from mfx.db import lxt
+
     logfile: str = ""
     if will_log:
         logfile = input("Please enter a file to log correction info to: ")
