@@ -1,5 +1,7 @@
 from ophyd.status import wait as status_wait
 from mfx.db import (mfx_reflaser,
+                    mfx_dg1_ipm,
+                    mfx_dg2_ipm,
                     mfx_dg1_slits,
                     mfx_dg1_wave8_motor,
                     mfx_dg2_upstream_slits,
@@ -29,16 +31,15 @@ def laser_in(wait=False, timeout=10):
     """
     # Command motion and collect status objects
     ref = mfx_reflaser.insert(wait=False)
-# Removing wave8 dg1 until target positions have been fixed
-#    w8 = mfx_dg1_wave8_motor.move(35, wait=False)
+    dg1_ipm=mfx_dg1_ipm.target.remove()
+    dg2_ipm=mfx_dg2_ipm.target.remove()
     dg1 = mfx_dg1_slits.move(6., wait=False)
-    dg2 = mfx_dg2_ipm.target.remove()
     dg2_us = mfx_dg2_upstream_slits.move(6., wait=False)
     dg2_ms = mfx_dg2_midstream_slits.move(1., wait=False)
     dg2_ds = mfx_dg2_downstream_slits.move(1., wait=False)
     # Combine status and wait for completion
     if wait:
-        status_wait(ref & w8 & dg1 & dg2_us & dg2_ms & dg2_ds,
+        status_wait(ref & dg1 & dg2_us & dg2_ms & dg2_ds,
                     timeout=timeout)
 
 
