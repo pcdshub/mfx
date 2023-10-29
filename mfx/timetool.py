@@ -126,7 +126,7 @@ def correct_timing_drift(
     will_log : bool, optional
         Log timing corrections to a file.
     """
-    from mfx.db import lxt
+    from mfx.db import lxt, txt
 
     logfile: str = ""
     if will_log:
@@ -169,6 +169,7 @@ def correct_timing_drift(
                     logfile
                 )
                 lxt.mvr(tt_average_seconds)
+                lxt.set_current_position(-float(txt.position))
 
         except KeyboardInterrupt as e:
             write_log(f"Breaking out of timing correction loop", logfile)
