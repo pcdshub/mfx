@@ -64,6 +64,9 @@ with safe_load('detector_image'):
 with safe_load("drift_correct"):
     from mfx.timetool import *
 
+with safe_load('xfel_gui'):
+    from mfx.xfel_gui import *
+
 #
 #
 # preparation for fine timing beamline python.
