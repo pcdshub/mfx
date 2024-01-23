@@ -67,12 +67,6 @@ with safe_load("drift_correct"):
 with safe_load('xfel_gui'):
     from mfx.xfel_gui import *
 
-#
-#
-# preparation for fine timing beamline python.
-#
-#
-
 with safe_load('FS45 lxt & lxt_ttc'):
     import logging
     logging.getLogger('pint').setLevel(logging.ERROR)
@@ -81,10 +75,10 @@ with safe_load('FS45 lxt & lxt_ttc'):
     from pcdsdevices.lxe import LaserTiming
     from pcdsdevices.pseudopos import SyncAxis
     from pcdsdevices.device_types import DelayNewport
-    # from xpp.db import xpp_txt
+    from mfx.db import mfx_txt
 
     lxt = LaserTiming('LAS:FS45', name='lxt')
-    txt = DelayNewport('MFX:LAS:MMN:06', n_bounces=16, name='txt')
+    txt = mfx_txt
     # <we are missibng the compensation 'motor'>
 
     class LXTTTC(SyncAxis):
@@ -102,12 +96,13 @@ with safe_load('FS45 lxt & lxt_ttc'):
 with safe_load('add laser motor groups'):
     from pcdsdevices.device_types import Newport
     from pcdsdevices.device_types import DelayNewport
-    # from xpp.db import xpp_txt as txt
-    opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
+    from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
+    from mfx.db import mfx_lxt_fast1
+    
+    #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
                                                           # this is the timetool compensationn stage. You might want this one
-
     class las():
-        opa_comp=opa_comp # waveplate for the main compressor
+        #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
         # initialize motors here for tab completion if wanted
         with safe_load('add more laser motors'):
@@ -115,18 +110,17 @@ with safe_load('add laser motor groups'):
             lasmot3 = Newport('MFX:LAS:MMN:03', name='lasmot3')
             lasmot4 = Newport('MFX:LAS:MMN:04', name='lasmot4')
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
-            lasmot6 = Newport('MFX:LAS:MMN:06', name='lasmot6')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
-            
+
+        with safe_load('Fast delay encoders'):
+            lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
 
         # timing virtual motors for x-ray laser delay adjustment
         lxt = lxt # virtual motor that moves the laser timing system phase shifter
         txt = txt
         lxt_ttc = lxt_ttc
-        #txt=txt # virtual motor that moves the time tool white light delay stage
-        #lxt_ttc=lxt_ttc # virtual motor that moves the LXT and TXT in a synchronous way so the TT signal stays at the center of the OPAL spectral window
-
+        lxt_fast1 = mfx_lxt_fast1
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
