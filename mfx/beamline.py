@@ -104,7 +104,8 @@ with safe_load('add laser motor groups'):
     from pcdsdevices.device_types import DelayNewport
     from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
     from mfx.db import mfx_lxt_fast1
-    
+    lxt_fast=mfx_lxt_fast1
+
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
                                                           # this is the timetool compensationn stage. You might want this one
     class las():
