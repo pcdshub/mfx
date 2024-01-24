@@ -1,55 +1,55 @@
-from subprocess import check_output
-
-import logging
-import json
-import sys
-import time
-import os
-
-import numpy as np
-import elog
-from hutch_python.utils import safe_load
-from ophyd import EpicsSignalRO
-from ophyd import EpicsSignal
-from bluesky import RunEngine
-from bluesky.plans import scan
-from bluesky.plans import list_scan
-from ophyd import Component as Cpt
-from ophyd import Device
-from pcdsdevices.interface import BaseInterface
-from pcdsdevices.areadetector import plugins
-from mfx.db import daq
-from mfx.db import camviewer
-from mfx.db import RE
-#from mfx.db import bec
-#from mfx.db import mfx_ccm as ccm
-from mfx.delay_scan import delay_scan
-from mfx.db import lxt_fast, lxt_fast_enc
-from pcdsdevices.device_types import Newport, IMS
-from pcdsdevices.evr import Trigger
-from epics import caget 
-
-#from macros import *
-import time
-
-logger = logging.getLogger(__name__)
-
-#from xpp.db import daq, seq, elog
-#from ophyd.status import wait as status_wait
-from pcdsdevices.evr import Trigger
-#from xpp.db import cp
-#from xpp.db import lp
-#from xpp.db import xpp_pulsepicker as pp
-#from xpp.db import xpp_ccm as ccm
-#from pcdsdevices.device_types import Newport, IMS
-# WAIT A WHILE FOR THE DAQ TO START
-#import pcdsdaq.daq
-#pcdsdaq.daq.BEGIN_TIMEOUT = 5
-
-
-
-#######################
 class User:
+    from subprocess import check_output
+
+    import logging
+    import json
+    import sys
+    import time
+    import os
+
+    import numpy as np
+    import elog
+    from hutch_python.utils import safe_load
+    from ophyd import EpicsSignalRO
+    from ophyd import EpicsSignal
+    from bluesky import RunEngine
+    from bluesky.plans import scan
+    from bluesky.plans import list_scan
+    from ophyd import Component as Cpt
+    from ophyd import Device
+    from pcdsdevices.interface import BaseInterface
+    from pcdsdevices.areadetector import plugins
+    from mfx.db import daq
+    from mfx.db import camviewer
+    from mfx.db import RE
+    #from mfx.db import bec
+    #from mfx.db import mfx_ccm as ccm
+    from mfx.delay_scan import delay_scan
+    from mfx.db import lxt_fast, lxt_fast_enc
+    from pcdsdevices.device_types import Newport, IMS
+    from pcdsdevices.evr import Trigger
+    from epics import caget 
+
+    #from macros import *
+    import time
+
+    logger = logging.getLogger(__name__)
+
+    #from xpp.db import daq, seq, elog
+    #from ophyd.status import wait as status_wait
+    from pcdsdevices.evr import Trigger
+    #from xpp.db import cp
+    #from xpp.db import lp
+    #from xpp.db import xpp_pulsepicker as pp
+    #from xpp.db import xpp_ccm as ccm
+    #from pcdsdevices.device_types import Newport, IMS
+    # WAIT A WHILE FOR THE DAQ TO START
+    #import pcdsdaq.daq
+    #pcdsdaq.daq.BEGIN_TIMEOUT = 5
+
+
+
+    #######################
     """Generic User Object"""
     with safe_load('Dummy'):
         print('Import dummy')
@@ -316,23 +316,22 @@ class User:
             print(time.ctime(time.time()))
         return
 
-post_template = """\
-Run Number: {} {}
+    post_template = """\
+    Run Number: {} {}
 
-Acquiring {} events
+    Acquiring {} events
 
-{}
-"""
+    {}
+    """
 
 
-post_template_escan = """\
-Run Number: {} {}
+    post_template_escan = """\
+    Run Number: {} {}
 
-{}
-Minimum photon_energy -> {}
-Maximum photon_energy -> {}
-"""
-
+    {}
+    Minimum photon_energy -> {}
+    Maximum photon_energy -> {}
+    """
 
 class MicroToNano():
     def __init__(self):
