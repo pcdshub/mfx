@@ -25,7 +25,7 @@ class User:
     #from mfx.db import bec
     #from mfx.db import mfx_ccm as ccm
     from mfx.delay_scan import delay_scan
-    from mfx.db import lxt_fast, lxt_fast_enc
+    from mfx.db import mfx_lxt_fast1 as lxt_fast
     from pcdsdevices.device_types import Newport, IMS
     from pcdsdevices.evr import Trigger
     from epics import caget 
@@ -114,6 +114,7 @@ class User:
 
     def lxt_fast_set_absolute_zero(self):
         currentpos = lxt_fast()
+        lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=lxt_fast)
         currentenc = lxt_fast_enc.get()
         #elog.post('Set current stage position {}, encoder value {} to 0'.format(currentpos,currentenc.pos))
         print('Set current stage position {}, encoder value {} to 0'.format(currentpos,currentenc.pos))
