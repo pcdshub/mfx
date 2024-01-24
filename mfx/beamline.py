@@ -39,6 +39,9 @@ with safe_load('macros'):
     from mfx.macros import *
     mfx_timing = MFX_Timing(sequencer)
 
+with safe_load('fast_delay'):
+    from mfx.mfxDOD import *
+
 with safe_load('autorun'):
     from mfx.autorun import *
 
