@@ -74,7 +74,8 @@ class User:
 #            self.vhs = VonHamos_Spec('MFX:VHS:MMB', name='vhs')
 
         with safe_load ('LED'):
-            self.led = Trigger('XCS:R42:EVR:01:TRIG6', name='led_delay')
+            #self.led = Trigger('XCS:R42:EVR:01:TRIG6', name='led_delay')
+            self.led = Trigger('MFX:LAS:EVR:01:TRIG3', name='led_delay')
             #self.led = Trigger('XCS:R44:EVR:44:TRIG6', name='led_delay')
             self.led_uS = MicroToNano()
 
