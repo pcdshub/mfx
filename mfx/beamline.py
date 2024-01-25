@@ -74,6 +74,29 @@ with safe_load("drift_correct"):
 with safe_load('xfel_gui'):
     from mfx.xfel_gui import *
 
+with safe_load("LXE_POWER"):
+    import logging
+
+    from pcdsdevices.lxe import LaserEnergyPostioner
+    from hutch_python.utils import get_current_experiment
+    from ophyd.device import Component as Cpt
+    from pcdsdevices.epics_motor import Newport
+
+    logging.getLogger("pint").setLevel(logging.ERROR)
+
+    # Hack the LXE class to make it work with Newports
+    class LXE(LaserEnergyPositioner):
+        motor = Cpt(Newport, "")
+
+    lxe_calib_file = (
+        f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
+    )
+    try:
+        lxe_pw = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe_pw")
+    except OSError:
+        print(f"Could not load file: {lxe_calib_file}")
+        raise FileNotFoundError
+
 with safe_load('FS45 lxt & lxt_ttc'):
     import logging
     logging.getLogger('pint').setLevel(logging.ERROR)
