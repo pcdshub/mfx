@@ -1,21 +1,3 @@
-from subprocess import check_output
-
-import logging
-import time
-
-import numpy as np
-import elog
-from hutch_python.utils import safe_load
-from bluesky.plans import scan
-from bluesky.plans import list_scan
-from mfx.db import daq
-from mfx.db import RE
-from mfx.delay_scan import delay_scan
-from mfx.db import mfx_lxt_fast1 as lxt_fast
-from pcdsdevices.evr import Trigger
-from pcdsdevices.evr import Trigger
-logger = logging.getLogger(__name__)
-
 def set_current_position(motor, value):
     motor.set_use_switch.put(1)
     motor.set_use_switch.wait_for_connection()
@@ -39,11 +21,16 @@ def led_scan(start, end, nsteps, duration):
         Dwell time at each delay. In seconds.
     """
 
+    from hutch_python.utils import safe_load
+    import time
+    import numpy as np
+    from pcdsdevices.evr import Trigger
+
     with safe_load ('LED'):
-    #self.led = Trigger('XCS:R42:EVR:01:TRIG6', name='led_delay')
-    led = Trigger('MFX:LAS:EVR:01:TRIG3', name='led_delay')
-    #self.led = Trigger('XCS:R44:EVR:44:TRIG6', name='led_delay')
-    led_uS = MicroToNano()
+        #self.led = Trigger('XCS:R42:EVR:01:TRIG6', name='led_delay')
+        led = Trigger('MFX:LAS:EVR:01:TRIG3', name='led_delay')
+        #self.led = Trigger('XCS:R44:EVR:44:TRIG6', name='led_delay')
+        led_uS = MicroToNano()
 
     old_led = led.ns_delay.get()
     print('Scanning LED delays...')
@@ -55,6 +42,9 @@ def led_scan(start, end, nsteps, duration):
     print('Scan complete setting delay back to old value: ' +str(old_led))
 
 def lxt_fast_set_absolute_zero(self):
+    import elog
+    from mfx.db import mfx_lxt_fast1 as lxt_fast
+
     currentpos = lxt_fast()
     lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=lxt_fast)
     currentenc = lxt_fast_enc.get()
@@ -65,24 +55,37 @@ def lxt_fast_set_absolute_zero(self):
     return
 
 def takeRun(nEvents=None, duration=None, record=True, use_l3t=False):
+    from mfx.db import daq
     daq.configure(events=120, record=record, use_l3t=use_l3t)
     daq.begin(events=nEvents, duration=duration)
     daq.wait()
     daq.end_run()
 
 def pvascan(motor, start, end, nsteps, nEvents, record=None):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
+
     currPos = motor.get()
     daq.configure(nEvents, record=record, controls=[motor])
     RE(scan([daq], motor, start, end, nsteps))
     motor.put(currPos)
 
 def pvdscan(motor, start, end, nsteps, nEvents, record=None):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
     daq.configure(nEvents, record=record, controls=[motor])
     currPos = motor.get()
     RE(scan([daq], motor, currPos + start, currPos + end, nsteps))
     motor.put(currPos)
 
 #def ascan(self, motor, start, end, nsteps, nEvents, record=True, use_l3t=False):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
+    import logging
+    logger = logging.getLogger(__name__)
 #    self.cleanup_RE()
 #    currPos = motor.wm()
 #    daq.configure(nEvents, record=record, controls=[motor], use_l3t=use_l3t)
@@ -95,6 +98,12 @@ def pvdscan(motor, start, end, nsteps, nEvents, record=None):
 #    motor.mv(currPos)
 
 def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import list_scan
+    import logging
+    logger = logging.getLogger(__name__)
+
     self.cleanup_RE()
     currPos = motor.wm()
     daq.configure(nEvents, record=record, controls=[motor], use_l3t=use_l3t)
@@ -107,6 +116,11 @@ def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
     motor.mv(currPos)
 
 #def dscan(self, motor, start, end, nsteps, nEvents, record=True, use_l3t=False):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
+    import logging
+    logger = logging.getLogger(__name__)
 #    self.cleanup_RE()
 #    daq.configure(nEvents, record=record, controls=[motor], use_l3t=use_l3t)
 #    currPos = motor.wm()
@@ -119,6 +133,11 @@ def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
 #    motor.mv(currPos)
 
 #def a2scan(self, m1, a1, b1, m2, a2, b2, nsteps, nEvents, record=True, use_l3t=False):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
+    import logging
+    logger = logging.getLogger(__name__)
 #    self.cleanup_RE()
 #    daq.configure(nEvents, record=record, controls=[m1, m2], use_l3t=use_l3t)
 #    try:
@@ -129,6 +148,11 @@ def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
 #        self.cleanup_RE()
 
 #def a3scan(self, m1, a1, b1, m2, a2, b2, m3, a3, b3, nsteps, nEvents, record=True):
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
+    import logging
+    logger = logging.getLogger(__name__)
 #    self.cleanup_RE()
 #    daq.configure(nEvents, record=record, controls=[m1, m2, m3])
 #    try:
@@ -141,6 +165,13 @@ def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
 #def delay_scan(self, start, end, sweep_time, record=True, use_l3t=False,
 #               duration=None):
 #    """Delay scan with the daq."""
+    from mfx.db import mfx_lxt_fast1 as lxt_fast
+    from mfx.delay_scan import delay_scan
+    from mfx.db import RE
+    from mfx.db import daq
+    from bluesky.plans import scan
+    import logging
+    logger = logging.getLogger(__name__)
 #    self.cleanup_RE()
 #    bec.disable_plots()
 #    controls = [lxt_fast]
@@ -157,6 +188,12 @@ def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
 #def empty_delay_scan(self, start, end, sweep_time, record=True,
 #                     use_l3t=False, duration=None):
 #    """Delay scan without the daq."""
+    from mfx.db import mfx_lxt_fast1 as lxt_fast
+    from mfx.db import RE
+    from mfx.db import daq
+    from mfx.delay_scan import delay_scan
+    import logging
+    logger = logging.getLogger(__name__)
 #    self.cleanup_RE()
 #    #daq.configure(events=None, duration=None, record=record,
 #    #              use_l3t=use_l3t, controls=[lxt_fast])
@@ -169,6 +206,7 @@ def listscan(self, motor, posList, nEvents, record=True, use_l3t=False):
 #        self.cleanup_RE()
 
 def cleanup_RE(self):
+    from mfx.db import RE
     if not RE.state.is_idle:
         print('Cleaning up RunEngine')
         print('Stopping previous run')
@@ -225,6 +263,11 @@ def perform_run(events, record=True, comment='', post=True,
     Note
     ----
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    import time
+    import elog
+    from mfx.db import daq
 
     comment = comment or ''
     # Start recording
@@ -248,8 +291,9 @@ def perform_run(events, record=True, comment='', post=True,
     return
 
 
-
 def dummy_daq_test(events=360, sleep=3, record=False):
+    import time
+    from mfx.db import daq
     daq.connect()
     while 1:
         daq.begin(events=events, record=record)
@@ -277,17 +321,17 @@ Maximum photon_energy -> {}
 """
 
 class MicroToNano():
-def __init__(self):
-    self._offset_nano = 0
+    def __init__(self):
+        self._offset_nano = 0
 
-def setOffset_nano(self, offset):
-    self._offset_nano = offset
+    def setOffset_nano(self, offset):
+        self._offset_nano = offset
 
-def setOffset_micro(self, offset):
-    self._offset_nano = offset * 1000
+    def setOffset_micro(self, offset):
+        self._offset_nano = offset * 1000
 
-def getOffset_nano(self):
-    return self._offset_nano
+    def getOffset_nano(self):
+        return self._offset_nano
 
-def __call__(self, micro):
-    return (micro * 1000) + self._offset_nano
+    def __call__(self, micro):
+        return (micro * 1000) + self._offset_nano
