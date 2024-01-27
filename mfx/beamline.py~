@@ -77,7 +77,7 @@ with safe_load('xfel_gui'):
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
-    from pcdsdevices.device import Component as Cpt
+    from pcdsdevices.device import Cpt
     from pcdsdevices.epics_motor import Newport
 
     # Hack the LXE class to make it work with Newports
