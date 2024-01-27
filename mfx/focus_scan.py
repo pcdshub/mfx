@@ -31,6 +31,6 @@ def focus_scan(camera, start=1, end=299, step=1):
     import numpy as np
     from mfx.db import tfs
 
-    trf_align = transfocator_scan.transfocator_aligner(camera)
+    trf_align = transfocator_aligner(camera)
     trf_pos = np.arange(start, end, step)
     trf_align.scan_transfocator(tfs.translation,trf_pos,1)
