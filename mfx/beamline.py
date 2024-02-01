@@ -88,7 +88,7 @@ with safe_load("laser wp power"):
         f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
     )
     try:
-        lxe_pw = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe_pw")
+        lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
     except OSError:
         print(f"Could not load file: {lxe_calib_file}")
         raise FileNotFoundError
