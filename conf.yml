@@ -7,6 +7,6 @@ db: /reg/g/pcds/pyps/apps/hutch-python/device_config/db.json
 load: mfx.beamline
 
 daq_platform:
-    default: 4
+    default: 0
 
-experiment: lu5017
+#experiment: lu5017

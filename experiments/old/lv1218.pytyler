@@ -1,0 +1,18 @@
+import numpy as np
+from bluesky.plans import list_grid_scan 
+from mfx.db import daq, RE
+
+# These motors should be added to the questionnaire which will allow this import
+# from mfx.db import shield_x, shield_y
+
+class User():
+    from pcdsdevices.epics_motor import Newport
+    shield_x = Newport('MFX:USR:MMN:31', name='shield_x')
+    shield_y = Newport('MFX:USR:MMN:32', name='shield_y')    
+
+    def flame_scan(self, x_start, x_stop, x_step, y_start, y_stop, y_step, duration=300):
+        daq.configure(record=True, duration=duration)
+        RE(list_grid_scan([daq],
+                          shield_x, np.arange(x_start, x_stop, x_step),
+                          shield_y, np.arange(y_start, y_stop, y_step),
+                          snake_axes=True)                          

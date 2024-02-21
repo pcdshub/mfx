@@ -10,8 +10,8 @@ class Rayonix:
     @property
     def current_rate(self):
         """Current configured EventSequencer rate"""
-        delta = self.sequencer.sequence.get_seq()[1][0]
-        rate = 120/(delta + 3)
+        delta = self.sequencer.sequence.get_seq()[0][1]
+        rate = 120 // (delta + 3)
         return int(rate)
 
     def configure_sequencer(self, rate=30, show_seq=True):
@@ -42,11 +42,18 @@ class Rayonix:
         self.sequencer.sync_marker.put('120Hz')
 
         # Construct the sequence and submit
-        delta = 120/rate - 3
-        sequence = [[213, 197, 212, 211, 210, 198],
-                    [delta, 1, 0, 1, 1, 0],
-                    [0, 0, 0, 0, 0, 0],
-                    [0, 0, 0, 0, 0, 0]]
+        delta = 120 // rate - 3
+        sequence = [[213, delta, 0, 0],
+                    [197, 1, 0, 0],
+                    [212, 0, 0, 0],
+                    [211, 1, 0, 0],
+                    [210, 1, 0, 0],
+                    [198, 0, 0, 0]]
+
+        # sequence = [[213, 197, 212, 211, 210, 198],
+        #             [delta, 1, 0, 1, 1, 0],
+        #             [0, 0, 0, 0, 0, 0],
+        #             [0, 0, 0, 0, 0, 0]]
         retries = 5
         success = False
         for i in range(retries):

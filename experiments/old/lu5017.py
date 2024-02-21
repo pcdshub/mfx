@@ -59,6 +59,8 @@ class User:
         """
         # Create descriptive message
         comment = comment or ''
+        if comment:
+            comment = 'Comment: ' + comment
         # Start recording
         logger.info("Starting DAQ run, -> record=%s", record)
         daq.begin(events=events, record=record)
@@ -116,7 +118,9 @@ class User:
 
 
 post_template = """\
-Run Number: {} {}
+Run Number: {}
+
+{}
 
 Acquiring {} events at {} Hz
 """
