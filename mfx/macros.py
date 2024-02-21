@@ -8,6 +8,7 @@ from mfx.db import (mfx_reflaser,
                     mfx_dg2_upstream_slits,
                     mfx_dg2_midstream_slits,
                     mfx_dg2_downstream_slits)
+import numpy as np
 import time
 def laser_in(wait=False, timeout=10):
     """
@@ -188,6 +189,55 @@ class MFX_Timing:
         self.seq.start()
         return
 
+class FakeDetector:
+    def __init__(self, detname='Rayonix'):
+        try:
+            self.detname = detname
+            if detname == 'Rayonix':
+                # below is 4x4 binning (https://www.rayonix.com/product/mx340-hs/)
+                self.pixel_size_mm = 0.177
+                self.pixel_per_side = 1920
+                self.beam_stop_radius_mm = 5
+            elif detname == 'epix10k2M':
+                # see https://lcls.slac.stanford.edu/detectors/ePix10k
+                self.pixel_size_mm = 0.100
+                self.pixel_per_side = 1650 # approximate
+                self.beam_stop_radius_mm = 9 # approximate
+        except:
+            print('Detector not implemented.')
+    def _energy_keV_to_wavelength_A(self, energy_keV):
+        return 12.398 / energy_keV
+    def _pixel_index_to_radius_mm(self, pixel_index):
+        return pixel_index * self.pixel_size_mm
+    def _pixel_radius_mm_to_theta_radian(self, pixel_radius_mm, det_dist_mm):
+        # angle between incident and outgoing wavevectors: 2*theta
+        return np.arctan2(pixel_radius_mm, det_dist_mm) / 2
+    def _pixel_theta_radian_to_q_invA(self, pixel_theta_radian, wavelength_A):
+        return 2 * np.sin(pixel_theta_radian) / wavelength_A
+    def _pixel_q_invA_to_resol_A(self, pixel_q_invA):
+        return 1 / pixel_q_invA
+    def resolution_coverage(self, energy_keV=None, det_dist_mm=None):
+        low_q_invA = self._pixel_theta_radian_to_q_invA(
+            self._pixel_radius_mm_to_theta_radian(
+                self.beam_stop_radius_mm, det_dist_mm
+            ), self._energy_keV_to_wavelength_A(energy_keV)
+        )
+        high_q_invA = self._pixel_theta_radian_to_q_invA(
+            self._pixel_radius_mm_to_theta_radian(
+                self._pixel_index_to_radius_mm(self.pixel_per_side/2), det_dist_mm
+            ), self._energy_keV_to_wavelength_A(energy_keV)
+        )
+        highest_q_invA = self._pixel_theta_radian_to_q_invA(
+            self._pixel_radius_mm_to_theta_radian(
+                self._pixel_index_to_radius_mm(self.pixel_per_side / np.sqrt(2)), det_dist_mm
+            ), self._energy_keV_to_wavelength_A(energy_keV)
+        )
+        print(f"### FakeDetector {self.detname} resolution range:")
+        print(f"### - Energy: {energy_keV} keV")
+        print(f"### - Distance: {det_dist_mm} mm")
+        print(f">>> Low q    : {low_q_invA:.2f} A-1 | {1/low_q_invA:.2f} A")
+        print(f">>> High q   : {high_q_invA:.2f} A-1 | {1/high_q_invA:.2f} A (detector edge)")
+        print(f">>> Highest q: {highest_q_invA:.2f} A-1 | {1/highest_q_invA:.2f} A (detector corner)")
 
 def get_exp():
     import requests
