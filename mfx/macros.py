@@ -225,11 +225,11 @@ class FakeDetector:
                 self._pixel_radius_mm_to_theta_radian(radius_mm, det_dist_mm),
                 self._energy_keV_to_wavelength_A(energy_keV)
         )
+
     def resolution_coverage(self, energy_keV=None, det_dist_mm=None):
         low_q_invA = self._pixel_radius_mm_to_q_invA(
             self.beam_stop_radius_mm, det_dist_mm, energy_keV
         )
-<<<<<<< HEAD
         high_q_invA = self._pixel_theta_radian_to_q_invA(
             self._pixel_radius_mm_to_theta_radian(
                 self._pixel_index_to_radius_mm(self.pixel_per_side/2.0), det_dist_mm
@@ -239,14 +239,18 @@ class FakeDetector:
             self._pixel_radius_mm_to_theta_radian(
                 self._pixel_index_to_radius_mm(self.pixel_per_side / np.sqrt(2.0)), det_dist_mm
             ), self._energy_keV_to_wavelength_A(energy_keV)
-=======
-        high_q_invA = self._pixel_radius_mm_to_q_invA(
-            self._pixel_index_to_radius_mm(self.pixel_per_side/2), det_dist_mm, energy_keV
-        )
-        highest_q_invA = self._pixel_radius_mm_to_q_invA(
-            self._pixel_index_to_radius_mm(self.pixel_per_side / np.sqrt(2)), det_dist_mm, energy_keV
->>>>>>> 28a4e4b6e896c73734d8fc114ea811ce6b64bbf2
-        )
+	)
+
+    #def resolution_coverage(self, energy_keV=None, det_dist_mm=None):
+        #low_q_invA = self._pixel_radius_mm_to_q_invA(
+           # self.beam_stop_radius_mm, det_dist_mm, energy_keV
+        #)
+        #high_q_invA = self._pixel_radius_mm_to_q_invA(
+          #  self._pixel_index_to_radius_mm(self.pixel_per_side/2), det_dist_mm, energy_keV
+        #)
+        #highest_q_invA = self._pixel_radius_mm_to_q_invA(
+          #  self._pixel_index_to_radius_mm(self.pixel_per_side / np.sqrt(2)), det_dist_mm, energy_keV
+        #)
 
         print(f"### FakeDetector {self.detname} resolution range:")
         print(f"### - Energy: {energy_keV} keV")
