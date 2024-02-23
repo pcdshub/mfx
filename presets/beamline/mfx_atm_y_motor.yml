@@ -3,8 +3,23 @@ Out:
   history:
     28 Oct 2023 19:20:12: '   -0.0955'
   value: -0.09555
+clear_yag:
+  active: true
+  history:
+    05 Feb 2024 14:23:13: '  -71.0805'
+  value: -71.0805
 clipping_YAG:
   active: true
   history:
     28 Oct 2023 20:23:27: '  -71.5789'
   value: -71.57885
+frosted_yag:
+  active: true
+  history:
+    05 Feb 2024 14:24:24: '  -90.1308'
+  value: -90.13075
+thermocouple:
+  active: true
+  history:
+    05 Feb 2024 14:23:52: '  -80.1115'
+  value: -80.11155
