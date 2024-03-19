@@ -140,24 +140,27 @@ def correct_timing_drift(
             num_curr_edges: int = 0
 
             while (num_curr_edges < num_events):
-                # EVENTBUILD PV contains 10 fields. TTALL makes up the last 8.
-                # (indices 0-7), and IPM DG1 and DG2 makeup the first 2.
-                # See `is_good_measurement` function for more accesses.
-                timetool: EpicsSignal = EpicsSignal("MFX:TT:01:EVENTBUILD.VALA")
-                tt_data: np.ndarray = timetool.get()
+                try:
+                    # EVENTBUILD PV contains 10 fields. TTALL makes up the last 8.
+                    # (indices 0-7), and IPM DG1 and DG2 makeup the first 2.
+                    # See `is_good_measurement` function for more accesses.
+                    timetool: EpicsSignal = EpicsSignal("MFX:TT:01:EVENTBUILD.VALA")
+                    tt_data: np.ndarray = timetool.get()
 
-                timetool_edge_ps: float = tt_data[3]
+                    timetool_edge_ps: float = tt_data[3]
 
-                if is_good_measurement(
-                        tt_data,
-                        amplitude_thresh,
-                        ipm_thresh,
-                        fwhm_threshs
-                ):
-                    timetool_edges[num_curr_edges] = timetool_edge_ps
-                    num_curr_edges += 1
+                    if is_good_measurement(
+                            tt_data,
+                            amplitude_thresh,
+                            ipm_thresh,
+                            fwhm_threshs
+                    ):
+                        timetool_edges[num_curr_edges] = timetool_edge_ps
+                        num_curr_edges += 1
 
-                time.sleep(0.01)
+                    time.sleep(0.01)
+                except KeyboardInterrupt as e:
+                    raise KeyboardInterrupt
 
             tt_edge_average_ps: float = np.mean(timetool_edges)
             write_log(f"Current average: {tt_edge_average_ps}", logfile)
