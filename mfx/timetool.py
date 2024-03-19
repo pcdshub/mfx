@@ -75,9 +75,9 @@ def is_good_measurement(
         Minimum and maximum FWHM from the processed timetool signal to consider
         a measurement to be "good."
     """
-    timetool_amp: float = tt_data[2]
-    ipm_dg2: float = tt_data[9]
-    fwhm: float = tt_data[5]
+    timetool_amp: float = tt_data[4]
+    ipm_dg2: float = tt_data[1]
+    fwhm: float = tt_data[7]
 
     if timetool_amp < amplitude_thresh:
         return False
@@ -140,13 +140,13 @@ def correct_timing_drift(
             num_curr_edges: int = 0
 
             while (num_curr_edges < num_events):
-                # EVENTBUILD PV contains 10 fields. TTALL makes up the first 8.
-                # (indices 0-7), and IPM DG1 and DG2 makeup the final 2.
+                # EVENTBUILD PV contains 10 fields. TTALL makes up the last 8.
+                # (indices 0-7), and IPM DG1 and DG2 makeup the first 2.
                 # See `is_good_measurement` function for more accesses.
                 timetool: EpicsSignal = EpicsSignal("MFX:TT:01:EVENTBUILD.VALA")
                 tt_data: np.ndarray = timetool.get()
 
-                timetool_edge_ps: float = tt_data[1]
+                timetool_edge_ps: float = tt_data[3]
 
                 if is_good_measurement(
                         tt_data,
