@@ -23,6 +23,7 @@ from ophyd.signal import EpicsSignal
 logging.basicConfig(level=logging.INFO)
 logger: logging.Logger = logging.getLogger(__name__)
 
+
 def write_log(msg: str, logfile: str = "") -> None:
     """
     Log messages both via the standard logger and optionally to a file.
@@ -46,11 +47,12 @@ def write_log(msg: str, logfile: str = "") -> None:
         with open(logfile, "a") as f:
             f.write(timestamped_msg)
 
+
 def is_good_measurement(
-        tt_data: np.ndarray,
-        amplitude_thresh: float,
-        ipm_thresh: float,
-        fwhm_threshs: Tuple[float, float]
+    tt_data: np.ndarray,
+    amplitude_thresh: float,
+    ipm_thresh: float,
+    fwhm_threshs: Tuple[float, float],
 ):
     """
     Determine whether a specific detected edge on the timetool camera is "good"
@@ -88,13 +90,14 @@ def is_good_measurement(
 
     return True
 
+
 def correct_timing_drift(
-        amplitude_thresh: float = 0.02,
-        ipm_thresh: float = 500.,
-        drift_adjustment_thresh: float = 0.05,
-        fwhm_threshs: Tuple[float, float] = (30, 130),
-        num_events: int = 61,
-        will_log: bool = True
+    amplitude_thresh: float = 0.02,
+    ipm_thresh: float = 500.0,
+    drift_adjustment_thresh: float = 0.05,
+    fwhm_threshs: Tuple[float, float] = (30, 130),
+    num_events: int = 61,
+    will_log: bool = True,
 ) -> None:
     """
     Automate the correction of timing drift. Will adjust the stages to
@@ -134,12 +137,12 @@ def correct_timing_drift(
 
     timetool_edges: np.ndarray = np.zeros([num_events])
 
-    write_log(f"Entering timing correction loop", logfile)
+    write_log(f"Entering timetool drift correction loop", logfile)
     while True:
         try:
             num_curr_edges: int = 0
-
-            while (num_curr_edges < num_events):
+            time_last_good_val: float = time.time()
+            while num_curr_edges < num_events:
                 try:
                     # EVENTBUILD PV contains 10 fields. TTALL makes up the last 8.
                     # (indices 0-7), and IPM DG1 and DG2 makeup the first 2.
@@ -150,13 +153,17 @@ def correct_timing_drift(
                     timetool_edge_ps: float = tt_data[3]
 
                     if is_good_measurement(
-                            tt_data,
-                            amplitude_thresh,
-                            ipm_thresh,
-                            fwhm_threshs
+                        tt_data, amplitude_thresh, ipm_thresh, fwhm_threshs
                     ):
                         timetool_edges[num_curr_edges] = timetool_edge_ps
                         num_curr_edges += 1
+                        time_last_good_val = time.time()
+                    elif time.time() - time_last_good_val > 60:
+                        write_log(
+                            f"No good measurement over one minute. Check thresholds?",
+                            logfile,
+                        )
+                        time_last_good_val = time.time()
 
                     time.sleep(0.01)
                 except KeyboardInterrupt as e:
@@ -166,14 +173,11 @@ def correct_timing_drift(
             write_log(f"Current average: {tt_edge_average_ps}", logfile)
 
             if np.abs(tt_edge_average_ps) > drift_adjustment_thresh:
-                tt_average_seconds: float = -(tt_edge_average_ps*1e-12)
-                write_log(
-                    f"Making adjustment to {tt_average_seconds}!",
-                    logfile
-                )
+                tt_average_seconds: float = -(tt_edge_average_ps * 1e-12)
+                write_log(f"Making adjustment to {tt_average_seconds}!", logfile)
                 lxt.mvr(tt_average_seconds)
                 lxt.set_current_position(-float(txt.position))
 
         except KeyboardInterrupt as e:
-            write_log(f"Breaking out of timing correction loop", logfile)
+            write_log(f"Breaking out of timetool drift correction loop", logfile)
             break
