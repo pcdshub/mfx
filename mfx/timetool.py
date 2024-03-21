@@ -53,7 +53,7 @@ def is_good_measurement(
     amplitude_thresh: float,
     ipm_thresh: float,
     fwhm_threshs: Tuple[float, float],
-):
+) -> bool:
     """
     Determine whether a specific detected edge on the timetool camera is "good"
 
