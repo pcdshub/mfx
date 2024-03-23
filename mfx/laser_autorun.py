@@ -62,10 +62,10 @@ class Laser:
             opo_delay += 1e9 / 120
             opo_ec = self.opo_ec_long
         self.opo.ns_delay.put(opo_delay)
-        logger.info(f"Setting OPO delay {opo_delay} ns")
+        print(f"Setting OPO delay {opo_delay} ns")
         self.opo.eventcode.put(opo_ec)
-        logger.info(f"Setting OPO ec {opo_ec}")
-        logger.info(self._delaystr)
+        print(f"Setting OPO ec {opo_ec}")
+        print(self._delaystr)
 
 
 def autorun(sample='?', run_length=300, record=True,
