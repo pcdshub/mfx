@@ -13,11 +13,11 @@ def quote():
 class Laser:
     def __init__(self,
                  opo_shutter_pv='MFX:USR:ao1:6',
-                 opo_trigger_pv='MFX:LAS:EVR:01:TRIG8',
+                 opo_trigger_pv='MFX:LAS:EVR:01:TRIG6',
                  evo_shutter1_pv='MFX:USR:ao1:7',
                  evo_shutter2_pv='MFX:USR:ao1:2',
                  evo_shutter3_pv='MFX:USR:ao1:3',
-                 evo_trigger_pv='MFX:LAS:EVR:01:TRIG6'):
+                 evo_trigger_pv='MFX:LAS:EVR:01:TRIG8'):
         from mfx.devices import LaserShutter
         from pcdsdevices.evr import Trigger
         # Declare shutter and trigger objects
@@ -32,8 +32,8 @@ class Laser:
         self.opo_time_zero = 576058
         # Event code switch logic for longer delay
         self.min_evr_delay = 669800
-        self.opo_ec_short = 211
-        self.opo_ec_long = 212
+        self.opo_ec_short = 203
+        self.opo_ec_long = 203
         self.rep_rate = 20
 
     @property
