@@ -10,6 +10,8 @@ from mfx.db import (mfx_reflaser,
                     mfx_dg2_downstream_slits)
 import numpy as np
 import time
+
+
 def laser_in(wait=False, timeout=10):
     """
     Insert the Reference Laser and clear the beampath
@@ -88,6 +90,7 @@ def mfxslits(pos):
     dg2_ms = mfx_dg2_midstream_slits.move(pos, wait=False)
     dg2_ds = mfx_dg2_downstream_slits.move(pos, wait=False)
 
+
 class MFX_Timing:
     def __init__(self,sequencer=None):
         if sequencer==None:
@@ -109,12 +112,14 @@ class MFX_Timing:
         self.sync_markers = {0.5:0, 1:1, 5:2, 10:3, 30:4, 60:5, 120:6, 360:7}
         self.sequence = []
     
+
     def _seq_step(self, evt_code_name=None, delta_beam=0):
         try:
             return [self.evt_code[evt_code_name], delta_beam, 0, 0]
         except:
             print('Error: event sequencer step not recognized.')
     
+
     def _seq_init(self, sync_mark=30):
         self.seq.sync_marker.put(self.sync_markers[sync_mark])
         self.sequence = []
@@ -124,36 +129,43 @@ class MFX_Timing:
         self.seq.sequence.put_seq(sequence)
         time.sleep(1)
     
+
     def _seq_put(self, steps):
         for step in steps:
             self.sequence.append(self._seq_step(step[0], step[1]))
         self.seq.sequence.put_seq(self.sequence)
 
+
     def _seq_30hz(self):
         # make sure daq_readout is penultimate event (set_30hz_laser assumes it)
-        steps = [['ray1', 1],
+        steps = [['ray_readout', 1],
                  ['pp_trig', 0],
+                 ['ray1', 1],
                  ['ray2', 1],
-                 ['ray_readout', 1],
                  ['daq_readout', 0],
                  ['ray3', 1]]
         return steps
 
+
     def _seq_20hz(self):
-        steps = [['ray3', 1],
+        steps = [['ray_readout', 1],
                  ['pp_trig', 0],
-                 ['ray2', 1],
                  ['ray1', 1],
+                 ['ray2', 1],
                  ['daq_readout', 0],
-                 ['ray_readout', 3]]
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1]]
         return steps
     
+
     def set_30hz(self):
         self._seq_init(sync_mark=30)
         self._seq_put(self._seq_30hz())
         self.seq.start()
         return
     
+
     def set_30hz_laser(self, laser_evt_list=None):
         self._seq_init(sync_mark=30)
         try:
@@ -169,12 +181,14 @@ class MFX_Timing:
         print(self.sequence)
         return    
     
+
     def set_20hz(self):
         self._seq_init(sync_mark=60)
         self._seq_put(self._seq_20hz())
         self.seq.start()
         return
     
+
     def set_120hz(self):
         self._seq_init(sync_mark=60)
         steps = [['ray3', 1],
@@ -188,6 +202,7 @@ class MFX_Timing:
         self._seq_put(steps)
         self.seq.start()
         return
+
 
 class FakeDetector:
     def __init__(self, detname='Rayonix'):
@@ -205,19 +220,30 @@ class FakeDetector:
                 self.beam_stop_radius_mm = 9 # approximate
         except:
             print('Detector not implemented.')
+
+
     def _energy_keV_to_wavelength_A(self, energy_keV):
         return 12.398 / energy_keV
+
+
     def _pixel_index_to_radius_mm(self, pixel_index):
         return pixel_index * self.pixel_size_mm
+
+
     def _pixel_radius_mm_to_theta_radian(self, pixel_radius_mm, det_dist_mm):
         # angle between incident and outgoing wavevectors: 2*theta
         return np.arctan2(pixel_radius_mm, det_dist_mm) / 2.0
+
+
     def _pixel_theta_radian_to_q_invA(self, pixel_theta_radian, wavelength_A):
         # q = 2pi.s = 4pi.sin(theta)/lambda
         return 4 * np.pi * np.sin(pixel_theta_radian) / wavelength_A
+
+
     def _pixel_q_invA_to_resol_A(self, pixel_q_invA):
         # d = 1/s = 2pi/q
         return 2 * np.pi / pixel_q_invA
+
 
     def _pixel_radius_mm_to_q_invA(self, radius_mm, det_dist_mm, energy_keV):
         return \
@@ -225,6 +251,7 @@ class FakeDetector:
                 self._pixel_radius_mm_to_theta_radian(radius_mm, det_dist_mm),
                 self._energy_keV_to_wavelength_A(energy_keV)
         )
+
 
     def resolution_coverage(self, energy_keV=None, det_dist_mm=None):
         low_q_invA = self._pixel_radius_mm_to_q_invA(
@@ -241,23 +268,13 @@ class FakeDetector:
             ), self._energy_keV_to_wavelength_A(energy_keV)
 	)
 
-    #def resolution_coverage(self, energy_keV=None, det_dist_mm=None):
-        #low_q_invA = self._pixel_radius_mm_to_q_invA(
-           # self.beam_stop_radius_mm, det_dist_mm, energy_keV
-        #)
-        #high_q_invA = self._pixel_radius_mm_to_q_invA(
-          #  self._pixel_index_to_radius_mm(self.pixel_per_side/2), det_dist_mm, energy_keV
-        #)
-        #highest_q_invA = self._pixel_radius_mm_to_q_invA(
-          #  self._pixel_index_to_radius_mm(self.pixel_per_side / np.sqrt(2)), det_dist_mm, energy_keV
-        #)
-
         print(f"### FakeDetector {self.detname} resolution range:")
         print(f"### - Energy: {energy_keV} keV")
         print(f"### - Distance: {det_dist_mm} mm")
         print(f">>> Low q    : {low_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(low_q_invA):.2f} A")
         print(f">>> High q   : {high_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(high_q_invA):.2f} A (detector edge)")
         print(f">>> Highest q: {highest_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(highest_q_invA):.2f} A (detector corner)")
+
 
 def get_exp():
     import requests
