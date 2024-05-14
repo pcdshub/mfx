@@ -20,11 +20,11 @@ evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
 evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
 
 # Trigger objects
-opo = Trigger('MFX:LAS:EVR:01:TRIG8', name='opo_trigger')
-evo = Trigger('MFX:LAS:EVR:01:TRIG6', name='evo_trigger')
+opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
+evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
 # Laser parameter
-opo_time_zero = 671740 # -230000-2000
+opo_time_zero = 671008 # -230000-2000
 #xfel_time_zero = 894857.1 # 894808
 #base_inhibit_delay = 500000
 #evo_time_zero = 800000
@@ -32,13 +32,13 @@ opo_time_zero = 671740 # -230000-2000
 #diode_delay = xfel_time_zero - opo_time_zero
 
 # Event code switch logic for longer delay
-min_evr_delay = 669800
-opo_ec_short = 211
-opo_ec_long  = 212
+min_evr_delay = 671008
+opo_ec_short = 213
+opo_ec_long = 213
 PP = 197
 DAQ = 198
-WATER = 190
-SAMPLE = 191
+WATER = 211
+SAMPLE = 212
 
 rep_rate = 20
 
@@ -54,9 +54,7 @@ class User:
     evo_shutter2 = evo_shutter2
     evo_shutter3 = evo_shutter3
     sequencer = sequencer
-
     opo = opo
-    evo = evo
 
 
     def __init__(self):
@@ -73,7 +71,7 @@ class User:
         return status
 
 
-    def configure_shutters(self, pulse1=False, pulse2=False, pulse3=False, opo=None):
+    def configure_shutters(self, pulse1=False, pulse2=False, pulse3=False, free_space=None):
         """
         Configure all four laser shutters
 
@@ -94,10 +92,10 @@ class User:
         pulse3: bool
             Controls ``evo_shutter3``
 
-        opo: bool
+        free_space: bool
             Controls ``opo_shutter``
         """
-        for state, shutter in zip((pulse1, pulse2, pulse3, opo),
+        for state, shutter in zip((pulse1, pulse2, pulse3, free_space),
                                   (self.evo_shutter1, self.evo_shutter2,
                                    self.evo_shutter3, opo_shutter)):
             if state is not None:
@@ -105,27 +103,25 @@ class User:
                     shutter('OUT')
                 else:
                     shutter('IN')
-        logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, opo=%s", pulse1, pulse2, pulse3, opo)
-                #logger.debug("Using %s : %s", shutter.name, state)
-                #shutter.move(int(state) + 1)
+        logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, free_space=%s", pulse1, pulse2, pulse3, free_space)
         sleep(1)
         return
 
 
     def pulse_0(self):
-        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=None)
+        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=None)
 
 
     def pulse_1(self):
-        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=True, opo=None)
+        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=True, free_space=None)
 
 
     def pulse_2(self):
-        return self.configure_shutters(pulse1=False, pulse2=True, pulse3=True, opo=None)
+        return self.configure_shutters(pulse1=False, pulse2=True, pulse3=True, free_space=None)
 
 
     def pulse_3(self):
-        return self.configure_shutters(pulse1=True, pulse2=True, pulse3=True, opo=None)
+        return self.configure_shutters(pulse1=True, pulse2=True, pulse3=True, free_space=None)
 
 
     @property
@@ -165,7 +161,7 @@ class User:
         Parameters
         ----------
         delay: float
-            Requested laser delay in nanoseconds. Must be less that 15.5 ms
+            Requested laser delay in nanoseconds.
         """
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
@@ -187,7 +183,7 @@ class User:
     ######################
     # Scanning Function #
     ######################
-    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5, picker=None, pulse=-1):
+    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, pulse=-1, free_space=None, laser_delay=None):
         """
         Perform a single run of the experiment
 
@@ -208,7 +204,7 @@ class User:
         inspire: bool, optional
             Set false by default because it makes Sandra sad. Set True to inspire
 
-        delay: int, optional
+        daq_delay: int, optional
             delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
         picker: str, optional
@@ -217,15 +213,20 @@ class User:
         pulse: int, optional
             Number of laser pulses. Default is -1. See ``configure_shutters`` for more
             information
+
+        free_space: bool, optional
+            Sets the free_space laser shutter to Closed (False) or Open (True). Default is None.
         
+        laser_delay: float
+            Requested laser delay in nanoseconds.
         Note
         ----
-        0: (pulse1=False, pulse2=False, pulse3=False, opo=None)
-        1: (pulse1=False, pulse2=False, pulse3=True, opo=None)
-        2: (pulse1=False, pulse2=True, pulse3=True, opo=None)
-        3: (pulse1=True, pulse2=True, pulse3=True, opo=None)
+        0: (pulse1=False, pulse2=False, pulse3=False)
+        1: (pulse1=False, pulse2=False, pulse3=True)
+        2: (pulse1=False, pulse2=True, pulse3=True)
+        3: (pulse1=True, pulse2=True, pulse3=True)
 
-        For alternative laser configurations either use ``cconfigure_shutters`` to set parameters
+        For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
         # Configure the shutters
         if pulse == 0:
@@ -239,6 +240,15 @@ class User:
         else:
             logger.warning("No proper pulse number set so defaulting to ``configure_shutters`` settings.")
 
+        if free_space is not None:
+            if free_space == True or free_space.lower()==str('out') or free_space == 2 or free_space.lower()==str('open'):
+                opo_shutter('OUT')
+            else:
+                opo_shutter('IN')
+
+        if laser_delay is not None:
+            self.set_delay(laser_delay)
+
         if sample.lower()=='water' or sample.lower()=='h2o':
             inspire=True
         if picker=='open':
@@ -249,22 +259,41 @@ class User:
             for i in range(runs):
                 print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
                 daq.begin(duration = run_length, record = record, wait = True, end_run = True)
+                record = True
                 if record:
                     if inspire:
-                        elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
+                        comment = f"Running {sample}......{quote()['quote']}"
                     else:
-                        elog.post(f"Running {sample}", run=(daq.run_number()))
-                sleep(delay)
+                        comment = f"Running {sample}"
+                    info = [daq.run_number(), comment, self._delaystr]
+                    info.extend(self.shutter_status)
+                    post_msg = post_template.format(*info)
+                    print('\n' + post_msg + '\n')
+                    elog.post(msg=post_msg, run=(daq.run_number()))
+
+                sleep(daq_delay)
             pp.close()
-            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
+            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
             daq.end_run()
             daq.disconnect()
 
         except KeyboardInterrupt:
             print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
             pp.close()
-            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
+            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
             daq.stop()
             daq.disconnect()
             sys.exit()
+
+post_template = """\
+Run Number {}: {}
+
+{}
+
+While the laser shutters are:
+EVO Pulse 1 ->  {}
+EVO Pulse 2 ->  {}
+EVO Pulse 3 ->  {}
+OPO Shutter ->  {}
+"""
 
