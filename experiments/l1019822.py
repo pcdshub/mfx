@@ -1,21 +1,13 @@
-import os
-import time
-import os.path
 import logging
-import subprocess
-
-import numpy as np
+from time import sleep
+import sys
 
 from mfx.devices import LaserShutter
-from mfx.db import daq, elog, sequencer, rayonix, pp
-from ophyd.status import wait as status_wait
-from pcdsdevices.sequencer import EventSequencer
+from mfx.db import daq, sequencer, elog, pp
 from pcdsdevices.evr import Trigger
+from mfx.autorun import quote
 
-from ophyd import EpicsSignal, EpicsSignalRO
-from ophyd import Device, Component
-
-from pcdsdevices.lasers.shutters import LaserShutter, LaserShutterMPOD
+from pcdsdevices.lasers.shutters import LaserShutter
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +62,7 @@ class User:
 
 
     def __init__(self):
-    	self.delay = None
+        self.delay = None
 
 
     @property
@@ -111,15 +103,15 @@ class User:
                                   (self.evo_shutter1, self.evo_shutter2,
                                    self.evo_shutter3, opo_shutter)):
             if state is not None:
-		if state == True or state == 'OUT' or state == 2:
+                if state == True or state == 'OUT' or state == 2:
                     shutter('OUT')
-            	else:
+                else:
                     shutter('IN')
-	logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, opo=%s", pulse1, pulse2, pulse3, opo)
+        logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, opo=%s", pulse1, pulse2, pulse3, opo)
                 #logger.debug("Using %s : %s", shutter.name, state)
                 #shutter.move(int(state) + 1)
-        time.sleep(1)
-	return
+        sleep(1)
+        return
 
 
     def zero_flash(self):
@@ -191,7 +183,7 @@ class User:
         opo.eventcode.put(opo_ec)
         logger.info("Setting OPO ec %s", opo_ec)
         logger.info(self._delaystr)
-	return
+        return
 
 
     ######################
@@ -207,22 +199,22 @@ class User:
         sample: str, optional
             Sample Name
 
-    	run_length: int, optional
+        run_length: int, optional
             number of seconds for run 300 is default
 
-    	record: bool, optional
+        record: bool, optional
             set True to record
 
-    	runs: int, optional
+        runs: int, optional
             number of runs 5 is default
 
-    	inspire: bool, optional
+        inspire: bool, optional
             Set false by default because it makes Sandra sad. Set True to inspire
 
-    	delay: int, optional
+        delay: int, optional
             delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
-    	picker: str, optional
+        picker: str, optional
             If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
 
         kwargs:
@@ -237,38 +229,34 @@ class User:
         # Configure the shutters
         self.configure_shutters(**kwargs)
 
-    from time import sleep
-    from mfx.db import daq, elog, pp
-    import sys
+        if sample.lower()=='water' or sample.lower()=='h2o':
+            inspire=True
+        if picker=='open':
+            pp.open()
+        if picker=='flip':
+            pp.flipflop()
+        try:
+            for i in range(runs):
+                print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
+                daq.begin(duration = run_length, record = record, wait = True, end_run = True)
+                if record:
+                    if inspire:
+                        elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
+                    else:
+                        elog.post(f"Running {sample}", run=(daq.run_number()))
+                sleep(delay)
+            pp.close()
+            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
+            daq.end_run()
+            daq.disconnect()
 
-    if sample.lower()=='water' or sample.lower()=='h2o':
-        inspire=True
-    if picker=='open':
-        pp.open()
-    if picker=='flip':
-        pp.flipflop()
-    try:
-        for i in range(runs):
-            print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-            daq.begin(duration = run_length, record = record, wait = True, end_run = True)
-            if record:
-                if inspire:
-                    elog.post(f"Running {sample}......{quote()['quote']}", run=(daq.run_number()))
-                else:
-                    elog.post(f"Running {sample}", run=(daq.run_number()))
-            sleep(delay)
-        pp.close()
-	self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
-        daq.end_run()
-        daq.disconnect()
-
-    except KeyboardInterrupt:
-        print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
-        pp.close()
-	self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
-        daq.stop()
-        daq.disconnect()
-        sys.exit()
+        except KeyboardInterrupt:
+            print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
+            pp.close()
+            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
+            daq.stop()
+            daq.disconnect()
+            sys.exit()
 
 
     def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
