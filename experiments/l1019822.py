@@ -33,8 +33,8 @@ opo_time_zero = 671008 # -230000-2000
 
 # Event code switch logic for longer delay
 min_evr_delay = 671008
-opo_ec_short = 213
-opo_ec_long = 213
+opo_ec_short = 212
+opo_ec_long = 211
 PP = 197
 DAQ = 198
 WATER = 211
