@@ -7,8 +7,6 @@ from mfx.db import daq, sequencer, elog, pp
 from pcdsdevices.evr import Trigger
 from mfx.autorun import quote
 
-from pcdsdevices.lasers.shutters import LaserShutter
-
 logger = logging.getLogger(__name__)
 
 #######################
@@ -114,20 +112,20 @@ class User:
         return
 
 
-    def zero_flash(self):
-        return configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=None)
+    def pulse_0(self):
+        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=None)
 
 
-    def one_flash(self):
-        return configure_shutters(pulse1=False, pulse2=False, pulse3=True, opo=None)
+    def pulse_1(self):
+        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=True, opo=None)
 
 
-    def two_flash(self):
-        return configure_shutters(pulse1=False, pulse2=True, pulse3=True, opo=None)
+    def pulse_2(self):
+        return self.configure_shutters(pulse1=False, pulse2=True, pulse3=True, opo=None)
 
 
-    def three_flash(self):
-        return configure_shutters(pulse1=True, pulse2=True, pulse3=True, opo=None)
+    def pulse_3(self):
+        return self.configure_shutters(pulse1=True, pulse2=True, pulse3=True, opo=None)
 
 
     @property
@@ -187,10 +185,9 @@ class User:
 
 
     ######################
-    # Scanning Functions #
+    # Scanning Function #
     ######################
-    def perform_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5, picker=None,
-                    **kwargs):
+    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5, picker=None, pulse=-1):
         """
         Perform a single run of the experiment
 
@@ -217,17 +214,30 @@ class User:
         picker: str, optional
             If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
 
-        kwargs:
-            Used to control the laser shutters. See ``configure_shutters`` for more
+        pulse: int, optional
+            Number of laser pulses. Default is -1. See ``configure_shutters`` for more
             information
-
+        
         Note
         ----
-        This does not configure the laser parameters. Either use ``loop`` or
-        ``configure_evr`` and ``configure_sequencer`` to set these parameters
+        0: (pulse1=False, pulse2=False, pulse3=False, opo=None)
+        1: (pulse1=False, pulse2=False, pulse3=True, opo=None)
+        2: (pulse1=False, pulse2=True, pulse3=True, opo=None)
+        3: (pulse1=True, pulse2=True, pulse3=True, opo=None)
+
+        For alternative laser configurations either use ``cconfigure_shutters`` to set parameters
         """
         # Configure the shutters
-        self.configure_shutters(**kwargs)
+        if pulse == 0:
+            self.pulse_0()
+        elif pulse == 1:
+            self.pulse_1()
+        elif pulse == 2:
+            self.pulse_2()
+        elif pulse == 3:
+            self.pulse_3()
+        else:
+            logger.warning("No proper pulse number set so defaulting to ``configure_shutters`` settings.")
 
         if sample.lower()=='water' or sample.lower()=='h2o':
             inspire=True
@@ -257,109 +267,4 @@ class User:
             daq.stop()
             daq.disconnect()
             sys.exit()
-
-
-    def loop(self, delays=[], nruns=1, pulse1=False, pulse2=False,
-             pulse3=False, light_events=3000, dark_events=None,
-             record=True, comment='', post=True, picker=None):
-        """
-        Loop through a number of delays a number of times while running the DAQ
-
-        Parameters
-        ----------
-        delays: list, optional
-            Requested laser delays in nanoseconds
-            close opo_shutter if False or None, 
-            i.e., delays=[None, 1000, 1e6, 1e7] loop through:
-            - close opo shutter
-            - 1 us delay
-            - 1 ms delay
-            - 10 ms delay
-
-        nruns: int, optional
-            Number of iterations to run requested delays
-
-        pulse1: bool, optional
-            Include the first pulse
-
-        pulse2: bool, optional
-            Include the second pulse
-
-        pulse3: bool, optional
-            Include the third pulse
-
-        light_events: int, optional
-            Number of events to sample with requested laser pulses
-
-        dark_events: int, optional
-            Number of events to sample with all lasers shuttered
-
-        record: bool, optional
-            Choice to record or not
-
-        comment: str, optional
-            Comment for ELog
-
-        post : bool, optional
-            Whether to post to ELog or not. Will not post if not recording.
-        
-        picker: str, optional
-            If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
-        """
-        # Accept a single int or float
-        if isinstance(delays, (float, int)):
-            delays = [delays]
-
-        # Preserve the original state of DAQ
-        logger.info("Running delays %r, %s times ...", delays, nruns)
-        delays = delays or [False]
-
-        # Estimated time for completion
-        try:
-            for irun in range(nruns):
-                run = irun+1
-                logger.info("Beginning run %s of %s", run, nruns)
-                for delay in delays:
-                    if light_events:
-                        # Set the laser delay if it exists
-                        if delay is None or delay is False:
-                            logger.info("Beginning light events with opo shutter closed")
-                            # Close state = 1
-                            opo_shutter.move(1)
-                        else:
-                            logger.info("Beginning light events using delay %s", delay)
-                            # Open state = 2
-                            opo_shutter.move(2)
-                            self.set_delay(delay)
-
-                        # Perform the light run
-                        if picker=='open':
-                            pp.open()
-                        if picker=='flip':
-                            pp.flipflop()
-                        self.perform_run(light_events, pulse1=pulse1,
-                                         pulse2=pulse2, pulse3=pulse3,
-                                         record=record,
-                                         post=post, comment=comment)
-                    # Estimated time for completion
-                    # Perform the dark run
-                    # No shutter information means all closed!
-                    if dark_events:
-                        opo_shutter.move(1)
-                        self.perform_run(events=dark_events, record=record,
-                                         post=post, comment=comment)
-            logger.info("All requested scans completed!")
-        except KeyboardInterrupt:
-            logger.warning("Scan interrupted by user request!")
-            logger.info("Stopping DAQ ...")
-            daq.stop()
-
-        # Return the DAQ to the original state
-        finally:
-            logger.info("Closing pulse picker ...")
-            pp.close()
-            logger.info("Disconnecting from DAQ ...")
-            daq.disconnect()
-            logger.info("Closing all laser shutters ...")
-            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, opo=False)
 
