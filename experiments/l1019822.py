@@ -24,7 +24,7 @@ opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
 evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
 # Laser parameter
-opo_time_zero = 671008 # -230000-2000
+opo_time_zero = 671765 # -230000-2000
 #xfel_time_zero = 894857.1 # 894808
 #base_inhibit_delay = 500000
 #evo_time_zero = 800000
@@ -32,7 +32,7 @@ opo_time_zero = 671008 # -230000-2000
 #diode_delay = xfel_time_zero - opo_time_zero
 
 # Event code switch logic for longer delay
-min_evr_delay = 671008
+min_evr_delay = 671765
 opo_ec_short = 212
 opo_ec_long = 211
 PP = 197
