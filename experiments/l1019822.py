@@ -42,6 +42,9 @@ SAMPLE = 212
 
 rep_rate = 20
 
+# Not-None sentinal for default value when None has a special meaning
+# Indicates that the last configured value should be used
+_CONFIG_VAL = object()
 
 ###########################
 # Configuration Functions #
@@ -103,7 +106,7 @@ class User:
                     shutter('OUT')
                 else:
                     shutter('IN')
-        logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, free_space=%s", pulse1, pulse2, pulse3, free_space)
+        #logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, free_space=%s", pulse1, pulse2, pulse3, free_space)
         sleep(1)
         return
 
@@ -180,6 +183,92 @@ class User:
         return
 
 
+    def begin(self, events=_CONFIG_VAL, duration=_CONFIG_VAL,
+              record=_CONFIG_VAL, use_l3t=_CONFIG_VAL, controls=_CONFIG_VAL,
+              wait=False, end_run=False):
+        """
+        Start the daq and block until the daq has begun acquiring data.
+
+        Optionally block with ``wait=True`` until the daq has finished aquiring
+        data. If blocking, a ``ctrl+c`` will end the run and clean up.
+
+        If omitted, any argument that is shared with `configure`
+        will fall back to the configured value.
+
+        Internally, this calls `kickoff` and manages its ``Status`` object.
+
+        Parameters
+        ----------
+        events: ``int``, optional
+            Number events to take in the daq.
+
+        duration: ``int``, optional
+            Time to run the daq in seconds, if ``events`` was not provided.
+
+        record: ``bool``, optional
+            If ``True``, we'll configure the daq to record data before this
+            run.
+
+        use_l3t: ``bool``, optional
+            If ``True``, we'll run with the level 3 trigger. This means that
+            if we specified a number of events, we will wait for that many
+            "good" events as determined by the daq.
+
+        controls: ``dict{name: device}`` or ``list[device...]``, optional
+            If provided, values from these will make it into the DAQ data
+            stream as variables. We will check ``device.position`` and
+            ``device.value`` for quantities to use and we will update these
+            values each time begin is called. To provide a list, all devices
+            must have a ``name`` attribute.
+
+        wait: ``bool``, optional
+            If ``True``, wait for the daq to finish aquiring data. A
+            ``KeyboardInterrupt`` (``ctrl+c``) during this wait will end the
+            run and clean up.
+
+        end_run: ``bool``, optional
+            If ``True``, we'll end the run after the daq has stopped.
+        """
+        logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
+                      'use_l3t=%s, controls=%s, wait=%s)'),
+                     events, duration, record, use_l3t, controls, wait)
+        try:
+            if record is not _CONFIG_VAL and record != daq.record:
+                old_record = daq.record
+                daq.preconfig(record=record, show_queued_cfg=False)
+            begin_status = daq.kickoff(events=events, duration=duration,
+                                        use_l3t=use_l3t, controls=controls)
+            try:
+                begin_status.wait(timeout=daq._begin_timeout)
+            except (StatusTimeoutError, WaitTimeoutError):
+                msg = (f'Timeout after {self._begin_timeout} seconds waiting '
+                       'for daq to begin.')
+                raise DaqTimeoutError(msg) from None
+
+            # In some daq configurations the begin status returns very early,
+            # so we allow the user to configure an emperically derived extra
+            # sleep.
+            time.sleep(daq.config['begin_sleep'])
+            if wait:
+                daq.wait()
+                if end_run:
+                    daq.end_run()
+            if end_run and not wait:
+                threading.Thread(target=self._ender_thread, args=()).start()
+        except KeyboardInterrupt:
+                pp.close()
+                self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
+                print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
+                daq.stop()
+                daq.disconnect()
+                sys.exit()
+        finally:
+            try:
+                daq.preconfig(record=old_record, show_queued_cfg=False)
+            except NameError:
+                pass
+
+
     ######################
     # Scanning Function #
     ######################
@@ -241,7 +330,7 @@ class User:
             logger.warning("No proper pulse number set so defaulting to ``configure_shutters`` settings.")
 
         if free_space is not None:
-            if free_space == True or free_space.lower()==str('out') or free_space == 2 or free_space.lower()==str('open'):
+            if free_space == True or str(free_space).lower()==str('out') or int(free_space) == 2 or str(free_space).lower()==str('open'):
                 opo_shutter('OUT')
             else:
                 opo_shutter('IN')
@@ -255,11 +344,11 @@ class User:
             pp.open()
         if picker=='flip':
             pp.flipflop()
-        try:
-            for i in range(runs):
+
+        for i in range(runs):
+            try:
                 print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
                 daq.begin(duration = run_length, record = record, wait = True, end_run = True)
-                record = True
                 if record:
                     if inspire:
                         comment = f"Running {sample}......{quote()['quote']}"
@@ -270,20 +359,19 @@ class User:
                     post_msg = post_template.format(*info)
                     print('\n' + post_msg + '\n')
                     elog.post(msg=post_msg, run=(daq.run_number()))
-
                 sleep(daq_delay)
-            pp.close()
-            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
-            daq.end_run()
-            daq.disconnect()
-
-        except KeyboardInterrupt:
-            print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
-            pp.close()
-            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
-            daq.stop()
-            daq.disconnect()
-            sys.exit()
+            except KeyboardInterrupt:
+                pp.close()
+                self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
+                print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
+                daq.stop()
+                daq.disconnect()
+                sys.exit()
+            finally:
+                pp.close()
+                self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
+                daq.end_run()
+                daq.disconnect()
 
 post_template = """\
 Run Number {}: {}
