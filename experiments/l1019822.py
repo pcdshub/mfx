@@ -42,10 +42,6 @@ SAMPLE = 212
 
 rep_rate = 20
 
-# Not-None sentinal for default value when None has a special meaning
-# Indicates that the last configured value should be used
-_CONFIG_VAL = object()
-
 ###########################
 # Configuration Functions #
 ###########################
@@ -183,8 +179,8 @@ class User:
         return
 
 
-    def begin(self, events=_CONFIG_VAL, duration=_CONFIG_VAL,
-              record=_CONFIG_VAL, use_l3t=_CONFIG_VAL, controls=_CONFIG_VAL,
+    def begin(self, events=None, duration=300,
+              record=False, use_l3t=None, controls=None,
               wait=False, end_run=False):
         """
         Start the daq and block until the daq has begun acquiring data.
@@ -232,8 +228,9 @@ class User:
         logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
                       'use_l3t=%s, controls=%s, wait=%s)'),
                      events, duration, record, use_l3t, controls, wait)
+        status = True
         try:
-            if record is not _CONFIG_VAL and record != daq.record:
+            if record is not None and record != daq.record:
                 old_record = daq.record
                 daq.preconfig(record=record, show_queued_cfg=False)
             begin_status = daq.kickoff(events=events, duration=duration,
@@ -248,7 +245,7 @@ class User:
             # In some daq configurations the begin status returns very early,
             # so we allow the user to configure an emperically derived extra
             # sleep.
-            time.sleep(daq.config['begin_sleep'])
+            sleep(daq.config['begin_sleep'])
             if wait:
                 daq.wait()
                 if end_run:
@@ -258,13 +255,15 @@ class User:
         except KeyboardInterrupt:
                 pp.close()
                 self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
-                print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
+                print(f"[*] Stopping Run {daq.run_number()} and exiting???...",'\n')
                 daq.stop()
                 daq.disconnect()
+                status = False
                 sys.exit()
         finally:
             try:
                 daq.preconfig(record=old_record, show_queued_cfg=False)
+                return status
             except NameError:
                 pass
 
@@ -346,32 +345,27 @@ class User:
             pp.flipflop()
 
         for i in range(runs):
-            try:
-                print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-                daq.begin(duration = run_length, record = record, wait = True, end_run = True)
-                if record:
-                    if inspire:
-                        comment = f"Running {sample}......{quote()['quote']}"
-                    else:
-                        comment = f"Running {sample}"
-                    info = [daq.run_number(), comment, self._delaystr]
-                    info.extend(self.shutter_status)
-                    post_msg = post_template.format(*info)
-                    print('\n' + post_msg + '\n')
-                    elog.post(msg=post_msg, run=(daq.run_number()))
-                sleep(daq_delay)
-            except KeyboardInterrupt:
-                pp.close()
-                self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
-                print(f"[*] Stopping Run {daq.run_number()} and exiting...",'\n')
-                daq.stop()
-                daq.disconnect()
-                sys.exit()
-            finally:
-                pp.close()
-                self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
-                daq.end_run()
-                daq.disconnect()
+            print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
+            status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
+            if status is False:
+                logger.warning('Run ended prematurely. Probably sample delivery problem')
+                break
+            if record:
+                if inspire:
+                    comment = f"Running {sample}......{quote()['quote']}"
+                else:
+                    comment = f"Running {sample}"
+                info = [daq.run_number(), comment, self._delaystr]
+                info.extend(self.shutter_status)
+                post_msg = post_template.format(*info)
+                print('\n' + post_msg + '\n')
+                elog.post(msg=post_msg, run=(daq.run_number()))
+            sleep(daq_delay)
+        if status:
+            pp.close()
+            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
+            daq.end_run()
+            daq.disconnect()
 
 post_template = """\
 Run Number {}: {}
