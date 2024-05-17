@@ -24,15 +24,10 @@ opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
 evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
 # Laser parameter
-opo_time_zero = 671765 # -230000-2000
-#xfel_time_zero = 894857.1 # 894808
-#base_inhibit_delay = 500000
-#evo_time_zero = 800000
-#min_evr_delay = 9280 #may depend on evr. min_evr_delay = 0 ticks for code 40
-#diode_delay = xfel_time_zero - opo_time_zero
+opo_time_zero = 671765
 
 # Event code switch logic for longer delay
-min_evr_delay = 671765
+
 opo_ec_short = 212
 opo_ec_long = 211
 PP = 197
@@ -70,31 +65,31 @@ class User:
         return status
 
 
-    def configure_shutters(self, pulse1=False, pulse2=False, pulse3=False, free_space=None):
+    def configure_shutters(self, fiber1=False, fiber2=False, fiber3=False, free_space=None):
         """
         Configure all four laser shutters
 
-        True means that the pulse will be used and the shutter is removed.
-        False means that the pulse will be blocked and the shutter is inserted 
-           - default for evo laser pulse1, pulse2, pulse3
+        True means that the fiber will be used and the shutter is removed.
+        False means that the fiber will be blocked and the shutter is inserted 
+           - default for evo laser fiber1, fiber2, fiber3
         None means that the shutter will not be changed
            - default for opo laser
 
         Parameters
         ----------
-        pulse1: bool
+        fiber1: bool
             Controls ``evo_shutter1``
 
-        pulse2: bool
+        fiber2: bool
             Controls ``evo_shutter2``
 
-        pulse3: bool
+        fiber3: bool
             Controls ``evo_shutter3``
 
         free_space: bool
             Controls ``opo_shutter``
         """
-        for state, shutter in zip((pulse1, pulse2, pulse3, free_space),
+        for state, shutter in zip((fiber1, fiber2, fiber3, free_space),
                                   (self.evo_shutter1, self.evo_shutter2,
                                    self.evo_shutter3, opo_shutter)):
             if state is not None:
@@ -102,33 +97,31 @@ class User:
                     shutter('OUT')
                 else:
                     shutter('IN')
-        #logger.info("Shutters set to pulse1=%s, pulse2=%s, pulse3=%s, free_space=%s", pulse1, pulse2, pulse3, free_space)
+        #logger.info("Shutters set to fiber1=%s, fiber2=%s, fiber3=%s, free_space=%s", fiber1, fiber2, fiber3, free_space)
         sleep(1)
         return
 
 
-    def pulse_0(self):
-        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=None)
+    def fiber_0(self):
+        return self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=None)
 
 
-    def pulse_1(self):
-        return self.configure_shutters(pulse1=False, pulse2=False, pulse3=True, free_space=None)
+    def fiber_1(self):
+        return self.configure_shutters(fiber1=False, fiber2=False, fiber3=True, free_space=None)
 
 
-    def pulse_2(self):
-        return self.configure_shutters(pulse1=False, pulse2=True, pulse3=True, free_space=None)
+    def fiber_2(self):
+        return self.configure_shutters(fiber1=False, fiber2=True, fiber3=True, free_space=None)
 
 
-    def pulse_3(self):
-        return self.configure_shutters(pulse1=True, pulse2=True, pulse3=True, free_space=None)
+    def fiber_3(self):
+        return self.configure_shutters(fiber1=True, fiber2=True, fiber3=True, free_space=None)
 
 
-    @property
-    def _delaystr(self):
+    def _delaystr(self, delay):
         """
         OPO delay string
         """
-        delay = self.delay
         if self.opo_shutter.state.value == 'IN':
             return 'No OPO Laser'
         elif delay >= 1e6:
@@ -167,7 +160,7 @@ class User:
         self.delay = delay
         opo_delay = opo_time_zero - delay
         opo_ec = opo_ec_short
-        if delay > min_evr_delay:
+        if delay > opo_time_zero:
             opo_delay += 1e9/120
             opo_ec = opo_ec_long
 
@@ -175,8 +168,26 @@ class User:
         logger.info("Setting OPO delay %s ns", opo_delay)
         opo.eventcode.put(opo_ec)
         logger.info("Setting OPO ec %s", opo_ec)
-        logger.info(self._delaystr)
+        logger.info(self._delaystr(delay))
         return
+
+
+    def get_delay(self):
+        """
+        Reads the current delay in ns
+
+        Parameters
+        ----------
+        delay: float
+            Requested laser delay in nanoseconds.
+        """
+        if opo.eventcode.get() == opo_ec_long:
+            opo_delay = opo.ns_delay.get() - 1e9/120
+        else:
+            opo_delay = opo.ns_delay.get()
+        delay = opo_time_zero - opo_delay 
+        logger.info(self._delaystr(delay))
+        return delay
 
 
     def begin(self, events=None, duration=300,
@@ -251,27 +262,23 @@ class User:
                 if end_run:
                     daq.end_run()
             if end_run and not wait:
-                threading.Thread(target=self._ender_thread, args=()).start()
+                threading.Thread(target=daq._ender_thread, args=()).start()
+            return status
         except KeyboardInterrupt:
                 pp.close()
-                self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
-                print(f"[*] Stopping Run {daq.run_number()} and exiting???...",'\n')
+                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                logger.warning(f"[*] Stopping Run {daq.run_number()} and exiting???...")
+                sleep(5)
                 daq.stop()
                 daq.disconnect()
                 status = False
-                sys.exit()
-        finally:
-            try:
-                daq.preconfig(record=old_record, show_queued_cfg=False)
                 return status
-            except NameError:
-                pass
 
 
     ######################
     # Scanning Function #
     ######################
-    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, pulse=-1, free_space=None, laser_delay=None):
+    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
         """
         Perform a single run of the experiment
 
@@ -298,8 +305,8 @@ class User:
         picker: str, optional
             If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
 
-        pulse: int, optional
-            Number of laser pulses. Default is -1. See ``configure_shutters`` for more
+        fiber: int, optional
+            Number of laser fibers. Default is -1. See ``configure_shutters`` for more
             information
 
         free_space: bool, optional
@@ -309,24 +316,24 @@ class User:
             Requested laser delay in nanoseconds.
         Note
         ----
-        0: (pulse1=False, pulse2=False, pulse3=False)
-        1: (pulse1=False, pulse2=False, pulse3=True)
-        2: (pulse1=False, pulse2=True, pulse3=True)
-        3: (pulse1=True, pulse2=True, pulse3=True)
+        0: (fiber1=False, fiber2=False, fiber3=False)
+        1: (fiber1=False, fiber2=False, fiber3=True)
+        2: (fiber1=False, fiber2=True, fiber3=True)
+        3: (fiber1=True, fiber2=True, fiber3=True)
 
         For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
         # Configure the shutters
-        if pulse == 0:
-            self.pulse_0()
-        elif pulse == 1:
-            self.pulse_1()
-        elif pulse == 2:
-            self.pulse_2()
-        elif pulse == 3:
-            self.pulse_3()
+        if fiber == 0:
+            self.fiber_0()
+        elif fiber == 1:
+            self.fiber_1()
+        elif fiber == 2:
+            self.fiber_2()
+        elif fiber == 3:
+            self.fiber_3()
         else:
-            logger.warning("No proper pulse number set so defaulting to ``configure_shutters`` settings.")
+            logger.warning("No proper fiber number set so defaulting to ``configure_shutters`` settings.")
 
         if free_space is not None:
             if free_space == True or str(free_space).lower()==str('out') or int(free_space) == 2 or str(free_space).lower()==str('open'):
@@ -336,6 +343,8 @@ class User:
 
         if laser_delay is not None:
             self.set_delay(laser_delay)
+        delay = self.get_delay()
+        logger.info(self._delaystr(delay))
 
         if sample.lower()=='water' or sample.lower()=='h2o':
             inspire=True
@@ -345,7 +354,7 @@ class User:
             pp.flipflop()
 
         for i in range(runs):
-            print(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
+            logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
             status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
             if status is False:
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
@@ -355,15 +364,27 @@ class User:
                     comment = f"Running {sample}......{quote()['quote']}"
                 else:
                     comment = f"Running {sample}"
-                info = [daq.run_number(), comment, self._delaystr]
+                info = [daq.run_number(), comment, self._delaystr(delay)]
                 info.extend(self.shutter_status)
                 post_msg = post_template.format(*info)
                 print('\n' + post_msg + '\n')
                 elog.post(msg=post_msg, run=(daq.run_number()))
-            sleep(daq_delay)
+            try:
+                sleep(daq_delay)
+            except KeyboardInterrupt:
+                pp.close()
+                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                logger.warning(f"[*] Stopping Run {daq.run_number()} and exiting???...")
+                sleep(5)
+                daq.disconnect()
+                status = False
+                if status is False:
+                    logger.warning('Run ended prematurely. Probably sample delivery problem')
+                    break
         if status:
+            logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
             pp.close()
-            self.configure_shutters(pulse1=False, pulse2=False, pulse3=False, free_space=False)
+            self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
             daq.end_run()
             daq.disconnect()
 
@@ -373,9 +394,9 @@ Run Number {}: {}
 {}
 
 While the laser shutters are:
-EVO Pulse 1 ->  {}
-EVO Pulse 2 ->  {}
-EVO Pulse 3 ->  {}
+EVO fiber 1 ->  {}
+EVO fiber 2 ->  {}
+EVO fiber 3 ->  {}
 OPO Shutter ->  {}
 """
 
