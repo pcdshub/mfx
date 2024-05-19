@@ -30,6 +30,7 @@ opo_time_zero = 671765
 
 opo_ec_short = 212
 opo_ec_long = 211
+opo_ec_longer = 210
 PP = 197
 DAQ = 198
 WATER = 211
@@ -160,9 +161,17 @@ class User:
         self.delay = delay
         opo_delay = opo_time_zero - delay
         opo_ec = opo_ec_short
-        if delay > opo_time_zero:
+        if delay > opo_time_zero + 1e9/120:
+            opo_delay += 2e9/120
+            opo_ec = opo_ec_longer
+            logger.info('Laser is 2 buckets before the beam')
+        elif delay > opo_time_zero:
             opo_delay += 1e9/120
             opo_ec = opo_ec_long
+            logger.info('Laser is 1 bucket before the beam')
+        else:
+            logger.info('Laser is in the same bucket as the beam')      
+
 
         opo.ns_delay.put(opo_delay)
         logger.info("Setting OPO delay %s ns", opo_delay)
@@ -188,6 +197,45 @@ class User:
         delay = opo_time_zero - opo_delay 
         logger.info(self._delaystr(delay))
         return delay
+
+
+    def post(self, sample='?', run_number=None, post=False, inspire=False, add_note=''):
+        """
+        Posts a message to the elog
+
+        Parameters
+        ----------
+        sample: str, optional
+            Sample Name
+
+        run_number: int, optional
+            Run Number. By default this is read off of the DAQ
+
+        post: bool, optional
+            set True to record/post message to elog
+
+        inspire: bool, optional
+            Set false by default because it makes Sandra sad. Set True to inspire
+
+        add_note: string, optional
+            adds additional note to elog message 
+        """
+        if add_note!='':
+            add_note = '\n' + add_note
+        if inspire:
+            comment = f"Running {sample}\n{quote()['quote']}{add_note}"
+        else:
+            comment = f"Running {sample}{add_note}"
+        delay = self.get_delay()
+        if run_number is None:
+            run_number = daq.run_number()
+        info = [run_number, comment, self._delaystr(delay)]
+        info.extend(self.shutter_status)
+        post_msg = post_template.format(*info)
+        print('\n' + post_msg + '\n')
+        if post:
+            elog.post(msg=post_msg, run=(run_number))
+        return post_msg
 
 
     def begin(self, events=None, duration=300,
@@ -265,12 +313,6 @@ class User:
                 threading.Thread(target=daq._ender_thread, args=()).start()
             return status
         except KeyboardInterrupt:
-                pp.close()
-                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning(f"[*] Stopping Run {daq.run_number()} and exiting???...")
-                sleep(5)
-                daq.stop()
-                daq.disconnect()
                 status = False
                 return status
 
@@ -355,26 +397,26 @@ class User:
 
         for i in range(runs):
             logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
+            run_number = daq.run_number() + 1
             status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
             if status is False:
+                pp.close()
+                self.post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
+                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                logger.warning("[*] Stopping Run and exiting???...")
+                sleep(5)
+                daq.stop()
+                daq.disconnect()
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
-            if record:
-                if inspire:
-                    comment = f"Running {sample}......{quote()['quote']}"
-                else:
-                    comment = f"Running {sample}"
-                info = [daq.run_number(), comment, self._delaystr(delay)]
-                info.extend(self.shutter_status)
-                post_msg = post_template.format(*info)
-                print('\n' + post_msg + '\n')
-                elog.post(msg=post_msg, run=(daq.run_number()))
+
+            self.post(sample, run_number, record, inspire)
             try:
                 sleep(daq_delay)
             except KeyboardInterrupt:
                 pp.close()
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning(f"[*] Stopping Run {daq.run_number()} and exiting???...")
+                logger.warning("[*] Stopping Run and exiting???...")
                 sleep(5)
                 daq.disconnect()
                 status = False
@@ -382,11 +424,11 @@ class User:
                     logger.warning('Run ended prematurely. Probably sample delivery problem')
                     break
         if status:
-            logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
             pp.close()
             self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
             daq.end_run()
             daq.disconnect()
+            logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
 post_template = """\
 Run Number {}: {}
