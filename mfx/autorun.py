@@ -131,7 +131,7 @@ def quote():
     return _res
 
 
-def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, delay=5, picker=None):
+def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None):
     """
     Automate runs.... With optional quotes
 
@@ -152,7 +152,7 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, dela
     inspire: bool, optional
         Set false by default because it makes Sandra sad. Set True to inspire
 
-    delay: int, optional
+    daq_delay: int, optional
         delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
     picker: str, optional
