@@ -76,6 +76,7 @@ with safe_load('xfel_gui'):
 
 with safe_load('yano-kern_code'):
     from mfx.yano import *
+    yano = yano()
 
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
