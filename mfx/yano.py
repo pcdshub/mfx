@@ -1,4 +1,4 @@
-class Yano:
+class yano:
     import logging
     from time import sleep
 
@@ -312,9 +312,6 @@ class Yano:
                 return status
 
 
-    ######################
-    # Scanning Function #
-    ######################
     def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
         """
         Perform a single run of the experiment
