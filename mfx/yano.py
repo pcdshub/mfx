@@ -1,4 +1,4 @@
-class yano:
+class Yano:
     import logging
     from time import sleep
 
@@ -312,125 +312,125 @@ class yano:
                 return status
 
 
-    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
-        """
-        Perform a single run of the experiment
+def yano_run(sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
+    """
+    Perform a single run of the experiment
 
-        Parameters
-        ----------
-        sample: str, optional
-            Sample Name
+    Parameters
+    ----------
+    sample: str, optional
+        Sample Name
 
-        run_length: int, optional
-            number of seconds for run 300 is default
+    run_length: int, optional
+        number of seconds for run 300 is default
 
-        record: bool, optional
-            set True to record
+    record: bool, optional
+        set True to record
 
-        runs: int, optional
-            number of runs 5 is default
+    runs: int, optional
+        number of runs 5 is default
 
-        inspire: bool, optional
-            Set false by default because it makes Sandra sad. Set True to inspire
+    inspire: bool, optional
+        Set false by default because it makes Sandra sad. Set True to inspire
 
-        daq_delay: int, optional
-            delay time between runs. Default is 5 second but increase is the DAQ is being slow.
+    daq_delay: int, optional
+        delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
-        picker: str, optional
-            If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+    picker: str, optional
+        If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
 
-        fiber: int, optional
-            Number of laser fibers. Default is -1. See ``configure_shutters`` for more
-            information
+    fiber: int, optional
+        Number of laser fibers. Default is -1. See ``configure_shutters`` for more
+        information
 
-        free_space: bool, optional
-            Sets the free_space laser shutter to Closed (False) or Open (True). Default is None.
-        
-        laser_delay: float
-            Requested laser delay in nanoseconds.
-        Note
-        ----
-        0: (fiber1=False, fiber2=False, fiber3=False)
-        1: (fiber1=False, fiber2=False, fiber3=True)
-        2: (fiber1=False, fiber2=True, fiber3=True)
-        3: (fiber1=True, fiber2=True, fiber3=True)
+    free_space: bool, optional
+        Sets the free_space laser shutter to Closed (False) or Open (True). Default is None.
+    
+    laser_delay: float
+        Requested laser delay in nanoseconds.
+    Note
+    ----
+    0: (fiber1=False, fiber2=False, fiber3=False)
+    1: (fiber1=False, fiber2=False, fiber3=True)
+    2: (fiber1=False, fiber2=True, fiber3=True)
+    3: (fiber1=True, fiber2=True, fiber3=True)
 
-        For alternative laser configurations either use ``configure_shutters`` to set parameters
-        """
-        # Configure the shutters
-        if fiber == 0:
-            self.fiber_0()
-        elif fiber == 1:
-            self.fiber_1()
-        elif fiber == 2:
-            self.fiber_2()
-        elif fiber == 3:
-            self.fiber_3()
+    For alternative laser configurations either use ``configure_shutters`` to set parameters
+    """
+    # Configure the shutters
+    if fiber == 0:
+        Yano.fiber_0()
+    elif fiber == 1:
+        Yano.fiber_1()
+    elif fiber == 2:
+        Yano.fiber_2()
+    elif fiber == 3:
+        Yano.fiber_3()
+    else:
+        logger.warning("No proper fiber number set so defaulting to ``configure_shutters`` settings.")
+
+    if free_space is not None:
+        if free_space == True or str(free_space).lower()==str('out') or int(free_space) == 2 or str(free_space).lower()==str('open'):
+            opo_shutter('OUT')
         else:
-            logger.warning("No proper fiber number set so defaulting to ``configure_shutters`` settings.")
+            opo_shutter('IN')
 
-        if free_space is not None:
-            if free_space == True or str(free_space).lower()==str('out') or int(free_space) == 2 or str(free_space).lower()==str('open'):
-                opo_shutter('OUT')
-            else:
-                opo_shutter('IN')
+    if laser_delay is not None:
+        Yano.set_delay(laser_delay)
+    delay = Yano.get_delay()
+    logger.info(Yano._delaystr(delay))
 
-        if laser_delay is not None:
-            self.set_delay(laser_delay)
-        delay = self.get_delay()
-        logger.info(self._delaystr(delay))
+    if sample.lower()=='water' or sample.lower()=='h2o':
+        inspire=True
+    if picker=='open':
+        pp.open()
+    if picker=='flip':
+        pp.flipflop()
 
-        if sample.lower()=='water' or sample.lower()=='h2o':
-            inspire=True
-        if picker=='open':
-            pp.open()
-        if picker=='flip':
-            pp.flipflop()
+    for i in range(runs):
+        logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
+        run_number = daq.run_number() + 1
+        status = Yano.begin(duration = run_length, record = record, wait = True, end_run = True)
+        if status is False:
+            pp.close()
+            Yano.post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
+            Yano.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+            logger.warning("[*] Stopping Run and exiting???...")
+            sleep(5)
+            daq.stop()
+            daq.disconnect()
+            logger.warning('Run ended prematurely. Probably sample delivery problem')
+            break
 
-        for i in range(runs):
-            logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-            run_number = daq.run_number() + 1
-            status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
+        Yano.post(sample, run_number, record, inspire)
+        try:
+            sleep(daq_delay)
+        except KeyboardInterrupt:
+            pp.close()
+            Yano.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+            logger.warning("[*] Stopping Run and exiting???...")
+            sleep(5)
+            daq.disconnect()
+            status = False
             if status is False:
-                pp.close()
-                self.post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
-                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
-                daq.stop()
-                daq.disconnect()
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
+    if status:
+        pp.close()
+        Yano.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+        daq.end_run()
+        daq.disconnect()
+        logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
-            self.post(sample, run_number, record, inspire)
-            try:
-                sleep(daq_delay)
-            except KeyboardInterrupt:
-                pp.close()
-                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
-                daq.disconnect()
-                status = False
-                if status is False:
-                    logger.warning('Run ended prematurely. Probably sample delivery problem')
-                    break
-        if status:
-            pp.close()
-            self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-            daq.end_run()
-            daq.disconnect()
-            logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+post_template = """\
+Run Number {}: {}
 
-    post_template = """\
-    Run Number {}: {}
+{}
 
-    {}
-
-    While the laser shutters are:
-    EVO fiber 1 ->  {}
-    EVO fiber 2 ->  {}
-    EVO fiber 3 ->  {}
-    OPO Shutter ->  {}
-    """
+While the laser shutters are:
+EVO fiber 1 ->  {}
+EVO fiber 2 ->  {}
+EVO fiber 3 ->  {}
+OPO Shutter ->  {}
+"""
 
