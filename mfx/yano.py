@@ -1,47 +1,43 @@
-import logging
-from time import sleep
-
-from mfx.devices import LaserShutter
-from mfx.db import daq, sequencer, elog, pp
-from pcdsdevices.evr import Trigger
-from mfx.autorun import quote
-
-logger = logging.getLogger(__name__)
-
-#######################
-#  Object Declaration #
-#######################
-
-# Declare shutter objects
-opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
-evo_shutter1 = LaserShutter('MFX:USR:ao1:7', name='evo_shutter1')
-evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
-evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
-
-# Trigger objects
-opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
-evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
-
-# Laser parameter
-opo_time_zero = 671765
-
-# Event code switch logic for longer delay
-
-opo_ec_short = 212
-opo_ec_long = 211
-opo_ec_longer = 210
-PP = 197
-DAQ = 198
-WATER = 211
-SAMPLE = 212
-
-rep_rate = 20
-
-###########################
-# Configuration Functions #
-###########################
-
 class Yano:
+    import logging
+    from time import sleep
+
+    from mfx.devices import LaserShutter
+    from mfx.db import daq, sequencer, elog, pp
+    from pcdsdevices.evr import Trigger
+    from mfx.autorun import quote
+
+    logger = logging.getLogger(__name__)
+
+    #######################
+    #  Object Declaration #
+    #######################
+
+    # Declare shutter objects
+    opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
+    evo_shutter1 = LaserShutter('MFX:USR:ao1:7', name='evo_shutter1')
+    evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
+    evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
+
+    # Trigger objects
+    opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
+    evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
+
+    # Laser parameter
+    opo_time_zero = 671765
+
+    # Event code switch logic for longer delay
+
+    opo_ec_short = 212
+    opo_ec_long = 211
+    opo_ec_longer = 210
+    PP = 197
+    DAQ = 198
+    WATER = 211
+    SAMPLE = 212
+
+    rep_rate = 20
+
     """Generic User Object"""
     opo_shutter = opo_shutter
     evo_shutter1 = evo_shutter1
