@@ -74,6 +74,9 @@ with safe_load("drift_correct"):
 with safe_load('xfel_gui'):
     from mfx.xfel_gui import *
 
+with safe_load('yano-kern_code'):
+    from mfx.yano import *
+
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
