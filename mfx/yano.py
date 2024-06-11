@@ -425,15 +425,15 @@ class Yano:
             daq.disconnect()
             logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
-post_template = """\
-Run Number {}: {}
+    post_template = """\
+    Run Number {}: {}
 
-{}
+    {}
 
-While the laser shutters are:
-EVO fiber 1 ->  {}
-EVO fiber 2 ->  {}
-EVO fiber 3 ->  {}
-OPO Shutter ->  {}
-"""
+    While the laser shutters are:
+    EVO fiber 1 ->  {}
+    EVO fiber 2 ->  {}
+    EVO fiber 3 ->  {}
+    OPO Shutter ->  {}
+    """
 
