@@ -359,13 +359,13 @@ def yano_run(sample='?', run_length=300, record=True, runs=5, inspire=False, daq
     """
     # Configure the shutters
     if fiber == 0:
-        Yano.fiber_0()
+        Yano.fiber_0(self)
     elif fiber == 1:
-        Yano.fiber_1()
+        Yano.fiber_1(self)
     elif fiber == 2:
-        Yano.fiber_2()
+        Yano.fiber_2(self)
     elif fiber == 3:
-        Yano.fiber_3()
+        Yano.fiber_3(self)
     else:
         logger.warning("No proper fiber number set so defaulting to ``configure_shutters`` settings.")
 
@@ -376,9 +376,9 @@ def yano_run(sample='?', run_length=300, record=True, runs=5, inspire=False, daq
             opo_shutter('IN')
 
     if laser_delay is not None:
-        Yano.set_delay(laser_delay)
-    delay = Yano.get_delay()
-    logger.info(Yano._delaystr(delay))
+        Yano.set_delay(self, laser_delay)
+    delay = Yano.get_delay(self)
+    logger.info(Yano._delaystr(self, delay))
 
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
@@ -390,7 +390,7 @@ def yano_run(sample='?', run_length=300, record=True, runs=5, inspire=False, daq
     for i in range(runs):
         logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
         run_number = daq.run_number() + 1
-        status = Yano.begin(duration = run_length, record = record, wait = True, end_run = True)
+        status = Yano.begin(self, duration = run_length, record = record, wait = True, end_run = True)
         if status is False:
             pp.close()
             Yano.post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
@@ -402,12 +402,12 @@ def yano_run(sample='?', run_length=300, record=True, runs=5, inspire=False, daq
             logger.warning('Run ended prematurely. Probably sample delivery problem')
             break
 
-        Yano.post(sample, run_number, record, inspire)
+        Yano.post(self, sample, run_number, record, inspire)
         try:
             sleep(daq_delay)
         except KeyboardInterrupt:
             pp.close()
-            Yano.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+            Yano.configure_shutters(self, fiber1=False, fiber2=False, fiber3=False, free_space=False)
             logger.warning("[*] Stopping Run and exiting???...")
             sleep(5)
             daq.disconnect()
@@ -417,7 +417,7 @@ def yano_run(sample='?', run_length=300, record=True, runs=5, inspire=False, daq
                 break
     if status:
         pp.close()
-        Yano.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+        Yano.configure_shutters(self, fiber1=False, fiber2=False, fiber3=False, free_space=False)
         daq.end_run()
         daq.disconnect()
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
