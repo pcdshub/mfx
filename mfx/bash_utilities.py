@@ -48,10 +48,10 @@ def makepeds(username, run_number):
         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-def awr(hutch=mfx):
+def awr(hutch='mfx'):
     import subprocess
     import logging
     logging.info("Making Pedestals")
     subprocess.Popen(
-        [f"/cds/home/opr/mfxopr/bin/awr {str(hutch)}"],
+        [f"/cds/home/opr/mfxopr/bin/awr {hutch}"],
         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
