@@ -5,7 +5,7 @@ class cctbx:
         self.experiment = str(get_exp())
 
 
-    def check_settings(self):
+    def check_settings(self, user):
         import logging
         import subprocess
         exp = self.experiment
@@ -34,7 +34,7 @@ mp {{
   nnodes_merge = 1
   nproc_per_node = 120
   queue = "milano"
-  extra_options = " --account=lcls:{exp}  --reservation=lcls:onshift"
+  extra_options = " --account=lcls:{exp} --reservation=lcls:onshift"
   env_script = "/sdf/group/lcls/ds/tools/cctbx/build/conda_setpaths.sh"
   phenix_script = "/sdf/group/lcls/ds/tools/cctbx/phenix/phenix-1.20.1-4487/phenix_env.sh"
 }}
@@ -51,13 +51,18 @@ db {{
             cctbx_settings.close
 
             subprocess.Popen(
-                ["rsync -avze ssh ~/.cctbx.xfel/settings_s3df.phil djr@s3dflogin:~/.cctbx.xfel/settings_old.phil "],
+                [f"rsync -avze ssh ~/.cctbx.xfel/settings_s3df.phil {user}@s3dflogin:~/.cctbx.xfel/settings_old.phil"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-    def xfel_gui(self):
+    def xfel_gui(self, user):
         import logging
         import subprocess
+        import os
+
+        #cctbx_dir = 
+        if not os.path.exists(out_result):
+            os.makedirs(out_result)
 
         proc = [
             f"ssh -YAC mfxopr@daq-mfx-mon0{str(node)} "
@@ -70,7 +75,6 @@ db {{
         subprocess.Popen(
             proc, shell=True, 
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
 
         subprocess.Popen(
             [". /reg/g/cctbx/brewster/working/build/conda_setpaths.sh;cctbx.xfel &"],
