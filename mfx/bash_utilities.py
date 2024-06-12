@@ -35,13 +35,17 @@ def takepeds():
     os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
 
 
-def makepeds(username, run_number):
+def makepeds(username, run_number=None):
     import os
     import logging
+    from mfx.db import daq
+    from mfx.macros import get_exp
     logging.info("Making Pedestals")
+    if run_number is None:
+        run_number = daq.run_number()
     username = str(username)
     run_number = str(int(run_number))
-    os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}")
+    os.system(f"ssh -Y {username}@s3dflogin ssh -Y psana /sdf/group/lcls/ds/tools/engineering_tools/R3.8.0/scripts/makepeds_psana --queue milano --run {run_number} --experiment {get_exp()}")
 
 
 def awr(hutch='mfx'):
