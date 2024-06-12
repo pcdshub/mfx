@@ -46,7 +46,7 @@ db {{
 }}\
 '''
         if change:
-            cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_new.phil", "w", encoding="UTF-8")
+            cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_s3df.phil", "w", encoding="UTF-8")
             cctbx_settings.writelines(settings)
             cctbx_settings.close
 
