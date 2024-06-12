@@ -46,3 +46,12 @@ def makepeds(username, run_number):
     subprocess.Popen(
         [f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}"],
         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
+def awr(hutch=mfx):
+    import subprocess
+    import logging
+    logging.info("Making Pedestals")
+    subprocess.Popen(
+        [f"/cds/home/opr/mfxopr/bin/awr {str(hutch)}"],
+        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
