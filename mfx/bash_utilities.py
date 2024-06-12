@@ -45,7 +45,7 @@ def makepeds(username, run_number=None):
         run_number = daq.run_number()
     username = str(username)
     run_number = str(int(run_number))
-    os.system(f"ssh -Y {username}@s3dflogin ssh -Y psana /sdf/group/lcls/ds/tools/engineering_tools/R3.8.0/scripts/makepeds_psana --queue milano --run {run_number} --experiment {get_exp()}")
+    os.system(f"ssh -Y {username}@s3dflogin ssh -Y psana /sdf/group/lcls/ds/tools/engineering_tools/engineering_tools/scripts/makepeds_psana --queue milano --run {run_number} --experiment {get_exp()}")
 
 
 def awr(hutch='mfx'):
