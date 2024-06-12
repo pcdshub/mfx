@@ -10,7 +10,7 @@ class cctbx:
         import subprocess
        
         logging.info("Checking xfel gui phil File")
-        cctbx_settings = open("~/.cctbx.xfel/settings_s3df.phil", "r", encoding="UTF-8")
+        cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_s3df.phil", "r", encoding="UTF-8")
         setting_lines = cctbx_settings.readlines()
         change = False
         if setting_lines[4] != f'experiment =  "{self.experiment}"':
@@ -62,7 +62,7 @@ class cctbx:
         #     change = True
 
         if change:
-            cctbx_settings = open("~/.cctbx.xfel/settings_new.phil", "w", encoding="UTF-8")
+            cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_new.phil", "w", encoding="UTF-8")
             cctbx_settings.writelines(settings)
             cctbx_settings.close
 
