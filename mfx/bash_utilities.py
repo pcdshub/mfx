@@ -44,5 +44,5 @@ def makepeds(username, run_number):
     username = str(username)
     run_number = str(int(run_number))
     subprocess.Popen(
-        [f"makepeds -q milano -r {run_number} -u {username}"],
+        [f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}"],
         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
