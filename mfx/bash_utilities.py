@@ -52,14 +52,20 @@ def awr(hutch='mfx'):
 
 
 def restartdaq():
-    import os
+    import subprocess
     import logging
     logging.info("Restarting the DAQ")
-    os.system("/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w")
+    subprocess.Popen(
+        ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
+        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    #os.system("/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w")
 
  
 def cameras(time=12):   
-    import os
+    import subprocess
     import logging
     logging.info("Opening Cam Viewer")
-    os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}")
+    subprocess.Popen(
+        [f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}"],
+        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    #os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}")
