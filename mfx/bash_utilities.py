@@ -33,9 +33,6 @@ def takepeds():
     import logging
     logging.info("Taking Pedestals")
     os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
-    #subprocess.Popen(
-        #["/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds"],
-        #shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 def makepeds(username, run_number):
@@ -45,9 +42,6 @@ def makepeds(username, run_number):
     username = str(username)
     run_number = str(int(run_number))
     os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}")
-    #subprocess.Popen(
-        #[f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}"],
-        #shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 def awr(hutch='mfx'):
@@ -55,7 +49,3 @@ def awr(hutch='mfx'):
     import logging
     logging.info(f"{hutch} Beamline Check")
     os.system(f"/cds/home/opr/mfxopr/bin/awr {hutch}")
-    #bash = subprocess.Popen(
-        #[f"/cds/home/opr/mfxopr/bin/awr, {hutch}"],
-        #stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    #stdout = bash.communicate()
