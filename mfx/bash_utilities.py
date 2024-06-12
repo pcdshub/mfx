@@ -52,6 +52,7 @@ def awr(hutch='mfx'):
     import subprocess
     import logging
     logging.info("Making Pedestals")
-    subprocess.Popen(
+    bash = subprocess.Popen(
         [f"/cds/home/opr/mfxopr/bin/awr {hutch}"],
-        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    stdout = bash.communicate()
