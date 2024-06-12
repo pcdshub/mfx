@@ -22,6 +22,9 @@ def xfel_gui():
         cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings.phil", "w", encoding="UTF-8")
         cctbx_settings.writelines(setting_lines)
         cctbx_settings.close
+        cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_old.phil", "w", encoding="UTF-8")
+        cctbx_settings.writelines(setting_lines)
+        cctbx_settings.close
 
     subprocess.Popen(
         [". /reg/g/cctbx/brewster/working/build/conda_setpaths.sh;cctbx.xfel &"],
