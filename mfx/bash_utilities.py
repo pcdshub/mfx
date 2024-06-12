@@ -29,30 +29,33 @@ def xfel_gui():
     
 
 def takepeds():
-    import subprocess
+    import os
     import logging
     logging.info("Taking Pedestals")
-    subprocess.Popen(
-        ["/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds"],
-        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
+    #subprocess.Popen(
+        #["/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds"],
+        #shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 def makepeds(username, run_number):
-    import subprocess
+    import os
     import logging
     logging.info("Making Pedestals")
     username = str(username)
     run_number = str(int(run_number))
-    subprocess.Popen(
-        [f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}"],
-        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}")
+    #subprocess.Popen(
+        #[f"/reg/g/pcds/engineering_tools/latest-released/scripts/makepeds -q milano -r {run_number} -u {username}"],
+        #shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 def awr(hutch='mfx'):
-    import subprocess
+    import os
     import logging
-    logging.info("Making Pedestals")
-    bash = subprocess.Popen(
-        [f"/cds/home/opr/mfxopr/bin/awr {hutch}"],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    stdout = bash.communicate()
+    logging.info(f"{hutch} Beamline Check")
+    os.system(f"/cds/home/opr/mfxopr/bin/awr {hutch}")
+    #bash = subprocess.Popen(
+        #[f"/cds/home/opr/mfxopr/bin/awr, {hutch}"],
+        #stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    #stdout = bash.communicate()
