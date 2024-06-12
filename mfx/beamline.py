@@ -71,8 +71,8 @@ with safe_load('detector_image'):
 with safe_load("drift_correct"):
     from mfx.timetool import *
 
-with safe_load('xfel_gui'):
-    from mfx.xfel_gui import *
+with safe_load('bash_utilities'):
+    from mfx.bash_utilities import *
 
 with safe_load('yano-kern_code'):
     from mfx.yano import *
