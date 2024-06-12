@@ -49,3 +49,17 @@ def awr(hutch='mfx'):
     import logging
     logging.info(f"{hutch} Beamline Check")
     os.system(f"/cds/home/opr/mfxopr/bin/awr {hutch}")
+
+
+def restartdaq():
+    import os
+    import logging
+    logging.info("Restarting the DAQ")
+    os.system("/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w")
+
+ 
+def cameras(time=12):   
+    import os
+    import logging
+    logging.info("Opening Cam Viewer")
+    os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}")
