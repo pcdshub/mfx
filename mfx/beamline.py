@@ -74,6 +74,10 @@ with safe_load("drift_correct"):
 with safe_load('bash_utilities'):
     from mfx.bash_utilities import *
 
+with safe_load('cctbx'):
+    from mfx.cctbx import *
+    cctbx = cctbx()
+    
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
@@ -179,3 +183,4 @@ with safe_load('Make Aliases'):
     import numpy as np
     from importlib import reload
     from mfx.transfocator_scan import *
+    from mfx.db import mfx_atm as tt

@@ -23,3 +23,8 @@ thermocouple:
   history:
     05 Feb 2024 14:23:52: '  -80.1115'
   value: -80.11155
+tt_diode:
+  active: true
+  history:
+    16 Jun 2024 23:29:42: '  -99.9685'
+  value: -99.96855
