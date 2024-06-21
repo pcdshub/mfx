@@ -147,6 +147,9 @@ with safe_load('add laser motor groups'):
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
+            lens_v = Newport('MFX:LAS:MMN:09', name='lens_v')
+            lens_f = Newport('MFX:LAS:MMN:10', name='lens_f')
+            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
 
         with safe_load('Fast delay encoders'):
             lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
