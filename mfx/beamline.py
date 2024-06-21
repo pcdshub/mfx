@@ -118,13 +118,13 @@ with safe_load('FS45 lxt & lxt_ttc'):
     class LXTTTC(SyncAxis):
         lxt = OCpt(lxt)
         txt = OCpt(txt)
-        
+
         tab_component_names = True
-        scales = {'txt': -1} 
+        scales = {'txt': -1}
         warn_deadband = 5e-14
         fix_sync_keep_still = 'lxt'
         sync_limits = (-10e-6, 10e-6)
-    
+
     lxt_ttc = LXTTTC('', name='lxt_ttc')
 
 with safe_load('add laser motor groups'):
