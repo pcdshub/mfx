@@ -4,7 +4,7 @@
 # edit this line only
 USE_LOCAL="1"
 #export CONDA_ENVNAME="pcds-5.7.2"
-export CONDA_ENVNAME="pcds-5.8.1"
+export CONDA_ENVNAME="pcds-5.8.2"
 
 export HUTCH="mfx"
 export LOCAL_BASE="/u1/mfxopr/conda_envs"
