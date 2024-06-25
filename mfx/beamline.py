@@ -73,6 +73,7 @@ with safe_load("drift_correct"):
 
 with safe_load('bash_utilities'):
     from mfx.bash_utilities import *
+    cl = cl()
 
 with safe_load('cctbx'):
     from mfx.cctbx import *
@@ -81,6 +82,7 @@ with safe_load('cctbx'):
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
+
 
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
