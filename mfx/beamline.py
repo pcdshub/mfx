@@ -77,7 +77,7 @@ with safe_load('bash_utilities'):
 with safe_load('cctbx'):
     from mfx.cctbx import *
     cctbx = cctbx()
-    
+
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
@@ -118,13 +118,13 @@ with safe_load('FS45 lxt & lxt_ttc'):
     class LXTTTC(SyncAxis):
         lxt = OCpt(lxt)
         txt = OCpt(txt)
-        
+
         tab_component_names = True
-        scales = {'txt': -1} 
+        scales = {'txt': -1}
         warn_deadband = 5e-14
         fix_sync_keep_still = 'lxt'
         sync_limits = (-10e-6, 10e-6)
-    
+
     lxt_ttc = LXTTTC('', name='lxt_ttc')
 
 with safe_load('add laser motor groups'):
@@ -188,3 +188,6 @@ with safe_load('Make Aliases'):
     from importlib import reload
     from mfx.transfocator_scan import *
     from mfx.db import mfx_atm as tt
+    lens_v=las.lens_v
+    lens_h=las.lens_h
+    lens_f=las.lens_f
