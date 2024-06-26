@@ -66,7 +66,6 @@ class cl:
         subprocess.Popen(
             ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        #os.system("/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w")
 
     
     def cameras(self, time=12):   
@@ -76,4 +75,47 @@ class cl:
         subprocess.Popen(
             [f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}"],
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        #os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}")
+        
+
+    def camera_list(self):
+        import re   
+        import logging
+        logging.info("Opening Camera List")
+        camlist = open("/reg/g/pcds/pyps/config/mfx/camviewer.cfg", "r", encoding="UTF-8")
+        cam_list = camlist.readlines()
+        self.avail_cams = [cam for cam in cam_list if cam.startswith('GE')]
+        print("Available Cameras")
+        for cam in self.avail_cams:
+            cam = re.split(';|,', cam)
+            print(f"Camera {cam[4].strip()} ....  {cam[2]}")
+
+        return self.avail_cams
+
+
+    def focus_scan(self, camera):
+        import os
+        import sys
+        import logging
+        logging.info(
+            "Preparing for Focus Scan\n"
+            "Please check the following\n"
+            "One of the following cameras is selected\n\n")
+        self.camera_list()
+        logging.info(
+            "\nCamera orientation set to none\n"
+            "Slits are open\n"
+            "Blue crosshair in upper left corner\n"
+            "Red crosshair in bottom right corner\n")
+
+        input("Press Enter to continue...")
+
+        if camera not in self.avail_cams:
+            logging.info("Desired Camera not in List. Software will exit.")
+            sys.exit()
+
+        logging.info("Checking Focus Scan Plot")
+        os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -p")
+        input("Press Enter to continue...")
+
+        logging.info("Running Focus Scan")
+        os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -s")
