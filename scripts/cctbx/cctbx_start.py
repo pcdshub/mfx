@@ -8,6 +8,9 @@ import logging
 import os
 import subprocess
 
+logging.basicConfig()
+logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 def check_settings(exp, cctbx_dir):
     logging.info("Checking xfel gui phil File")
@@ -46,7 +49,7 @@ db {{
         cctbx_settings = open(phil_file, "r", encoding="UTF-8")
         setting_lines = cctbx_settings.readlines()
         change = False
-        if setting_lines[4] != f'experiment =  "{exp}"':
+        if setting_lines[3] != f'    experiment = "{exp}"\n':
             logging.warning(f"Changing experiment to current: {exp}")
             change = True
     else:
@@ -86,11 +89,6 @@ def parse_args(args):
         default=None,
         help="Enter -e to specify experiment number",
     )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"cctbx {__version__}",
-    )
 
     return parser.parse_args(args)
 
@@ -103,7 +101,6 @@ def main(args):
       args ([str]): command line parameter list
     """
     args = parse_args(args)
-    logging.info("Starting up cctbx")
     user = args.username
     exp = args.experiment
 
@@ -111,11 +108,12 @@ def main(args):
     if not os.path.exists(cctbx_dir):
         os.makedirs(cctbx_dir)
 
-    check_settings(user, exp, cctbx_dir)
+    check_settings(exp, cctbx_dir)
 
+    logging.info("Starting up cctbx")
     proc = [
         f"ssh -YAC psana "
-        f"source /sdf/group/lcls/ds/tools/cctbx/setup.sh;cctbx.xfel &"
+        f"/sdf/home/d/djr/scripts/cctbx_step2.sh"
         ]
     
     logging.info(proc)
