@@ -8,7 +8,7 @@ class cctbx:
         self.cctbx_dir = f"/sdf/home/{user[0]}/{user}"
 
         proc = [
-            f"ssh -YAC {user}@s3dflogin"
+            f"ssh -YAC {user}@s3dflogin "
             f"/sdf/home/d/djr/scripts/cctbx_step1.sh {user} {self.experiment}"
             ]
 
