@@ -89,8 +89,6 @@ class cl:
             cam = re.split(';|,', cam)
             print(f"Camera {cam[4].strip()} ....  {cam[2]}")
 
-        return self.avail_cams
-
 
     def focus_scan(self, camera):
         import os
