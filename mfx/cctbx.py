@@ -22,7 +22,7 @@ class cctbx:
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     
-    def notch_check(self, runs=[])
+    def notch_check(self, user, runs=[])
         import logging
         import subprocess
 
