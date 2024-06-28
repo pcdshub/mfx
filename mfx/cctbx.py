@@ -25,8 +25,7 @@ class cctbx:
     def notch_check(self, user, runs=[]):
         import logging
         import subprocess
-
-        if len(runs) > 0:    
+        if len(runs) > 0:
             self.run_list = []
             for run in runs:
                 self.run_list.append(f'{self.experiment}:{run}')
