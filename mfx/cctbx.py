@@ -29,14 +29,14 @@ class cctbx:
         if len(runs) > 0:    
             self.run_list = []
             for run in runs:
-                run_list.append(f'{self.experiment}:{run}')
-            runlist = ' '
-            runlist.join(run_list)
+                self.run_list.append(f'{self.experiment}:{run}')
+            self.runlist = ' '
+            self.runlist.join(self.run_list)
         logging.info(f'Selected runs: {self.runlist}')
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/home/d/djr/scripts/cctbx_notch_check.sh {runlist}"
+            f"/sdf/home/d/djr/scripts/cctbx_notch_check.sh {self.runlist}"
             ]
 
         logging.info(proc)
