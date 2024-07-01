@@ -1,7 +1,6 @@
 class MFX_Timing:
     def __init__(self,sequencer=None):
         from pcdsdevices.sequencer import EventSequencer
-        from time import sleep
         self.seq1 = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
         self.seq2 = EventSequencer('ECS:SYS0:12', name='mfx_sequencer_spare')
 
@@ -28,6 +27,7 @@ class MFX_Timing:
 
 
     def _seq_init(self, sync_mark=30):
+        from time import sleep
         self.seq.sync_marker.put(self.sync_markers[sync_mark])
         self.sequence = []
         sequence = []
