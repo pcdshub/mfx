@@ -156,3 +156,7 @@ class MFX_Timing:
 
         self.seq.start()
         return self.sequence
+
+    def check_seq(self):
+        for line in self.sequence:
+            print(line)
