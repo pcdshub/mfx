@@ -164,7 +164,7 @@ class MFX_Timing:
         steps = [['ray_readout', 1],
                  ['ray1', 0],
                  ['ray2', 1],
-                 ['daq_readout', 0],
+                 ['daq_readout', 0]]
         return steps
 
 
