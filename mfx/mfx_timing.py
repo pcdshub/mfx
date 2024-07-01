@@ -104,6 +104,8 @@ class MFX_Timing:
 
 
     def set_seq(self, rep=None, sequencer=None, laser=None):
+        self.seq1.stop()
+        self.seq2.stop()
         if sequencer == 2:
             self.seq = self.seq2
         else:
