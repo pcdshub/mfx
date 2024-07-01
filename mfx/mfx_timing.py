@@ -104,9 +104,27 @@ class MFX_Timing:
 
 
     def set_seq(self, rep=None, sequencer=None, laser=None):
+        """
+    Set your event sequencer
+
+    Parameters
+    ----------
+    rep: int, optional
+        Set repitition rate only 120, 60, 30, and 20 Hz are currently available
+
+    sequencer: str, optional
+        default is event sequencer 7 and use 'spare' to run sequencer 12
+
+    laser: list, optional
+        sets laser sequence list in format [[laser_on,0],[laser_off,0],...]
+
+    Operations
+    ----------
+
+        """
         self.seq1.stop()
         self.seq2.stop()
-        if sequencer == 2:
+        if sequencer.lower() == 'spare':
             self.seq = self.seq2
         else:
             self.seq = self.seq1
