@@ -1,10 +1,9 @@
 class MFX_Timing:
     def __init__(self,sequencer=None):
-        if sequencer==None:
-            from mfx.db import sequencer as seq
-            self.seq=seq
-        else:
-            self.seq = sequencer
+        from pcdsdevices.sequencer import EventSequencer
+        self.seq1 = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
+        self.seq2 = EventSequencer('ECS:SYS0:12', name='mfx_sequencer_spare')
+
         self.evt_code = {
             'wait':0,
             'pp_trig':197,
@@ -43,7 +42,7 @@ class MFX_Timing:
         self.seq.sequence.put_seq(self.sequence)
 
 
-    def set_120hz(self):
+    def _seq_120hz(self):
         steps = [['ray_readout', 1],
                  ['daq_readout',0],
                  ['ray1',1],
@@ -55,7 +54,7 @@ class MFX_Timing:
         return steps
 
 
-    def set_120hz_trucated(self):
+    def _seq_120hz_trucated(self):
         steps = [['ray_readout', 1],
                  ['daq_readout',0]]
         return steps
@@ -105,9 +104,9 @@ class MFX_Timing:
 
     def set_seq(self, rep=None, sequencer=None, laser=None):
         if sequencer == 2:
-            self.seq = mfx_sequencer_spare
+            self.seq = self.seq1
         else:
-            self.seq = mfx_sequencer
+            self.seq = self.seq2
         if laser:
             if rep is None or rep == 120:
                 self._seq_init(sync_mark=120)
