@@ -148,6 +148,12 @@ class MFX_Timing:
         return steps
 
 
+    def set_120hz_trucated(self):
+        steps = [['ray_readout', 1],
+                 ['daq_readout',0]]
+        return steps
+
+
     def _seq_60hz(self):
         steps = [['ray_readout', 1],
                  ['pp_trig', 0],
@@ -169,7 +175,6 @@ class MFX_Timing:
 
 
     def _seq_30hz(self):
-        # make sure daq_readout is penultimate event (set_30hz_laser assumes it)
         steps = [['ray_readout', 1],
                  ['pp_trig', 0],
                  ['ray1', 1],
@@ -219,6 +224,22 @@ class MFX_Timing:
         return
 
 
+    def set_120hz_laser(self, laser_evt_list=None):
+        self._seq_init(sync_mark=120)
+        try:
+            for laser_evt in laser_evt_list:
+                sequence = self._seq_120hz_trucated()
+                block = sequence[:-1]
+                block.append(laser_evt)
+                block.append(sequence[-1])
+                self._seq_put(block)
+        except:
+            self._seq_put(self._seq_120hz())
+        self.seq.start()
+        print(self.sequence)
+        return
+
+
     def set_60hz_laser(self, laser_evt_list=None):
         self._seq_init(sync_mark=120)
         try:
@@ -229,7 +250,7 @@ class MFX_Timing:
                 block.append(sequence[-1])
                 self._seq_put(block)
         except:
-            self._seq_put(self._seq_30hz())
+            self._seq_put(self._seq_60hz())
         self.seq.start()
         print(self.sequence)
         return
@@ -251,6 +272,20 @@ class MFX_Timing:
         return
 
 
+    def set_20hz_laser(self, laser_evt_list=None):
+        self._seq_init(sync_mark=30)
+        try:
+            for laser_evt in laser_evt_list:
+                sequence = self._seq_20hz()
+                block = sequence[:-1]
+                block.append(laser_evt)
+                block.append(sequence[-1])
+                self._seq_put(block)
+        except:
+            self._seq_put(self._seq_20hz())
+        self.seq.start()
+        print(self.sequence)
+        return
 
 
 class FakeDetector:
