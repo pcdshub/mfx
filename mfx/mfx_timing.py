@@ -105,9 +105,9 @@ class MFX_Timing:
 
     def set_seq(self, rep=None, sequencer=None, laser=None):
         if sequencer == 2:
-            self.seq = self.seq1
-        else:
             self.seq = self.seq2
+        else:
+            self.seq = self.seq1
         if laser:
             if rep is None or rep == 120:
                 self._seq_init(sync_mark=120)
