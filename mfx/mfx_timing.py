@@ -111,7 +111,7 @@ class MFX_Timing:
         if laser:
             if rep is None or rep == 120:
                 self._seq_init(sync_mark=120)
-                for laser_evt in laser_evt_list:
+                for laser_evt in laser:
                     sequence = self._seq_120hz_trucated()
                     block = sequence[:-1]
                     block.append(laser_evt)
@@ -119,7 +119,7 @@ class MFX_Timing:
                     self._seq_put(block)
             elif rep == 60:
                 self._seq_init(sync_mark=120)
-                for laser_evt in laser_evt_list:
+                for laser_evt in laser:
                     sequence = self._seq_60hz_trucated()
                     block = sequence[:-1]
                     block.append(laser_evt)
@@ -127,7 +127,7 @@ class MFX_Timing:
                     self._seq_put(block)
             elif rep == 30:
                 self._seq_init(sync_mark=30)
-                for laser_evt in laser_evt_list:
+                for laser_evt in laser:
                     sequence = self._seq_30hz()
                     block = sequence[:-1]
                     block.append(laser_evt)
@@ -135,7 +135,7 @@ class MFX_Timing:
                     self._seq_put(block)
             elif rep == 20:
                 self._seq_init(sync_mark=60)
-                for laser_evt in laser_evt_list:
+                for laser_evt in laser:
                     sequence = self._seq_20hz()
                     block = sequence[:-1]
                     block.append(laser_evt)
