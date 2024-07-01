@@ -1,4 +1,4 @@
-class cl:
+class bs:
     def xfel_gui(self):
         import subprocess
         import logging

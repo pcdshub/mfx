@@ -40,7 +40,6 @@ with safe_load('macros'):
     mfx_timing = MFX_Timing(sequencer)
 
 with safe_load('Droplet_on_Demand'):
-    # from mfx.mfxDOD import *
     from mfx.mfx_dod import *
 
 with safe_load('delay_scan'):
@@ -73,7 +72,7 @@ with safe_load("drift_correct"):
 
 with safe_load('bash_utilities'):
     from mfx.bash_utilities import *
-    cl = cl()
+    bs = bs()
 
 with safe_load('cctbx'):
     from mfx.cctbx import *
