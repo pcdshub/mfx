@@ -124,7 +124,7 @@ class MFX_Timing:
         """
         self.seq1.stop()
         self.seq2.stop()
-        if sequencer.lower() == 'spare':
+        if str(sequencer).lower() == 'spare':
             self.seq = self.seq2
         else:
             self.seq = self.seq1
