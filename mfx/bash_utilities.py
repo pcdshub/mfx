@@ -83,10 +83,12 @@ class bs:
         logging.info("Opening Camera List")
         camlist = open("/reg/g/pcds/pyps/config/mfx/camviewer.cfg", "r", encoding="UTF-8")
         cam_list = camlist.readlines()
-        self.avail_cams = [cam for cam in cam_list if cam.startswith('GE')]
+        avail_cams = [cam for cam in cam_list if cam.startswith('GE')]
+        self.camera_names = [['camera_name', 'camera_pv']]
         print("Available Cameras")
-        for cam in self.avail_cams:
+        for cam in avail_cams:
             cam = re.split(';|,', cam)
+            self.camera_names.append([cam[4].strip(),cam[2]])
             print(f"Camera {cam[4].strip()} ....  {cam[2]}")
 
 
@@ -107,7 +109,7 @@ class bs:
 
         input("Press Enter to continue...")
 
-        if camera not in self.avail_cams:
+        if camera not in [pv[1] for pv in self.camera_names]:
             logging.info("Desired Camera not in List. Software will exit.")
             sys.exit()
 
