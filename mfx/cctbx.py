@@ -25,17 +25,22 @@ class cctbx:
     def notch_check(self, user, runs=[]):
         import logging
         import subprocess
+        import sys
         if len(runs) > 0:
-            self.run_list = []
+            run_list = []
             for run in runs:
-                self.run_list.append(f'{self.experiment}:{run}')
-            self.runlist = ' '
-            self.runlist.join(self.run_list)
-        logging.info(f'Selected runs: {self.runlist}')
+                run_list.append(f'{experiment}:{run}')
+            logging.info(f'Selected runs: {run_list}')
+            runlist = ' '
+            runlist = runlist.join(run_list)
+            logging.info(f'Selected runs: {runlist}')
+        else:
+            logging.warning(f'No selected runs. Program will exit.')
+            sys.exit()
 
         proc = [
-            f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/home/d/djr/scripts/cctbx_notch_check.sh {self.runlist}"
+            f'ssh -YAC {user}@s3dflogin '
+            f'/sdf/home/d/djr/scripts/cctbx_notch_check.sh "{self.runlist}"'
             ]
 
         logging.info(proc)
