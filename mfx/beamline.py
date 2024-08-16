@@ -12,6 +12,8 @@ with safe_load('sequencer'):
     from pcdsdevices.sequencer import EventSequencer
     sequencer = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
     mfx_sequencer = sequencer
+    sequencer2 = EventSequencer('ECS:SYS0:12', name='mfx_sequencer_spare')
+    mfx_sequencer_spare = sequencer2
 
 with safe_load('rayonix utils'):
     from mfx.rayonix import Rayonix
@@ -37,10 +39,12 @@ with safe_load('beam_suspender'):
 
 with safe_load('macros'):
     from mfx.macros import *
+
+with safe_load('MFX_Timing'):
+    from mfx.mfx_timing import *
     mfx_timing = MFX_Timing(sequencer)
 
 with safe_load('Droplet_on_Demand'):
-    # from mfx.mfxDOD import *
     from mfx.mfx_dod import *
 
 with safe_load('delay_scan'):
@@ -73,6 +77,7 @@ with safe_load("drift_correct"):
 
 with safe_load('bash_utilities'):
     from mfx.bash_utilities import *
+    bs = bs()
 
 with safe_load('cctbx'):
     from mfx.cctbx import *

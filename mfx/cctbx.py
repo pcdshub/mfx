@@ -1,81 +1,50 @@
 class cctbx:
     def __init__(self):
         from mfx.macros import get_exp
-        self.settings = "~/.cctbx.xfe/settings_old.phil"
         self.experiment = str(get_exp())
-
-
-    def check_settings(self, user):
-        import logging
-        import subprocess
-        exp = self.experiment
-        logging.info("Checking xfel gui phil File")
-        cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_s3df.phil", "r", encoding="UTF-8")
-        setting_lines = cctbx_settings.readlines()
-        change = False
-        if setting_lines[4] != f'experiment =  "{exp}"':
-            logging.warning(f"Changing experiment to current: {exp}")
-            change = True
-            settings = f'''\
-facility {{
-  name = *lcls standalone
-  lcls {{
-    experiment = "{exp}"
-    web {{
-      location = "S3DF"
-    }}
-  }}
-}}
-output_folder = "/sdf/data/lcls/ds/mfx/{exp}/results/common/results"
-mp {{
-  method = local lsf sge pbs *slurm shifter htcondor custom
-  nnodes_index = 2
-  nnodes_scale = 1
-  nnodes_merge = 1
-  nproc_per_node = 120
-  queue = "milano"
-  extra_options = " --account=lcls:{exp} --reservation=lcls:onshift"
-  env_script = "/sdf/group/lcls/ds/tools/cctbx/build/conda_setpaths.sh"
-  phenix_script = "/sdf/group/lcls/ds/tools/cctbx/phenix/phenix-1.20.1-4487/phenix_env.sh"
-}}
-experiment_tag = "common"
-db {{
-  host = "172.24.5.182"
-  name = "{exp}"
-  user = "{exp}"
-}}\
-'''
-        if change:
-            cctbx_settings = open("/cds/home/opr/mfxopr/.cctbx.xfel/settings_s3df.phil", "w", encoding="UTF-8")
-            cctbx_settings.writelines(settings)
-            cctbx_settings.close
-
-            subprocess.Popen(
-                [f"rsync -avze ssh ~/.cctbx.xfel/settings_s3df.phil {user}@s3dflogin:~/.cctbx.xfel/settings_old.phil"],
-                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
     def xfel_gui(self, user):
         import logging
         import subprocess
-        import os
-
-        #cctbx_dir = 
-        if not os.path.exists(out_result):
-            os.makedirs(out_result)
+        self.settings = f"/sdf/home/{user[0]}/{user}/.cctbx.xfel/settings.phil"
+        self.cctbx_dir = f"/sdf/home/{user[0]}/{user}"
 
         proc = [
-            f"ssh -YAC mfxopr@daq-mfx-mon0{str(node)} "
-            f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/"
-            f"detector_image.sh {experiment} {str(det)} {str(calibdir)} {str(ave)}"
+            f"ssh -YAC {user}@s3dflogin "
+            f"/sdf/home/d/djr/scripts/cctbx_step1.sh {user} {self.experiment}"
             ]
-        
+
         logging.info(proc)
         
         subprocess.Popen(
             proc, shell=True, 
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
+    
+    def notch_check(self, user, runs=[]):
+        import logging
+        import subprocess
+        import sys
+        if len(runs) > 0:
+            run_list = []
+            for run in runs:
+                run_list.append(f'{experiment}:{run}')
+            logging.info(f'Selected runs: {run_list}')
+            runlist = ' '
+            runlist = runlist.join(run_list)
+            logging.info(f'Selected runs: {runlist}')
+        else:
+            logging.warning(f'No selected runs. Program will exit.')
+            sys.exit()
+
+        proc = [
+            f'ssh -YAC {user}@s3dflogin '
+            f'/sdf/home/d/djr/scripts/cctbx_notch_check.sh "{self.runlist}"'
+            ]
+
+        logging.info(proc)
+        
         subprocess.Popen(
-            [". /reg/g/cctbx/brewster/working/build/conda_setpaths.sh;cctbx.xfel &"],
-            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            proc, shell=True, 
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
