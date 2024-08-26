@@ -87,6 +87,12 @@ with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
 
+with safe_load('Droplet_on_Demand_Colliding_Droplets'):
+    from pcdsdevices.epics_motor import SmarAct
+    from mfx.mfx_dod_codi import *
+    #need adjustment of the robot parameters
+    dod_robot = dod_robot(ip = "172.21.72.187" , port = 9999, supported_json = "dev/DropletOnDemand/drops/supported.json")
+
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
