@@ -1,17 +1,4 @@
-from drops.DropsDriver import myClient
-import time
-from pcdsdevices.device import ObjectComponent as OCpt
-from pcdsdevices.epics_motor import SmarAct
-
-# Create object 
-# pytest encourages this pattern, apologies.
-ip = "172.21.72.187" #"172.21.148.101"
-port = 9999
-supported_json = "dev/DropletOnDemand/drops/supported.json"
-client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
-
-
-class dod_robot: 
+class dod: 
     def __init__(self, ip = "172.21.72.187" , port = 9999, supported_json = "dev/DropletOnDemand/drops/supported.json"):
         """
         Class definition of the DoD robot
@@ -24,7 +11,17 @@ class dod_robot:
         supported_json : string
             json file            
         """
-        
+        from drops.DropsDriver import myClient
+        import time
+        from pcdsdevices.device import ObjectComponent as OCpt
+        from pcdsdevices.epics_motor import SmarAct
+
+        # Create object 
+        # pytest encourages this pattern, apologies.
+        ip = "172.21.72.187" #"172.21.148.101"
+        port = 9999
+        supported_json = "dev/DropletOnDemand/drops/supported.json"
+        client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
         # User input parameters: 
         # Safety parameters in hutch coordinate system. 
         # Note: hutch (x,y,z) = robot (x,-z, y) 
