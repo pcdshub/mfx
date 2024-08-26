@@ -88,7 +88,7 @@ with safe_load('yano-kern_code'):
     yano = yano()
 
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
-    from mfx.mfx_dod_codi import *
+    from dod.dod import *
     dod = dod()
 
 with safe_load("laser wp power"):
