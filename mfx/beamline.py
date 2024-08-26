@@ -140,7 +140,7 @@ with safe_load('add laser motor groups'):
     lxt_fast=mfx_lxt_fast1
 
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
-                                                          # this is the timetool compensationn stage. You might want this one
+    # this is the timetool compensationn stage. You might want this one
     class las():
         #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
