@@ -6,7 +6,7 @@ from dod.JsonFileHandler import JsonFileHandler
 
 ip = "127.0.0.1"
 port = 8081
-supported_json = "drops/supported.json"
+supported_json = "supported.json"
 
 # pytest encourages this pattern, apologies.
 # instantiate HTTP client

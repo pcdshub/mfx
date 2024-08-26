@@ -5,7 +5,7 @@ import json
 
 hostName = "localhost"
 serverPort = 8081
-supportedJson = 'drops/supported.json'
+supportedJson = 'supported.json'
 
 
 class MyServer(BaseHTTPRequestHandler):

@@ -28,7 +28,6 @@ def parse_arguments(obj):
 
   return parser.parse_args()
 
-
 '''
 Simple HTTP Client wrapper.
 Takes ip and port on construction can send data on socket and print reply
@@ -37,7 +36,7 @@ Can be invoked via command line args or as orchestrated by higher level software
 
 
 class myClient:
-  def __init__(self, ip, port, supported_json="drops/supported.json", reload=True, queue=None, **kwargs):
+  def __init__(self, ip, port, supported_json="supported.json", reload=True, queue=None, **kwargs):
     # dto pipelines
     self.__queue__ = Queue()
     self.__queue_ready__ = Semaphore(value=0)
@@ -49,8 +48,7 @@ class myClient:
     logger.info(f"Connected to ip: {ip} port: {port}")
 
     # configuration persitence, updating
-    self.supported_ends_handler = SupportedEndsHandler(supported_json,
-                                                       self.conn)
+    self.supported_ends_handler = SupportedEndsHandler(supported_json,self.conn)
     if (reload):
       self.supported_ends_handler.reload_all()
 
@@ -132,8 +130,8 @@ class myClient:
       """
         Returns the name and properties of the last selected position,
         together with the real current position coordinates.
-        (The drives can have been stepped away from the stored position or
-         they include small dispenser related offsets.)
+        (The drives can have been stepped away from the stored position or 
+        they include small dispenser related offsets.)
       """
       self.send(f"/DoD/get/CurrentPosition")
 
@@ -312,9 +310,9 @@ class myClient:
             This endpoint uses the current coordinates for the currently selected
             nozzle (SelectNozzle) to set the IP position (Nozzle 1) or calculates
             and sets the IP offsets (Nozzles 2, …).
-            (Note: The ‘Nozzle Offset’ values in the nozzle parameter table are
-             always considered.
-             Changing these would require a readjustment of the IP offsets.)
+            (Note: The ‘Nozzle Offset’ values in the nozzle parameter table are 
+            always considered.
+            Changing these would require a readjustment of the IP offsets.)
             Offsets are rejected if they exceed a maximum of 2 mm.
             Thus, the selected nozzle must be moved to the IP (InteractionPoint)
             before requesting SetIPOffset.
@@ -343,8 +341,8 @@ class myClient:
     '''
             In situations of “Status” = “Dialog” the endpoint Status provides the
                 dialog’s reference, message text and button labels.
-            (If the response of ‘Button2’ is empty, there is only one selection
-             available, typically with the label ‘OK.).
+            (If the response of ‘Button2’ is empty, there is only one selection 
+            available, typically with the label ‘OK.).
             This endpoint allows to close the dialog by specifying the reference and t
                 he selection (“1” or “2”).
             The reference is individual, incrementing integer for each occurrence

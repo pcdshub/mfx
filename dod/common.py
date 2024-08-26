@@ -8,7 +8,7 @@ from dod.ServerResponse import ServerResponse
 # pytest encourages this pattern, apologies.
 ip = "172.21.148.101"
 port = 9999
-supported_json = "drops/supported.json"
+supported_json = "supported.json"
 client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
 
 # create config parser handler
