@@ -3,6 +3,9 @@ logs
 # Ignore generated database file
 mfx/db.txt
 
+# Ignore changed presets
+presets/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

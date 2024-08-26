@@ -12,6 +12,8 @@ with safe_load('sequencer'):
     from pcdsdevices.sequencer import EventSequencer
     sequencer = EventSequencer('ECS:SYS0:7', name='mfx_sequencer')
     mfx_sequencer = sequencer
+    sequencer2 = EventSequencer('ECS:SYS0:12', name='mfx_sequencer_spare')
+    mfx_sequencer_spare = sequencer2
 
 with safe_load('rayonix utils'):
     from mfx.rayonix import Rayonix
@@ -37,10 +39,12 @@ with safe_load('beam_suspender'):
 
 with safe_load('macros'):
     from mfx.macros import *
+
+with safe_load('MFX_Timing'):
+    from mfx.mfx_timing import *
     mfx_timing = MFX_Timing(sequencer)
 
 with safe_load('Droplet_on_Demand'):
-    # from mfx.mfxDOD import *
     from mfx.mfx_dod import *
 
 with safe_load('delay_scan'):
@@ -71,8 +75,17 @@ with safe_load('detector_image'):
 with safe_load("drift_correct"):
     from mfx.timetool import *
 
-with safe_load('xfel_gui'):
-    from mfx.xfel_gui import *
+with safe_load('bash_utilities'):
+    from mfx.bash_utilities import *
+    bs = bs()
+
+with safe_load('cctbx'):
+    from mfx.cctbx import *
+    cctbx = cctbx()
+
+with safe_load('yano-kern_code'):
+    from mfx.yano import *
+    yano = yano()
 
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
@@ -110,13 +123,13 @@ with safe_load('FS45 lxt & lxt_ttc'):
     class LXTTTC(SyncAxis):
         lxt = OCpt(lxt)
         txt = OCpt(txt)
-        
+
         tab_component_names = True
-        scales = {'txt': -1} 
+        scales = {'txt': -1}
         warn_deadband = 5e-14
         fix_sync_keep_still = 'lxt'
         sync_limits = (-10e-6, 10e-6)
-    
+
     lxt_ttc = LXTTTC('', name='lxt_ttc')
 
 with safe_load('add laser motor groups'):
@@ -139,6 +152,10 @@ with safe_load('add laser motor groups'):
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
+            lens_v = Newport('MFX:LAS:MMN:09', name='lens_v')
+            lens_f = Newport('MFX:LAS:MMN:10', name='lens_f')
+            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            lens_g = Newport('MFX:LAS:MMN:12', name='lens_g')
 
         with safe_load('Fast delay encoders'):
             lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
@@ -175,3 +192,7 @@ with safe_load('Make Aliases'):
     import numpy as np
     from importlib import reload
     from mfx.transfocator_scan import *
+    from mfx.db import mfx_atm as tt
+    lens_v=las.lens_v
+    lens_h=las.lens_h
+    lens_f=las.lens_f
