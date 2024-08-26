@@ -11,8 +11,6 @@ supported_json = "dev/DropletOnDemand/drops/supported.json"
 client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
 
 
-
-
 class dod_robot: 
     def __init__(self, ip = "172.21.72.187" , port = 9999, supported_json = "dev/DropletOnDemand/drops/supported.json"):
         """
@@ -150,23 +148,23 @@ class dod_robot:
     
 
     def busy_wait(timeout: int):
-      '''
+    '''
             Busy wait untill timeout value is reached,
             timeout : sec
             returns true if timeout occured
-      '''
-      start = time.time()
-      r = self.client.get_status()
-      delta = 0
+    '''
+    start = time.time()
+    r = self.client.get_status()
+    delta = 0
     
-      while(r.STATUS['Status'] == "Busy"):
+    while(r.STATUS['Status'] == "Busy"):
         if delta > timeout:
-          return True
+        return True
     
         time.sleep(0.1) #Wait a ms to stop spamming robot
         r = self.client.get_status()
         delta = time.time() - start    
-      return False
+    return False
     
 
     def __del__(self):
@@ -567,11 +565,11 @@ class dod_robot:
     #   '''
     #   # Connect
     #   r = self.client.connect("Test")
-      
+    
     #   # get current position
     #   r = self.client.get_current_positions()
     #   current_real_position = r.RESULTS['PositionReal']
-      
+    
     #   r = client.move(new_position)
     #   assert r.RESULTS == 'Accepted'
     
@@ -620,4 +618,4 @@ robot1.get_forbidden_region(rotation_state='horizontal')
 robot1.get_forbidden_region(rotation_state='vertical')
 robot1.test_forbidden_region(0.5, 0.5)
 robot1.test_forbidden_region(1.5, 1.5)
- """
+"""
