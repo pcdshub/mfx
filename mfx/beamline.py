@@ -88,6 +88,10 @@ with safe_load('yano-kern_code'):
     yano = yano()
 
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
+    from dod.dod_codi import *
+    codi = dod_codi()
+
+with safe_load('Droplet_on_Demand'):
     from dod.dod import *
     dod = dod()
 
