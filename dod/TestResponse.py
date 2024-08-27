@@ -1,11 +1,15 @@
 import json
 
-from drops.DropsDriver import myClient
+from dod.DropsDriver import myClient
 from testServerSpawner import ServerSpawner
 from dod.JsonFileHandler import JsonFileHandler
 
 ip = "127.0.0.1"
 port = 8081
+supported_json = "supported.json"
+
+ip = "172.21.148.101"
+port = 9999
 supported_json = "supported.json"
 
 # pytest encourages this pattern, apologies.
