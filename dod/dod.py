@@ -49,9 +49,30 @@ class dod:
 
         # Flag that can be used later on for safety aborts during task execution
         self.safety_abort = False
-        if modules = 'codi': 
+        if modules == 'codi': 
             from dod.codi import codi
             self.codi = codi()
+        
+        # Timing section
+        from pcdsdevices.evr import Trigger
+        self.delay = None
+
+        # Trigger objects
+        self.trigger_Xray = Trigger('MFX:LAS:EVR:01:TRIG6', name='trigger_X-ray_simulator')
+        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG2', name='trigger_nozzle_1')
+        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_2')
+        self.trigger_LED = Trigger('MFX:LAS:EVR:01:TRIG4', name='trigger_LED_array')
+
+        # Timing parameter
+        self.timing_Xray = self.trigger_Xray.ns_delay.get()
+        self.timing_nozzle_1 = self.trigger_nozzle_1.ns_delay.get()
+        self.timing_nozzle_2 = self.trigger_nozzle_2.ns_delay.get()
+        self.timing_LED = self.trigger_LED.ns_delay.get()
+        self.timing_delay_sciPulse = 60600
+        self.timing_delay_LED = 1000 #delay of LED relative to X-ray timing
+        self.timing_delay_reaction = 0
+        self.timing_delay_nozzle_1 = self.timing_Xray - self.timing_nozzle_1 - self.timing_delay_sciPulse - self.timing_delay_reaction
+        self.timing_delay_nozzle_2 = self.timing_Xray - self.timing_nozzle_2 - self.timing_delay_sciPulse - self.timing_delay_reaction
 
 
     def stop_task(self, verbose = True):
@@ -454,6 +475,105 @@ class dod:
                 flag_safe_endpoint = flag_safe_endpoint and True
             
         return flag_safe_endpoint
+
+
+    def set_timing_update(self): 
+        """
+        updating the timing triggers according to the set relative and absolute timing values
+        
+        Parameters
+               ----------
+        Returns: 
+        """
+        # Nozzle 1
+        self.timing_nozzle_1 = self.timing_Xray - self.timing_delay_nozzle_1 - self.timing_delay_sciPulse - self.timing_delay_reaction
+        if self.timing_nozzle_1 < 0: 
+            self.timing_nozzle_1 = self.timing_nozzle_1 + 1/120*1000000000
+        self.trigger_nozzle_1.ns_delay.put(self.timing_nozzle_1)
+
+        # Nozzle 2
+        self.timing_nozzle_2 = self.timing_Xray - self.timing_delay_nozzle_2 - self.timing_delay_sciPulse - self.timing_delay_reaction
+        if self.timing_nozzle_2 < 0: 
+            self.timing_nozzle_2 = self.timing_nozzle_2 + 1/120*1000000000
+        self.trigger_nozzle_2.ns_delay.put(self.timing_nozzle_2)
+        # LED
+        self.trigger_LED.ns_delay.put(self.timing_LED)
+        
+        
+    def set_timing_zero_nozzle(self, nozzle, timing_rel): 
+        """
+        Setting the time zero for the nozzles from the LED alignment in robot
+        
+        Parameters
+        nozle : int
+            nozzle number
+        timing_rel : float
+            relative delay in ns from robot alignment
+        ----------
+        Returns: 
+        """
+        if nozzle == 1: 
+            self.timing_delay_nozzle_1 = timing_rel
+        elif nozzle == 2: 
+            self.timing_delay_nozzle_2 = timing_rel
+        else: 
+            print('no valid nozzle selected.')
+            return
+        
+        # update timings
+        self.set_timing_update()
+
+
+    def set_timing_rel_LED(self, timing_rel): 
+        """
+        Setting the relative timing of the LED relative to the X-rays
+        
+        Parameters
+        timing_rel : float
+            relative delay in ns from robot alignment
+        ----------
+        Returns: 
+        """
+        self.timing_delay_LED = timing_rel #delay of LED relative to X-ray timing
+
+        # update timings
+        self.set_timing_update()
+
+
+    def set_timing_rel_reaction(self, timing_rel): 
+        """
+        Setting the relative timing of the reaction relative to the X-rays
+        
+        Parameters
+        timing_rel : float
+            relative delay in ns from robot alignment
+        ----------
+        Returns: 
+        """
+        self.timing_delay_reaction = timing_rel #delay of LED relative to X-ray timing
+        
+        # update timings
+        self.set_timing_update()
+
+
+    def set_timing_abs_Xray(self, timing_abs): 
+        """
+        Setting the absolute timing of the X-rays for claculation purposes
+        
+        Parameters
+        timing_abs : float
+            abs timing in ns from robot alignment
+        ----------
+        Returns: 
+        """
+        self.timing_Xray = timing_abs #delay of LED relative to X-ray timing
+        self.trigger_Xray.ns_delay.put(self.timing_Xray)
+        
+        # update timings
+        self.set_timing_update()
+
+
+
 
     # def move(self, name):
     #   '''
