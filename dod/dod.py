@@ -13,6 +13,9 @@ class dod:
         ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
         from dod.DropsDriver import myClient
+        from dod.JsonFileHandler import JsonFileHandler
+        from dod.ServerResponse import ServerResponse
+
         import time
 
         # Create object 

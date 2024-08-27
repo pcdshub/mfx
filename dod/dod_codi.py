@@ -117,7 +117,7 @@ class dod_codi:
         
         # Move motors
         self.CoDI_rot_base.mv(pos_rot_base, wait=False)
-        self.CoDI_rot_left.mv(pos_rot_left, wait=False)
+        self.CoDI_rot_left.mv(pos_rot_left,  wait=False)
         self.CoDI_rot_right.mv(pos_rot_right, wait=False)
         self.CoDI_trans_z.mv(pos_trans_z, wait=False)
         
