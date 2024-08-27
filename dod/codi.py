@@ -185,6 +185,35 @@ class codi:
         """
         del self.CoDI_pos_predefined[name]
 
+
+    def move_z_rel(self, z_rel):
+        """
+        moves the z position relative to the current position 
+        
+        Parameters
+        z_rel : float
+            relative motion in mm
+        ----------
+    
+        """
+        # get current z position:
+        pos_trans_z  = self.CoDI_trans_z.wm()
+        self.CoDI_trans_z.umvr(z_rel)
+
+
+    def move_z_abs(self, z_abs):
+        """
+        moves the z position to the absolute position in mm
+        
+        Parameters
+        z_abs : float
+            absolute motion in mm
+        ----------
+    
+        """
+        # move z position:
+        self.CoDI_trans_z.umv(z_abs)
+
 '''
 robot1.get_CoDI_predefined()
 robot1.set_CoDI_predefined('test',1,1,1,1)
