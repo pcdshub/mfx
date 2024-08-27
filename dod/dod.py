@@ -183,9 +183,9 @@ class dod:
             r : 
                 returns the robot tasks
         """
-        self.client.connect("Test")
+        rr = self.client.connect("Test")
         r = self.client.get_task_details(task_name)
-        self.client.disconnect()
+        rr = self.client.disconnect()
         if verbose == True: 
             return r
         else: 
@@ -206,9 +206,9 @@ class dod:
                 returns the robot tasks
         """
         # Check if reponse is not an empty array or any errors occured
-        self.client.connect("Test")
+        rr = self.client.connect("Test")
         r = self.client.get_task_names()
-        self.client.disconnect()
+        rr = self.client.disconnect()
         if verbose == True: 
             return r
         else: 
@@ -233,9 +233,9 @@ class dod:
         #         'PositionReal',
         #         ]
         '''
-        self.client.connect("Test")
+        rr = self.client.connect("Test")
         r = self.client.get_current_positions()
-        self.client.disconnect()
+        rr = self.client.disconnect()
         if verbose == True: 
             return r
         else: 
@@ -260,9 +260,9 @@ class dod:
                 "Dispensing",
                 ]
         '''
-        self.client.connect("Test")
+        rr = self.client.connect("Test")
         r = self.client.get_nozzle_status()
-        self.client.disconnect()
+        rr = self.client.disconnect()
         if verbose == True: 
             return r
         else: 
@@ -327,7 +327,7 @@ class dod:
         r : 
         '''
 
-        self.client.connect("Test")
+        rr = self.client.connect("Test")
         if safety_check == False: 
             r = self.client.execute_task(task_name)
         else: 
