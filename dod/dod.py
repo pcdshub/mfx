@@ -117,23 +117,25 @@ class dod:
             return r
     
     
-    def clear_popup_window(self, verbose = True):
-        """
-        clears a popup window that might pop up on the robot gui
-        Parameters
-        verbose : boolean
-           Defines whether the function returns the full output, or only the results
-        ----------
-        Returns: 
-        r : 
-            status readback after error cleared
-        '''
-        """
-        r = self.client.connect("Test")
-        r = self.client.get_status()
-        self.safety_abort = False
-        if verbose == True: 
-            return r
+    # def clear_popup_window(self, verbose = True):
+    #     """
+    #     clears a popup window that might pop up on the robot gui
+    #     Parameters
+    #     verbose : boolean
+    #        Defines whether the function returns the full output, or only the results
+    #     ----------
+    #     Returns: 
+    #     r : 
+    #         status readback after error cleared
+    #     '''
+    #     """
+    #     r = self.client.connect("Test")
+    #     r = self.client.get_status()
+
+    #     self.client.close_dialog(reference, selection)
+
+    #     if verbose == True: 
+    #         return r
 
 
     def get_status(self, verbose = False):
@@ -363,6 +365,7 @@ class dod:
 
     def move_x_abs(self, position_x, safety_test = False, verbose = False):
         '''
+            Robot coordinate system!!!: 
             Moves robot to new absolute x position. 
             No safety test. 
             
@@ -408,6 +411,7 @@ class dod:
     
     def move_y_abs(self, position_y, safety_test = False, verbose = False):
         '''
+            Robot coordinate system!!!: 
             Moves robot to new absolute x position. 
             No safety test. 
             
@@ -453,6 +457,7 @@ class dod:
 
     def move_z_abs(self, position_z, safety_test = False, verbose = False):
         '''
+            Robot coordinate system!!!: 
             Moves robot to new absolute Z position. 
             No safety test. 
             
