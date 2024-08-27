@@ -147,9 +147,9 @@ class dod:
         return False
     
 
-    def __del__(self):
-        # close network connection
-        self.client.conn.close()
+    # def __del__(self):
+    #     # close network connection
+    #     self.client.conn.close()
 
 
     def get_task_details(self, task_name):
@@ -353,8 +353,6 @@ class dod:
         ----------
     
         """
-        
-
         region_tuple = (min(x_start,x_stop), max(x_start,x_stop), min(y_start,y_stop), max(y_start,y_stop))
         if rotation_state == "horizontal": 
             self.forbidden_regions_horizontal.append(region_tuple)
@@ -454,13 +452,12 @@ class dod:
     # Stop injection
 
     # Testing the class
-    """ robot1 = DoD_robot()
+    # robot1 = DoD_robot()
 
-    robot1.set_forbidden_region(0,1.5, 0, 1.5, rotation_state='both')
-    robot1.set_forbidden_region(0,1, 0, 1, rotation_state='horizontal')
-    robot1.set_forbidden_region(0,1, 0, 1, rotation_state='vertical')
-    robot1.get_forbidden_region(rotation_state='horizontal')
-    robot1.get_forbidden_region(rotation_state='vertical')
-    robot1.test_forbidden_region(0.5, 0.5)
-    robot1.test_forbidden_region(1.5, 1.5)
-    """
+    # robot1.set_forbidden_region(0,1.5, 0, 1.5, rotation_state='both')
+    # robot1.set_forbidden_region(0,1, 0, 1, rotation_state='horizontal')
+    # robot1.set_forbidden_region(0,1, 0, 1, rotation_state='vertical')
+    # robot1.get_forbidden_region(rotation_state='horizontal')
+    # robot1.get_forbidden_region(rotation_state='vertical')
+    # robot1.test_forbidden_region(0.5, 0.5)
+    # robot1.test_forbidden_region(1.5, 1.5)
