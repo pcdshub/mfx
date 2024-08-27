@@ -1,5 +1,5 @@
 class dod: 
-    def __init__(self, ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"):
+    def __init__(self):
         """
         Class definition of the DoD robot
         Parameters
@@ -9,10 +9,10 @@ class dod:
         port : int
             port used for communication
         supported_json : string
-            json file            
+            json file
+        ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
         from DropsDriver import myClient
-        from dod_codi import *
         import time
 
         # Create object 
@@ -29,7 +29,6 @@ class dod:
         self.y_safety  = 50000 # value in y, above which the robot can only be in vertical configuration
         self.y_max     = 50000 # maximum value in y
         
-        
         #Initialize safety regions for horizontal and vertical rotation: 
         self.forbidden_regions_horizontal = []
         self.forbidden_regions_vertical = []
@@ -40,9 +39,8 @@ class dod:
         #region where horizontal rotation is forbidden: 
         self.set_forbidden_region(0, 300000,  self.y_safety, self.y_max,rotation_state='horizontal')
         
-        
         # Initializing the robot client that is used for communication
-        self.client     = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
+        self.client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
         
         # # create config parser handler
         # json_handler = JsonFileHandler(supported_json)
@@ -130,28 +128,28 @@ class dod:
     
 
     def busy_wait(timeout: int):
-    '''
-            Busy wait untill timeout value is reached,
-            timeout : sec
-            returns true if timeout occured
-    '''
-    start = time.time()
-    r = self.client.get_status()
-    delta = 0
-    
-    while(r.STATUS['Status'] == "Busy"):
-        if delta > timeout:
-        return True
-    
-        time.sleep(0.1) #Wait a ms to stop spamming robot
+        '''
+                Busy wait untill timeout value is reached,
+                timeout : sec
+                returns true if timeout occured
+        '''
+        start = time.time()
         r = self.client.get_status()
-        delta = time.time() - start    
-    return False
+        delta = 0
+        
+        while(r.STATUS['Status'] == "Busy"):
+            if delta > timeout:
+                return True
+        
+            time.sleep(0.1) #Wait a ms to stop spamming robot
+            r = self.client.get_status()
+            delta = time.time() - start    
+        return False
     
 
-    def __del__(self):
-        # close network connection
-        self.client.conn.close()
+    # def __del__(self):
+    #     # close network connection
+    #     self.client.conn.close()
 
 
     def get_task_details(self, task_name):
@@ -288,7 +286,7 @@ class dod:
         if safety_check == False: 
             r = self.client.execute_task(task_name)
         else: 
-            print'(safety check needs to be implemented')
+            print('safety check needs to be implemented')
 
         ## Wait for task to be done
         while(r.STATUS['Status'] == "Busy"):
@@ -355,8 +353,6 @@ class dod:
         ----------
     
         """
-        
-
         region_tuple = (min(x_start,x_stop), max(x_start,x_stop), min(y_start,y_stop), max(y_start,y_stop))
         if rotation_state == "horizontal": 
             self.forbidden_regions_horizontal.append(region_tuple)
@@ -385,7 +381,7 @@ class dod:
         safe_motion : bool
             boolean flag if endpoint of motion is safe or not
         """
-        
+        from dod.codi import CoDI_base
         # Get current rotation state
         pos_rot_base  = round(CoDI_base.wm(),0)
         
@@ -409,8 +405,6 @@ class dod:
                 flag_safe_endpoint = flag_safe_endpoint and True
             
         return flag_safe_endpoint
-
-        
 
     # def move(self, name):
     #   '''
@@ -441,30 +435,29 @@ class dod:
     #   r = client.disconnect()
     
     
-# Test orientation CoDI
+    # Test orientation CoDI
 
-# Test pathing
+    # Test pathing
 
-# Move 
+    # Move 
 
-# Aspiration
+    # Aspiration
 
-# Washing 
+    # Washing 
 
-# Start injection
+    # Start injection
 
-# Relative motion
+    # Relative motion
 
-# Stop injection
+    # Stop injection
 
-# Testing the class
-""" robot1 = DoD_robot()
+    # Testing the class
+    # robot1 = DoD_robot()
 
-robot1.set_forbidden_region(0,1.5, 0, 1.5, rotation_state='both')
-robot1.set_forbidden_region(0,1, 0, 1, rotation_state='horizontal')
-robot1.set_forbidden_region(0,1, 0, 1, rotation_state='vertical')
-robot1.get_forbidden_region(rotation_state='horizontal')
-robot1.get_forbidden_region(rotation_state='vertical')
-robot1.test_forbidden_region(0.5, 0.5)
-robot1.test_forbidden_region(1.5, 1.5)
-"""
+    # robot1.set_forbidden_region(0,1.5, 0, 1.5, rotation_state='both')
+    # robot1.set_forbidden_region(0,1, 0, 1, rotation_state='horizontal')
+    # robot1.set_forbidden_region(0,1, 0, 1, rotation_state='vertical')
+    # robot1.get_forbidden_region(rotation_state='horizontal')
+    # robot1.get_forbidden_region(rotation_state='vertical')
+    # robot1.test_forbidden_region(0.5, 0.5)
+    # robot1.test_forbidden_region(1.5, 1.5)
