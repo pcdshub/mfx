@@ -1,5 +1,5 @@
 class dod: 
-    def __init__(self, ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"):
+    def __init__(self):
         """
         Class definition of the DoD robot
         Parameters
@@ -9,10 +9,11 @@ class dod:
         port : int
             port used for communication
         supported_json : string
-            json file            
+            json file
+        ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
         from DropsDriver import myClient
-        from dod_codi import *
+        from dod.codi import *
         import time
 
         # Create object 
@@ -130,23 +131,23 @@ class dod:
     
 
     def busy_wait(timeout: int):
-    '''
-            Busy wait untill timeout value is reached,
-            timeout : sec
-            returns true if timeout occured
-    '''
-    start = time.time()
-    r = self.client.get_status()
-    delta = 0
-    
-    while(r.STATUS['Status'] == "Busy"):
-        if delta > timeout:
-        return True
-    
-        time.sleep(0.1) #Wait a ms to stop spamming robot
+        '''
+                Busy wait untill timeout value is reached,
+                timeout : sec
+                returns true if timeout occured
+        '''
+        start = time.time()
         r = self.client.get_status()
-        delta = time.time() - start    
-    return False
+        delta = 0
+        
+        while(r.STATUS['Status'] == "Busy"):
+            if delta > timeout:
+                return True
+        
+            time.sleep(0.1) #Wait a ms to stop spamming robot
+            r = self.client.get_status()
+            delta = time.time() - start    
+        return False
     
 
     def __del__(self):
@@ -288,7 +289,7 @@ class dod:
         if safety_check == False: 
             r = self.client.execute_task(task_name)
         else: 
-            print'(safety check needs to be implemented')
+            print('safety check needs to be implemented')
 
         ## Wait for task to be done
         while(r.STATUS['Status'] == "Busy"):
@@ -441,30 +442,30 @@ class dod:
     #   r = client.disconnect()
     
     
-# Test orientation CoDI
+    # Test orientation CoDI
 
-# Test pathing
+    # Test pathing
 
-# Move 
+    # Move 
 
-# Aspiration
+    # Aspiration
 
-# Washing 
+    # Washing 
 
-# Start injection
+    # Start injection
 
-# Relative motion
+    # Relative motion
 
-# Stop injection
+    # Stop injection
 
-# Testing the class
-""" robot1 = DoD_robot()
+    # Testing the class
+    """ robot1 = DoD_robot()
 
-robot1.set_forbidden_region(0,1.5, 0, 1.5, rotation_state='both')
-robot1.set_forbidden_region(0,1, 0, 1, rotation_state='horizontal')
-robot1.set_forbidden_region(0,1, 0, 1, rotation_state='vertical')
-robot1.get_forbidden_region(rotation_state='horizontal')
-robot1.get_forbidden_region(rotation_state='vertical')
-robot1.test_forbidden_region(0.5, 0.5)
-robot1.test_forbidden_region(1.5, 1.5)
-"""
+    robot1.set_forbidden_region(0,1.5, 0, 1.5, rotation_state='both')
+    robot1.set_forbidden_region(0,1, 0, 1, rotation_state='horizontal')
+    robot1.set_forbidden_region(0,1, 0, 1, rotation_state='vertical')
+    robot1.get_forbidden_region(rotation_state='horizontal')
+    robot1.get_forbidden_region(rotation_state='vertical')
+    robot1.test_forbidden_region(0.5, 0.5)
+    robot1.test_forbidden_region(1.5, 1.5)
+    """
