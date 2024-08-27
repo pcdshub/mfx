@@ -290,6 +290,37 @@ class dod:
             return r.RESULTS
 
 
+    def set_nozzle_dispensing(self, mode = "Off", verbose = False):
+        '''
+        Sets the dispensing, either "Free", "Triggered", or "Off"
+        Parameters
+        mode : string 
+            either "free", "triggered", or "off"
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+        ----------
+        Returns: 
+        r : 
+        '''
+        rr = self.client.connect("Test")
+        if mode == 'Free': 
+            r = self.client.dispensing('Free')
+        elif mode == 'Triggered':
+            r = self.client.dispensing('Triggered')
+        else: 
+            #turns active nozzles off. Safer if all nozzles would be turned off
+            r = self.client.dispensing('Off')
+            for i in [1,2,3,4]: 
+                r = self.client.select_nozzle(i)
+                r = self.client.dispensing('Off')
+
+        rr = self.client.disconnect()
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
+        
+
     def do_move(self, position, safety_test = False, verbose = False):
         '''
             Moves robot to new position
@@ -482,7 +513,6 @@ class dod:
         Returns: 
         r : 
         '''
-
         rr = self.client.connect("Test")
         if safety_check == False: 
             r = self.client.execute_task(task_name)
@@ -498,7 +528,6 @@ class dod:
                 r = self.client.stop_task()
                 print('User aborted task execution')
                 return r
-
 
         r = self.client.get_status()
 
@@ -707,8 +736,6 @@ class dod:
         
         # update timings
         self.set_timing_update()
-
-
 
 
     # def move(self, name):
