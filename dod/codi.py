@@ -116,10 +116,11 @@ class codi:
         
         # Move motors
 
-        self.CoDI_rot_base.umv(pos_rot_base, wait=False)
-        self.CoDI_rot_left.umv(pos_rot_left, wait=False)
-        self.CoDI_rot_right.umv(pos_rot_right, wait=False)
-        self.CoDI_trans_z.umv(pos_trans_z, wait=False)
+        self.CoDI_rot_base.mv(pos_rot_base, wait=False)
+        self.CoDI_rot_left.mv(pos_rot_left,  wait=False)
+        self.CoDI_rot_right.mv(pos_rot_right, wait=False)
+        self.CoDI_trans_z.mv(pos_trans_z, wait=False)
+        
         
         if wait == True: 
             test_name, test_pos_rot_base, test_pos_rot_left, test_pos_rot_right, test_pos_trans_z = self.get_CoDI_pos()
