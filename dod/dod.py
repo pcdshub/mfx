@@ -22,7 +22,7 @@ class dod:
         # pytest encourages this pattern, apologies.
         ip = "172.21.72.187" #"172.21.148.101"
         port = 9999
-        supported_json = "supported.json"
+        supported_json = "/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json"
         client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
         # User input parameters: 
         # Safety parameters in hutch coordinate system. 
