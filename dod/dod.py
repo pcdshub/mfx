@@ -42,10 +42,10 @@ class dod:
         # Initializing the robot client that is used for communication
         self.client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
         
-        # # create config parser handler
-        # json_handler = JsonFileHandler(supported_json)
-        # # load configs and launch web server
-        # json_handler.reload_endpoints()
+        # create config parser handler
+        json_handler = JsonFileHandler(supported_json)
+        # load configs and launch web server
+        json_handler.reload_endpoints()
 
         # Flag that can be used later on for safety aborts during task execution
         self.safety_abort = False
