@@ -7,7 +7,7 @@ class dod_codi:
         """
         
         from pcdsdevices.device import ObjectComponent as OCpt
-        from pcdsdevices.epics_motor import SmarAct
+        from pcdsdevices.epics_motor import SmarAct, Motor
 
 
         #Predefined positions CoDI
@@ -116,10 +116,10 @@ class dod_codi:
         
         # Move motors
 
-        self.CoDI_rot_base.umv(pos_rot_base)
-        self.CoDI_rot_left.umv(pos_rot_left)
-        self.CoDI_rot_right.umv(pos_rot_right)
-        self.CoDI_trans_z.umv(pos_trans_z)
+        self.CoDI_rot_base.umv(pos_rot_base, wait=False)
+        self.CoDI_rot_left.umv(pos_rot_left, wait=False)
+        self.CoDI_rot_right.umv(pos_rot_right, wait=False)
+        self.CoDI_trans_z.umv(pos_trans_z, wait=False)
         
         if wait == True: 
             test_name, test_pos_rot_base, test_pos_rot_left, test_pos_rot_right, test_pos_trans_z = self.get_CoDI_pos()
