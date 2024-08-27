@@ -44,9 +44,6 @@ with safe_load('MFX_Timing'):
     from mfx.mfx_timing import *
     mfx_timing = MFX_Timing(sequencer)
 
-with safe_load('Droplet_on_Demand'):
-    from mfx.mfx_dod import *
-
 with safe_load('delay_scan'):
     from mfx.delay_scan import *
 
