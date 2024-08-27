@@ -22,8 +22,8 @@ class dod:
         # pytest encourages this pattern, apologies.
         ip = "172.21.72.187" #"172.21.148.101"
         port = 9999
-        supported_json = "/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json"
-        client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
+        supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json'
+
         # User input parameters: 
         # Safety parameters in hutch coordinate system. 
         # Note: hutch (x,y,z) = robot (x,-z, y) 
@@ -54,13 +54,15 @@ class dod:
         self.safety_abort = False
         
 
-    def stop_task(self):
+    def stop_task(self, verbose = True):
         """
         Stop task while running
         ** ISSUES **
         -  When stop task  is called, the Robot stays in "BUSY" Status.
         Parameters
         ----------
+        verbose : boolean
+            Defines whether the function returns the full output, or only the results
         Returns: 
         r : 
             status readback when aborted
@@ -69,13 +71,16 @@ class dod:
         self.safety_abort = False
         r = self.client.stop_task()
         r = self.client.disconnect()
-        return r
+        if verbose == True: 
+            return r
 
 
-    def clear_abort(self):
+    def clear_abort(self, verbose = True):
         """
         clear abort flag
         Parameters
+        verbose : boolean
+           Defines whether the function returns the full output, or only the results
         ----------
         Returns: 
         r : 
@@ -86,13 +91,17 @@ class dod:
         r = self.client.get_status()
         self.safety_abort = False
         rr = self.client.disconnect()
-        return r
+        
+        if verbose == True: 
+            return r
     
     
-    def clear_popup_window(self):
+    def clear_popup_window(self, verbose = True):
         """
         clears a popup window that might pop up on the robot gui
         Parameters
+        verbose : boolean
+           Defines whether the function returns the full output, or only the results
         ----------
         Returns: 
         r : 
@@ -102,20 +111,23 @@ class dod:
         r = self.client.connect("Test")
         r = self.client.get_status()
         self.safety_abort = False
-        return r
+        if verbose == True: 
+            return r
 
 
-    def get_status(self):
+    def get_status(self, verbose = False):
         """
         returns the robot state
         
         Parameters
+        verbose : boolean
+           Defines whether the function returns the full output, or only the results
         ----------
         Returns: 
         r : dict
             different states of the robot
         """
-        self.client.connect("Test")
+        rr = self.client.connect("Test")
         r = self.client.get_status()
         # expected_keys = [
         #     'Position',
@@ -126,8 +138,11 @@ class dod:
         #     'Temperature',
         #     'BathTemp',
         #     ]
-        self.client.disconnect()
-        return r
+        rr = self.client.disconnect()
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
     
 
     def busy_wait(timeout: int):
@@ -155,12 +170,14 @@ class dod:
     #     self.client.conn.close()
 
 
-    def get_task_details(self, task_name):
+    def get_task_details(self, task_name, verbose = False):
         """
             This gets the details of a task from the robot to see the scripted routines
             Parameters
             task_name : string
                 Name of the task that we want to get
+            verbose : boolean
+                Defines whether the function returns the full output, or only the results
             ----------
             Returns: 
             r : 
@@ -169,15 +186,20 @@ class dod:
         self.client.connect("Test")
         r = self.client.get_task_details(task_name)
         self.client.disconnect()
-        return r
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
 
 
-    def get_task_names(self):
+    def get_task_names(self, verbose = False):
         """
             This gets the names of available tasks from the robot
             Parameters
             task_name : string
                 Name of the task that we want to get
+            verbose : boolean
+                Defines whether the function returns the full output, or only the results
             ----------
             Returns: 
             r : dict
@@ -187,16 +209,21 @@ class dod:
         self.client.connect("Test")
         r = self.client.get_task_names()
         self.client.disconnect()
-        return r
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
     
 
-    def get_current_position(self):
+    def get_current_position(self, verbose = False):
         '''
         Returns current robot position
         name and properties of the last selected position, together with the real current position coordinates
         Parameters
         
-        ----------
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+            ----------
         Returns: 
         r : 
             returns the current position.         
@@ -209,14 +236,19 @@ class dod:
         self.client.connect("Test")
         r = self.client.get_current_positions()
         self.client.disconnect()
-        return r
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
     
 
-    def get_nozzle_status(self):
+    def get_nozzle_status(self, verbose = False):
         '''
         Returns current nozzle parameters position
         Parameters
         
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
         ----------
         Returns: 
         r : 
@@ -231,10 +263,13 @@ class dod:
         self.client.connect("Test")
         r = self.client.get_nozzle_status()
         self.client.disconnect()
-        return r
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
 
 
-    def do_move(self, position, safety_test = False):
+    def do_move(self, position, safety_test = False, verbose = False):
         '''
             Moves robot to new position
             
@@ -245,7 +280,9 @@ class dod:
             question whether a safety test is to be performed or not
             True: Test will be performed
             False: Not performed
-        ----------
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+            ----------
         Returns: 
         r : current position
         '''
@@ -266,10 +303,13 @@ class dod:
         new_real_position = r.RESULTS['PositionReal']
         
         rr = self.client.disconnect()
-        return r
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
 
 
-    def do_task(self, task_name, safety_check = False):
+    def do_task(self, task_name, safety_check = False, verbose = False):
         '''
         Executes a task of the robot
             
@@ -280,7 +320,9 @@ class dod:
             question whether a safety test is to be performed or not
             True: Test will be performed
             False: Not performed
-        ----------
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+            ----------
         Returns: 
         r : 
         '''
@@ -309,7 +351,11 @@ class dod:
             print('no error')
         else: 
             print('error while performing task!')
-        return r    
+
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
         
 
     def get_forbidden_region(self, rotation_state = 'both'): 
