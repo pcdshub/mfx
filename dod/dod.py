@@ -12,7 +12,7 @@ class dod:
             json file
         ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
-        from DropsDriver import myClient
+        from dod.DropsDriver import myClient
         import time
 
         # Create object 
