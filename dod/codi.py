@@ -198,8 +198,60 @@ class codi:
         """
         # get current z position:
         pos_trans_z  = self.CoDI_trans_z.wm()
+
+        # set new position
         self.CoDI_trans_z.umvr(z_rel)
 
+    def move_rot_left_rel(self, rot_rel):
+        """
+        moves the rotation of the left nozzle relative to the current position in degree
+        
+        Parameters
+        rot_rel : float
+            relative motion in degree
+        ----------
+    
+        """
+        # get current position:
+        pos_rot_left  = self.CoDI_rot_left.wm()
+
+        # set new position: 
+        self.CoDI_rot_left.umvr(rot_rel)
+
+
+    def move_rot_right_rel(self, rot_rel):
+        """
+        moves the rotation of the right nozzle relative to the current position in degree
+        
+        Parameters
+        rot_rel : float
+            relative motion in degree
+        ----------
+    
+        """
+        # get current position:
+        pos_rot_right  = self.CoDI_rot_right.wm()
+
+        # set new position: 
+        self.CoDI_rot_right.umvr(rot_rel)
+
+
+    def move_rot_base_rel(self, rot_rel):
+        """
+        moves the rotation of the base relative to the current position in degree
+        
+        Parameters
+        rot_rel : float
+            relative motion in degree
+        ----------
+    
+        """
+        # get current position:
+        pos_rot_base  = self.CoDI_rot_base.wm()
+
+        # set new position: 
+        self.CoDI_rot_base.umvr(rot_rel)
+        
 
     def move_z_abs(self, z_abs):
         """
@@ -214,6 +266,50 @@ class codi:
         # move z position:
         self.CoDI_trans_z.umv(z_abs)
 
+
+def move_rot_left_abs(self, rot_abs):
+        """
+        moves the rotation of the left nozzle to the absolute position in degree
+        
+        Parameters
+        rot_abs : float
+            abs motion in degree
+        ----------
+    
+        """
+
+        # set new position: 
+        self.CoDI_rot_left.umv(rot_abs)
+
+
+def move_rot_right_abs(self, rot_abs):
+        """
+        moves the rotation of the right nozzle to the absolute position in degree
+        
+        Parameters
+        rot_abs : float
+            abs motion in degree
+        ----------
+    
+        """
+
+        # set new position: 
+        self.CoDI_rot_right.umv(rot_abs)
+
+
+def move_rot_base_abs(self, rot_abs):
+        """
+        moves the rotation of the base to the absolute position in degree
+        
+        Parameters
+        rot_abs : float
+            abs motion in degree
+        ----------
+    
+        """
+
+        # set new position: 
+        self.CoDI_rot_base.umv(rot_abs)
 '''
 robot1.get_CoDI_predefined()
 robot1.set_CoDI_predefined('test',1,1,1,1)
