@@ -58,10 +58,10 @@ class dod:
         self.delay = None
 
         # Trigger objects
-        self.trigger_Xray = Trigger('MFX:LAS:EVR:01:TRIG6', name='trigger_X-ray_simulator')
-        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG2', name='trigger_nozzle_1')
-        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_2')
-        self.trigger_LED = Trigger('MFX:LAS:EVR:01:TRIG4', name='trigger_LED_array')
+        self.trigger_Xray = Trigger('MFX:LAS:EVR:01:TRIG7', name='trigger_X-ray_simulator')
+        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_1')
+        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG4', name='trigger_nozzle_2')
+        self.trigger_LED = Trigger('MFX:LAS:EVR:01:TRIG1', name='trigger_LED_array')
 
         # Timing parameter
         self.timing_Xray = self.trigger_Xray.ns_delay.get()
@@ -496,6 +496,7 @@ class dod:
         if self.timing_nozzle_2 < 0: 
             self.timing_nozzle_2 = self.timing_nozzle_2 + 1/120*1000000000
         self.trigger_nozzle_2.ns_delay.put(self.timing_nozzle_2)
+        
         # LED
         self.trigger_LED.ns_delay.put(self.timing_LED)
         
@@ -567,7 +568,7 @@ class dod:
         Returns: 
         """
         self.timing_Xray = timing_abs #delay of LED relative to X-ray timing
-        self.trigger_Xray.ns_delay.put(self.timing_Xray)
+        #self.trigger_Xray.ns_delay.put(self.timing_Xray)
         
         # update timings
         self.set_timing_update()
