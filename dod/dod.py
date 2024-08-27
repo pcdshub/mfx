@@ -330,6 +330,141 @@ class dod:
             return r.RESULTS
 
 
+    def move_x_abs(self, position_x, safety_test = False, verbose = False):
+        '''
+            Moves robot to new absolute x position. 
+            No safety test. 
+            
+        Parameters
+        position : int
+            Absolute position in um(?) to which the robot is supposed to move
+        safety_test : Boolean
+            question whether a safety test is to be performed or not
+            True: Test will be performed
+            False: Not performed
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+            ----------
+        Returns: 
+        r : current position
+        '''
+
+        r = self.client.connect("Test")
+        r = self.client.get_current_positions()
+        current_real_position = r.RESULTS['PositionReal']
+        x_current, y_current, z_current = current_real_position
+
+        if safety_test == False:  
+            r = self.client.move_x(position_x)
+        else: 
+            print('safety test of move has yet to be implemented')
+            if self.test_forbidden_region(position_x, y_current): 
+                r = self.client.move_x(position_x)
+                
+            
+        # WAIT FOR MOVEMENT TO BE DONE
+        self.busy_wait(25)
+
+        # r = self.client.get_current_positions()
+        # new_real_position = r.RESULTS['PositionReal']
+        
+        rr = self.client.disconnect()
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
+    
+    
+    def move_y_abs(self, position_y, safety_test = False, verbose = False):
+        '''
+            Moves robot to new absolute x position. 
+            No safety test. 
+            
+        Parameters
+        position : int
+            Absolute position in um(?) to which the robot is supposed to move
+        safety_test : Boolean
+            question whether a safety test is to be performed or not
+            True: Test will be performed
+            False: Not performed
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+            ----------
+        Returns: 
+        r : current position
+        '''
+
+        r = self.client.connect("Test")
+        r = self.client.get_current_positions()
+        current_real_position = r.RESULTS['PositionReal']
+        x_current, y_current, z_current = current_real_position
+
+        if safety_test == False:  
+            r = self.client.move_y(position_y)
+        else: 
+            print('safety test of move has yet to be implemented')
+            if self.test_forbidden_region(x_current, position_y): 
+                r = self.client.move_y(position_y)
+                
+            
+        # WAIT FOR MOVEMENT TO BE DONE
+        self.busy_wait(25)
+
+        # r = self.client.get_current_positions()
+        # new_real_position = r.RESULTS['PositionReal']
+        
+        rr = self.client.disconnect()
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
+        
+
+    def move_z_abs(self, position_z, safety_test = False, verbose = False):
+        '''
+            Moves robot to new absolute Z position. 
+            No safety test. 
+            
+        Parameters
+        position : int
+            Absolute position in um(?) to which the robot is supposed to move
+        safety_test : Boolean
+            question whether a safety test is to be performed or not
+            True: Test will be performed
+            False: Not performed
+        verbose : boolean
+                Defines whether the function returns the full output, or only the results
+            ----------
+        Returns: 
+        r : current position
+        '''
+
+        r = self.client.connect("Test")
+        r = self.client.get_current_positions()
+        current_real_position = r.RESULTS['PositionReal']
+        x_current, y_current, z_current = current_real_position
+
+        if safety_test == False:  
+            r = self.client.move_z(position_z)
+        else: 
+            print('safety test of move has yet to be implemented')
+            if self.test_forbidden_region(x_current, y_current): 
+                r = self.client.move_z(position_z)
+                
+            
+        # WAIT FOR MOVEMENT TO BE DONE
+        self.busy_wait(25)
+
+        # r = self.client.get_current_positions()
+        # new_real_position = r.RESULTS['PositionReal']
+        
+        rr = self.client.disconnect()
+        if verbose == True: 
+            return r
+        else: 
+            return r.RESULTS
+
+
     def do_task(self, task_name, safety_check = False, verbose = False):
         '''
         Executes a task of the robot
