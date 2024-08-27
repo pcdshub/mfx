@@ -106,6 +106,7 @@ class dod_codi:
         Return : 
     
         """
+        import time
         # pos_rot_base  = CoDI_base.wm()
         # pos_rot_left  = CoDI_left.wm()
         # pos_rot_right = CoDI_right.wm()
@@ -115,7 +116,6 @@ class dod_codi:
         pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z = self.CoDI_pos_predefined[pos_name]
         
         # Move motors
-
         self.CoDI_rot_base.mv(pos_rot_base, wait=False)
         self.CoDI_rot_left.mv(pos_rot_left, wait=False)
         self.CoDI_rot_right.mv(pos_rot_right, wait=False)
