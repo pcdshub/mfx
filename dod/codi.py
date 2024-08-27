@@ -146,6 +146,33 @@ class codi:
         self.set_CoDI_predefined(name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z)
     
 
+    def set_CoDI_current_z(self, verbose = True):
+        """
+        sets the current z position to all preloaded positions
+        Useful for global change of z after aligning
+        
+        Parameters
+        verbose : Boolean
+            prints the new positions as a sanity check if True
+        ----------
+    
+        """
+        # get current z position:
+        pos_trans_z_new  = self.CoDI_trans_z.wm()
+
+        # get all keys from the positions
+        position_keys = self.CoDI_pos_predefined.keys
+        
+        #go through all positions and change the z-value to the current z value
+        for key in position_keys: 
+            pos_name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z = self.CoDI_pos_predefined[key]
+            self.set_CoDI_predefined(pos_name,pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z_new)
+        
+        #Print the new predefined positions as a sanity check
+        if verbose == True:
+            print(self.get_CoDI_predefined)
+        
+
     def remove_CoDI_pos(self, name):
         """
         removes the defined motor combination for CoDI
