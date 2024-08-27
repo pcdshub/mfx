@@ -13,7 +13,6 @@ class dod:
         ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
         from DropsDriver import myClient
-        from dod.codi import *
         import time
 
         # Create object 
@@ -30,7 +29,6 @@ class dod:
         self.y_safety  = 50000 # value in y, above which the robot can only be in vertical configuration
         self.y_max     = 50000 # maximum value in y
         
-        
         #Initialize safety regions for horizontal and vertical rotation: 
         self.forbidden_regions_horizontal = []
         self.forbidden_regions_vertical = []
@@ -41,9 +39,8 @@ class dod:
         #region where horizontal rotation is forbidden: 
         self.set_forbidden_region(0, 300000,  self.y_safety, self.y_max,rotation_state='horizontal')
         
-        
         # Initializing the robot client that is used for communication
-        self.client     = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
+        self.client = myClient(ip=ip, port=port, supported_json=supported_json, reload=False)
         
         # # create config parser handler
         # json_handler = JsonFileHandler(supported_json)
@@ -386,7 +383,7 @@ class dod:
         safe_motion : bool
             boolean flag if endpoint of motion is safe or not
         """
-        
+        from dod.codi import CoDI_base
         # Get current rotation state
         pos_rot_base  = round(CoDI_base.wm(),0)
         
@@ -410,8 +407,6 @@ class dod:
                 flag_safe_endpoint = flag_safe_endpoint and True
             
         return flag_safe_endpoint
-
-        
 
     # def move(self, name):
     #   '''
