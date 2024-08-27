@@ -90,7 +90,7 @@ with safe_load('Droplet_on_Demand_Colliding_Droplets'):
 
 with safe_load('Droplet_on_Demand'):
     from dod.dod import *
-    dod = dod()
+    dod = dod(modules = 'codi')
 
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner

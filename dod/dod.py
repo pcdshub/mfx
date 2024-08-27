@@ -1,15 +1,12 @@
 class dod: 
-    def __init__(self):
+    def __init__(self, modules = 'None'):
         """
         Class definition of the DoD robot
         Parameters
         ----------
-        IP : string
-            IP of the robot
-        port : int
-            port used for communication
-        supported_json : string
-            json file
+        modules : string
+            Defines the optional modules of the robot. 
+            Options: 'None', 'codi', 
         ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
         from dod.DropsDriver import myClient
@@ -52,7 +49,10 @@ class dod:
 
         # Flag that can be used later on for safety aborts during task execution
         self.safety_abort = False
-        
+        if modules = 'codi': 
+            from dod.codi import codi
+            self.codi = codi()
+
 
     def stop_task(self, verbose = True):
         """
