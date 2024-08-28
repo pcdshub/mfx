@@ -58,10 +58,10 @@ class dod:
         self.delay = None
 
         # Trigger objects
-        self.trigger_Xray = Trigger('MFX:LAS:EVR:01:TRIG8', name='trigger_X-ray_simulator')
-        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_1')
-        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG4', name='trigger_nozzle_2')
-        self.trigger_LED = Trigger('MFX:LAS:EVR:01:TRIG2', name='trigger_LED_array')
+        self.trigger_Xray = Trigger('MFX:LAS:EVR:01:TRIG7', name='trigger_X-ray_simulator')
+        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG2', name='trigger_nozzle_1')
+        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_2')
+        self.trigger_LED = Trigger('MFX:LAS:EVR:01:TRIG1', name='trigger_LED_array')
 
         # Timing parameter
         self.timing_Xray = self.trigger_Xray.ns_delay.get()
