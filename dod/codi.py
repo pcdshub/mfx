@@ -8,7 +8,7 @@ class codi:
         
         from pcdsdevices.device import ObjectComponent as OCpt
         from pcdsdevices.epics_motor import SmarAct, Motor
-
+        import time
 
         #Predefined positions CoDI
         self.CoDI_pos_predefined = dict()
