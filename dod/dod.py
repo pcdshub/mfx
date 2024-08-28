@@ -59,8 +59,8 @@ class dod:
 
         # Trigger objects
         self.trigger_Xray = Trigger('MFX:LAS:EVR:01:TRIG7', name='trigger_X-ray_simulator')
-        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_1')
-        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG4', name='trigger_nozzle_2')
+        self.trigger_nozzle_1 = Trigger('MFX:LAS:EVR:01:TRIG2', name='trigger_nozzle_1')
+        self.trigger_nozzle_2 = Trigger('MFX:LAS:EVR:01:TRIG3', name='trigger_nozzle_2')
         self.trigger_LED = Trigger('MFX:LAS:EVR:01:TRIG1', name='trigger_LED_array')
 
         # Timing parameter
@@ -518,6 +518,8 @@ class dod:
         Returns: 
         r : 
         '''
+        import time
+
         rr = self.client.connect("Test")
         if safety_check == False: 
             r = self.client.execute_task(task_name)
@@ -667,6 +669,7 @@ class dod:
         self.trigger_nozzle_2.ns_delay.put(self.timing_nozzle_2)
         
         # LED
+        self.timing_LED = self.timing_Xray + self.timing_delay_LED
         self.trigger_LED.ns_delay.put(self.timing_LED)
         
         
