@@ -745,6 +745,32 @@ class dod:
         # update timings
         self.set_timing_update()
 
+            
+    def set_timing_relative_nozzle(self, nozzle, timing_rel): 
+        """
+        Changing the timing of the selected nozzle by a relative amount 
+        
+        Parameters
+        nozle : int
+            nozzle number
+        timing_rel : float
+            relative change in ns from robot alignment
+        ----------
+        Returns: 
+        """
+        if nozzle == 1: 
+            current_timing = self.timing_delay_nozzle_1
+            self.timing_delay_nozzle_1 = self.timing_delay_nozzle_1 + timing_rel
+        elif nozzle == 2: 
+            current_timing = self.timing_delay_nozzle_2
+            self.timing_delay_nozzle_2 = self.timing_delay_nozzle_2 + timing_rel
+        else: 
+            print('no valid nozzle selected.')
+            return
+        
+        # update timings
+        self.set_timing_update()
+
 
     # def move(self, name):
     #   '''
