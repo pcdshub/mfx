@@ -772,6 +772,37 @@ class dod:
         self.set_timing_update()
 
 
+    def logging_string(self):
+        """
+        Creating the string to post to the e-log. 
+        
+        Parameters
+        ----------
+        Returns: 
+        post : string
+            String with useful logging information for posting into the e-log 
+        """
+        post_str = ''
+     
+        # Info to be posted: 
+         
+        # Nozzle angles: 
+        position = self.codi.get_CoDI_pos()
+        position_str = 'CoDI data: name: ' str(position[0]) + 'rot_base: '+ str(position[1])+ 'rot_left: '+ str(position[2]) + 'rot_right: '+ str(position[3])+ 'z-transl: '+ str(position[4]) 
+        post_str = post_str + position_str +'\n'
+        
+        #Timings:
+        post_str = post_str + 'Timing:' + '\n'
+        post_str = post_str + 'timing_Xray:' + str(self.timing_Xray) +'\n'
+        post_str = post_str + 'timing_nozzle_1:' + str(self.timing_nozzle_1) +'\n'
+        post_str = post_str + 'timing_nozzle_2:' + str(self.timing_nozzle_2) +'\n'
+        post_str = post_str + 'timing_LED:' + str(self.timing_LED) +'\n'
+        post_str = post_str + 'timing_delay_LED:' + str(self.timing_delay_LED) +'\n'
+        post_str = post_str + 'timing_delay_reaction:' + str(self.timing_delay_reaction) +'\n'        
+        post_str = post_str + 'timing_delay_nozzle_1:' + str(self.timing_delay_nozzle_1) +'\n'   
+        post_str = post_str + 'timing_delay_nozzle_2:' + str(self.timing_delay_nozzle_2) +'\n'   
+        
+
     # def move(self, name):
     #   '''
     #       Moves robot to posion of name 
