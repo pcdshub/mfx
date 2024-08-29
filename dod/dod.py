@@ -788,7 +788,7 @@ class dod:
          
         # Nozzle angles: 
         position = self.codi.get_CoDI_pos()
-        position_str = 'CoDI data: name: ' + str(position[0]) + 'rot_base: '+ str(position[1])+ 'rot_left: '+ str(position[2]) + 'rot_right: '+ str(position[3])+ 'z-transl: '+ str(position[4]) 
+        position_str = 'Codi Information: \n CoDI data: name: ' + str(position[0]) + '\n rot_base: '+ str(position[1])+ '\n rot_left: '+ str(position[2]) + '\n rot_right: '+ str(position[3])+ '\n z-transl: '+ str(position[4]) 
         post_str = post_str + position_str +'\n'
         
         #Timings:
