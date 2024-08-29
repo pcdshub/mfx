@@ -802,6 +802,7 @@ class dod:
         post_str = post_str + 'timing_delay_nozzle_1:' + str(self.timing_delay_nozzle_1) +'\n'   
         post_str = post_str + 'timing_delay_nozzle_2:' + str(self.timing_delay_nozzle_2) +'\n'   
         
+        return post_str
 
     # def move(self, name):
     #   '''
