@@ -1,12 +1,13 @@
 class dod: 
-    def __init__(self, modules = 'None'):
+    def __init__(self, modules = 'None', ip = "172.21.72.187", port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json'
+):
         """
         Class definition of the DoD robot
         Parameters
         ----------
         modules : string
             Defines the optional modules of the robot. 
-            Options: 'None', 'codi', 
+            Options: 'None', 'codi', , 
         ip = "172.21.72.187" , port = 9999, supported_json = "supported.json"            
         """
         from dod.DropsDriver import myClient
