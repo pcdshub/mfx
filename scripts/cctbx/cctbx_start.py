@@ -113,7 +113,7 @@ def main(args):
     logging.info("Starting up cctbx")
     proc = [
         f"ssh -YAC psana "
-        f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx_step2.sh"
+        f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx_step2.sh"
         ]
     
     logging.info(proc)
