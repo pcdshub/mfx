@@ -169,7 +169,7 @@ class mfx_dod:
             return r.RESULTS
     
 
-    def busy_wait(timeout: int):
+    def busy_wait(timeout):
         '''
                 Busy wait untill timeout value is reached,
                 timeout : sec
@@ -347,7 +347,7 @@ class mfx_dod:
         current_real_position = r.RESULTS['PositionReal']
 
         if safety_test == False:  
-            r = self.client.move(new_position)
+            r = self.client.move(position)
         else: 
             print('safety test of move has yet to be implemented')
 
