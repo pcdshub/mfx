@@ -12,7 +12,7 @@ class cctbx:
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/home/d/djr/scripts/cctbx_step1.sh {user} {self.experiment}"
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx_step1.sh {user} {self.experiment}"
             ]
 
         logging.info(proc)
@@ -40,7 +40,7 @@ class cctbx:
 
         proc = [
             f'ssh -YAC {user}@s3dflogin '
-            f'/sdf/home/d/djr/scripts/cctbx_notch_check.sh "{self.runlist}"'
+            f'/sdf/group/lcls/ds/tools/mfx/scripts/cctbx_notch_check.sh "{self.runlist}"'
             ]
 
         logging.info(proc)
