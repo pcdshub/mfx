@@ -130,6 +130,7 @@ class CoDI:
                 time.sleep(1)
                 print('\r waiting for motion to end: %i s' %i, end="\r")
                 i = i+1
+                test_name, test_pos_rot_base, test_pos_rot_left, test_pos_rot_right, test_pos_trans_z = self.get_CoDI_pos()
             print('Motion ended')
         
     
