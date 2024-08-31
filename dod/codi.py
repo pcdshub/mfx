@@ -1,4 +1,4 @@
-class codi: 
+class CoDI: 
     def __init__(self):
         """
         Class definition of the DoD codi injector 

@@ -1,4 +1,4 @@
-class dod: 
+class DoD: 
     def __init__(self, modules = 'None', ip = "172.21.72.187", port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json'
 ):
         """
@@ -51,8 +51,8 @@ class dod:
         # Flag that can be used later on for safety aborts during task execution
         self.safety_abort = False
         if modules == 'codi': 
-            from dod.codi import codi
-            self.codi = codi()
+            from dod.codi import CoDI
+            self.codi = CoDI()
         
         # Timing section
         from pcdsdevices.evr import Trigger
