@@ -169,12 +169,13 @@ class DoD:
             return r.RESULTS
     
 
-    def busy_wait(timeout):
+    def busy_wait(self, timeout):
         '''
-                Busy wait untill timeout value is reached,
-                timeout : sec
-                returns true if timeout occured
+            Busy wait untill timeout value is reached,
+            timeout : sec
+            returns true if timeout occured
         '''
+        import time
         start = time.time()
         r = self.client.get_status()
         delta = 0
