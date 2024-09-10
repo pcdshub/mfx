@@ -44,9 +44,6 @@ with safe_load('MFX_Timing'):
     from mfx.mfx_timing import *
     mfx_timing = MFX_Timing(sequencer)
 
-with safe_load('Droplet_on_Demand'):
-    from mfx.mfx_dod import *
-
 with safe_load('delay_scan'):
     from mfx.delay_scan import *
 
@@ -86,6 +83,15 @@ with safe_load('cctbx'):
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
+
+with safe_load('Droplet_on_Demand_Colliding_Droplets'):
+    from dod.codi import *
+    codi = CoDI()
+    
+
+with safe_load('Droplet_on_Demand'):
+    from dod.dod import *
+    dod = DoD(modules = 'codi')
 
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
@@ -140,7 +146,7 @@ with safe_load('add laser motor groups'):
     lxt_fast=mfx_lxt_fast1
 
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
-                                                          # this is the timetool compensationn stage. You might want this one
+    # this is the timetool compensationn stage. You might want this one
     class las():
         #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
