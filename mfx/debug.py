@@ -35,7 +35,7 @@ class Debug:
         import logging
         if str(server) in self.ioc_serverlist or str(server) in self.daq_serverlist:
             logging.info(f"Power cycling: {server}")
-            status = os.popen(f"/reg/g/pcds/engineering_tools/latest-released/scripts/serverStat {server} cycle").read().splitlines()
+            os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/serverStat {server} cycle")
         else:
             logging.info(f"The server you are looking for does not exist please select one of the following")
             self.print_servers('ioc')
@@ -53,14 +53,18 @@ class Debug:
                     logging.info(f"Server {server} has passed all tests")
                 else:
                     logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
-                    error_server.append(server)
+                    logging.error(status)
+                    self.error_servers.append(server)
+
             for server in self.daq_serverlist:
                 status = self.check_server(str(server))
-                if status[0].endswith('on') and status[1].endswith('1)') and status[2].endswith('up'):
+                if status[0].endswith('on') and status[1].split(", ")[0].endswith('1)') and status[2].endswith('up'):
                     logging.info(f"Server {server} has passed all tests")
                 else:
                     logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
-                    error_server.append(server)
+                    logging.error(status)
+                    self.error_servers.append(server)
+
         elif str(server_type) == 'ioc':
             logging.info(f"You've decided to check all {len(self.ioc_serverlist)} ioc servers.")
             for server in self.ioc_serverlist:
@@ -69,7 +73,7 @@ class Debug:
                     logging.info(f"Server {server} has passed all tests")
                 else:
                     logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
-                    error_server.append(server)
+                    self.error_servers.append(server)
         elif str(server_type) == 'daq':
             logging.info(f"You've decided to check all {len(self.daq_serverlist)} daq servers.")
             for server in self.daq_serverlist:
@@ -82,8 +86,11 @@ class Debug:
         else:
             logging.warning(f"There is no server of the type you requested. Please use either ioc or daq or all.")
 
-        logging.warning(f"There is something wrong with the following servers.")
-        cycle = input("Would you like to power cycle all error servers? (y/n)? ")
+        if len(self.error_servers) != 0:
+            logging.warning(f"There is something wrong with the following servers.")
+            for server in self.error_servers:
+                print(f'{server}')
+            cycle = input("\nWould you like to power cycle all error servers? (y/n)? ")
 
             if cycle.lower() == "y":
                 logging.info(f"You've decided to cycle all {len(self.error_servers)} broken servers.")
@@ -91,6 +98,8 @@ class Debug:
                     self.cycle_server(str(server))
             else:
                 logging.info(f"You've decided not to cycle {len(self.error_servers)} broken servers.")
+        else:
+            logging.info(f"All {len(self.error_servers)} servers are ready to rock.")
 
         return self.error_servers
 
