@@ -13,7 +13,7 @@
           "configs": [
             {
               "DeviceConfiguration": {
-                "name": "Errors",
+                "name": "IPM Errors",
                 "description": null,
                 "tags": null,
                 "devices": [
@@ -58,54 +58,35 @@
           "tags": null,
           "configs": [
             {
-              "ConfigurationGroup": {
-                "name": "Errors",
+              "DeviceConfiguration": {
+                "name": "Slit Errors",
                 "description": null,
                 "tags": null,
-                "configs": [
+                "devices": [
+                  "mfx_dg1_slits",
+                  "mfx_dg2_downstream_slits",
+                  "mfx_dg2_midstream_slits",
+                  "mfx_dg2_upstream_slits"
+                ],
+                "by_attr": {},
+                "shared": [
                   {
-                    "DeviceConfiguration": {
-                      "name": "DG1 Slits Errors",
+                    "AnyValue": {
+                      "name": "Check Errors",
                       "description": null,
-                      "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
-                    }
-                  },
-                  {
-                    "DeviceConfiguration": {
-                      "name": "DG2 Upstream Slits Errors",
-                      "description": null,
-                      "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
-                    }
-                  },
-                  {
-                    "DeviceConfiguration": {
-                      "name": "DG2 Midstream Slits Errors",
-                      "description": null,
-                      "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
-                    }
-                  },
-                  {
-                    "DeviceConfiguration": {
-                      "name": "DG2 Downstream Slits Errors",
-                      "description": null,
-                      "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
                     }
                   }
-                ],
-                "values": {},
-                "mode": "all"
+                ]
               }
             }
           ],
@@ -120,13 +101,40 @@
           "tags": null,
           "configs": [
             {
-              "ConfigurationGroup": {
-                "name": "Errors",
+              "DeviceConfiguration": {
+                "name": "TFS Errors",
                 "description": null,
                 "tags": null,
-                "configs": [],
-                "values": {},
-                "mode": "all"
+                "devices": [
+                  "mfx_tfs"
+                ],
+                "by_attr": {
+                  "interlock.bypass": [],
+                  "interlock.faulted": [],
+                  "interlock.lens_required_fault": [],
+                  "interlock.min_fault": [],
+                  "interlock.state_fault": [],
+                  "interlock.table_fault": [],
+                  "interlock.violated_fault": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
@@ -136,18 +144,41 @@
       },
       {
         "ConfigurationGroup": {
-          "name": "Ref",
+          "name": "REF",
           "description": null,
           "tags": null,
           "configs": [
             {
-              "ConfigurationGroup": {
-                "name": "Errors",
+              "DeviceConfiguration": {
+                "name": "REF Errors",
                 "description": null,
                 "tags": null,
-                "configs": [],
-                "values": {},
-                "mode": "all"
+                "devices": [
+                  "mfx_reflaser"
+                ],
+                "by_attr": {
+                  "motor.disabled": [],
+                  "motor.error_severity": [],
+                  "motor.motor_is_moving": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
@@ -157,18 +188,45 @@
       },
       {
         "ConfigurationGroup": {
-          "name": "Att",
+          "name": "ATT",
           "description": null,
           "tags": null,
           "configs": [
             {
-              "ConfigurationGroup": {
-                "name": "Errors",
+              "DeviceConfiguration": {
+                "name": "ATT Errors",
                 "description": null,
                 "tags": null,
-                "configs": [],
-                "values": {},
-                "mode": "all"
+                "devices": [
+                  "mfx_attenuator"
+                ],
+                "by_attr": {
+                  "filter1.stuck": [],
+                  "filter10.stuck": [],
+                  "filter11.stuck": [],
+                  "filter3.stuck": [],
+                  "filter4.stuck": [],
+                  "filter6.stuck": [],
+                  "filter9.stuck": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
