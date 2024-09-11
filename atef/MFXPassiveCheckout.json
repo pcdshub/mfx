@@ -22,9 +22,32 @@
                       "name": "DG1 IPM Errors",
                       "description": null,
                       "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
+                      "devices": [
+                        "mfx_dg1_ipm"
+                      ],
+                      "by_attr": {
+                        "diode.state.motor.error_severity": [],
+                        "diode.x_motor.error_severity": [],
+                        "target.motor.error_severity": []
+                      },
+                      "shared": [
+                        {
+                          "Equals": {
+                            "name": "Check Errors",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "value_dynamic": null,
+                            "value": 0.0,
+                            "rtol": null,
+                            "atol": null
+                          }
+                        }
+                      ]
                     }
                   },
                   {
@@ -32,9 +55,32 @@
                       "name": "DG2 IPM Errors",
                       "description": null,
                       "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
+                      "devices": [
+                        "mfx_dg2_ipm"
+                      ],
+                      "by_attr": {
+                        "diode.state.motor.error_severity": [],
+                        "diode.x_motor.error_severity": [],
+                        "target.motor.error_severity": []
+                      },
+                      "shared": [
+                        {
+                          "Equals": {
+                            "name": "Check Errors",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "value_dynamic": null,
+                            "value": 0.0,
+                            "rtol": null,
+                            "atol": null
+                          }
+                        }
+                      ]
                     }
                   },
                   {
@@ -42,9 +88,32 @@
                       "name": "DIA IPM Errors",
                       "description": null,
                       "tags": null,
-                      "devices": [],
-                      "by_attr": {},
-                      "shared": []
+                      "devices": [
+                        "mfx_dia_ipm"
+                      ],
+                      "by_attr": {
+                        "diode.state.motor.error_severity": [],
+                        "diode.x_motor.error_severity": [],
+                        "target.motor.error_severity": []
+                      },
+                      "shared": [
+                        {
+                          "Equals": {
+                            "name": "Check Errors",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "value_dynamic": null,
+                            "value": 0.0,
+                            "rtol": null,
+                            "atol": null
+                          }
+                        }
+                      ]
                     }
                   }
                 ],
