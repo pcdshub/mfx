@@ -29,7 +29,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Errors",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -72,7 +72,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Errors",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -110,6 +110,7 @@
                 ],
                 "by_attr": {
                   "interlock.bypass": [],
+                  "interlock.bypass_energy": [],
                   "interlock.faulted": [],
                   "interlock.lens_required_fault": [],
                   "interlock.min_fault": [],
@@ -120,7 +121,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Errors",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -130,6 +131,71 @@
                       "if_disconnected": 2,
                       "values": [
                         0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "TFS Latching Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_tfs"
+                ],
+                "by_attr": {
+                  "interlock.lens_required_fault_latch": [],
+                  "interlock.min_fault_latch": [],
+                  "interlock.table_fault_latch": [],
+                  "interlock.violated_fault_latch": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 0",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "TFS IOC Alive",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_tfs"
+                ],
+                "by_attr": {
+                  "interlock.ioc_alive": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 1",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
                       ],
                       "values_dynamic": []
                     }
@@ -164,7 +230,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Errors",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -174,6 +240,37 @@
                       "if_disconnected": 2,
                       "values": [
                         0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "REF State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_reflaser"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 2",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        2
                       ],
                       "values_dynamic": []
                     }
@@ -212,7 +309,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Errors",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -222,6 +319,88 @@
                       "if_disconnected": 2,
                       "values": [
                         0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "ATT State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_attenuator"
+                ],
+                "by_attr": {
+                  "filter1.state": [],
+                  "filter10.state": [],
+                  "filter11.state": [],
+                  "filter2.state": [],
+                  "filter3.state": [],
+                  "filter4.state": [],
+                  "filter5.state": [],
+                  "filter6.state": [],
+                  "filter7.state": [],
+                  "filter8.state": [],
+                  "filter9.state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 1",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "ATT Status",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_attenuator"
+                ],
+                "by_attr": {
+                  "filter1.status": [],
+                  "filter10.status": [],
+                  "filter11.status": [],
+                  "filter2.status": [],
+                  "filter3.status": [],
+                  "filter4.status": [],
+                  "filter5.status": [],
+                  "filter6.status": [],
+                  "filter7.status": [],
+                  "filter8.status": [],
+                  "filter9.status": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 2",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        2
                       ],
                       "values_dynamic": []
                     }
