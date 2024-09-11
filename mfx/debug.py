@@ -9,6 +9,21 @@ class Debug:
             "-ipmi") and not ioc.endswith("-fez") and not ioc.endswith("-ana")]
 
 
+    def awr(self, hutch='mfx'):
+    """
+    Checks if the beamline is ready to take beam
+
+    Parameters
+    ----------
+    hutch: str, optional
+        Specify the hutch you want to check. Default is MFX because it is the best
+    """
+        import os
+        import logging
+        logging.info(f"{hutch} Beamline Check")
+        os.system(f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/awr {hutch}")
+
+
     def motor_check(self):
         import os
         import logging
@@ -17,6 +32,14 @@ class Debug:
 
 
     def check_server(self, server):
+    """
+    Checks the status of an individual server
+
+    Parameters
+    ----------
+    server: str, required
+        Specify the server name to check. Use debug.server_list('all') to see all servers
+    """
         import os
         import logging
         status = None
@@ -25,12 +48,20 @@ class Debug:
             status = os.popen(f"/reg/g/pcds/engineering_tools/latest-released/scripts/serverStat {server} status").read().splitlines()
         else:
             logging.info(f"The server you are looking for does not exist please select one of the following")
-            self.print_servers('ioc')
-            self.print_servers('daq')
+            self.server_list('ioc')
+            self.server_list('daq')
         return status
 
 
     def cycle_server(self, server):
+    """
+    Cycles an individual server
+
+    Parameters
+    ----------
+    server: str, required
+        Specify the server name to cycle. Use debug.server_list('all') to see all servers
+    """
         import os
         import logging
         if str(server) in self.ioc_serverlist or str(server) in self.daq_serverlist:
@@ -38,18 +69,26 @@ class Debug:
             os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/serverStat {server} cycle")
         else:
             logging.info(f"The server you are looking for does not exist please select one of the following")
-            self.print_servers('ioc')
-            self.print_servers('daq')
+            self.server_list('ioc')
+            self.server_list('daq')
 
     
     def check_all_servers(self, server_type):
+    """
+    Checks the status of all servers local to MFX
+
+    Parameters
+    ----------
+    server_type: str, required
+        Specify the server type input either 'all', 'ioc', or 'daq
+    """
         import logging
         self.error_servers = []
         if str(server_type) == 'all':
             logging.info(f"You've decided to check all {len(self.ioc_serverlist) + len(self.daq_serverlist)} servers.")
             for server in self.ioc_serverlist:
                 status = self.check_server(str(server))
-                if status[0].endswith('on') and status[1].endswith('1)') and status[2].endswith('up'):
+                if status[0].endswith('on') and status[1].split(", ")[0].endswith('1)') and status[2].endswith('up'):
                     logging.info(f"Server {server} has passed all tests")
                 else:
                     logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
@@ -74,6 +113,7 @@ class Debug:
                 else:
                     logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
                     self.error_servers.append(server)
+
         elif str(server_type) == 'daq':
             logging.info(f"You've decided to check all {len(self.daq_serverlist)} daq servers.")
             for server in self.daq_serverlist:
@@ -104,9 +144,24 @@ class Debug:
         return self.error_servers
 
 
-    def print_servers(self, server_type):
+    def server_list(self, server_type):
+    """
+    Lists servers local to MFX
+
+    Parameters
+    ----------
+    server_type: str, required
+        Specify the server type input either 'all', 'ioc', or 'daq
+    """
         import logging
-        if str(server_type) == 'ioc':
+        elif str(server_type) == 'all':
+            print('IOC SERVERS\n#########################')
+            for server in self.ioc_serverlist:
+                print(f'{server}')
+            print('\nDAQ SERVERS\n#########################')
+            for server in self.daq_serverlist:
+                print(f'{server}')
+        elif str(server_type) == 'ioc':
             print('IOC SERVERS\n#########################')
             for server in self.ioc_serverlist:
                 print(f'{server}')
