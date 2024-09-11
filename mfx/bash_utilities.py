@@ -52,13 +52,6 @@ class bs:
         os.system(f"ssh -Y {username}@s3dflogin ssh -Y psana /sdf/group/lcls/ds/tools/engineering_tools/engineering_tools/scripts/makepeds_psana --queue milano --run {run_number} --experiment {get_exp()}")
 
 
-    def awr(self, hutch='mfx'):
-        import os
-        import logging
-        logging.info(f"{hutch} Beamline Check")
-        os.system(f"/cds/home/opr/mfxopr/bin/awr {hutch}")
-
-
     def restartdaq(self):
         import subprocess
         import logging

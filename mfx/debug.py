@@ -9,6 +9,21 @@ class Debug:
             "-ipmi") and not ioc.endswith("-fez") and not ioc.endswith("-ana")]
 
 
+    def awr(self, hutch='mfx'):
+    """
+    Checks if the beamline is ready to take beam
+
+    Parameters
+    ----------
+    hutch: str, optional
+        Specify the hutch you want to check. Default is MFX because it is the best
+    """
+        import os
+        import logging
+        logging.info(f"{hutch} Beamline Check")
+        os.system(f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/awr {hutch}")
+
+
     def motor_check(self):
         import os
         import logging
