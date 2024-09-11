@@ -102,6 +102,37 @@
           "configs": [
             {
               "DeviceConfiguration": {
+                "name": "TFS IOC Alive",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_tfs"
+                ],
+                "by_attr": {
+                  "interlock.ioc_alive": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 1",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
                 "name": "TFS Errors",
                 "description": null,
                 "tags": null,
@@ -171,37 +202,6 @@
                   }
                 ]
               }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "TFS IOC Alive",
-                "description": null,
-                "tags": null,
-                "devices": [
-                  "mfx_tfs"
-                ],
-                "by_attr": {
-                  "interlock.ioc_alive": []
-                },
-                "shared": [
-                  {
-                    "AnyValue": {
-                      "name": "Check Value is 1",
-                      "description": null,
-                      "invert": false,
-                      "reduce_period": null,
-                      "reduce_method": "average",
-                      "string": null,
-                      "severity_on_failure": 2,
-                      "if_disconnected": 2,
-                      "values": [
-                        1
-                      ],
-                      "values_dynamic": []
-                    }
-                  }
-                ]
-              }
             }
           ],
           "values": {},
@@ -214,6 +214,37 @@
           "description": null,
           "tags": null,
           "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "REF State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_reflaser"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 2",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        2
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
             {
               "DeviceConfiguration": {
                 "name": "REF Errors",
@@ -246,37 +277,6 @@
                   }
                 ]
               }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "REF State",
-                "description": null,
-                "tags": null,
-                "devices": [
-                  "mfx_reflaser"
-                ],
-                "by_attr": {
-                  "state": []
-                },
-                "shared": [
-                  {
-                    "AnyValue": {
-                      "name": "Check Value is 2",
-                      "description": null,
-                      "invert": false,
-                      "reduce_period": null,
-                      "reduce_method": "average",
-                      "string": null,
-                      "severity_on_failure": 2,
-                      "if_disconnected": 2,
-                      "values": [
-                        2
-                      ],
-                      "values_dynamic": []
-                    }
-                  }
-                ]
-              }
             }
           ],
           "values": {},
@@ -291,25 +291,29 @@
           "configs": [
             {
               "DeviceConfiguration": {
-                "name": "ATT Errors",
+                "name": "ATT Status",
                 "description": null,
                 "tags": null,
                 "devices": [
                   "mfx_attenuator"
                 ],
                 "by_attr": {
-                  "filter1.stuck": [],
-                  "filter10.stuck": [],
-                  "filter11.stuck": [],
-                  "filter3.stuck": [],
-                  "filter4.stuck": [],
-                  "filter6.stuck": [],
-                  "filter9.stuck": []
+                  "filter1.status": [],
+                  "filter10.status": [],
+                  "filter11.status": [],
+                  "filter2.status": [],
+                  "filter3.status": [],
+                  "filter4.status": [],
+                  "filter5.status": [],
+                  "filter6.status": [],
+                  "filter7.status": [],
+                  "filter8.status": [],
+                  "filter9.status": []
                 },
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "Check Value is 2",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -318,7 +322,7 @@
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
                       "values": [
-                        0
+                        2
                       ],
                       "values_dynamic": []
                     }
@@ -369,29 +373,25 @@
             },
             {
               "DeviceConfiguration": {
-                "name": "ATT Status",
+                "name": "ATT Errors",
                 "description": null,
                 "tags": null,
                 "devices": [
                   "mfx_attenuator"
                 ],
                 "by_attr": {
-                  "filter1.status": [],
-                  "filter10.status": [],
-                  "filter11.status": [],
-                  "filter2.status": [],
-                  "filter3.status": [],
-                  "filter4.status": [],
-                  "filter5.status": [],
-                  "filter6.status": [],
-                  "filter7.status": [],
-                  "filter8.status": [],
-                  "filter9.status": []
+                  "filter1.stuck": [],
+                  "filter10.stuck": [],
+                  "filter11.stuck": [],
+                  "filter3.stuck": [],
+                  "filter4.stuck": [],
+                  "filter6.stuck": [],
+                  "filter9.stuck": []
                 },
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 2",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -400,12 +400,182 @@
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
                       "values": [
-                        2
+                        0
                       ],
                       "values_dynamic": []
                     }
                   }
                 ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Other",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Spectrometer",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "DG2 Stopper",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "MEC YAG0",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "XCS YAG3M",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "XRT Vaccum",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Pulse Picker",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": null,
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Cameras",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Vaccum",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Mirrors",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "MR1L0 Coating",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mr1l0_homs"
+                ],
+                "by_attr": {
+                  "coating.state": []
+                },
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "MR2L0 Coating",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mr2l0_homs"
+                ],
+                "by_attr": {
+                  "coating.state": []
+                },
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "MR1L3 Coating",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "MR1L4 Coating",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            },
+            {
+              "ConfigurationGroup": {
+                "name": "Coating",
+                "description": null,
+                "tags": null,
+                "configs": [],
+                "values": {},
+                "mode": "all"
               }
             }
           ],
