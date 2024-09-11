@@ -10,7 +10,49 @@
           "name": "IPMs",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "ConfigurationGroup": {
+                "name": "Errors",
+                "description": null,
+                "tags": null,
+                "configs": [
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DG1 IPM Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DG2 IPM Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DIA IPM Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  }
+                ],
+                "values": {},
+                "mode": "all"
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -20,7 +62,59 @@
           "name": "Slits",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "ConfigurationGroup": {
+                "name": "Errors",
+                "description": null,
+                "tags": null,
+                "configs": [
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DG1 Slits Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DG2 Upstream Slits Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DG2 Midstream Slits Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "DG2 Downstream Slits Errors",
+                      "description": null,
+                      "tags": null,
+                      "devices": [],
+                      "by_attr": {},
+                      "shared": []
+                    }
+                  }
+                ],
+                "values": {},
+                "mode": "all"
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -30,7 +124,18 @@
           "name": "TFS",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "ConfigurationGroup": {
+                "name": "Errors",
+                "description": null,
+                "tags": null,
+                "configs": [],
+                "values": {},
+                "mode": "all"
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -40,7 +145,18 @@
           "name": "Ref",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "ConfigurationGroup": {
+                "name": "Errors",
+                "description": null,
+                "tags": null,
+                "configs": [],
+                "values": {},
+                "mode": "all"
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -50,7 +166,18 @@
           "name": "Att",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "ConfigurationGroup": {
+                "name": "Errors",
+                "description": null,
+                "tags": null,
+                "configs": [],
+                "values": {},
+                "mode": "all"
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
