@@ -1,0 +1,62 @@
+{
+  "version": 0,
+  "root": {
+    "name": "MFX Passive Checkout",
+    "description": "Checkout for the MFX Beamline",
+    "tags": null,
+    "configs": [
+      {
+        "ConfigurationGroup": {
+          "name": "IPMs",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Slits",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "TFS",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Ref",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Att",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      }
+    ],
+    "values": {},
+    "mode": "all"
+  }
+}
