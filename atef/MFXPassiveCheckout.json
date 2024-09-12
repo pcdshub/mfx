@@ -313,7 +313,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 2",
+                      "name": "Check Value is 0",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -354,7 +354,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 1",
+                      "name": "is 1?",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -522,60 +522,223 @@
           "configs": [
             {
               "DeviceConfiguration": {
-                "name": "MR1L0 Coating",
+                "name": "Mirror Coatings",
                 "description": null,
                 "tags": null,
                 "devices": [
-                  "mr1l0_homs"
-                ],
-                "by_attr": {
-                  "coating.state": []
-                },
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "MR2L0 Coating",
-                "description": null,
-                "tags": null,
-                "devices": [
+                  "mr1l0_homs",
+                  "mr1l3_homs",
+                  "mr1l4_homs",
                   "mr2l0_homs"
                 ],
                 "by_attr": {
                   "coating.state": []
                 },
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "MR1L3 Coating",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "MR1L4 Coating",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
+                "shared": [
+                  {
+                    "AnyComparison": {
+                      "name": "Coating Based on Beam Energy",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "comparisons": []
+                    }
+                  }
+                ]
               }
             },
             {
               "ConfigurationGroup": {
-                "name": "Coating",
+                "name": "Mirror Positions",
                 "description": null,
                 "tags": null,
-                "configs": [],
+                "configs": [
+                  {
+                    "DeviceConfiguration": {
+                      "name": "MR1L3 Inserted",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l3_homs"
+                      ],
+                      "by_attr": {
+                        "insertion.state": []
+                      },
+                      "shared": [
+                        {
+                          "AnyValue": {
+                            "name": "Check Value is 1",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "values": [
+                              1
+                            ],
+                            "values_dynamic": []
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "MR1L4 Inserted",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l4_homs"
+                      ],
+                      "by_attr": {
+                        "insertion.state": []
+                      },
+                      "shared": []
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "MR1L4 Pitch",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l4_homs"
+                      ],
+                      "by_attr": {
+                        "pitch.user_readback": [],
+                        "pitch.user_setpoint": []
+                      },
+                      "shared": [
+                        {
+                          "Equals": {
+                            "name": "Check Value is ??",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "value_dynamic": null,
+                            "value": 0.0,
+                            "rtol": null,
+                            "atol": null
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
                 "values": {},
                 "mode": "all"
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Mirror Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mr1l0_homs",
+                  "mr1l3_homs",
+                  "mr1l4_homs",
+                  "mr2l0_homs"
+                ],
+                "by_attr": {
+                  "bender.disabled": [],
+                  "bender.high_limit_switch": [],
+                  "bender.low_limit_switch": [],
+                  "bender.motor_is_moving": [],
+                  "bender.offset_freeze_switch": [],
+                  "bender.plc.cmd_err_reset": [],
+                  "bender.plc.err_bool": [],
+                  "bender.plc.err_code": [],
+                  "bender.plc.status": [],
+                  "bender.set_use_switch": [],
+                  "coating.error": [],
+                  "coating.error_id": [],
+                  "coating.error_message": [],
+                  "couple_status_x": [],
+                  "couple_status_y": [],
+                  "insertion.error": [],
+                  "insertion.error_id": [],
+                  "insertion.error_message": [],
+                  "pitch.disabled": [],
+                  "pitch.high_limit_switch": [],
+                  "pitch.low_limit_switch": [],
+                  "pitch.motor_is_moving": [],
+                  "pitch.offset_freeze_switch": [],
+                  "pitch.plc.cmd_err_reset": [],
+                  "pitch.plc.err_bool": [],
+                  "pitch.plc.err_code": [],
+                  "pitch.plc.status": [],
+                  "pitch.set_use_switch": [],
+                  "x_dwn.disabled": [],
+                  "x_dwn.high_limit_switch": [],
+                  "x_dwn.low_limit_switch": [],
+                  "x_dwn.motor_is_moving": [],
+                  "x_dwn.offset_freeze_switch": [],
+                  "x_dwn.plc.cmd_err_reset": [],
+                  "x_dwn.plc.err_bool": [],
+                  "x_dwn.plc.err_code": [],
+                  "x_dwn.plc.status": [],
+                  "x_dwn.set_use_switch": [],
+                  "x_up.disabled": [],
+                  "x_up.high_limit_switch": [],
+                  "x_up.low_limit_switch": [],
+                  "x_up.motor_is_moving": [],
+                  "x_up.offset_freeze_switch": [],
+                  "x_up.plc.cmd_err_reset": [],
+                  "x_up.plc.err_bool": [],
+                  "x_up.plc.err_code": [],
+                  "x_up.plc.status": [],
+                  "x_up.set_use_switch": [],
+                  "y_dwn.disabled": [],
+                  "y_dwn.high_limit_switch": [],
+                  "y_dwn.low_limit_switch": [],
+                  "y_dwn.motor_is_moving": [],
+                  "y_dwn.offset_freeze_switch": [],
+                  "y_dwn.plc.cmd_err_reset": [],
+                  "y_dwn.plc.err_bool": [],
+                  "y_dwn.plc.err_code": [],
+                  "y_dwn.plc.status": [],
+                  "y_dwn.set_use_switch": [],
+                  "y_up.disabled": [],
+                  "y_up.high_limit_switch": [],
+                  "y_up.low_limit_switch": [],
+                  "y_up.motor_is_moving": [],
+                  "y_up.offset_freeze_switch": [],
+                  "y_up.plc.cmd_err_reset": [],
+                  "y_up.plc.err_bool": [],
+                  "y_up.plc.err_code": [],
+                  "y_up.plc.status": [],
+                  "y_up.set_use_switch": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 0 or Blank",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0,
+                        ""
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
