@@ -415,87 +415,6 @@
       },
       {
         "ConfigurationGroup": {
-          "name": "Other",
-          "description": null,
-          "tags": null,
-          "configs": [
-            {
-              "DeviceConfiguration": {
-                "name": "Spectrometer",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "DG2 Stopper",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "MEC YAG0",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "XCS YAG3M",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "XRT Vaccum",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "Pulse Picker",
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": null,
-                "description": null,
-                "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
-              }
-            }
-          ],
-          "values": {},
-          "mode": "all"
-        }
-      },
-      {
-        "ConfigurationGroup": {
           "name": "Cameras",
           "description": null,
           "tags": null,
@@ -509,7 +428,54 @@
           "name": "Vaccum",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Valves",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_mxt_valve",
+                  "mfx_dvd_valve",
+                  "mfx_dia_valve_02",
+                  "mfx_dia_valve_01",
+                  "mfx_dg1_valve_2",
+                  "mfx_dg1_valve_1"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 0",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Ion Pumps",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -742,6 +708,46 @@
               }
             }
           ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Spectrometer",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "YAGs",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Pulse Picker",
+          "description": null,
+          "tags": null,
+          "configs": [],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Stopper",
+          "description": null,
+          "tags": null,
+          "configs": [],
           "values": {},
           "mode": "all"
         }
