@@ -1,0 +1,125 @@
+{
+  "version": 0,
+  "root": {
+    "name": "MFX Active Checkout",
+    "description": null,
+    "parent": null,
+    "verify_required": true,
+    "step_success_required": true,
+    "steps": [
+      {
+        "PassiveStep": {
+          "name": "MFX Passive Checkout",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "filepath": "/cds/home/opr/mfxopr/ATEF/MFXPassiveCheckout.json"
+        }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "MFX DG1 PIM",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MFX DG1 YAG",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": "YAG Y",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:09.VAL",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:09.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check Value is near 0",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 0.0,
+                        "rtol": null,
+                        "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MFX DG1 OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": "OUT",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:09.VAL",
+                    "value": 30.0,
+                    "timeout": null,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:09.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check Value is near 30",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 30.0,
+                        "rtol": null,
+                        "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

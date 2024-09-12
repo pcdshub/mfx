@@ -440,7 +440,11 @@
                   "mfx_dia_valve_02",
                   "mfx_dia_valve_01",
                   "mfx_dg1_valve_2",
-                  "mfx_dg1_valve_1"
+                  "mfx_dg1_valve_1",
+                  "mxt_valve_1",
+                  "mxt_valve_2",
+                  "xrt_mxt_valve",
+                  "xrt_dvd_valve"
                 ],
                 "by_attr": {
                   "state": []
@@ -717,7 +721,20 @@
           "name": "Spectrometer",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Spectrometer",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_von_hamos_6crystal"
+                ],
+                "by_attr": {},
+                "shared": []
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -727,7 +744,20 @@
           "name": "YAGs",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": null,
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mec_yag0_mfx"
+                ],
+                "by_attr": {},
+                "shared": []
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -747,7 +777,39 @@
           "name": "Stopper",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Stopper State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "hxd_dg2_stopper"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is IN",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        "IN"
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
