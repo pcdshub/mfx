@@ -21,8 +21,8 @@ with safe_load('rayonix utils'):
     mfx_rayonix = rayonix
 
 with safe_load('mfx_transfocator'):
-    from tfs.transfocator import Transfocator
-    mfx_tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
+    from tfs.transfocator import Transfocator as trans
+    tfs = trans("MFX:LENS", name='MFX Transfocator')
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
@@ -191,7 +191,6 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_pulsepicker as pp
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
-    from mfx.db import mfx_tfs as tfs
     from mfx.db import um6_ipm as xcs_yag1
     from mfx.db import hx2_slits as xpp_s1
     from mfx.db import mfx_von_hamos_6crystal as vh
