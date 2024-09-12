@@ -20,10 +20,9 @@ with safe_load('rayonix utils'):
     rayonix = Rayonix(mfx_sequencer)
     mfx_rayonix = rayonix
 
-with safe_load('transfocator'):
-    from transfocate import Transfocator
-    tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
-    mfx_tfs = tfs
+with safe_load('mfx_transfocator'):
+    from tfs.transfocator import Transfocator
+    mfx_tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
@@ -88,29 +87,30 @@ with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *
     codi = CoDI()
     
-
 with safe_load('Droplet_on_Demand'):
     from dod.dod import *
     dod = DoD(modules = 'codi')
 
-with safe_load("laser wp power"):
-    from pcdsdevices.lxe import LaserEnergyPositioner
-    from hutch_python.utils import get_current_experiment
-    from pcdsdevices.device import Component as Cpt
-    from pcdsdevices.epics_motor import Newport
+with safe_load('Debugging Scripts'):
+    from mfx.debug import *
+    debug = Debug()
 
-    # Hack the LXE class to make it work with Newports
-    class LXE(LaserEnergyPositioner):
-        motor = Cpt(Newport, "")
-
-    lxe_calib_file = (
-        f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
-    )
-    try:
-        lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
-    except OSError:
-        print(f"Could not load file: {lxe_calib_file}")
-        raise FileNotFoundError
+# with safe_load("laser wp power"):
+#     # Hack the LXE class to make it work with Newports
+#     class LXE(LaserEnergyPositioner):
+#         from pcdsdevices.lxe import LaserEnergyPositioner
+#         from hutch_python.utils import get_current_experiment
+#         from pcdsdevices.device import Component as Cpt
+#         from pcdsdevices.epics_motor import Newport
+#         motor = Cpt(Newport, "")
+#         lxe_calib_file = (
+#             f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
+#         )
+#         try:
+#             lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
+#         except OSError:
+#             print(f"Could not load file: {lxe_calib_file}")
+#             raise FileNotFoundError
 
 with safe_load('FS45 lxt & lxt_ttc'):
     import logging
