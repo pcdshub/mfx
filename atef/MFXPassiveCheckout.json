@@ -68,7 +68,24 @@
                   "mfx_dg2_midstream_slits",
                   "mfx_dg2_upstream_slits"
                 ],
-                "by_attr": {},
+                "by_attr": {
+                  "blade_bottom.disabled": [],
+                  "blade_bottom.high_limit_switch": [],
+                  "blade_bottom.low_limit_switch": [],
+                  "blade_bottom.motor_is_moving": [],
+                  "blade_north.disabled": [],
+                  "blade_north.high_limit_switch": [],
+                  "blade_north.low_limit_switch": [],
+                  "blade_north.motor_is_moving": [],
+                  "blade_south.disabled": [],
+                  "blade_south.high_limit_switch": [],
+                  "blade_south.low_limit_switch": [],
+                  "blade_south.motor_is_moving": [],
+                  "blade_top.disabled": [],
+                  "blade_top.high_limit_switch": [],
+                  "blade_top.low_limit_switch": [],
+                  "blade_top.motor_is_moving": []
+                },
                 "shared": [
                   {
                     "AnyValue": {
@@ -586,8 +603,8 @@
                       },
                       "shared": [
                         {
-                          "Equals": {
-                            "name": "Check Value is ??",
+                          "Less": {
+                            "name": "Check Value is less than 500",
                             "description": null,
                             "invert": false,
                             "reduce_period": null,
@@ -596,9 +613,7 @@
                             "severity_on_failure": 2,
                             "if_disconnected": 2,
                             "value_dynamic": null,
-                            "value": 0.0,
-                            "rtol": null,
-                            "atol": null
+                            "value": -500.0
                           }
                         }
                       ]
