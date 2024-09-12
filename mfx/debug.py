@@ -10,14 +10,14 @@ class Debug:
 
 
     def awr(self, hutch='mfx'):
-    """
-    Checks if the beamline is ready to take beam
+        """
+        Checks if the beamline is ready to take beam
 
-    Parameters
-    ----------
-    hutch: str, optional
-        Specify the hutch you want to check. Default is MFX because it is the best
-    """
+        Parameters
+        ----------
+        hutch: str, optional
+            Specify the hutch you want to check. Default is MFX because it is the best
+        """
         import os
         import logging
         logging.info(f"{hutch} Beamline Check")
@@ -32,14 +32,14 @@ class Debug:
 
 
     def check_server(self, server):
-    """
-    Checks the status of an individual server
+        """
+        Checks the status of an individual server
 
-    Parameters
-    ----------
-    server: str, required
-        Specify the server name to check. Use debug.server_list('all') to see all servers
-    """
+        Parameters
+        ----------
+        server: str, required
+            Specify the server name to check. Use debug.server_list('all') to see all servers
+        """
         import os
         import logging
         status = None
@@ -54,14 +54,14 @@ class Debug:
 
 
     def cycle_server(self, server):
-    """
-    Cycles an individual server
+        """
+        Cycles an individual server
 
-    Parameters
-    ----------
-    server: str, required
-        Specify the server name to cycle. Use debug.server_list('all') to see all servers
-    """
+        Parameters
+        ----------
+        server: str, required
+            Specify the server name to cycle. Use debug.server_list('all') to see all servers
+        """
         import os
         import logging
         if str(server) in self.ioc_serverlist or str(server) in self.daq_serverlist:
@@ -74,14 +74,14 @@ class Debug:
 
     
     def check_all_servers(self, server_type):
-    """
-    Checks the status of all servers local to MFX
+        """
+        Checks the status of all servers local to MFX
 
-    Parameters
-    ----------
-    server_type: str, required
-        Specify the server type input either 'all', 'ioc', or 'daq
-    """
+        Parameters
+        ----------
+        server_type: str, required
+            Specify the server type input either 'all', 'ioc', or 'daq
+        """
         import logging
         self.error_servers = []
         if str(server_type) == 'all':
@@ -145,16 +145,16 @@ class Debug:
 
 
     def server_list(self, server_type):
-    """
-    Lists servers local to MFX
+        """
+        Lists servers local to MFX
 
-    Parameters
-    ----------
-    server_type: str, required
-        Specify the server type input either 'all', 'ioc', or 'daq
-    """
+        Parameters
+        ----------
+        server_type: str, required
+            Specify the server type input either 'all', 'ioc', or 'daq
+        """
         import logging
-        elif str(server_type) == 'all':
+        if str(server_type) == 'all':
             print('IOC SERVERS\n#########################')
             for server in self.ioc_serverlist:
                 print(f'{server}')

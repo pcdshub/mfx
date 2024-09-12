@@ -20,10 +20,9 @@ with safe_load('rayonix utils'):
     rayonix = Rayonix(mfx_sequencer)
     mfx_rayonix = rayonix
 
-with safe_load('transfocator'):
-    from transfocate import Transfocator
-    tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
-    mfx_tfs = tfs
+with safe_load('mfx_transfocator'):
+    from tfs.transfocator import Transfocator
+    mfx_tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
