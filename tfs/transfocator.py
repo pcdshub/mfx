@@ -10,6 +10,7 @@ from tfs.lens import LensConnect, LensTripLimits
 from tfs.lens import MFXLens as Lens
 from tfs.offline_calculator import TFS_Calculator
 from functools import wraps
+from tfs.utils import estimate_beam_fwhm, focal_length
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,15 @@ class MFXTransfocator(TransfocatorBase):
         combo, diff = calc.find_solution(target, energy, **kwargs)
         if combo:
             combo.show_info()
-            print(f'Difference to desired focus position: {diff}')
+            radius=33.3
+            estimate_beam_fwhm(radius=radius, energy=energy)
+            focal_length(radius=radius, energy=energy)
+            print('\n')
+            logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
+            logger.info(f'Calculated Radius: {round(radius, 1)} um')
+            logger.info(f'Estimated Beam FWHM: {estimate_beam_fwhm} um')
+            logger.info(f'Calculated Focal Length: {focal_length} um\n')
+
         else:
             logger.error("Unable to find a valid solution for target")
         return combo
