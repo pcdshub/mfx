@@ -9,6 +9,109 @@
     "steps": [
       {
         "ProcedureGroup": {
+          "name": "MFX DIA PIM",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MFX DIA YAG",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04",
+                    "value": 0.0,
+                    "timeout": 5.0,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check Value is 0",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 0.0,
+                        "rtol": null,
+                        "atol": 0.01
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MFX DIA OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04",
+                    "value": 30.0,
+                    "timeout": 5.0,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "untitled",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 30.0,
+                        "rtol": null,
+                        "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ProcedureGroup": {
           "name": "MFX DG1 PIM",
           "description": null,
           "parent": null,
@@ -29,7 +132,7 @@
                     "attr": null,
                     "pv": "MFX:DG1:MMS:09.VAL",
                     "value": 0.0,
-                    "timeout": null,
+                    "timeout": 5.0,
                     "settle_time": null
                   }
                 ],
@@ -75,7 +178,7 @@
                     "attr": null,
                     "pv": "MFX:DG1:MMS:09.VAL",
                     "value": 30.0,
-                    "timeout": null,
+                    "timeout": 5.0,
                     "settle_time": null
                   }
                 ],
@@ -99,6 +202,682 @@
                         "value": 30.0,
                         "rtol": null,
                         "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "MFX DG2 PIM",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MFX DG2 YAG",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG2:MMS:08",
+                    "value": 0.0,
+                    "timeout": 5.0,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG2:MMS:08.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Move to YAG",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 0.0,
+                        "rtol": null,
+                        "atol": 0.01
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MFX DG2 OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG2:MMS:08",
+                    "value": 30.0,
+                    "timeout": null,
+                    "settle_time": 5.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG2:MMS:08.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check if value is 30",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 30.0,
+                        "rtol": null,
+                        "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "REF LASER",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MOVE IN",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:01",
+                    "value": 54.0,
+                    "timeout": 25.0,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:01.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check if vales if 54",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 54.0,
+                        "rtol": null,
+                        "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MOVE OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:01",
+                    "value": 0.0,
+                    "timeout": 25.0,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:MMS:01.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check Value is 0",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 0.0,
+                        "rtol": null,
+                        "atol": 0.01
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "VACUUM GATES",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MFX GATE VALVES IN",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:01:OPN_SW",
+                    "value": 0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:02:OPN_SW",
+                    "value": 0,
+                    "timeout": 5.0,
+                    "settle_time": 3.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:01:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check valve 1 close",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:02:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check valve 2 is closed",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MFX GATE VALVES OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:01:OPN_SW",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:02:OPN_SW",
+                    "value": 1,
+                    "timeout": 5.0,
+                    "settle_time": 3.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:01:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check valve 1 open",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DG1:VGC:02:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check valve 2 is open",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "TFS",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MOVE LENSES IN",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": "TFS02",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:02:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS03",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:03:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS04",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:04:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS05",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:05:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS06",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:06:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS07",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:07:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS08",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:08:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS09",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:09:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": "TFS10",
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:10:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:02:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:03:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:04:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:05:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:06:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:07:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:08:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:09:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:10:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
                       }
                     }
                   }

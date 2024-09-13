@@ -239,11 +239,11 @@
                     "AnyValue": {
                       "name": "Check Value is 0",
                       "description": null,
-                      "invert": false,
+                      "invert": true,
                       "reduce_period": null,
                       "reduce_method": "average",
                       "string": null,
-                      "severity_on_failure": 2,
+                      "severity_on_failure": 1,
                       "if_disconnected": 2,
                       "values": [
                         0
