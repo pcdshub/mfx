@@ -835,7 +835,36 @@
           "name": "Pulse Picker",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "EVR Event Code",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "XRT:EVR:R48:TRIG1:TEC": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 197",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        197
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
@@ -872,6 +901,67 @@
                         "IN"
                       ],
                       "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Detector",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Detector Motion Errors",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Accelerator",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "FEE Gas Detector Energy",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "GDET:FEE1:241:ENRC": [],
+                  "GDET:FEE1:242:ENRC": [],
+                  "GDET:FEE1:361:ENRC": [],
+                  "GDET:FEE1:362:ENRC": []
+                },
+                "shared": [
+                  {
+                    "Greater": {
+                      "name": "Check Value is greater than 0.2",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 0.2
                     }
                   }
                 ]
