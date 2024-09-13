@@ -548,8 +548,7 @@
                 "tags": null,
                 "devices": [
                   "mr1l4_homs",
-                  "mr2l0_homs",
-                  "mr1l3_homs"
+                  "mr2l0_homs"
                 ],
                 "by_attr": {
                   "coating.state": []
@@ -587,8 +586,38 @@
                       "description": null,
                       "tags": null,
                       "devices": [
-                        "mr1l3_homs",
                         "mr1l4_homs"
+                      ],
+                      "by_attr": {
+                        "insertion.state": []
+                      },
+                      "shared": [
+                        {
+                          "AnyValue": {
+                            "name": "Check Value is 2",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "values": [
+                              2
+                            ],
+                            "values_dynamic": []
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "Mirrors Removed",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l3_homs"
                       ],
                       "by_attr": {
                         "insertion.state": []
@@ -628,7 +657,7 @@
                       "shared": [
                         {
                           "Less": {
-                            "name": "Check Value is less than 500",
+                            "name": "Check Value is less than -500",
                             "description": null,
                             "invert": false,
                             "reduce_period": null,
@@ -638,38 +667,6 @@
                             "if_disconnected": 2,
                             "value_dynamic": null,
                             "value": -500.0
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "DeviceConfiguration": {
-                      "name": "MR1L3 Pitch",
-                      "description": null,
-                      "tags": null,
-                      "devices": [
-                        "mr1l3_homs"
-                      ],
-                      "by_attr": {
-                        "pitch.user_readback": [],
-                        "pitch.user_setpoint": []
-                      },
-                      "shared": [
-                        {
-                          "Equals": {
-                            "name": "Check Value",
-                            "description": null,
-                            "invert": false,
-                            "reduce_period": null,
-                            "reduce_method": "average",
-                            "string": null,
-                            "severity_on_failure": 2,
-                            "if_disconnected": 2,
-                            "value_dynamic": null,
-                            "value": -31.39826,
-                            "rtol": null,
-                            "atol": 0.01
                           }
                         }
                       ]
