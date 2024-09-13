@@ -206,14 +206,13 @@ class MFXTransfocator(TransfocatorBase):
         combo, diff = calc.find_solution(target, energy, **kwargs)
         if combo:
             combo.show_info()
-            radius=33.3
-            estimate_beam_fwhm(radius=radius, energy=energy)
-            focal_length(radius=radius, energy=energy)
-            print('\n')
             logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
-            logger.info(f'Calculated Radius: {round(radius, 1)} um')
-            logger.info(f'Estimated Beam FWHM: {estimate_beam_fwhm} um')
-            logger.info(f'Calculated Focal Length: {focal_length} um\n')
+            radius = combo.effective_radius
+            logger.info(f'Calculated Radius: {round(radius, 2)} um')
+            estimate_beam_fwhm(radius=radius, energy=energy)
+            focal = focal_length(radius=radius, energy=energy)
+
+            logger.info(f'Calculated Focal Length: {focal} um\n')
 
         else:
             logger.error("Unable to find a valid solution for target")
