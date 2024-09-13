@@ -105,6 +105,40 @@
                   }
                 ]
               }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Fee Slits Position",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "sl1l0"
+                ],
+                "by_attr": {
+                  "xwidth.readback": [],
+                  "xwidth.setpoint": [],
+                  "ywidth.readback": [],
+                  "ywidth.setpoint": []
+                },
+                "shared": [
+                  {
+                    "Equals": {
+                      "name": "Check Value is near 2.5",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 2.5,
+                      "rtol": null,
+                      "atol": 0.01
+                    }
+                  }
+                ]
+              }
             }
           ],
           "values": {},
@@ -469,7 +503,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "Check Value is OUT",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -478,7 +512,7 @@
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
                       "values": [
-                        0
+                        "OUT"
                       ],
                       "values_dynamic": []
                     }
@@ -513,17 +547,16 @@
                 "description": null,
                 "tags": null,
                 "devices": [
-                  "mr1l0_homs",
-                  "mr1l3_homs",
                   "mr1l4_homs",
-                  "mr2l0_homs"
+                  "mr2l0_homs",
+                  "mr1l3_homs"
                 ],
                 "by_attr": {
                   "coating.state": []
                 },
                 "shared": [
                   {
-                    "AnyComparison": {
+                    "AnyValue": {
                       "name": "Coating Based on Beam Energy",
                       "description": null,
                       "invert": false,
@@ -532,7 +565,11 @@
                       "string": null,
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
-                      "comparisons": []
+                      "values": [
+                        "",
+                        "SiC"
+                      ],
+                      "values_dynamic": []
                     }
                   }
                 ]
@@ -546,11 +583,12 @@
                 "configs": [
                   {
                     "DeviceConfiguration": {
-                      "name": "MR1L3 Inserted",
+                      "name": "Mirrors Inserted",
                       "description": null,
                       "tags": null,
                       "devices": [
-                        "mr1l3_homs"
+                        "mr1l3_homs",
+                        "mr1l4_homs"
                       ],
                       "by_attr": {
                         "insertion.state": []
@@ -573,20 +611,6 @@
                           }
                         }
                       ]
-                    }
-                  },
-                  {
-                    "DeviceConfiguration": {
-                      "name": "MR1L4 Inserted",
-                      "description": null,
-                      "tags": null,
-                      "devices": [
-                        "mr1l4_homs"
-                      ],
-                      "by_attr": {
-                        "insertion.state": []
-                      },
-                      "shared": []
                     }
                   },
                   {
@@ -614,6 +638,38 @@
                             "if_disconnected": 2,
                             "value_dynamic": null,
                             "value": -500.0
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "MR1L3 Pitch",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l3_homs"
+                      ],
+                      "by_attr": {
+                        "pitch.user_readback": [],
+                        "pitch.user_setpoint": []
+                      },
+                      "shared": [
+                        {
+                          "Equals": {
+                            "name": "Check Value",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "value_dynamic": null,
+                            "value": -31.39826,
+                            "rtol": null,
+                            "atol": 0.01
                           }
                         }
                       ]

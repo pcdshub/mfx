@@ -8,16 +8,6 @@
     "step_success_required": true,
     "steps": [
       {
-        "PassiveStep": {
-          "name": "MFX Passive Checkout",
-          "description": null,
-          "parent": null,
-          "verify_required": true,
-          "step_success_required": true,
-          "filepath": "/cds/home/opr/mfxopr/ATEF/MFXPassiveCheckout.json"
-        }
-      },
-      {
         "ProcedureGroup": {
           "name": "MFX DG1 PIM",
           "description": null,
