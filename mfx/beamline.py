@@ -195,7 +195,6 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
-    from mfx.transfocator_scan import *
     from mfx.db import mfx_atm as tt
     lens_v=las.lens_v
     lens_h=las.lens_h
