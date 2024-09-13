@@ -207,7 +207,7 @@ class MFXTransfocator(TransfocatorBase):
         if combo:
             combo.show_info()
             logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
-            radius = combo.effective_radius
+            radius = combo.tfs_radius
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
