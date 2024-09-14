@@ -450,7 +450,43 @@
                     "attr": null,
                     "pv": "MFX:DG1:VGC:02:OPN_SW",
                     "value": 0,
-                    "timeout": 5.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "HXX:MXT:VGC:04:OPN_SW",
+                    "value": 0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DVD:VGC:01:OPN_SW",
+                    "value": 0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:01:OPN_SW",
+                    "value": 0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:02:OPN_SW",
+                    "value": 0,
+                    "timeout": null,
                     "settle_time": 3.0
                   }
                 ],
@@ -462,7 +498,7 @@
                     "pv": "MFX:DG1:VGC:01:OPN_DI",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check valve 1 close",
+                        "name": "Check valve 1 closes",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -484,7 +520,95 @@
                     "pv": "MFX:DG1:VGC:02:OPN_DI",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check valve 2 is closed",
+                        "name": "Check valve 2 is closes",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "HXX:MXT:VGC:04:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Cjeck if valve closes",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DVD:VGC:01:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if valve closes",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:01:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if valve closes",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:02:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if valve closes",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -527,7 +651,43 @@
                     "attr": null,
                     "pv": "MFX:DG1:VGC:02:OPN_SW",
                     "value": 1,
-                    "timeout": 5.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "HXX:MXT:VGC:04:OPN_SW",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DVD:VGC:01:OPN_SW",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:01:OPN_SW",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:02:OPN_SW",
+                    "value": 1,
+                    "timeout": null,
                     "settle_time": 3.0
                   }
                 ],
@@ -575,6 +735,94 @@
                         "values_dynamic": []
                       }
                     }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "HXX:MXT:VGC:04:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check is valves open",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DVD:VGC:01:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if valve opens",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:01:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if valve opens",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:VGC:02:OPN_DI",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if valve opens",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
                   }
                 ],
                 "halt_on_fail": true,
@@ -601,83 +849,83 @@
                 "step_success_required": true,
                 "actions": [
                   {
-                    "name": "TFS02",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:02:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:02:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS03",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:03:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:03:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS04",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:04:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:04:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS05",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:05:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:05:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS06",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:06:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:06:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS07",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:07:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:07:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS08",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:08:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:08:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS09",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:09:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:09:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   },
                   {
-                    "name": "TFS10",
+                    "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:LENS:TFS:10:OUT",
-                    "value": 0.0,
+                    "pv": "MFX:LENS:TFS:10:INSERT",
+                    "value": 1,
                     "timeout": null,
                     "settle_time": null
                   }
@@ -690,7 +938,7 @@
                     "pv": "MFX:LENS:TFS:02:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -712,7 +960,7 @@
                     "pv": "MFX:LENS:TFS:03:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "check if out",
+                        "name": "check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -734,7 +982,7 @@
                     "pv": "MFX:LENS:TFS:04:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -756,7 +1004,7 @@
                     "pv": "MFX:LENS:TFS:05:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -778,7 +1026,7 @@
                     "pv": "MFX:LENS:TFS:06:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -800,7 +1048,7 @@
                     "pv": "MFX:LENS:TFS:07:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -822,7 +1070,7 @@
                     "pv": "MFX:LENS:TFS:08:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -844,7 +1092,7 @@
                     "pv": "MFX:LENS:TFS:09:SAFE",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if out",
+                        "name": "Check if in",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -864,6 +1112,300 @@
                     "device": null,
                     "attr": null,
                     "pv": "MFX:LENS:TFS:10:SAFE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MOVE LENSES OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:02:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:03:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:04:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:05:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:06:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:07:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:08:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:09:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": null
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:LENS:TFS:10:OUT",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": 15.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:02",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:03",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:04",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:05",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:06",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:07",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:08",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:09",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:TFS:XFLS:10",
                     "comparison": {
                       "AnyValue": {
                         "name": "Check if out",
