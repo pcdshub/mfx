@@ -29,8 +29,8 @@
                     "attr": null,
                     "pv": "MFX:DIA:MMS:04",
                     "value": 0.0,
-                    "timeout": 5.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 5.0
                   }
                 ],
                 "success_criteria": [
@@ -75,8 +75,8 @@
                     "attr": null,
                     "pv": "MFX:DIA:MMS:04",
                     "value": 30.0,
-                    "timeout": 5.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 5.0
                   }
                 ],
                 "success_criteria": [
@@ -132,8 +132,8 @@
                     "attr": null,
                     "pv": "MFX:DG1:MMS:09.VAL",
                     "value": 0.0,
-                    "timeout": 5.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 5.0
                   }
                 ],
                 "success_criteria": [
@@ -178,8 +178,8 @@
                     "attr": null,
                     "pv": "MFX:DG1:MMS:09.VAL",
                     "value": 30.0,
-                    "timeout": 5.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 5.0
                   }
                 ],
                 "success_criteria": [
@@ -235,8 +235,8 @@
                     "attr": null,
                     "pv": "MFX:DG2:MMS:08",
                     "value": 0.0,
-                    "timeout": 5.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 5.0
                   }
                 ],
                 "success_criteria": [
@@ -338,8 +338,8 @@
                     "attr": null,
                     "pv": "MFX:DG1:MMS:01",
                     "value": 54.0,
-                    "timeout": 25.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 25.0
                   }
                 ],
                 "success_criteria": [
@@ -384,8 +384,8 @@
                     "attr": null,
                     "pv": "MFX:DG1:MMS:01",
                     "value": 0.0,
-                    "timeout": 25.0,
-                    "settle_time": null
+                    "timeout": null,
+                    "settle_time": 25.0
                   }
                 ],
                 "success_criteria": [
@@ -2029,16 +2029,6 @@
               }
             }
           ]
-        }
-      },
-      {
-        "ProcedureGroup": {
-          "name": "ECT",
-          "description": null,
-          "parent": null,
-          "verify_required": true,
-          "step_success_required": true,
-          "steps": []
         }
       }
     ]
