@@ -1430,6 +1430,549 @@
             }
           ]
         }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "ATTENUATORS",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "ATT IN",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:COM:GO",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": 1.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:01:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:02:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:03:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:04:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:05:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:06:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:07:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:08:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:09:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:10:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:11:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "ATT OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:COM:GO",
+                    "value": 0,
+                    "timeout": null,
+                    "settle_time": 1.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:01:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:02:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:03:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Chekc if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:04:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:05:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:06:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:07:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:08:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:09:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:10:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  },
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:11:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if out",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          2
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
       }
     ]
   }
