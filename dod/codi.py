@@ -84,10 +84,10 @@ class CoDI:
         self.CoDI_pos_predefined.update({name: (base,left, right, z)})
         
         # Presets using MFX presets functionalities 
-        self.CoDI_rot_left.presets.add_here_hutch(name, left)
-        self.CoDI_rot_right.presets.add_here_hutch(name, right)
-        self.CoDI_rot_base.presets.add_here_hutch(name, base)
-        self.CoDI_trans_z.presets.add_here_hutch(name, z)
+        self.CoDI_rot_left.presets.add_hutch(name, value = left)
+        self.CoDI_rot_right.presets.add_hutch(name, value = right)
+        self.CoDI_rot_base.presets.add_hutch(name, value = base)
+        self.CoDI_trans_z.presets.add_hutch(name, value = z)
 
     
 
