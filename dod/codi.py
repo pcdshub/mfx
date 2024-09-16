@@ -31,7 +31,7 @@ class CoDI:
             self.set_CoDI_predefined('angled_hor',90.0,45.0,45.0,0.0)
         else: 
             all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
-            for preset, preset_value in all_presets.items: 
+            for preset, preset_value in all_presets.items(): 
                 # get preset position
                 exec_base = "self.CoDI_rot_base.presets.positions." + preset
                 exec_rot_left = "self.CoDI_rot_left.presets.positions." + preset
