@@ -121,7 +121,8 @@ class CoDI:
         # Test if this is one of the preset positions: 
         pos_name = 'undefined'
         for preset in self.CoDI_pos_predefined:
-            if self.CoDI_pos_predefined[preset][:-1] == pos_rounded[:-1]: 
+            preset_rounded = tuple([float(round(each_pos,1)) for each_pos in self.CoDI_pos_predefined[preset]])
+            if preset_rounded[:-1] == pos_rounded[:-1]: 
                 pos_name = preset
                 
         return pos_name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z
@@ -159,13 +160,13 @@ class CoDI:
         # self.CoDI_trans_z.mv(pos_trans_z, wait=False)
 
         # Move using hutch python presets
-        exec_base = "self.CoDI_rot_base.mv_" + pos_name
+        exec_base = "self.CoDI_rot_base.mv_" + pos_name + '()'
         exec(exec_base)
-        exec_left = "self.CoDI_rot_left.mv_" + pos_name
+        exec_left = "self.CoDI_rot_left.mv_" + pos_name + '()'
         exec(exec_left)
-        exec_right = "self.CoDI_rot_right.mv_" + pos_name
+        exec_right = "self.CoDI_rot_right.mv_" + pos_name + '()'
         exec(exec_right)
-        exec_z = "self.CoDI_trans_z.mv_" + pos_name
+        exec_z = "self.CoDI_trans_z.mv_" + pos_name + '()'
         exec(exec_z)
 
         if wait == True: 
