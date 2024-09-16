@@ -22,7 +22,9 @@ with safe_load('rayonix utils'):
 
 with safe_load('mfx_transfocator'):
     from tfs.transfocator import Transfocator
-    mfx_tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
+    tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
+    from tfs import utils as tfs_utils
+    from tfs.transfocator_scan import *
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
@@ -61,9 +63,6 @@ with safe_load('plans'):
 with safe_load('Mesh Voltage Control'):
     from pcdsdevices.analog_signals import Mesh
     mesh = Mesh('MFX:USR', 0, 1)
-
-with safe_load('transfocator_scan'):
-    from mfx.transfocator_scan import *
 
 with safe_load('detector_image'):
     from mfx.detector_image import *
@@ -191,13 +190,11 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_pulsepicker as pp
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
-    from mfx.db import mfx_tfs as tfs
     from mfx.db import um6_ipm as xcs_yag1
     from mfx.db import hx2_slits as xpp_s1
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
-    from mfx.transfocator_scan import *
     from mfx.db import mfx_atm as tt
     lens_v=las.lens_v
     lens_h=las.lens_h
