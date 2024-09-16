@@ -184,6 +184,7 @@ class LensConnect:
     def effective_radius(self):
         """
         Method calculates the effective radius of the lens array
+        including prefocusing lens 
 
         Returns
         -------
@@ -193,6 +194,23 @@ class LensConnect:
         if not self.lenses:
             return 0.0
         return 1/np.sum(np.reciprocal([float(l.radius) for l in self.lenses]))
+
+
+    @property
+    def tfs_radius(self):
+        """
+        Method calculates the effective radius of the lens array
+        excluding prefocusing lens 
+
+        Returns
+        -------
+        float
+            returns the effective radius of the lens array.
+        """
+        if not self.lenses:
+            return 0.0
+        return 1/np.sum(np.reciprocal([float(l.radius) for l in self.lenses[1:]]))
+
 
     def image(self, z_obj, energy):
         """

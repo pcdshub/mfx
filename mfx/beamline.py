@@ -24,7 +24,7 @@ with safe_load('mfx_transfocator'):
     from tfs.transfocator import Transfocator
     tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
     from tfs import utils as tfs_utils
-    from mfx.transfocator_scan import *
+    from tfs.transfocator_scan import *
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
@@ -195,7 +195,6 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
-    from mfx.transfocator_scan import *
     from mfx.db import mfx_atm as tt
     lens_v=las.lens_v
     lens_h=las.lens_h
