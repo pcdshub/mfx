@@ -86,9 +86,11 @@ class CoDI:
                 
                 exec(exec_trans_z)
                 print(exec_trans_z)
-                
+                print(preset_trans_z)
+
                 # Save to local database
-                self.set_CoDI_predefined(preset,preset_rot_base,preset_rot_left,preset_rot_right,preset_trans_z)
+                print(preset)
+                self.set_CoDI_predefined(preset, preset_rot_base, preset_rot_left, preset_rot_right, preset_trans_z)
             except: 
                 print('skipping preset '+ preset + ', as it is not defined in all motors')    
 
