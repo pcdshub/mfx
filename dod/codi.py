@@ -73,30 +73,30 @@ class CoDI:
 
         all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
         for preset, preset_value in all_presets.items(): 
-            try: 
-                # get preset position
-                exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
-                exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset + '.pos'
-                exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset + '.pos'
-                exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset + '.pos'
-                print(exec_base)
-                exec(exec_base)
+            # try: 
+            # get preset position
+            exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
+            exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset + '.pos'
+            exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset + '.pos'
+            exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset + '.pos'
+            print(exec_base)
+            exec(exec_base)
 
-                exec(exec_rot_left)
-                print(exec_rot_left)
+            exec(exec_rot_left)
+            print(exec_rot_left)
 
-                exec(exec_rot_right)
-                print(exec_rot_left)
-                
-                exec(exec_trans_z)
-                print(exec_trans_z)
-                print(preset_trans_z)
+            exec(exec_rot_right)
+            print(exec_rot_left)
+            
+            exec(exec_trans_z)
+            print(exec_trans_z)
+            print(preset_trans_z)
 
-                # Save to local database
-                print(preset)
-                self.set_CoDI_predefined(preset, preset_rot_base, preset_rot_left, preset_rot_right, preset_trans_z)
-            except: 
-                print('skipping preset '+ preset + ', as it is not defined in all motors')    
+            # Save to local database
+            print(preset)
+            self.set_CoDI_predefined(preset, preset_rot_base, preset_rot_left, preset_rot_right, preset_trans_z)
+            # except: 
+            #     print('skipping preset '+ preset + ', as it is not defined in all motors')    
 
     def set_CoDI_predefined(self, name, base, left, right, z):
         """
