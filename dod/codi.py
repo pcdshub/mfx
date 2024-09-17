@@ -72,7 +72,7 @@ class CoDI:
         self.CoDI_pos_predefined = dict()
 
         all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
-        for preset, preset_value in all_presets.items(): 
+        for preset in all_presets.keys(): 
             # try: 
             # get preset position
             self.exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
@@ -90,7 +90,7 @@ class CoDI:
             
             exec(self.exec_trans_z)
             print(self.exec_trans_z)
-            print(self.preset_trans_z)
+            print(preset_trans_z)
 
             # Save to local database
             print(preset)
