@@ -49,7 +49,7 @@ class bs:
             run_number = daq.run_number()
         username = str(username)
         run_number = str(int(run_number))
-        os.system(f"ssh -Y {username}@s3dflogin ssh -Y psana /sdf/group/lcls/ds/tools/engineering_tools/engineering_tools/scripts/makepeds_psana --queue milano --run {run_number} --experiment {get_exp()}")
+        os.system(f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}")
 
 
     def restartdaq(self):
@@ -60,7 +60,7 @@ class bs:
             ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    
+
     def cameras(self, time=12):   
         import subprocess
         import logging
