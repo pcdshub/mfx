@@ -32,7 +32,6 @@ class CoDI:
         else: 
             all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
             for preset, preset_value in all_presets.items(): 
-                
                 try: 
                     # get preset position
                     exec_base = "self.CoDI_rot_base.presets.positions." + preset
@@ -62,6 +61,30 @@ class CoDI:
         
         return self.CoDI_pos_predefined
     
+
+    def update_CoDI_predefined(self): 
+        'reloads all the hutch python presets for motors and overwrites local position preset dict'
+        
+        #Predefined positions CoDI
+        self.CoDI_pos_predefined = dict()
+
+        all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
+        for preset, preset_value in all_presets.items(): 
+            try: 
+                # get preset position
+                exec_base = "self.CoDI_rot_base.presets.positions." + preset
+                exec_rot_left = "self.CoDI_rot_left.presets.positions." + preset
+                exec_rot_right = "self.CoDI_rot_right.presets.positions." + preset
+                exec_trans_z = "self.CoDI_trans_z.presets.positions." + preset
+                preset_rot_base     = exec(exec_base)
+                preset_rot_left     = exec(exec_rot_left)
+                preset_rot_right    = exec(exec_rot_right)
+                preset_trans_z      = exec(exec_trans_z)
+                
+                # Save to local database
+                self.set_CoDI_predefined(preset,preset_rot_base,preset_rot_left,preset_rot_right,preset_trans_z)
+            except: 
+                print('skipping preset '+ preset + ', as it is not defined in all motors')    
 
     def set_CoDI_predefined(self, name, base, left, right, z):
         """
