@@ -405,7 +405,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "is 1?",
+                      "name": "Check Value is 1 or 2",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -414,7 +414,8 @@
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
                       "values": [
-                        1
+                        1,
+                        2
                       ],
                       "values_dynamic": []
                     }
