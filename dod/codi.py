@@ -75,22 +75,22 @@ class CoDI:
         for preset, preset_value in all_presets.items(): 
             # try: 
             # get preset position
-            exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
-            exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset + '.pos'
-            exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset + '.pos'
-            exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset + '.pos'
-            print(exec_base)
-            exec(exec_base)
+            self.exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
+            self.exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset + '.pos'
+            self.exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset + '.pos'
+            self.exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset + '.pos'
+            print(self.exec_base)
+            exec(self.exec_base)
 
-            exec(exec_rot_left)
-            print(exec_rot_left)
+            exec(self.exec_rot_left)
+            print(self.exec_rot_left)
 
-            exec(exec_rot_right)
-            print(exec_rot_left)
+            exec(self.exec_rot_right)
+            print(self.exec_rot_left)
             
-            exec(exec_trans_z)
-            print(exec_trans_z)
-            print(preset_trans_z)
+            exec(self.exec_trans_z)
+            print(self.exec_trans_z)
+            print(self.preset_trans_z)
 
             # Save to local database
             print(preset)
