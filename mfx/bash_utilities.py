@@ -46,17 +46,16 @@ class bs:
         from mfx.macros import get_exp
         logging.info("Making Pedestals")
         if run_number is None:
-            run_number = daq.run_number()
+            try:
+                run_number = daq.run_number()
+            except NameError:
+                logging.error(
+                    f"daq.run_number() not working please enter run manually as follows\n"
+                    f"bs.makepeds('{username}', run_number=XXX)")
         username = str(username)
         run_number = str(int(run_number))
-        os.system(f"ssh -Y {username}@s3dflogin ssh -Y psana /sdf/group/lcls/ds/tools/engineering_tools/engineering_tools/scripts/makepeds_psana --queue milano --run {run_number} --experiment {get_exp()}")
-
-
-    def awr(self, hutch='mfx'):
-        import os
-        import logging
-        logging.info(f"{hutch} Beamline Check")
-        os.system(f"/cds/home/opr/mfxopr/bin/awr {hutch}")
+        os.system(
+            f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}")
 
 
     def restartdaq(self):
@@ -67,7 +66,7 @@ class bs:
             ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    
+
     def cameras(self, time=12):   
         import subprocess
         import logging

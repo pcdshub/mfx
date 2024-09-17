@@ -20,10 +20,11 @@ with safe_load('rayonix utils'):
     rayonix = Rayonix(mfx_sequencer)
     mfx_rayonix = rayonix
 
-with safe_load('transfocator'):
-    from transfocate import Transfocator
+with safe_load('mfx_transfocator'):
+    from tfs.transfocator import Transfocator
     tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
-    mfx_tfs = tfs
+    from tfs import utils as tfs_utils
+    from tfs.transfocator_scan import *
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
@@ -44,9 +45,6 @@ with safe_load('MFX_Timing'):
     from mfx.mfx_timing import *
     mfx_timing = MFX_Timing(sequencer)
 
-with safe_load('Droplet_on_Demand'):
-    from mfx.mfx_dod import *
-
 with safe_load('delay_scan'):
     from mfx.delay_scan import *
 
@@ -66,9 +64,6 @@ with safe_load('Mesh Voltage Control'):
     from pcdsdevices.analog_signals import Mesh
     mesh = Mesh('MFX:USR', 0, 1)
 
-with safe_load('transfocator_scan'):
-    from mfx.transfocator_scan import *
-
 with safe_load('detector_image'):
     from mfx.detector_image import *
 
@@ -87,24 +82,34 @@ with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
 
-with safe_load("laser wp power"):
-    from pcdsdevices.lxe import LaserEnergyPositioner
-    from hutch_python.utils import get_current_experiment
-    from pcdsdevices.device import Component as Cpt
-    from pcdsdevices.epics_motor import Newport
+with safe_load('Droplet_on_Demand_Colliding_Droplets'):
+    from dod.codi import *
+    codi = CoDI()
+    
+with safe_load('Droplet_on_Demand'):
+    from dod.dod import *
+    dod = DoD(modules = 'codi')
 
-    # Hack the LXE class to make it work with Newports
-    class LXE(LaserEnergyPositioner):
-        motor = Cpt(Newport, "")
+with safe_load('Debugging Scripts'):
+    from mfx.debug import *
+    debug = Debug()
 
-    lxe_calib_file = (
-        f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
-    )
-    try:
-        lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
-    except OSError:
-        print(f"Could not load file: {lxe_calib_file}")
-        raise FileNotFoundError
+# with safe_load("laser wp power"):
+#     # Hack the LXE class to make it work with Newports
+#     class LXE(LaserEnergyPositioner):
+#         from pcdsdevices.lxe import LaserEnergyPositioner
+#         from hutch_python.utils import get_current_experiment
+#         from pcdsdevices.device import Component as Cpt
+#         from pcdsdevices.epics_motor import Newport
+#         motor = Cpt(Newport, "")
+#         lxe_calib_file = (
+#             f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
+#         )
+#         try:
+#             lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
+#         except OSError:
+#             print(f"Could not load file: {lxe_calib_file}")
+#             raise FileNotFoundError
 
 with safe_load('FS45 lxt & lxt_ttc'):
     import logging
@@ -140,7 +145,7 @@ with safe_load('add laser motor groups'):
     lxt_fast=mfx_lxt_fast1
 
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
-                                                          # this is the timetool compensationn stage. You might want this one
+    # this is the timetool compensationn stage. You might want this one
     class las():
         #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
@@ -185,13 +190,11 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_pulsepicker as pp
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
-    from mfx.db import mfx_tfs as tfs
     from mfx.db import um6_ipm as xcs_yag1
     from mfx.db import hx2_slits as xpp_s1
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
-    from mfx.transfocator_scan import *
     from mfx.db import mfx_atm as tt
     lens_v=las.lens_v
     lens_h=las.lens_h
