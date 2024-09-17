@@ -75,7 +75,7 @@
                     "pv": "MFX:DIA:VGC:02:OPN_SW",
                     "value": 0,
                     "timeout": null,
-                    "settle_time": 3.0
+                    "settle_time": 2.0
                   }
                 ],
                 "success_criteria": [
@@ -276,7 +276,7 @@
                     "pv": "MFX:DIA:VGC:02:OPN_SW",
                     "value": 1,
                     "timeout": null,
-                    "settle_time": 3.0
+                    "settle_time": 2.0
                   }
                 ],
                 "success_criteria": [
@@ -2154,6 +2154,52 @@
                 "halt_on_fail": true,
                 "require_action_success": true
               }
+            },
+            {
+              "SetValueStep": {
+                "name": "Leave Attenuator 11 in",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:11:GO",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": 1.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:ATT:11:STATE",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check if in",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
             }
           ]
         }
@@ -2168,7 +2214,7 @@
           "steps": [
             {
               "SetValueStep": {
-                "name": "PP ON",
+                "name": "PP Open",
                 "description": null,
                 "parent": null,
                 "verify_required": true,
@@ -2178,10 +2224,10 @@
                     "name": null,
                     "device": null,
                     "attr": null,
-                    "pv": "MFX:DIA:MMS:07:DF",
-                    "value": 0,
+                    "pv": "MFX:DIA:MMS:07:S_OPEN",
+                    "value": 1,
                     "timeout": null,
-                    "settle_time": null
+                    "settle_time": 2.0
                   }
                 ],
                 "success_criteria": [
@@ -2192,7 +2238,7 @@
                     "pv": "MFX:DIA:MMS:07:READ_DF",
                     "comparison": {
                       "AnyValue": {
-                        "name": "Check if open",
+                        "name": "Check Open",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
@@ -2202,6 +2248,52 @@
                         "if_disconnected": 2,
                         "values": [
                           0
+                        ],
+                        "values_dynamic": []
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "PP Close",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:07:S_CLOSE",
+                    "value": 1,
+                    "timeout": null,
+                    "settle_time": 2.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:07:READ_DF",
+                    "comparison": {
+                      "AnyValue": {
+                        "name": "Check Closed",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "values": [
+                          1
                         ],
                         "values_dynamic": []
                       }

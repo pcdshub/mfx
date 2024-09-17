@@ -521,13 +521,107 @@
               }
             },
             {
-              "DeviceConfiguration": {
+              "PVConfiguration": {
+                "name": "Vaccum Levels",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "HXX:MXT:GCC:02:PMON": [],
+                  "HXX:MXT:GCC:03:PMON": [],
+                  "HXX:MXT:GCC:05:PMON": [],
+                  "HXX:MXT:GCC:06:PMON": [],
+                  "HXX:MXT:PIP:01:PMON": [],
+                  "HXX:MXT:PIP:02:PMON": [],
+                  "HXX:MXT:PIP:03:PMON": [],
+                  "HXX:MXT:PIP:04:PMON": [],
+                  "HXX:MXT:PIP:05:PMON": [],
+                  "HXX:MXT:PIP:06:PMON": [],
+                  "HXX:MXT:PIP:08:PMON": [],
+                  "HXX:UM6:GCC:01:PMON": [],
+                  "HXX:UM6:GCC:02:PMON": [],
+                  "HXX:UM6:PIP:01:PMON": [],
+                  "HXX:UM6:PIP:02:PMON": [],
+                  "MFX:DG1:GCC:01:PRESS": [],
+                  "MFX:DG1:PIP:01:PMON": [],
+                  "MFX:DG2:GCC:01:PRESS": [],
+                  "MFX:DG2:PIP:01:PMON": [],
+                  "MFX:DIA:GCC:01:PRESS": [],
+                  "MFX:DIA:PIP:01:PMON": [],
+                  "MFX:DVD:GCC:02:PRESS": [],
+                  "MFX:DVD:GCC:04:PRESS": [],
+                  "MFX:DVD:PIP:01:PMON": [],
+                  "MFX:DVD:PIP:02:PMON": [],
+                  "MFX:DVD:PIP:03:PMON": [],
+                  "MFX:DVD:PIP:04:PMON": [],
+                  "MFX:MON:GCC:01:PRESS": [],
+                  "MFX:MON:PIP:01:PMON": [],
+                  "MFX:SB2:GCC:01:PRESS": [],
+                  "MFX:SB2:PIP:01:PMON": [],
+                  "MFX:TFS:GCC:01:PRESS": [],
+                  "MFX:TFS:PIP:01:PMON": []
+                },
+                "shared": [
+                  {
+                    "LessOrEqual": {
+                      "name": "Vaccum Levels Good",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 1e-08
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
                 "name": "Ion Pumps",
                 "description": null,
                 "tags": null,
-                "devices": [],
-                "by_attr": {},
-                "shared": []
+                "by_pv": {
+                  "HXX:MXT:PIP:01:STATEMON": [],
+                  "HXX:MXT:PIP:02:STATEMON": [],
+                  "HXX:MXT:PIP:03:STATEMON": [],
+                  "HXX:MXT:PIP:04:STATEMON": [],
+                  "HXX:MXT:PIP:05:STATEMON": [],
+                  "HXX:MXT:PIP:06:STATEMON": [],
+                  "HXX:MXT:PIP:08:STATEMON": [],
+                  "HXX:UM6:PIP:01:STATEMON": [],
+                  "HXX:UM6:PIP:02:STATEMON": [],
+                  "MFX:DG1:PIP:01:STATEMON": [],
+                  "MFX:DG2:PIP:01:STATEMON": [],
+                  "MFX:DIA:PIP:01:STATEMON": [],
+                  "MFX:DVD:PIP:01:STATEMON": [],
+                  "MFX:DVD:PIP:02:STATEMON": [],
+                  "MFX:DVD:PIP:03:STATEMON": [],
+                  "MFX:DVD:PIP:04:STATEMON": [],
+                  "MFX:MON:PIP:01:STATEMON": [],
+                  "MFX:SB2:PIP:01:STATEMON": [],
+                  "MFX:TFS:PIP:01:STATEMON": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is ON",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
@@ -556,18 +650,15 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Coating Based on Beam Energy",
+                      "name": "Always Flag",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
                       "reduce_method": "average",
                       "string": null,
-                      "severity_on_failure": 2,
+                      "severity_on_failure": 1,
                       "if_disconnected": 2,
-                      "values": [
-                        "",
-                        "SiC"
-                      ],
+                      "values": [],
                       "values_dynamic": []
                     }
                   }
@@ -792,14 +883,70 @@
           "configs": [
             {
               "DeviceConfiguration": {
-                "name": "Spectrometer",
+                "name": "Spectrometer Position",
                 "description": null,
                 "tags": null,
                 "devices": [
-                  "mfx_von_hamos_6crystal"
+                  "hxx_von_hamos_y"
                 ],
-                "by_attr": {},
-                "shared": []
+                "by_attr": {
+                  "user_readback": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Always Flag",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 1,
+                      "if_disconnected": 2,
+                      "values": [],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Spectrometer Errors ",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "hxx_von_hamos_y"
+                ],
+                "by_attr": {
+                  "disabled": [],
+                  "high_limit_switch": [],
+                  "low_limit_switch": [],
+                  "motor_done_move": [],
+                  "motor_is_moving": [],
+                  "plc.cmd_err_reset": [],
+                  "plc.err_bool": [],
+                  "plc.err_code": [],
+                  "plc.status": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is 0",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
@@ -814,15 +961,31 @@
           "tags": null,
           "configs": [
             {
-              "DeviceConfiguration": {
-                "name": null,
+              "PVConfiguration": {
+                "name": "YAGs",
                 "description": null,
                 "tags": null,
-                "devices": [
-                  "mec_yag0_mfx"
-                ],
-                "by_attr": {},
-                "shared": []
+                "by_pv": {
+                  "HXX:HXM:PIM": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is OUT",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        3
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
               }
             }
           ],
