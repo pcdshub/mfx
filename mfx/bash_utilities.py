@@ -46,10 +46,16 @@ class bs:
         from mfx.macros import get_exp
         logging.info("Making Pedestals")
         if run_number is None:
-            run_number = daq.run_number()
+            try:
+                run_number = daq.run_number()
+            except NameError:
+                logging.error(
+                    f"daq.run_number() not working please enter run manually as follows\n"
+                    f"bs.makepeds('{username}', run_number=XXX)")
         username = str(username)
         run_number = str(int(run_number))
-        os.system(f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}")
+        os.system(
+            f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}")
 
 
     def restartdaq(self):
