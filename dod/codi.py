@@ -40,7 +40,8 @@ class CoDI:
                     exec_trans_z = "self.CoDI_trans_z.presets.positions." + preset
                     exec('preset_rot_base = ' + exec_base)
                     exec('preset_rot_left = ' + exec_rot_left)
-                    exec('preset_rot_right = ' + exec_rot_right)                    exec('preset_trans_z = ' + exec_trans_z)
+                    exec('preset_rot_right = ' + exec_rot_right)                    
+                    exec('preset_trans_z = ' + exec_trans_z)
                     # Save to local database
                     self.set_CoDI_predefined(preset,preset_rot_base,preset_rot_left,preset_rot_right,preset_trans_z)
                 except: 
