@@ -1,8 +1,10 @@
 class CoDI: 
-    def __init__(self):
+    def __init__(self, reload_presets = False):
         """
         Class definition of the DoD codi injector 
         Parameters
+        reload_presets : Boolean
+            force resetting the presets (overwriting existing hutch presets)
         ----------
         """
         
@@ -10,18 +12,44 @@ class CoDI:
         from pcdsdevices.epics_motor import SmarAct, Motor
         import time
 
-        #Predefined positions CoDI
-        self.CoDI_pos_predefined = dict()
-        self.CoDI_pos_predefined['aspiration'] = (0.0,0.0,0.0,0.0) 
-        self.CoDI_pos_predefined['angled_vert'] = (0.0,45.0,45.0,0.0)
-        self.CoDI_pos_predefined['angled_hor'] = (90.0,45.0,45.0,0.0)
-        
         # CoDI motor PVs loading 
         self.CoDI_rot_left = SmarAct('MFX:MCS2:01:m3', name='CoDI_rot_left')
         self.CoDI_rot_right = SmarAct('MFX:MCS2:01:m1', name='CoDI_rot_right')
         self.CoDI_rot_base = SmarAct('MFX:MCS2:01:m2', name='CoDI_rot_base')
         self.CoDI_trans_z = SmarAct('MFX:MCS2:01:m4', name='CoDI_trans_z')
-        
+
+        #Predefined positions CoDI
+        self.CoDI_pos_predefined = dict()
+
+        if reload_presets == True: 
+            # self.CoDI_pos_predefined['aspiration'] = (0.0,0.0,0.0,0.0) 
+            # self.CoDI_pos_predefined['angled_vert'] = (0.0,45.0,45.0,0.0)
+            # self.CoDI_pos_predefined['angled_hor'] = (90.0,45.0,45.0,0.0)
+
+            self.set_CoDI_predefined('aspiration',0.0,0.0,0.0,0.0)
+            self.set_CoDI_predefined('angled_vert',0.0,45.0,45.0,0.0)
+            self.set_CoDI_predefined('angled_hor',90.0,45.0,45.0,0.0)
+        else: 
+            all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
+            for preset, preset_value in all_presets.items(): 
+                try: 
+                    # get preset position
+                    exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
+                    exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset + '.pos'
+                    exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset + '.pos'
+                    exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset + '.pos'
+                    exec(exec_base)
+                    exec(exec_rot_left)
+                    exec(exec_rot_right)
+                    exec(exec_trans_z)
+
+                    # Save to local database
+                    print(preset)
+                    self.set_CoDI_predefined(preset, preset_rot_base, preset_rot_left, preset_rot_right, preset_trans_z)
+                except: 
+                    print('skipping preset '+ preset + ', as it is not defined in all motors')    
+
+                
         # # create config parser handler
         # json_handler = JsonFileHandler(supported_json)
         # # load configs and launch web server
@@ -32,8 +60,43 @@ class CoDI:
 
 
     def get_CoDI_predefined(self):
+        
+        
         return self.CoDI_pos_predefined
     
+
+    def update_CoDI_predefined(self): 
+        'reloads all the hutch python presets for motors and overwrites local position preset dict'
+        
+        #Predefined positions CoDI
+        self.CoDI_pos_predefined = dict()
+
+        all_presets = vars(self.CoDI_rot_left.presets.positions) #Needs to be fixed
+        for preset in all_presets.keys(): 
+            # try: 
+            # get preset position
+            self.exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + '.pos'
+            self.exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset + '.pos'
+            self.exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset + '.pos'
+            self.exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset + '.pos'
+            print(self.exec_base)
+            exec(self.exec_base)
+
+            exec(self.exec_rot_left)
+            print(self.exec_rot_left)
+
+            exec(self.exec_rot_right)
+            print(self.exec_rot_left)
+            
+            exec(self.exec_trans_z)
+            print(self.exec_trans_z)
+            print(preset_trans_z)
+
+            # Save to local database
+            print(preset)
+            self.set_CoDI_predefined(preset, preset_rot_base, preset_rot_left, preset_rot_right, preset_trans_z)
+            # except: 
+            #     print('skipping preset '+ preset + ', as it is not defined in all motors')    
 
     def set_CoDI_predefined(self, name, base, left, right, z):
         """
@@ -54,6 +117,13 @@ class CoDI:
     
         """
         self.CoDI_pos_predefined.update({name: (base,left, right, z)})
+        
+        # Presets using MFX presets functionalities 
+        self.CoDI_rot_left.presets.add_hutch(name, value = left)
+        self.CoDI_rot_right.presets.add_hutch(name, value = right)
+        self.CoDI_rot_base.presets.add_hutch(name, value = base)
+        self.CoDI_trans_z.presets.add_hutch(name, value = z)
+
     
 
     def get_CoDI_pos(self, precision_digits = 1): 
@@ -86,7 +156,8 @@ class CoDI:
         # Test if this is one of the preset positions: 
         pos_name = 'undefined'
         for preset in self.CoDI_pos_predefined:
-            if self.CoDI_pos_predefined[preset][:-1] == pos_rounded[:-1]: 
+            preset_rounded = tuple([float(round(each_pos,1)) for each_pos in self.CoDI_pos_predefined[preset]])
+            if preset_rounded[:-1] == pos_rounded[:-1]: 
                 pos_name = preset
                 
         return pos_name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z
@@ -116,13 +187,23 @@ class CoDI:
         pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z = self.CoDI_pos_predefined[pos_name]
         
         # Move motors
+        
+        # Old wayy 
+        # self.CoDI_rot_base.mv(pos_rot_base, wait=False)
+        # self.CoDI_rot_left.mv(pos_rot_left,  wait=False)
+        # self.CoDI_rot_right.mv(pos_rot_right, wait=False)
+        # self.CoDI_trans_z.mv(pos_trans_z, wait=False)
 
-        self.CoDI_rot_base.mv(pos_rot_base, wait=False)
-        self.CoDI_rot_left.mv(pos_rot_left,  wait=False)
-        self.CoDI_rot_right.mv(pos_rot_right, wait=False)
-        self.CoDI_trans_z.mv(pos_trans_z, wait=False)
-        
-        
+        # Move using hutch python presets
+        exec_base = "self.CoDI_rot_base.mv_" + pos_name + '()'
+        exec(exec_base)
+        exec_left = "self.CoDI_rot_left.mv_" + pos_name + '()'
+        exec(exec_left)
+        exec_right = "self.CoDI_rot_right.mv_" + pos_name + '()'
+        exec(exec_right)
+        exec_z = "self.CoDI_trans_z.mv_" + pos_name + '()'
+        exec(exec_z)
+
         if wait == True: 
             test_name, test_pos_rot_base, test_pos_rot_left, test_pos_rot_right, test_pos_trans_z = self.get_CoDI_pos()
             i = 0
@@ -177,7 +258,7 @@ class CoDI:
 
     def remove_CoDI_pos(self, name):
         """
-        removes the defined motor combination for CoDI
+        removes the defined motor combination for CoDI from local database
         
         Parameters
         name : str
