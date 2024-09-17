@@ -72,15 +72,20 @@ class CoDI:
             try: 
                 # get preset position
                 exec_base = "preset_rot_base = self.CoDI_rot_base.presets.positions." + preset
-                exec_rot_left = "self.CoDI_rot_left.presets.positions." + preset
-                exec_rot_right = "self.CoDI_rot_right.presets.positions." + preset
-                exec_trans_z = "self.CoDI_trans_z.presets.positions." + preset
+                exec_rot_left = "preset_rot_left = self.CoDI_rot_left.presets.positions." + preset
+                exec_rot_right = "preset_rot_right = self.CoDI_rot_right.presets.positions." + preset
+                exec_trans_z = "preset_trans_z = self.CoDI_trans_z.presets.positions." + preset
                 print(exec_base)
                 exec(exec_base)
 
-                exec('preset_rot_left = ' + exec_rot_left)
-                exec('preset_rot_right = ' + exec_rot_right)
-                exec('preset_trans_z = ' + exec_trans_z)
+                exec(exec_rot_left)
+                print(exec_rot_left)
+
+                exec(exec_rot_right)
+                print(exec_rot_left)
+                
+                exec(exec_trans_z)
+                print(exec_trans_z)
                 
                 # Save to local database
                 self.set_CoDI_predefined(preset,preset_rot_base,preset_rot_left,preset_rot_right,preset_trans_z)
