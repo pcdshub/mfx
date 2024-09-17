@@ -1308,109 +1308,6 @@
       },
       {
         "ProcedureGroup": {
-          "name": "MFX DIA PIM",
-          "description": null,
-          "parent": null,
-          "verify_required": true,
-          "step_success_required": true,
-          "steps": [
-            {
-              "SetValueStep": {
-                "name": "MFX DIA YAG",
-                "description": null,
-                "parent": null,
-                "verify_required": true,
-                "step_success_required": true,
-                "actions": [
-                  {
-                    "name": null,
-                    "device": null,
-                    "attr": null,
-                    "pv": "MFX:DIA:MMS:04",
-                    "value": 0.0,
-                    "timeout": null,
-                    "settle_time": 5.0
-                  }
-                ],
-                "success_criteria": [
-                  {
-                    "name": null,
-                    "device": null,
-                    "attr": null,
-                    "pv": "MFX:DIA:MMS:04.RBV",
-                    "comparison": {
-                      "Equals": {
-                        "name": "Check Value is 0",
-                        "description": null,
-                        "invert": false,
-                        "reduce_period": null,
-                        "reduce_method": "average",
-                        "string": null,
-                        "severity_on_failure": 2,
-                        "if_disconnected": 2,
-                        "value_dynamic": null,
-                        "value": 0.0,
-                        "rtol": null,
-                        "atol": 0.01
-                      }
-                    }
-                  }
-                ],
-                "halt_on_fail": true,
-                "require_action_success": true
-              }
-            },
-            {
-              "SetValueStep": {
-                "name": "MFX DIA OUT",
-                "description": null,
-                "parent": null,
-                "verify_required": true,
-                "step_success_required": true,
-                "actions": [
-                  {
-                    "name": null,
-                    "device": null,
-                    "attr": null,
-                    "pv": "MFX:DIA:MMS:04",
-                    "value": 30.0,
-                    "timeout": null,
-                    "settle_time": 5.0
-                  }
-                ],
-                "success_criteria": [
-                  {
-                    "name": null,
-                    "device": null,
-                    "attr": null,
-                    "pv": "MFX:DIA:MMS:04.RBV",
-                    "comparison": {
-                      "Equals": {
-                        "name": "untitled",
-                        "description": null,
-                        "invert": false,
-                        "reduce_period": null,
-                        "reduce_method": "average",
-                        "string": null,
-                        "severity_on_failure": 2,
-                        "if_disconnected": 2,
-                        "value_dynamic": null,
-                        "value": 30.0,
-                        "rtol": null,
-                        "atol": 0.1
-                      }
-                    }
-                  }
-                ],
-                "halt_on_fail": true,
-                "require_action_success": true
-              }
-            }
-          ]
-        }
-      },
-      {
-        "ProcedureGroup": {
           "name": "MFX DG1 PIM",
           "description": null,
           "parent": null,
@@ -1593,6 +1490,109 @@
                     "comparison": {
                       "Equals": {
                         "name": "Check if value is 30",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 30.0,
+                        "rtol": null,
+                        "atol": 0.1
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ProcedureGroup": {
+          "name": "MFX DIA PIM",
+          "description": null,
+          "parent": null,
+          "verify_required": true,
+          "step_success_required": true,
+          "steps": [
+            {
+              "SetValueStep": {
+                "name": "MFX DIA YAG",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04",
+                    "value": 0.0,
+                    "timeout": null,
+                    "settle_time": 5.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "Check Value is 0",
+                        "description": null,
+                        "invert": false,
+                        "reduce_period": null,
+                        "reduce_method": "average",
+                        "string": null,
+                        "severity_on_failure": 2,
+                        "if_disconnected": 2,
+                        "value_dynamic": null,
+                        "value": 0.0,
+                        "rtol": null,
+                        "atol": 0.01
+                      }
+                    }
+                  }
+                ],
+                "halt_on_fail": true,
+                "require_action_success": true
+              }
+            },
+            {
+              "SetValueStep": {
+                "name": "MFX DIA OUT",
+                "description": null,
+                "parent": null,
+                "verify_required": true,
+                "step_success_required": true,
+                "actions": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04",
+                    "value": 30.0,
+                    "timeout": null,
+                    "settle_time": 5.0
+                  }
+                ],
+                "success_criteria": [
+                  {
+                    "name": null,
+                    "device": null,
+                    "attr": null,
+                    "pv": "MFX:DIA:MMS:04.RBV",
+                    "comparison": {
+                      "Equals": {
+                        "name": "untitled",
                         "description": null,
                         "invert": false,
                         "reduce_period": null,
