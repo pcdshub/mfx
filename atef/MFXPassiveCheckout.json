@@ -219,40 +219,6 @@
                   }
                 ]
               }
-            },
-            {
-              "DeviceConfiguration": {
-                "name": "TFS Latching Errors",
-                "description": null,
-                "tags": null,
-                "devices": [
-                  "mfx_tfs"
-                ],
-                "by_attr": {
-                  "interlock.lens_required_fault_latch": [],
-                  "interlock.min_fault_latch": [],
-                  "interlock.table_fault_latch": [],
-                  "interlock.violated_fault_latch": []
-                },
-                "shared": [
-                  {
-                    "AnyValue": {
-                      "name": "TFS Latching Errors",
-                      "description": null,
-                      "invert": false,
-                      "reduce_period": null,
-                      "reduce_method": "average",
-                      "string": null,
-                      "severity_on_failure": 1,
-                      "if_disconnected": 2,
-                      "values": [
-                        0
-                      ],
-                      "values_dynamic": []
-                    }
-                  }
-                ]
-              }
             }
           ],
           "values": {},
