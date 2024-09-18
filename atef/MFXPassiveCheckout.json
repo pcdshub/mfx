@@ -29,7 +29,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "IPM Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -89,7 +89,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "Slit Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -123,7 +123,7 @@
                 "shared": [
                   {
                     "Equals": {
-                      "name": "Check Value is near 2.5",
+                      "name": "FEE Slits Position",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -165,7 +165,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 1",
+                      "name": "TFS IOC Alive",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -203,7 +203,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "TFS Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -237,9 +237,9 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "TFS Latching Errors",
                       "description": null,
-                      "invert": true,
+                      "invert": false,
                       "reduce_period": null,
                       "reduce_method": "average",
                       "string": null,
@@ -279,7 +279,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 2",
+                      "name": "REF State",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -312,7 +312,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "REF Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -364,7 +364,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "ATT Status",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -373,7 +373,7 @@
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
                       "values": [
-                        2
+                        1
                       ],
                       "values_dynamic": []
                     }
@@ -405,7 +405,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 1 or 2",
+                      "name": "ATT State",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -443,7 +443,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "ATT Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -483,7 +483,7 @@
           "configs": [
             {
               "DeviceConfiguration": {
-                "name": "Valves",
+                "name": "Gate Valves",
                 "description": null,
                 "tags": null,
                 "devices": [
@@ -504,7 +504,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is OUT",
+                      "name": "Gate Valves",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -531,40 +531,21 @@
                   "HXX:MXT:GCC:03:PMON": [],
                   "HXX:MXT:GCC:05:PMON": [],
                   "HXX:MXT:GCC:06:PMON": [],
-                  "HXX:MXT:PIP:01:PMON": [],
-                  "HXX:MXT:PIP:02:PMON": [],
-                  "HXX:MXT:PIP:03:PMON": [],
-                  "HXX:MXT:PIP:04:PMON": [],
-                  "HXX:MXT:PIP:05:PMON": [],
-                  "HXX:MXT:PIP:06:PMON": [],
-                  "HXX:MXT:PIP:08:PMON": [],
                   "HXX:UM6:GCC:01:PMON": [],
                   "HXX:UM6:GCC:02:PMON": [],
-                  "HXX:UM6:PIP:01:PMON": [],
-                  "HXX:UM6:PIP:02:PMON": [],
                   "MFX:DG1:GCC:01:PRESS": [],
-                  "MFX:DG1:PIP:01:PMON": [],
                   "MFX:DG2:GCC:01:PRESS": [],
-                  "MFX:DG2:PIP:01:PMON": [],
                   "MFX:DIA:GCC:01:PRESS": [],
-                  "MFX:DIA:PIP:01:PMON": [],
                   "MFX:DVD:GCC:02:PRESS": [],
                   "MFX:DVD:GCC:04:PRESS": [],
-                  "MFX:DVD:PIP:01:PMON": [],
-                  "MFX:DVD:PIP:02:PMON": [],
-                  "MFX:DVD:PIP:03:PMON": [],
-                  "MFX:DVD:PIP:04:PMON": [],
                   "MFX:MON:GCC:01:PRESS": [],
-                  "MFX:MON:PIP:01:PMON": [],
                   "MFX:SB2:GCC:01:PRESS": [],
-                  "MFX:SB2:PIP:01:PMON": [],
-                  "MFX:TFS:GCC:01:PRESS": [],
-                  "MFX:TFS:PIP:01:PMON": []
+                  "MFX:TFS:GCC:01:PRESS": []
                 },
                 "shared": [
                   {
                     "LessOrEqual": {
-                      "name": "Vaccum Levels Good",
+                      "name": "Vaccum Levels",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -573,7 +554,7 @@
                       "severity_on_failure": 2,
                       "if_disconnected": 2,
                       "value_dynamic": null,
-                      "value": 1e-08
+                      "value": 5e-08
                     }
                   }
                 ]
@@ -608,7 +589,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is ON",
+                      "name": "Ion Pumps Status",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -651,7 +632,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Always Flag",
+                      "name": "Always Flag Mirror Coatings",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -686,7 +667,7 @@
                       "shared": [
                         {
                           "AnyValue": {
-                            "name": "Check Value is 2",
+                            "name": "Mirrors Inserted",
                             "description": null,
                             "invert": false,
                             "reduce_period": null,
@@ -717,7 +698,7 @@
                       "shared": [
                         {
                           "AnyValue": {
-                            "name": "Check Value is 1",
+                            "name": "Mirrors Removed",
                             "description": null,
                             "invert": false,
                             "reduce_period": null,
@@ -749,7 +730,7 @@
                       "shared": [
                         {
                           "Less": {
-                            "name": "Check Value is less than -500",
+                            "name": "Mirror Pitch to MFX",
                             "description": null,
                             "invert": false,
                             "reduce_period": null,
@@ -775,85 +756,45 @@
                 "description": null,
                 "tags": null,
                 "devices": [
-                  "mr1l0_homs",
                   "mr1l3_homs",
                   "mr1l4_homs",
                   "mr2l0_homs"
                 ],
                 "by_attr": {
-                  "bender.disabled": [],
                   "bender.high_limit_switch": [],
                   "bender.low_limit_switch": [],
                   "bender.motor_is_moving": [],
-                  "bender.offset_freeze_switch": [],
-                  "bender.plc.cmd_err_reset": [],
                   "bender.plc.err_bool": [],
-                  "bender.plc.err_code": [],
                   "bender.plc.status": [],
-                  "bender.set_use_switch": [],
+                  "coating.busy": [],
                   "coating.error": [],
-                  "coating.error_id": [],
                   "coating.error_message": [],
-                  "couple_status_x": [],
-                  "couple_status_y": [],
-                  "insertion.error": [],
-                  "insertion.error_id": [],
-                  "insertion.error_message": [],
-                  "pitch.disabled": [],
                   "pitch.high_limit_switch": [],
                   "pitch.low_limit_switch": [],
                   "pitch.motor_is_moving": [],
-                  "pitch.offset_freeze_switch": [],
-                  "pitch.plc.cmd_err_reset": [],
                   "pitch.plc.err_bool": [],
-                  "pitch.plc.err_code": [],
                   "pitch.plc.status": [],
-                  "pitch.set_use_switch": [],
-                  "x_dwn.disabled": [],
                   "x_dwn.high_limit_switch": [],
                   "x_dwn.low_limit_switch": [],
                   "x_dwn.motor_is_moving": [],
-                  "x_dwn.offset_freeze_switch": [],
-                  "x_dwn.plc.cmd_err_reset": [],
-                  "x_dwn.plc.err_bool": [],
-                  "x_dwn.plc.err_code": [],
-                  "x_dwn.plc.status": [],
-                  "x_dwn.set_use_switch": [],
-                  "x_up.disabled": [],
                   "x_up.high_limit_switch": [],
                   "x_up.low_limit_switch": [],
                   "x_up.motor_is_moving": [],
-                  "x_up.offset_freeze_switch": [],
-                  "x_up.plc.cmd_err_reset": [],
-                  "x_up.plc.err_bool": [],
-                  "x_up.plc.err_code": [],
-                  "x_up.plc.status": [],
-                  "x_up.set_use_switch": [],
-                  "y_dwn.disabled": [],
                   "y_dwn.high_limit_switch": [],
                   "y_dwn.low_limit_switch": [],
                   "y_dwn.motor_is_moving": [],
-                  "y_dwn.offset_freeze_switch": [],
-                  "y_dwn.plc.cmd_err_reset": [],
                   "y_dwn.plc.err_bool": [],
-                  "y_dwn.plc.err_code": [],
                   "y_dwn.plc.status": [],
-                  "y_dwn.set_use_switch": [],
-                  "y_up.disabled": [],
                   "y_up.high_limit_switch": [],
                   "y_up.low_limit_switch": [],
                   "y_up.motor_is_moving": [],
-                  "y_up.offset_freeze_switch": [],
-                  "y_up.plc.cmd_err_reset": [],
                   "y_up.plc.err_bool": [],
-                  "y_up.plc.err_code": [],
-                  "y_up.plc.status": [],
-                  "y_up.set_use_switch": []
+                  "y_up.plc.status": []
                 },
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0 or Blank",
+                      "name": "Mirror Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -896,7 +837,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Always Flag",
+                      "name": "Always Flag Spectrometer Position",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -926,14 +867,12 @@
                   "motor_done_move": [],
                   "motor_is_moving": [],
                   "plc.cmd_err_reset": [],
-                  "plc.err_bool": [],
-                  "plc.err_code": [],
                   "plc.status": []
                 },
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 0",
+                      "name": "Spectrometer Errors",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -972,7 +911,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is OUT",
+                      "name": "YAG Out",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -1011,7 +950,7 @@
                 "shared": [
                   {
                     "AnyValue": {
-                      "name": "Check Value is 197",
+                      "name": "EVR Event Code",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
@@ -1021,6 +960,65 @@
                       "if_disconnected": 2,
                       "values": [
                         197
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
+                "name": "PP Errors",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "MFX:DIA:MMS:07:LD": [],
+                  "MFX:DIA:MMS:07:MV": [],
+                  "MFX:DIA:MMS:07:SE": [],
+                  "MFX:DIA:MMS:07:UD": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "PP Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
+                "name": "PP Fan",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "MFX:DIA:MMS:07:I4_L": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "PP Fan ON",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
                       ],
                       "values_dynamic": []
                     }
@@ -1116,7 +1114,7 @@
                 "shared": [
                   {
                     "Greater": {
-                      "name": "Check Value is greater than 0.2",
+                      "name": "FEE Energy Greater than 0.2",
                       "description": null,
                       "invert": false,
                       "reduce_period": null,
