@@ -94,6 +94,11 @@ with safe_load('Debugging Scripts'):
     from mfx.debug import *
     debug = Debug()
 
+with safe_load('Spectrometers'):
+    from mfx.spectrometers import VonHamos6Crystal
+    vh6 = VonHamos6Crystal()
+
+
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
 #     class LXE(LaserEnergyPositioner):
@@ -192,7 +197,7 @@ with safe_load('Make Aliases'):
     crl1=mfx_prefocus
     from mfx.db import um6_ipm as xcs_yag1
     from mfx.db import hx2_slits as xpp_s1
-    from mfx.db import mfx_von_hamos_6crystal as vh
+    # from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
     from mfx.db import mfx_atm as tt
