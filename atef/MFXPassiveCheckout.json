@@ -227,7 +227,7 @@
       },
       {
         "ConfigurationGroup": {
-          "name": "REF",
+          "name": "Reference Laser",
           "description": null,
           "tags": null,
           "configs": [
