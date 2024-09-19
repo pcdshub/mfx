@@ -302,7 +302,7 @@
       },
       {
         "ConfigurationGroup": {
-          "name": "ATT",
+          "name": "Attenuator",
           "description": null,
           "tags": null,
           "configs": [
