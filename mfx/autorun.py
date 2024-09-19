@@ -1,4 +1,4 @@
-def post(sample='?', run_number=None, post=False, inspire=False, add_note=''):
+def post(sample='?', tag=None, run_number=None, post=False, inspire=False, add_note=''):
     """
     Posts a message to the elog
 
@@ -22,6 +22,8 @@ def post(sample='?', run_number=None, post=False, inspire=False, add_note=''):
     from mfx.db import daq, elog
     if add_note!='':
         add_note = '\n' + add_note
+    if tag is None:
+        tag = sample
     if inspire:
         comment = f"Running {sample}\n{quote()['quote']}{add_note}"
     else:
@@ -32,7 +34,7 @@ def post(sample='?', run_number=None, post=False, inspire=False, add_note=''):
     post_msg = post_template.format(*info)
     print('\n' + post_msg + '\n')
     if post:
-        elog.post(msg=post_msg, run=(run_number))
+        elog.post(msg=post_msg, tags=tag, run=(run_number))
     return post_msg
 
 
@@ -118,7 +120,7 @@ def begin(events=None, duration=300,
     except KeyboardInterrupt:
             status = False
             return status
-        
+
 
 def quote():
     import json,random
@@ -131,7 +133,41 @@ def quote():
     return _res
 
 
-def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None):
+def ioc_cam_recorder(cam, run_length, tag):
+    """
+    Record IOC Cameras
+
+    Parameters
+    ----------
+    cam: str, required
+        Select camera PV you'd like to record
+
+    run_length: int, required
+        number of seconds for run 300 is default
+
+    tag: str, required
+        Run group tag
+
+    Operations
+    ----------
+
+    """
+    import subprocess
+    from epics import caget
+    import logging
+    rate = caget(f'{cam}:ArrayRate_RBV')
+    n_images = int(run_length * rate)
+    logging.info(f"Recording Camera {cam}")
+    logging.info(
+        f"/reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData")
+    
+    subprocess.Popen(
+        [f"source /cds/group/pcds/pyps/conda/pcds_conda; /reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData"],
+        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
+def autorun(sample='?', tag=None, run_length=300, record=True,
+            runs=5, inspire=False, daq_delay=5, picker=None, cam=None):
     """
     Automate runs.... With optional quotes
 
@@ -139,6 +175,9 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, daq_
     ----------
     sample: str, optional
         Sample Name
+
+    tag: str, optional
+        Run group tag
 
     run_length: int, optional
         number of seconds for run 300 is default
@@ -174,10 +213,15 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, daq_
     if picker=='flip':
         pp.flipflop()
 
+    if tag is None:
+        tag = sample
+
     for i in range(runs):
         logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
         run_number = daq.run_number() + 1
         status = begin(duration = run_length, record = record, wait = True, end_run = True)
+        if cam is not None:
+            ioc_cam_recorder(cam, run_length, tag)
         if status is False:
             pp.close()
             post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
@@ -188,7 +232,7 @@ def autorun(sample='?', run_length=300, record=True, runs=5, inspire=False, daq_
             logger.warning('Run ended prematurely. Probably sample delivery problem')
             break
 
-        post(sample, run_number, record, inspire)
+        post(sample, tag, run_number, record, inspire)
         try:
             sleep(daq_delay)
         except KeyboardInterrupt:
