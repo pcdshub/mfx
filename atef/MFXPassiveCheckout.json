@@ -436,7 +436,51 @@
           "name": "Cameras",
           "description": null,
           "tags": null,
-          "configs": [],
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "Camera Capture Rate",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "MFX:ALV:01:ArrayRate_RBV": [],
+                  "MFX:ALV:02:ArrayRate_RBV": [],
+                  "MFX:DG1:P6740:ArrayRate_RBV": [],
+                  "MFX:DG2:P6740:ArrayRate_RBV": [],
+                  "MFX:GDE:01:ArrayRate_RBV": [],
+                  "MFX:GIGE:01:ArrayRate_RBV": [],
+                  "MFX:GIGE:02:ArrayRate_RBV": [],
+                  "MFX:GIGE:03:ArrayRate_RBV": [],
+                  "MFX:GIGE:04:ArrayRate_RBV": [],
+                  "MFX:GIGE:05:ArrayRate_RBV": [],
+                  "MFX:GIGE:06:ArrayRate_RBV": [],
+                  "MFX:GIGE:07:ArrayRate_RBV": [],
+                  "MFX:GIGE:08:ArrayRate_RBV": [],
+                  "MFX:GIGE:DIA:YAG:ArrayRate_RBV": [],
+                  "MFX:GIGE:LBL:01:ArrayRate_RBV": [],
+                  "MFX:GIGE:LBL:02:ArrayRate_RBV": [],
+                  "MFX:GIGE:LBL:03:ArrayRate_RBV": [],
+                  "MFX:GIGE:RR1:ArrayRate_RBV": []
+                },
+                "shared": [
+                  {
+                    "Greater": {
+                      "name": "Camera Capture Rate",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          ],
           "values": {},
           "mode": "all"
         }
