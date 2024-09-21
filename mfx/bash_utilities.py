@@ -76,7 +76,7 @@ class bs:
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         
 
-    def camera_list(self):
+    def camera_list_out(self):
         import re   
         import logging
         logging.info("Opening Camera List")
@@ -89,6 +89,12 @@ class bs:
             cam = re.split(';|,', cam)
             self.camera_names.append([cam[4].strip(),cam[2]])
             print(f"Camera {cam[4].strip()} ....  {cam[2]}")
+
+        return self.camera_names
+
+
+    def camera_list(self):
+        camera_names = self.camera_list_out()
 
 
     def focus_scan(self, camera):

@@ -2,7 +2,7 @@
 # Source this to load the full environment that hutch python uses
 
 # edit this line only
-# USE_LOCAL="1"
+USE_LOCAL="1"
 #export CONDA_ENVNAME="pcds-5.7.2"
 # export CONDA_ENVNAME="pcds-5.8.2"
 export CONDA_ENVNAME="pcds-5.9.0"

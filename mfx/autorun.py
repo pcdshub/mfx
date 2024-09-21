@@ -133,7 +133,7 @@ def quote():
     return _res
 
 
-def ioc_cam_recorder(cam, run_length, tag):
+def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
     """
     Record IOC Cameras
 
@@ -143,7 +143,7 @@ def ioc_cam_recorder(cam, run_length, tag):
         Select camera PV you'd like to record
 
     run_length: int, required
-        number of seconds for run 300 is default
+        number of seconds for recording. 10 is default
 
     tag: str, required
         Run group tag
@@ -155,15 +155,21 @@ def ioc_cam_recorder(cam, run_length, tag):
     import subprocess
     from epics import caget
     import logging
-    rate = caget(f'{cam}:ArrayRate_RBV')
-    n_images = int(run_length * rate)
-    logging.info(f"Recording Camera {cam}")
-    logging.info(
-        f"/reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData")
-    
-    subprocess.Popen(
-        [f"source /cds/group/pcds/pyps/conda/pcds_conda; /reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData"],
-        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    from mfx.bash_utilities import bs
+    bs = bs()
+    camera_names = bs.camera_list_out()
+    if cam not in [pv[1] for pv in camera_names]:
+            logging.info("Desired Camera not in List. Please choose from the above list:.")
+    else:
+        rate = caget(f'{cam}:ArrayRate_RBV')
+        n_images = int(run_length * rate)
+        logging.info(f"Recording Camera {cam} for {run_length} sec")
+        logging.info(
+            f"/reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData")
+        
+        subprocess.Popen(
+            [f"source /cds/group/pcds/pyps/conda/pcds_conda; /reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData"],
+            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 def autorun(sample='?', tag=None, run_length=300, record=True,
