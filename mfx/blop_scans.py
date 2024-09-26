@@ -22,7 +22,7 @@ DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41
 
 devices: dict[str, Device] = {}
-bluesky_objs = dict[str, object] = {}
+bluesky_objs: dict[str, object] = {}
 re_setup_info = {
     "databroker_sub_token": None,
     "bec_starting_state": None,
@@ -64,7 +64,7 @@ def sim_devices() -> dict[str, Device]:
         if isinstance(devices["mr1l4_homs"], SimpleNamespace):
             return devices
     
-    devices["mr1l4_homs"] = SimpleNamespace(pitch=SynAxis("mr1l4_homs_pitch", value=MIRROR_NOMINAL))
+    devices["mr1l4_homs"] = SimpleNamespace(pitch=SynAxis(name="mr1l4_homs_pitch", value=MIRROR_NOMINAL))
     devices["mfx_dg1_ipm"] = SimpleNamespace(inserted=True)
     devices["mfx_dg2_ipm"] = SimpleNamespace(inserted=False)
     dg1_offset = random.uniform(-1, 1)
@@ -72,11 +72,11 @@ def sim_devices() -> dict[str, Device]:
 
     def get_fake_dg1_wave8():
         pitch = devices["mr1l4_homs"].pitch.position
-        return pitch - MIRROR_NOMINAL + DG1_WAVE8_XPOS + dg1_offset
+        return pitch - MIRROR_NOMINAL + DG1_WAVE8_XPOS + dg1_offset + random.uniform(-0.1, 0.1)
     
     def get_fake_dg2_wave8():
         pitch = devices["mr1l4_homs"].pitch.position
-        return pitch - MIRROR_NOMINAL + DG2_WAVE8_XPOS + dg2_offset
+        return pitch - MIRROR_NOMINAL + DG2_WAVE8_XPOS + dg2_offset + random.uniform(-0.1, 0.1)
 
     devices["mfx_dg1_wave8"] = SimpleNamespace(
         xpos=SynSignal(
@@ -116,6 +116,8 @@ def init_bluesky_objs(force: bool = False) -> dict[str, object]:
         # Sync up with how RE is configured outside of this module
         RE.subscribe(bec)
     bluesky_objs["bec"] = bec
+
+    return bluesky_objs
 
 
 def init_re() -> None:
@@ -161,8 +163,8 @@ def clean_re(re: RunEngine, bec: BestEffortCallback):
 
 
 def get_mirror_wave8_agent(
-    use_dg1: bool,
-    use_dg2: bool,
+    use_dg1: bool = False,
+    use_dg2: bool = False,
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
     dg1_wave8_xpos: float = DG1_WAVE8_XPOS,
@@ -249,7 +251,7 @@ def get_mirror_wave8_agent(
         verbose=True,
         db=bluesky_objs["broker"],
         tolerate_acquisition_errors=False,
-        enforce_all_objectives_value=True,
+        enforce_all_objectives_valid=True,
         train_every=3,
     )
 
@@ -259,12 +261,15 @@ def setup_sim_test() -> None:
     Prep offline test without using mfx hardware or mfx3 startup script
     """
     plt.ion()
+    print("Creating sim devices")
     globals().update(**sim_devices())
+    print("Setting up bluesky")
     globals().update(**init_bluesky_objs())
-    print(f"devices: {devices}")
-    print(f"bluesky objs: {bluesky_objs}")
+    print("Configuring RE")
+    init_re()
+    print(f"devices: {list(devices.keys())}")
+    print(f"bluesky objs: {list(bluesky_objs.keys())}")
     print("Agent factory: get_mirror_wave8_agent")
-    print(get_mirror_wave8_agent.__doc__)
 
 
 if __name__ == "__main__":
