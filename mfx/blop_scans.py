@@ -285,7 +285,7 @@ def setup_sim_test() -> None:
     print("Canned test: run_sim_test")
 
 
-def run_sim_test():
+def run_sim_test() -> Agent:
     print("Create agent")
     RE = bluesky_objs["RE"]
     agent = get_mirror_wave8_agent(use_dg1=True)
@@ -304,6 +304,7 @@ def run_sim_test():
     print(f"pitch is at {devices['mr1l4_homs'].pitch.position}")
     print("Generating plots")
     agent.plot_objectives()
+    return agent
 
 
 if __name__ == "__main__":
