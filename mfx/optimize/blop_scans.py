@@ -1,111 +1,22 @@
 """
-To run for real, import get_mirror_wave8_agent and generate agents.
-To test with sim, ipython -i mfx/blop_scans.py
+To run for real, import get_blop_agent, generate agents, and try to agent.learn().
+To test with sim, ipython -i mfx/optimize/blop_scans.py
 """
-import random
-from types import SimpleNamespace
+from __future__ import annotations
 
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
 from blop import DOF, Objective, Agent
 from databroker import Broker
-from happi import Client
 from matplotlib import pyplot as plt
-from ophyd.device import Device
-from ophyd.sim import SynAxis, SynSignal
-from pcdsdevices.ipm import Wave8
 
-HAPPI_NAMES = (
-    "mr1l4_homs",
-    "mfx_dg1_ipm",
-    "mfx_dg2_ipm",
-)
-# Default constants so I can re-use them in sim_devices
-MIRROR_NOMINAL = -544
-DG1_WAVE8_XPOS = 8
-DG2_WAVE8_XPOS = 41
+from mfx.optimize.mirror_hw import MIRROR_NOMINAL, DG1_WAVE8_XPOS, DG2_WAVE8_XPOS, init_devices, sim_devices
 
-devices: dict[str, Device] = {}
 bluesky_objs: dict[str, object] = {}
 re_setup_info = {
     "databroker_sub_token": None,
     "bec_starting_state": None,
 }
-
-
-def init_devices(force: bool = False) -> dict[str, Device]:
-    """
-    Collect all the devices needed for blop scanning into the "devices" dictionary.
-
-    Returns the fully-loaded device dictionary.
-    This can be simulated devices if sim_devices was called first.
-    """
-    if devices and not force:
-        return devices
-
-    client = Client.from_config("/cds/group/pcds/pyps/apps/hutch-python/device_config/happi.cfg")
-
-    for name in HAPPI_NAMES:
-        devices[name] = client.load_device(name=name)
-
-    # Happi IPMs do not currently have wave8s, add manually
-    for stand in ("dg1", "dg2"):
-        name = f"mfx_{stand}_wave8"
-        devices[name] = Wave8(f"MFX:{stand.upper()}:BMMON", name=name)
-        devices[name].kind = "hinted"
-    
-    return devices
-
-
-def sim_devices() -> dict[str, Device]:
-    """
-    Collect simulated stand-ins for all devices we might use in blop into the "devices" dictionary.
-
-    Returns the fully-loaded device dictionary.
-    This is guaranteed to always be simulated devices.
-    """
-    if devices:
-        if isinstance(devices["mr1l4_homs"], SimpleNamespace):
-            return devices
-    
-    devices["mr1l4_homs"] = SimpleNamespace(pitch=SynAxis(name="mr1l4_homs_pitch", value=MIRROR_NOMINAL))
-    devices["mfx_dg1_ipm"] = SimpleNamespace(inserted=True)
-    devices["mfx_dg2_ipm"] = SimpleNamespace(inserted=False)
-    dg1_offset = random.uniform(-1, 1)
-    dg2_offset = random.uniform(-1, 1)
-
-    print("Generated fake dg1 and dg2 signals")
-    print("Expected: 1:1 linear relationship between x and pitch")
-    print(f"Expected: dg1 reads {DG1_WAVE8_XPOS + dg1_offset} + noise when pitch is {MIRROR_NOMINAL}")
-    print(f"Expected: dg2 reads {DG2_WAVE8_XPOS + dg2_offset} + noise when pitch is {MIRROR_NOMINAL}")
-    print(f"default alignment on dg1 should pick {MIRROR_NOMINAL - dg1_offset}")
-    print(f"default alignment on dg2 should pick {MIRROR_NOMINAL - dg2_offset}")
-
-    def get_fake_dg1_wave8():
-        pitch = devices["mr1l4_homs"].pitch.position
-        return pitch - MIRROR_NOMINAL + DG1_WAVE8_XPOS + dg1_offset + random.uniform(-0.1, 0.1)
-    
-    def get_fake_dg2_wave8():
-        pitch = devices["mr1l4_homs"].pitch.position
-        return pitch - MIRROR_NOMINAL + DG2_WAVE8_XPOS + dg2_offset + random.uniform(-0.1, 0.1)
-
-    devices["mfx_dg1_wave8"] = SimpleNamespace(
-        xpos=SynSignal(
-            func=get_fake_dg1_wave8,
-            name="mfx_dg1_wave8_xpos"
-        )
-    )
-    devices["mfx_dg2_wave8"] = SimpleNamespace(
-        xpos=SynSignal(
-            func=get_fake_dg2_wave8,
-            name="mfx_dg2_wave8_xpos"
-        )
-    )
-    devices["mfx_dg1_wave8"].kind = "hinted"
-    devices["mfx_dg2_wave8"].kind = "hinted"
-    
-    return devices
-
 
 def init_bluesky_objs(force: bool = False) -> dict[str, object]:
     """
@@ -173,7 +84,7 @@ def clean_re(re: RunEngine, bec: BestEffortCallback):
         re_setup_info["bec_starting_state"] = None
 
 
-def get_mirror_wave8_agent(
+def get_blop_agent(
     use_dg1: bool = False,
     use_dg2: bool = False,
     mirror_nominal: float = MIRROR_NOMINAL,
@@ -279,7 +190,7 @@ def setup_sim_test() -> None:
     globals().update(**init_bluesky_objs())
     print("Configuring RE")
     init_re()
-    print(f"devices: {list(devices.keys())}")
+    print(f"devices: {list(init_devices().keys())}")
     print(f"bluesky objs: {list(bluesky_objs.keys())}")
     print("Agent factory: get_mirror_wave8_agent")
     print("Canned test: run_sim_test")
@@ -288,7 +199,7 @@ def setup_sim_test() -> None:
 def run_sim_test() -> Agent:
     print("Create agent")
     RE = bluesky_objs["RE"]
-    agent = get_mirror_wave8_agent(use_dg1=True)
+    agent = get_blop_agent(use_dg1=True)
     print("QR sampling")
     RE(agent.learn("qr", n=16))
     print("QEI optimization")
@@ -301,7 +212,7 @@ def run_sim_test() -> Agent:
     agent.refresh()
     print("Move to best")
     RE(agent.go_to_best())
-    print(f"pitch is at {devices['mr1l4_homs'].pitch.position}")
+    print(f"pitch is at {init_devices()['mr1l4_homs'].pitch.position}")
     print("Generating plots")
     agent.plot_objectives()
     return agent
