@@ -296,7 +296,7 @@ def run_sim_test() -> Agent:
     try:
         RE(agent.learn("qei", n=4, iterations=4))
     except Exception as exc:
-        print(f"some error running qei: {exc}")
+        ...
         # raise
     agent.refresh()
     print("Move to best")
