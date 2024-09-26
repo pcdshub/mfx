@@ -1,3 +1,7 @@
+"""
+To run for real, import get_mirror_wave8_agent and generate agents.
+To test with sim, ipython -i mfx/blop_scans.py
+"""
 import random
 from types import SimpleNamespace
 
@@ -69,6 +73,13 @@ def sim_devices() -> dict[str, Device]:
     devices["mfx_dg2_ipm"] = SimpleNamespace(inserted=False)
     dg1_offset = random.uniform(-1, 1)
     dg2_offset = random.uniform(-1, 1)
+
+    print("Generated fake dg1 and dg2 signals")
+    print("Expected: 1:1 linear relationship between x and pitch")
+    print(f"Expected: dg1 reads {DG1_WAVE8_XPOS + dg1_offset} + noise when pitch is {MIRROR_NOMINAL}")
+    print(f"Expected: dg2 reads {DG2_WAVE8_XPOS + dg2_offset} + noise when pitch is {MIRROR_NOMINAL}")
+    print(f"default alignment on dg1 should pick {MIRROR_NOMINAL - dg1_offset}")
+    print(f"default alignment on dg2 should pick {MIRROR_NOMINAL - dg2_offset}")
 
     def get_fake_dg1_wave8():
         pitch = devices["mr1l4_homs"].pitch.position
@@ -247,12 +258,13 @@ def get_mirror_wave8_agent(
     return Agent(
         dofs=dofs,
         objectives=objectives,
-        detectors=detectors,
+        dets=detectors,         # blop =0.7.0
+        # detectors=detectors,  # blop >0.7.0
         verbose=True,
         db=bluesky_objs["broker"],
         tolerate_acquisition_errors=False,
-        enforce_all_objectives_valid=True,
-        train_every=3,
+        # enforce_all_objectives_valid=True,  # blop >0.7.0
+        train_every=1,
     )
 
 
@@ -270,7 +282,33 @@ def setup_sim_test() -> None:
     print(f"devices: {list(devices.keys())}")
     print(f"bluesky objs: {list(bluesky_objs.keys())}")
     print("Agent factory: get_mirror_wave8_agent")
+    print("Canned test: run_sim_test")
+
+
+def run_sim_test():
+    print("Create agent")
+    RE = bluesky_objs["RE"]
+    agent = get_mirror_wave8_agent(use_dg1=True)
+    print("QR sampling")
+    RE(agent.learn("qr", n=16))
+    print("QEI optimization")
+    agent.refresh()
+    try:
+        RE(agent.learn("qei", n=4, iterations=4))
+    except Exception as exc:
+        print(f"some error running qei: {exc}")
+        # raise
+    agent.refresh()
+    print("Move to best")
+    RE(agent.go_to_best())
+    print(f"pitch is at {devices['mr1l4_homs'].pitch.position}")
+    print("Generating plots")
+    agent.plot_objectives()
 
 
 if __name__ == "__main__":
+    from IPython import get_ipython
+    ip = get_ipython()
+    if ip is not None:
+        ip.run_line_magic("matplotlib", "qt")
     setup_sim_test()
