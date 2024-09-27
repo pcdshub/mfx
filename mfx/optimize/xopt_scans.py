@@ -43,6 +43,7 @@ def get_evaluator(
             raise ValueError(f"Invalid wave8 {wave8}, expected dg1 or dg2")
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
+        print(f"Trying {input['mirror_pitch']}")
         devices = init_devices()
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
         xpos_device = devices[f"mfx_{wave8}_wave8"].xpos
