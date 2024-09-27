@@ -24,7 +24,7 @@ devices: dict[str, Device] = {}
 
 def init_devices(force: bool = False) -> dict[str, Device]:
     """
-    Collect all the devices needed for blop scanning into the "devices" dictionary.
+    Collect all the devices needed for mfx mirror scanning into the "devices" dictionary.
 
     Returns the fully-loaded device dictionary.
     This can be simulated devices if sim_devices was called first.
@@ -48,7 +48,7 @@ def init_devices(force: bool = False) -> dict[str, Device]:
 
 def sim_devices() -> dict[str, Device]:
     """
-    Collect simulated stand-ins for all devices we might use in blop into the "devices" dictionary.
+    Collect simulated stand-ins for all devices we might use in mfx mirror optimization into the "devices" dictionary.
 
     Returns the fully-loaded device dictionary.
     This is guaranteed to always be simulated devices.
