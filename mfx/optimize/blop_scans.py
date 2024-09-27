@@ -1,6 +1,7 @@
 """
 To run for real, import get_blop_agent, generate agents, and try to agent.learn().
 To test with sim, ipython -i mfx/optimize/blop_scans.py
+Or python -m mfx.optimize.blop_scans for a default sim run-through
 """
 from __future__ import annotations
 
@@ -223,3 +224,7 @@ if __name__ == "__main__":
     if ip is not None:
         ip.run_line_magic("matplotlib", "qt")
     setup_sim_test()
+    if ip is None:
+        # If we're not using ipython, just run the canned sim test
+        # Otherwise we'll set up and then do nothing
+        run_sim_test()

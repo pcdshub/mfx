@@ -1,6 +1,7 @@
 """
 To run for real, import get_xopt_obj and try to random_evaluate() and step() the Xopt object.
-To test with sim, ipython -i mfx/optimize/xopt_scans.py
+To test with sim, ipython -i mfx/optimize/xopt_scans.py for an interactive test
+Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
 
@@ -145,3 +146,7 @@ if __name__ == "__main__":
     if ip is not None:
         ip.run_line_magic("matplotlib", "qt")
     setup_sim_test()
+    if ip is None:
+        # If we're not using ipython, just run the canned sim test
+        # Otherwise we'll set up and then do nothing
+        run_sim_test()
