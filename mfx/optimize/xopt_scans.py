@@ -50,7 +50,7 @@ def get_evaluator(
         results = {}
         results["xpos"] = xpos
         results["abs_xpos"] = abs(xpos)
-        results["objective"] = (xpos - wave8_xpos) ** 2
+        results["objective"] = abs(xpos - wave8_xpos)
         return results
 
     return Evaluator(function=evaluate)
@@ -63,6 +63,30 @@ def get_xopt_obj(
     wave8_xpos: float | None = None,
     wave8_max_value: float = 10,
 ) -> Xopt:
+    """
+    Create an appropriate xopt optimization object.
+
+    When you have this object, it can be used to optimize the position of
+    the MFX flat mirror.
+
+    xopt.random_evaluate(3)
+    xopt.step()
+    xopt.step()
+    etc.
+
+    Parameters
+    ----------
+    wave8 : str
+        Whether to use the dg1 or dg2 wave8
+    mirror_nominal : float
+        The starting mirror pitch position and midpoint of the optimization search.
+    search_delta : float
+        How far +/- we check away from the mirror nominal pitch position
+    wave8_xpos : float
+        The goal x position on the wave8
+    wave8_max_value : float
+        The maximum absolute wave8 value that is considered "reasonable".
+    """
     vocs = get_vocs(
         mirror_nominal=mirror_nominal,
         search_delta=search_delta,

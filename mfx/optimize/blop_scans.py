@@ -9,6 +9,7 @@ from bluesky.callbacks.best_effort import BestEffortCallback
 from blop import DOF, Objective, Agent
 from databroker import Broker
 from matplotlib import pyplot as plt
+from pandas import DataFrame
 
 from mfx.optimize.mirror_hw import MIRROR_NOMINAL, DG1_WAVE8_XPOS, DG2_WAVE8_XPOS, init_devices, sim_devices
 
@@ -85,13 +86,10 @@ def clean_re(re: RunEngine, bec: BestEffortCallback):
 
 
 def get_blop_agent(
-    use_dg1: bool = False,
-    use_dg2: bool = False,
+    wave8: str = "dg1",
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    dg1_wave8_xpos: float = DG1_WAVE8_XPOS,
-    dg2_wave8_xpos: float = DG2_WAVE8_XPOS,
-    wave8_tol: float = 0.1,
+    wave8_xpos: float | None = None,
     wave8_max_value: float = 10,
     setup_re: bool = True,
 ) -> Agent:
@@ -108,26 +106,30 @@ def get_blop_agent(
 
     Parameters
     ----------
-    use_dg1 : bool
-        If True, we'll try to optimize the position on DG1.
-    use_dg2 : bool
-        If True, we'll try to optimize the position on DG2.
+    wave8 : str
+        Whether to use the dg1 or dg2 wave8
     mirror_nominal : float
         The starting mirror pitch position and midpoint of the optimization search.
     search_delta : float
         How far +/- we check away from the mirror nominal pitch position
-    dg1_wave8_xpos : float
-        The goal position on dg1
-    dg2_wave8_xpos : float
-        The goal position on dg2
-    wave8_tol : float
-        How close to our goal we need to get before we consider ourselves "done".
+    wave8_xpos : float
+        The goal x position on the wave8
     wave8_max_value : float
         The maximum absolute wave8 value that is considered "reasonable".
     setup_re : bool
         If True, we'll set up the run engine first. Set to False to avoid
         setting up the run engine.
     """
+    wave8 = wave8.lower()
+
+    if wave8_xpos is None:
+        if wave8 == "dg1":
+            wave8_xpos = DG1_WAVE8_XPOS
+        elif wave8 == "dg2":
+            wave8_xpos = DG2_WAVE8_XPOS
+        else:
+            raise ValueError(f"Invalid wave8 {wave8}, expected dg1 or dg2")
+
     if setup_re:
         init_re()
     
@@ -141,36 +143,39 @@ def get_blop_agent(
             search_domain=(mirror_nominal - search_delta, mirror_nominal + search_delta),
         ),
     ]
-    objectives = []
-    detectors = []
-    if use_dg1:
-        objectives.append(
-            Objective(
-                name="mfx_dg1_wave8_xpos",
-                target=(dg1_wave8_xpos - wave8_tol, dg1_wave8_xpos + wave8_tol),
-                trust_domain=(-1 * wave8_max_value, wave8_max_value),
-            )
-        )
-        detectors.append(devices["mfx_dg1_wave8"].xpos)
-        if not devices["mfx_dg1_ipm"].inserted:
-            print("Warning: DG1 Wave8 is not inserted!")
-    if use_dg2:
-        objectives.append(
-            Objective(
-                name="mfx_dg2_wave8_xpos",
-                target=(dg2_wave8_xpos - wave8_tol, dg2_wave8_xpos + wave8_tol),
-                trust_domain=(-1 * wave8_max_value, wave8_max_value),
-            )
-        )
-        detectors.append(devices["mfx_dg2_wave8"].xpos)
-        if not devices["mfx_dg2_ipm"].inserted:
-            print("Warning: DG2 Wave8 is not inserted!")
-    
+    wave8_name = f"mfx_{wave8}_wave8"
+    ipm_name = f"mfx_{wave8}_ipm"
+    df_name = f"{wave8_name}_xpos"
+    objectives = [
+        # Optimization target
+        Objective(name="distance", target="min"),
+        # Data validity
+        Objective(
+            name=df_name,
+            trust_domain=(-1 * wave8_max_value, wave8_max_value),
+        ),
+    ]
+    detectors = [devices[wave8_name].xpos]
+
+    if not devices[ipm_name].inserted:
+        print(f"Warning: {wave8.upper()} Wave8 is not inserted!")
+
+
+    def digestion(df: DataFrame) -> DataFrame:
+        """
+        Calculate optimization parameter: distance from target
+        """
+        for index, entry in df.iterrows():
+            df.loc[index, "distance"] = abs(entry.get(df_name) - wave8_xpos)
+        return df
+
+
     return Agent(
         dofs=dofs,
         objectives=objectives,
         dets=detectors,         # blop =0.7.0
         # detectors=detectors,  # blop >0.7.0
+        digestion=digestion,
         verbose=True,
         db=bluesky_objs["broker"],
         tolerate_acquisition_errors=False,
@@ -199,17 +204,11 @@ def setup_sim_test() -> None:
 def run_sim_test() -> Agent:
     print("Create agent")
     RE = bluesky_objs["RE"]
-    agent = get_blop_agent(use_dg1=True)
+    agent = get_blop_agent()
     print("QR sampling")
     RE(agent.learn("qr", n=16))
     print("QEI optimization")
-    agent.refresh()
-    try:
-        RE(agent.learn("qei", n=4, iterations=4))
-    except Exception as exc:
-        ...
-        # raise
-    agent.refresh()
+    RE(agent.learn("qei", n=4, iterations=4))
     print("Move to best")
     RE(agent.go_to_best())
     print(f"pitch is at {init_devices()['mr1l4_homs'].pitch.position}")
