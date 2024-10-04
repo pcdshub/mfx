@@ -983,6 +983,8 @@
                 "description": null,
                 "tags": null,
                 "by_pv": {
+                  "MFX:DIA:MMS:05.DISP": [],
+                  "MFX:DIA:MMS:06.DISP": [],
                   "MFX:DIA:MMS:07:LD": [],
                   "MFX:DIA:MMS:07:MV": [],
                   "MFX:DIA:MMS:07:SE": [],
