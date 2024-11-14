@@ -87,6 +87,7 @@ def begin(events=None, duration=300,
     import logging
     from time import sleep
     from mfx.db import daq
+    from ophyd.utils import StatusTimeoutError, WaitTimeoutError
     logger = logging.getLogger(__name__)
 
     logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
@@ -101,10 +102,11 @@ def begin(events=None, duration=300,
                                     use_l3t=use_l3t, controls=controls)
         try:
             begin_status.wait(timeout=daq._begin_timeout)
-        except (StatusTimeoutError, WaitTimeoutError):
+        except (StatusTimeoutError, WaitTimeoutError) as e:
             msg = (f'Timeout after {daq._begin_timeout} seconds waiting '
-                    'for daq to begin.')
-            raise DaqTimeoutError(msg) from None
+                    'for daq to begin. Exception: {type(e).__name__}')
+            logger.info(msg)
+            #raise DaqTimeoutError(msg) from None
 
         # In some daq configurations the begin status returns very early,
         # so we allow the user to configure an emperically derived extra
