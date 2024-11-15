@@ -107,8 +107,8 @@ def attenuator_scan_single_run(
     if use_daq:
         from mfx.db import daq
 
-        daq.end_run()
-        daq.disconnect()
+        #daq.end_run()
+        #daq.disconnect()
 
     evts = kwargs.get("events")
     if duration is None:

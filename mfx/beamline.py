@@ -93,6 +93,9 @@ with safe_load('Droplet_on_Demand'):
 with safe_load('Debugging Scripts'):
     from mfx.debug import *
     debug = Debug()
+with safe_load('XLJ'):
+    from pcdsdevices.jet import BeckhoffJet
+    xlj = BeckhoffJet('MFX:LJH', name='xlj')
 
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports

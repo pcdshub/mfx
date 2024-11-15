@@ -39,7 +39,7 @@ class bs:
         os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
 
 
-    def makepeds(self, username, run_number=None):
+    def makepeds(self, username, run_number=None, onshift=False):
         import os
         import logging
         from mfx.db import daq
@@ -54,8 +54,12 @@ class bs:
                     f"bs.makepeds('{username}', run_number=XXX)")
         username = str(username)
         run_number = str(int(run_number))
-        os.system(
-            f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}")
+        if onshift:
+            cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()} --reservation lcls:onshift"
+        else:
+            cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}"
+        logging.info(cmd)
+        os.system(cmd)
 
 
     def restartdaq(self):
@@ -115,8 +119,7 @@ class bs:
         input("Press Enter to continue...")
 
         if camera not in [pv[1] for pv in self.camera_names]:
-            logging.info("Desired Camera not in List. Software will exit.")
-            sys.exit()
+            logging.error("Desired Camera not in List. Please double check camera name.")
 
         logging.info("Checking Focus Scan Plot")
         os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -p")
