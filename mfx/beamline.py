@@ -93,9 +93,14 @@ with safe_load('Droplet_on_Demand'):
 with safe_load('Debugging Scripts'):
     from mfx.debug import *
     debug = Debug()
+    
 with safe_load('XLJ'):
     from pcdsdevices.jet import BeckhoffJet
     xlj = BeckhoffJet('MFX:LJH', name='xlj')
+    from mfx.xlj_fast import BypassPositionCheck
+    xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
+    xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
+    xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
