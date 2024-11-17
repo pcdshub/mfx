@@ -19,8 +19,6 @@ class cctbx:
         """
         import logging
         import subprocess
-        #self.settings = f"/sdf/home/{user[0]}/{user}/.cctbx.xfel/settings.phil"
-        #self.cctbx_dir = f"/sdf/home/{user[0]}/{user}"
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
