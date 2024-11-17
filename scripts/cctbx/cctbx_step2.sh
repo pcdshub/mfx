@@ -1,18 +1,21 @@
 #! /bin/bash
 
-option=$1
+user=$1
+experiment=$2
+facility=$3
 
-source /sdf/group/lcls/ds/tools/cctbx/setup.sh
+case $facility in
 
-if [[ "$option" == "notch" ]]
-then
-  echo Selected $option
-  runlist=$2
-  libtbx.python /sdf/group/lcls/ds/tools/cctbx/energy/fee_spec.py $runlist
-fi
+  S3DF)
+    mfx_dir="/sdf/group/lcls/ds/tools/mfx"
+    source /sdf/group/lcls/ds/tools/cctbx/setup.sh
+    ;;
 
-if [[ "$option" == "gui" ]]
-then
-  echo Selected $option
-  cctbx.xfel
-fi
+  NERSC)
+    mfx_dir="/global/homes/c/cctbx/mfx"
+    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    ;;
+esac
+
+python ${mfx_dir}/scripts/cctbx/phil_setup.py -u $user -e $experiment -f $facility
+cctbx.xfel

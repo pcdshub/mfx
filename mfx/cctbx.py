@@ -4,15 +4,27 @@ class cctbx:
         self.experiment = str(get_exp())
 
 
-    def xfel_gui(self, user):
+    def xfel_gui(
+        self,
+        user: str,
+        facility: str = "S3DF"
+    ):
+        """Launch CCTBX XFEL GUI.
+
+        Parameters:
+
+            user (str): username for computer account at facility.
+
+            facility (str): Default: "S3DF". Options: "S3DF, NERSC".
+        """
         import logging
         import subprocess
-        self.settings = f"/sdf/home/{user[0]}/{user}/.cctbx.xfel/settings.phil"
-        self.cctbx_dir = f"/sdf/home/{user[0]}/{user}"
+        #self.settings = f"/sdf/home/{user[0]}/{user}/.cctbx.xfel/settings.phil"
+        #self.cctbx_dir = f"/sdf/home/{user[0]}/{user}"
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx_step1.sh {user} {self.experiment}"
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx_step1.sh {user} {self.experiment} {facility}"
             ]
 
         logging.info(proc)
