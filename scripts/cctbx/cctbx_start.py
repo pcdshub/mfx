@@ -150,11 +150,11 @@ def parse_args(args):
         help="Enter -d to set debugging mode",
     )
     parser.add_argument(
-        "--phil",
-        "-p",
-        dest="phil",
+        "--step",
+        "-s",
+        dest="step",
         default=None,
-        help="Enter -p to setup phil settings",
+        help="Enter -s to setup step",
     )
 
     return parser.parse_args(args)
@@ -172,25 +172,9 @@ def main(args):
     exp = args.experiment
     facility = args.facility
     debug = bool(args.debug)
-    phil = args.phil
+    step = args.step
 
-    if phil is not None:
-
-        if facility == "NERSC":
-            cctbx_dir = f"/global/homes/c/cctbx/.cctbx.xfel"
-        elif facility == "S3DF":
-            cctbx_dir = f"/sdf/home/{user[0]}/{user}/.cctbx.xfel"
-        else:
-            cctbx_dir = None
-            logging.warning(f"Facility not found: {facility}")
-
-        if cctbx_dir is not None:
-            if not os.path.exists(cctbx_dir):
-                os.makedirs(cctbx_dir)
-            #
-            check_settings(exp, facility, cctbx_dir)
-
-    else:
+    if int(step) == 1:
 
         logging.info("Starting up cctbx")
 
@@ -199,7 +183,7 @@ def main(args):
             proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
-                f"{user} {exp} {facility} 2}"
+                f"{user} {exp} {facility} 2 {str(debug)}"
             ]
         elif facility == "NERSC":
             preproc = [
@@ -208,7 +192,7 @@ def main(args):
             proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
-                f"{user} {exp} {facility} 2"
+                f"{user} {exp} {facility} 2 {str(debug)}"
             ]
 
         if preproc is not None:
@@ -227,6 +211,24 @@ def main(args):
             subprocess.Popen(
                 proc, shell=True,
                 stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+    else:
+
+        if facility == "NERSC":
+            cctbx_dir = f"/global/homes/c/cctbx/.cctbx.xfel"
+        elif facility == "S3DF":
+            cctbx_dir = f"/sdf/home/{user[0]}/{user}/.cctbx.xfel"
+        else:
+            cctbx_dir = None
+            logging.warning(f"Facility not found: {facility}")
+
+        if cctbx_dir is not None:
+            if not os.path.exists(cctbx_dir):
+                os.makedirs(cctbx_dir)
+            #
+            check_settings(exp, facility, cctbx_dir)
+
+
 
 
 def run():
