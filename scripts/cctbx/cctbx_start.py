@@ -188,11 +188,11 @@ def main(args):
             ]
         elif facility == "NERSC":
             preproc = [
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy -c cctbx -u {user}"
+                f"/global/common/software/lcls/mfx/scripts/cctbx/sshproxy -c cctbx -u {user}"
             ]
             proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
+                f"/global/common/software/lcls/mfx/scripts/cctbx/cctbx.sh "
                 f"{user} {exp} {facility} 2 {str(debug)}"
             ]
 
