@@ -3,6 +3,7 @@
 user=$1
 experiment=$2
 facility=$3
+step=$4
 
 case $facility in
 
@@ -17,5 +18,14 @@ case $facility in
     ;;
 esac
 
-python ${mfx_dir}/scripts/cctbx/phil_setup.py -u $user -e $experiment -f $facility
-cctbx.xfel
+case $step in
+
+  1)
+    python ${mfx_dir}/scripts/cctbx/cctbx_start.py -u $user -e $experiment -f $facility
+    ;;
+
+  2)
+    python ${mfx_dir}/scripts/cctbx/phil_setup.py -u $user -e $experiment -f $facility
+    cctbx.xfel
+    ;;
+esac

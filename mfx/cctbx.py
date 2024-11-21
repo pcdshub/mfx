@@ -22,7 +22,7 @@ class cctbx:
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx_step1.sh {user} {self.experiment} {facility}"
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh {user} {self.experiment} {facility} 1"
             ]
 
         logging.info(proc)
