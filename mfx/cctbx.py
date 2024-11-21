@@ -7,7 +7,8 @@ class cctbx:
     def xfel_gui(
         self,
         user: str,
-        facility: str = "S3DF"
+        facility: str = "S3DF",
+        debug: bool = False,
     ):
         """Launch CCTBX XFEL GUI.
 
@@ -16,20 +17,27 @@ class cctbx:
             user (str): username for computer account at facility.
 
             facility (str): Default: "S3DF". Options: "S3DF, NERSC".
+
+            debug (bool): Default: False.
         """
         import logging
+        import os
         import subprocess
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh {user} {self.experiment} {facility} 1"
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh"
+            f"{user} {self.experiment} {facility} 1"
             ]
 
         logging.info(proc)
-        
-        subprocess.Popen(
-            proc, shell=True, 
-            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        if debug:
+            os.system(proc)
+        else:
+            subprocess.Popen(
+                proc, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     
     def notch_check(self, user, runs=[]):
