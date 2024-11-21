@@ -14,8 +14,18 @@ case $facility in
     ;;
 
   NERSC)
-    mfx_dir="/global/common/software/lcls/mfx"
-    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    case $step in
+
+      1)
+        mfx_dir="/sdf/group/lcls/ds/tools/mfx"
+        source /sdf/group/lcls/ds/tools/cctbx/setup.sh
+        ;;
+
+      2)
+        mfx_dir="/global/common/software/lcls/mfx"
+        source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+        ;;
+    esac
     ;;
 esac
 
