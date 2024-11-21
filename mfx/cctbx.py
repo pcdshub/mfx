@@ -26,7 +26,7 @@ class cctbx:
 
         proc = [
             f"ssh -YAC {user}@s3dflogin "
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh"
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
             f"{user} {self.experiment} {facility} 1"
             ]
 
