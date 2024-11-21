@@ -12,7 +12,7 @@ case $facility in
     ;;
 
   NERSC)
-    mfx_dir="/global/homes/c/cctbx/mfx"
+    mfx_dir="/global/common/software/lcls/mfx"
     source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
     ;;
 esac

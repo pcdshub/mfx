@@ -16,6 +16,6 @@ case $facility in
   NERSC)
     # /global/homes/c/cctbx/mfx.sh
     ./sshproxy -c cctbx -u $user
-    ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov /global/homes/c/cctbx/mfx/scripts/cctbx/cctbx_step2.sh $user $experiment NERSC
+    ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov /global/common/software/lcls/mfx/scripts/cctbx/cctbx_step2.sh $user $experiment NERSC
     ;;
 esac
