@@ -46,6 +46,13 @@ def parse_args(args):
         default=None,
         help="Enter -f to specify facility",
     )
+    parser.add_argument(
+        "--debug",
+        "-d",
+        dest="debug",
+        default=str(False),
+        help="Enter -d to set debugging mode",
+    )
 
     return parser.parse_args(args)
 
@@ -61,6 +68,7 @@ def main(args):
     user = args.username
     exp = args.experiment
     facility = args.facility
+    debug = bool(args.debug)
 
     logging.info("Starting up cctbx")
 
@@ -83,14 +91,20 @@ def main(args):
 
     if preproc is not None:
         logging.info(preproc)
-        subprocess.Popen(
-            preproc, shell=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        if debug:
+            os.system(preproc[0])
+        else:
+            subprocess.Popen(
+                preproc, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     logging.info(proc)
-    subprocess.Popen(
-        proc, shell=True,
-        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    if debug:
+        os.system(proc[0])
+    else:
+        subprocess.Popen(
+            proc, shell=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 def run():
