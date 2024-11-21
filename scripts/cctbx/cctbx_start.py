@@ -76,16 +76,16 @@ def main(args):
         preproc = None
         proc = [
             f"ssh -YAC psana "
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx.sh "
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
             f"{user} {exp} {facility} 2"
         ]
     elif facility == "NERSC":
         preproc = [
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/sshproxy -c cctbx -u {user}"
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy -c cctbx -u {user}"
         ]
         proc = [
             f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx.sh "
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
             f"{user} {exp} {facility} 2"
         ]
 
