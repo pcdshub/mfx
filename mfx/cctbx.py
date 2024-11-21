@@ -33,7 +33,7 @@ class cctbx:
         logging.info(proc)
 
         if debug:
-            os.system(proc)
+            os.system(proc[0])
         else:
             subprocess.Popen(
                 proc, shell=True,
