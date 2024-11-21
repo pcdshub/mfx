@@ -5,6 +5,7 @@ experiment=$2
 facility=$3
 step=$4
 debug=$5
+phil=$6
 
 case $facility in
 
@@ -26,7 +27,7 @@ case $step in
     ;;
 
   2)
-    python ${mfx_dir}/scripts/cctbx/phil_setup.py -u $user -e $experiment -f $facility -d $debug
+    python ${mfx_dir}/scripts/cctbx/cctbx_start.py -u $user -e $experiment -f $facility -d $debug -p $phil
     cctbx.xfel
     ;;
 esac
