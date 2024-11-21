@@ -41,6 +41,7 @@ db {{
   host = "172.24.5.182"
   name = "{exp}"
   user = "{exp}"
+  password = "lcls"
 }}\
 '''
     setting_NERSC = f'''\
