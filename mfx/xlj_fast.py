@@ -3,6 +3,7 @@ from ophyd.device import Component as Cpt
 from ophyd.signal import EpicsSignal
 from pcdsdevices.pv_positioner import PVPositionerDone
 from pcdsdevices import utils
+from pcdsdevices.jet import BeckhoffJet
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
         xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
 
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
+
+    xlj = BeckhoffJet('MFX:LJH', name='xlj')
 
     up = "\x1b[A"
     down = "\x1b[B"
@@ -117,16 +120,34 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
         """Function used to know when and the direction to move the motor."""
         try:
             if direction == left:
+                if round(xlj.jet.x(), 2) != round(xlj_fast_x(), 2):
+                    logger.error(f'xlj.jet.x = {xlj.jet.x()}, xlj_fast_x = {xlj_fast_x()}')
+                    xlj_fast_x.umv(xlj.jet.x())
                 xlj_fast_x.umvr(-scale, log=False, newline=False)
             elif direction == right:
+                if round(xlj.jet.x(), 2) != round(xlj_fast_x(), 2):
+                    logger.error(f'xlj.jet.x = {xlj.jet.x()}, xlj_fast_x = {xlj_fast_x()}')
+                    xlj_fast_x.umv(xlj.jet.x())
                 xlj_fast_x.umvr(scale, log=False, newline=False)
             elif direction == up:
+                if round(xlj.jet.y(), 2) != round(xlj_fast_y(), 2):
+                    logger.error(f'xlj.jet.y = {xlj.jet.y()}, xlj_fast_y = {xlj_fast_y()}')
+                    xlj_fast_y.umv(xlj.jet.y())
                 xlj_fast_y.umvr(scale, log=False, newline=False)
             elif direction == down:
+                if round(xlj.jet.y(), 2) != round(xlj_fast_y(), 2):
+                    logger.error(f'xlj.jet.y = {xlj.jet.y()}, xlj_fast_y = {xlj_fast_y()}')
+                    xlj_fast_y.umv(xlj.jet.y())
                 xlj_fast_y.umvr(-scale, log=False, newline=False)
             elif direction == shift_up:
+                if round(xlj.jet.z(), 2) != round(xlj_fast_z(), 2):
+                    logger.error(f'xlj.jet.z = {xlj.jet.z()}, xlj_fast_z = {xlj_fast_z()}')
+                    xlj_fast_z.umv(xlj.jet.z())
                 xlj_fast_z.umvr(-scale, log=False, newline=False)
             elif direction == shift_down:
+                if round(xlj.jet.z(), 2) != round(xlj_fast_z(), 2):
+                    logger.error(f'xlj.jet.z = {xlj.jet.z()}, xlj_fast_z = {xlj_fast_z()}')
+                    xlj_fast_z.umv(xlj.jet.z())
                 xlj_fast_z.umvr(scale, log=False, newline=False)
         except Exception as exc:
             logger.error('Error in tweak move: %s', exc)
