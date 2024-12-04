@@ -116,7 +116,7 @@ class MFX_Timing:
         default is event sequencer 7 and use 'spare' to run sequencer 12
 
     laser: list, optional
-        sets laser sequence list in format [[laser_on,0],[laser_off,0],...]
+        sets laser sequence list in format [['laser_on',0],['laser_off',0],...]
 
     Operations
     ----------
