@@ -78,6 +78,10 @@ with safe_load('cctbx'):
     from mfx.cctbx import *
     cctbx = cctbx()
 
+with safe_load('OM'):
+    from mfx.om import *
+    om = OM()
+
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
