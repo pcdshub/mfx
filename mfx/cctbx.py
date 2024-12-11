@@ -4,6 +4,34 @@ class cctbx:
         self.experiment = str(get_exp())
 
 
+    def sshproxy(
+        self,
+        user: str,
+    ):
+
+        """Launch sshproxy check for getting NERSC token if needed
+
+        Parameters:
+
+            user (str): username for computer account at facility.
+
+            debug (bool): Default: False.
+        """
+        import logging
+        import os
+        import subprocess
+
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy.sh "
+            f"-c cctbx -u {user}"
+            ]
+
+        logging.info(proc)
+
+        os.system(proc[0])
+
+
     def xfel_gui(
         self,
         user: str,
@@ -25,14 +53,14 @@ class cctbx:
         import subprocess
 
         proc = [
-            f"ssh -YAC {user}@s3dflogin "
+            f"ssh -Yt {user}@s3dflogin "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
             f"{user} {self.experiment} {facility} 1 {str(debug)}"
             ]
 
         logging.info(proc)
 
-        if debug:
+        if facility == 'NERSC':
             os.system(proc[0])
         else:
             subprocess.Popen(
