@@ -54,7 +54,7 @@ facility {{
     }}
   }}
 }}
-output_folder = "/pscratch/sd/c/cctbx/l10451/common/results"
+output_folder = "/pscratch/sd/c/cctbx/{exp[3:-2]}/common/results"
 mp {{
   method = local lsf sge pbs *slurm shifter htcondor custom
   mpi_command = "srun"
@@ -73,8 +73,8 @@ mp {{
 }}
 experiment_tag = "common"
 db {{
-  host = "db-loadbalancer.mfxl1045123.production.svc.spin.nersc.org"
-  name = "mfxl1045123"
+  host = "db-lb.{exp}.production.svc.spin.nersc.org"
+  name = "{exp}"
   user = "user"
   password = "JohanWah1"
   server {{
