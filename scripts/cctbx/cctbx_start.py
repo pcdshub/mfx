@@ -198,12 +198,7 @@ def main(args):
 
         if preproc is not None:
             logging.info(preproc)
-            if debug:
-                os.system(preproc[0])
-            else:
-                subprocess.Popen(
-                    preproc, shell=True,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            os.system(preproc[0])
 
         logging.info(proc)
         if debug:
