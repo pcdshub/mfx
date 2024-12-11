@@ -56,19 +56,14 @@ class OM:
                     newline = f'  psana_calibration_directory: /sdf/data/lcls/ds/mfx/{self.experiment}/calib\n'
                     logging.info(f'Changing line {ind} to {newline}')
                     lines[ind] = newline
-
-        if mask != '':
-            with open(yaml, "r") as file:
-                lines = file.readlines()
+            if mask != '':
                 for ind, line in enumerate(lines):
                     if 'bad_pixel_map_filename' in lines[ind]:
                         newline = f'  bad_pixel_map_filename: {mask}\n'
                         logging.info(f'Changing line {ind} to {newline}')
                         lines[ind] = newline
 
-        if geom != '':
-            with open(yaml, "r") as file:
-                lines = file.readlines()
+            if geom != '':
                 for ind, line in enumerate(lines):
                     if 'geometry_file' in lines[ind]:
                         newline = f'  geometry_file: {geom}\n'
@@ -219,7 +214,7 @@ class OM:
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-    def om(self, det=None, start='all', calibdir=None):
+    def om(self, det=None, start='all', calibdir=None, debug: bool = False):
         """
         Launches OM
 
@@ -228,8 +223,13 @@ class OM:
         det: str, optional
             Detector name. Example 'Rayonix', 'Epix10k2M', or 'XES' for spectroscopy
 
+        start: str, optional
+            Which process to start. All by default
+
         calibdir: str, optional
             path to calib directory
+
+        debug (bool): Default: False.
 
         Operations
         ----------
@@ -237,8 +237,9 @@ class OM:
         """
         import logging
         import subprocess
+        import os
         self.check_settings()
-        monitor_wrapper = None
+        monitor_wrapper = ''
         monitor_wrapper = subprocess.check_output(
             "ssh -YAC mfx-monitor ps aux | grep monitor_wrapper.sh | grep -v grep | awk '{ print $2 }'",shell=True).decode()
 
@@ -255,11 +256,11 @@ class OM:
                 "No proper detector seclected. Please use either"
                 "'Rayonix', 'Epix10k2M', or 'XES' for spectroscopy")
 
-        if monitor_wrapper is None:
+        if monitor_wrapper == '':
             proc = [
-                f'{det_dir}/run_om.sh',
                 f'{det_dir}/run_gui.sh',
-                f'{det_dir}/run_frame_viewer.sh'
+                f'{det_dir}/run_frame_viewer.sh',
+                f'ssh -YAC mfx-monitor "cd {det_dir}; ./run_om.sh"'
                 ]
         else:
             proc = [
@@ -268,11 +269,20 @@ class OM:
                 ]
 
         logging.info(proc)
-        
-        subprocess.Popen(
-            proc, shell=True, 
-            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
+        if debug:
+            subprocess.Popen(
+                proc[0], shell=True, 
+                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            subprocess.Popen(
+                proc[1], shell=True, 
+                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            os.system(proc[-1])
+        else:
+            for cmd in proc:
+                subprocess.Popen(
+                    cmd, shell=True, 
+                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     def reset(self):
         """
