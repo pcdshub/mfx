@@ -30,6 +30,7 @@ case $type in
     cd masks/
     dials.generate_mask ${out}/imported.expt border=1
     mv pixels.mask border.mask
+    dials.image_viewer border.mask
     ;;
 
   geometry)
