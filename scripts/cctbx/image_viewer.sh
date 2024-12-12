@@ -19,19 +19,20 @@ case $facility in
     ;;
 esac
 
+cd ${mfx_dir}/common/results/averages/r0024/000/out
+dials.import max.cbf wavelength=1.105
+
 case $type in
 
   mask)
     cd ${mfx_dir}/common/results
     mkdir masks
     cd masks/
-    dials.generate_mask ../geom/r24_agbe.expt border=1
+    dials.generate_mask ${mfx_dir}/common/results/averages/r0024/000/out/imported.expt border=1
     mv pixels.mask border.mask
     ;;
 
   geometry)
-    cd ${mfx_dir}/common/results/averages/r0024/000/out
-    dials.import max.cbf wavelength=1.105
     dials.image_viewer imported.expt
     ;;
 esac
