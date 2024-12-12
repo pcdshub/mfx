@@ -187,18 +187,11 @@ def main(args):
                 f"{user} {exp} {facility} 2 {str(debug)}"
             ]
         elif facility == "NERSC":
-            preproc = [
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy.sh -c cctbx -u {user}"
-            ]
             proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/cctbx.sh "
                 f"{user} {exp} {facility} 2 {str(debug)}"
             ]
-
-        if preproc is not None:
-            logging.info(preproc)
-            os.system(preproc[0])
 
         logging.info(proc)
         if debug:

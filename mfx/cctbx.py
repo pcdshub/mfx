@@ -20,7 +20,7 @@ class cctbx:
         import logging
         import os
         import subprocess
-
+        logging.info(f"Creating new sshproxy token for {user}.")
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy.sh "
@@ -55,12 +55,19 @@ class cctbx:
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
-            f"{user} {self.experiment} {facility} 1 {str(debug)}"
+            f"{user} {self.experiment} {facility} 1 {str(debug)} "
             ]
 
         logging.info(proc)
 
         if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+        if debug:
             os.system(proc[0])
         else:
             subprocess.Popen(
