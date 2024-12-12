@@ -7,11 +7,10 @@ class cctbx:
     def image_viewer(
         self,
         user: str,
-        facility: str = "S3DF",
-        debug: bool = False,
+        run: int,
         image_type: str,
-        run: int
-    ):
+        facility: str = "S3DF",
+        debug: bool = False):
         """Launch CCTBX XFEL GUI.
 
         Parameters:
