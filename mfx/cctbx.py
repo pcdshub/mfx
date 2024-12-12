@@ -4,6 +4,57 @@ class cctbx:
         self.experiment = str(get_exp())
 
 
+    def image_viewer(
+        self,
+        user: str,
+        facility: str = "S3DF",
+        debug: bool = False,
+        image_type: str,
+        run: int
+    ):
+        """Launch CCTBX XFEL GUI.
+
+        Parameters:
+
+            user (str): username for computer account at facility.
+
+            facility (str): Default: "S3DF". Options: "S3DF, NERSC".
+
+            debug (bool): Default: False.
+
+            image_type (str): Enter -t for type of image view
+
+            run (int): Enter -r for the run number
+
+
+        """
+        import logging
+        import os
+        import subprocess
+
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
+            f"-e {self.experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run}"
+            ]
+
+        logging.info(proc)
+
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+        if debug:
+            os.system(proc[0])
+        else:
+            subprocess.Popen(
+                proc, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
     def sshproxy(
         self,
         user: str,
