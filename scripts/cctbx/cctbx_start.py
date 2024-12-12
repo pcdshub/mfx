@@ -180,7 +180,6 @@ def main(args):
         logging.info("Starting up cctbx")
 
         if facility == "S3DF":
-            preproc = None
             proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
