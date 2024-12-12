@@ -4,7 +4,6 @@ experiment=$1
 run=$2
 facility=$3
 type=$4
-debug=$5
 
 case $facility in
 

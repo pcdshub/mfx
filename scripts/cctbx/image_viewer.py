@@ -21,14 +21,14 @@ def image_viewer(exp, run, facility, type, debug):
         exp = {exp[3:-2]}
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-                f"/global/common/software/lcls/mfx/scripts/cctbx/cctbx.sh "
-                f"{exp} {run} {facility} {type} {str(debug)}"
+                f"/global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
+                f"{exp} {run} {facility} {type}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
-                f"{exp} {run} {facility} {type} {str(debug)}"
+                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.sh "
+                f"{exp} {run} {facility} {type}"
             ]
     else:
         logging.warning(f"Facility not found: {facility}")
