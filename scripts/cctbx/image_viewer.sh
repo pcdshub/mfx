@@ -18,7 +18,8 @@ case $facility in
     ;;
 esac
 
-cd ${mfx_dir}/common/results/averages/r0024/000/out
+out="${mfx_dir}/common/results/averages/${run}/000/out"
+cd ${out}
 dials.import max.cbf wavelength=1.105
 
 case $type in
@@ -27,7 +28,7 @@ case $type in
     cd ${mfx_dir}/common/results
     mkdir masks
     cd masks/
-    dials.generate_mask ${mfx_dir}/common/results/averages/r0024/000/out/imported.expt border=1
+    dials.generate_mask ${out}/imported.expt border=1
     mv pixels.mask border.mask
     ;;
 
