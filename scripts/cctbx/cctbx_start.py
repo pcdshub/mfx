@@ -214,10 +214,8 @@ def main(args):
         if cctbx_dir is not None:
             if not os.path.exists(cctbx_dir):
                 os.makedirs(cctbx_dir)
-            #
+
             check_settings(exp, facility, cctbx_dir)
-
-
 
 
 def run():
