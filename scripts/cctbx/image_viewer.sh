@@ -1,6 +1,6 @@
 #! /bin/bash
 
-experiment=$1
+exp=$1
 run=$2
 facility=$3
 type=$4
