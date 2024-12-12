@@ -14,17 +14,21 @@ logger = logging.getLogger(__name__)
 
 def image_viewer(exp, run, facility, type, debug):
     logging.info(f"Opening image viewer for {type}")
+    run = str(run).zfill(4)
+    run = f'r{run}'
+
     if facility == "NERSC":
+        exp = {exp[3:-2]}
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/cctbx.sh "
-                f"{exp} {facility} {type} {str(debug)}"
+                f"{exp} {run} {facility} {type} {str(debug)}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
-                f"{exp} {facility} {type} {str(debug)}"
+                f"{exp} {run} {facility} {type} {str(debug)}"
             ]
     else:
         logging.warning(f"Facility not found: {facility}")
