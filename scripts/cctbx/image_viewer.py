@@ -18,7 +18,7 @@ def image_viewer(exp, run, facility, type, debug):
     run = f'r{run}'
 
     if facility == "NERSC":
-        exp = {exp[3:-2]}
+        exp = exp[3:-2]
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
