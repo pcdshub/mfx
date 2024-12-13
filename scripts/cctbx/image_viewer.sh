@@ -83,7 +83,8 @@ case $type in
     echo "Your level 0 refinement file found Here:"
     echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
 
-    read -p "Refinement done. Would you like to Deploy? (y/n) " yn
+    echo "Refinement done. Would you like to Deploy? (y/n) "
+    read yn
 
     case $yn in 
       y) echo ok, we shall proceed;;
@@ -114,7 +115,8 @@ case $type in
     echo "Final refinement file found Here:"
     echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
 
-    read -p "Refinement done. Would you like to Deploy? (y/n) " yn
+    echo "Refinement done. Would you like to Deploy? (y/n) "
+    read yn
 
     case $yn in 
       y) echo ok, we shall proceed;;
@@ -156,7 +158,8 @@ case $type in
     echo "Final refinement file found Here:"
     echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
 
-    read -p "Refinement done. Would you like to Deploy? (y/n) " yn
+    echo "Refinement done. Would you like to Deploy? (y/n) "
+    read yn
 
     case $yn in 
       y) echo ok, we shall proceed;;
