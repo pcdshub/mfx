@@ -71,6 +71,10 @@ case $type in
     cd ${mfx_dir}/common/geom/refine_${group:3}
     dials.combine_experiments ${mfx_dir}/common/results/r0*/${group}/out/*refined*.expt ${mfx_dir}/common/results/r0*/${group}/out/*indexed*.refl reference_from_experiment.detector=0
     cctbx.xfel.detector_residuals combined.* hierarchy=1 tag=combined &
+
+    cctbx.xfel.filter_experiments_by_rmsd combined.*
+    dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
+    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined &
     ;;
 
   refinement1)
