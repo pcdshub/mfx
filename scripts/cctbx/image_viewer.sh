@@ -19,7 +19,7 @@ case $facility in
     ;;
 esac
 
-if [ $5 -eq 0 ]; then
+if [ -z "${group}" ]; then
   # No arguments provided, open the newest file
   group=$(ls -t ${mfx_dir}/common/results/averages/${run} | head -n 1)
   echo "no trial-rungroup provided so using the newest"
