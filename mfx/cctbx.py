@@ -49,7 +49,7 @@ class cctbx:
             if token.lower() == "n":
                 self.sshproxy(user)
 
-        if debug:
+        if debug or 'refinement' in image_type:
             os.system(proc[0])
         else:
             subprocess.Popen(

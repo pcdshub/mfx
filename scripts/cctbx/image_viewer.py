@@ -12,8 +12,8 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-def image_viewer(exp, run, facility, type, group, debug):
-    logging.info(f"Opening image viewer for {type}")
+def image_viewer(exp, run, facility, image_type, group, debug):
+    logging.info(f"Opening image viewer for {image_type}")
     run = str(run).zfill(4)
     run = f'r{run}'
 
@@ -22,19 +22,19 @@ def image_viewer(exp, run, facility, type, group, debug):
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
-                f"{exp} {run} {facility} {type}"
+                f"{exp} {run} {facility} {image_type} {group}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.sh "
-                f"{exp} {run} {facility} {type}"
+                f"{exp} {run} {facility} {image_type} {group}"
             ]
     else:
         logging.warning(f"Facility not found: {facility}")
 
     logging.info(proc)
-    if debug:
+    if debug or 'refinement' in image_type:
         os.system(proc[0])
     else:
         subprocess.Popen(
@@ -75,9 +75,9 @@ def parse_args(args):
         help="Enter -d to set debugging mode",
     )
     parser.add_argument(
-        "--type",
+        "--image_type",
         "-t",
-        dest="type",
+        dest="image_type",
         default=None,
         help="Enter -t for type of image view",
     )
@@ -112,11 +112,11 @@ def main(args):
     exp = args.experiment
     facility = args.facility
     debug = bool(args.debug)
-    type = args.type.lower()
+    image_type = args.image_type.lower()
     run = args.run
     group = args.group
 
-    image_viewer(exp, run, facility, type, group, debug)
+    image_viewer(exp, run, facility, image_type, group, debug)
 
 
 def run():
