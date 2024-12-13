@@ -86,7 +86,7 @@ case $type in
     read -p "Refinement done. Would you like to Deploy? (y/n) " yn
 
     case $yn in 
-      y) echo ok, we will proceed;;
+      y) echo ok, we shall proceed;;
       n) echo exiting...;
         exit;;
       *) echo invalid response;
@@ -108,7 +108,7 @@ case $type in
   refinement1)
     cd ${mfx_dir}/common/geom/refine_${group:3}
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
+    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
     dxtbx.plot_detector_models refined_level0.expt refined_level1.expt
     echo
     echo "Final refinement file found Here:"
@@ -117,7 +117,7 @@ case $type in
     read -p "Refinement done. Would you like to Deploy? (y/n) " yn
 
     case $yn in 
-      y) echo ok, we will proceed;;
+      y) echo ok, we shall proceed;;
       n) echo exiting...;
         exit;;
       *) echo invalid response;
@@ -150,7 +150,7 @@ case $type in
     echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
 
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
+    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
     dxtbx.plot_detector_models refined_level0.expt refined_level1.expt
     echo
     echo "Final refinement file found Here:"
@@ -159,7 +159,7 @@ case $type in
     read -p "Refinement done. Would you like to Deploy? (y/n) " yn
 
     case $yn in 
-      y) echo ok, we will proceed;;
+      y) echo ok, we shall proceed;;
       n) echo exiting...;
         exit;;
       *) echo invalid response;
