@@ -22,8 +22,6 @@ esac
 runpath="${mfx_dir}/common/results/averages/${run}"
 
 out="${runpath}/${group}/out"
-cd ${out}
-dials.import max.cbf wavelength=1.105
 
 case $type in
 
@@ -41,6 +39,9 @@ case $type in
       # Arguments provided, use the first one as the file to open
       echo "path provided"
     fi
+
+    cd ${out}
+    dials.import max.cbf wavelength=1.105
     cd ${mfx_dir}/common/results
     mkdir masks
     cd masks/
@@ -63,6 +64,9 @@ case $type in
       # Arguments provided, use the first one as the file to open
       echo "path provided"
     fi
+
+    cd ${out}
+    dials.import max.cbf wavelength=1.105
     dials.image_viewer imported.expt
     ;;
 
@@ -70,7 +74,7 @@ case $type in
     mkdir -p ${mfx_dir}/common/geom/refine_${group:3}
     cd ${mfx_dir}/common/geom/refine_${group:3}
     dials.combine_experiments ${mfx_dir}/common/results/r0*/${group}/out/*refined*.expt ${mfx_dir}/common/results/r0*/${group}/out/*indexed*.refl reference_from_experiment.detector=0
-    cctbx.xfel.detector_residuals combined.* hierarchy=1 tag=combined &
+    cctbx.xfel.detector_residuals combined.* hierarchy=1 tag=combined
 
     cctbx.xfel.filter_experiments_by_rmsd combined.*
     dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
