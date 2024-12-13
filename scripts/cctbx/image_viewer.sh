@@ -19,6 +19,11 @@ case $facility in
     ;;
 esac
 
+if [[ ! -d ${mfx_dir}/common/results/averages/${run} ]]; then
+    echo ERROR: Run not averaged yet. Please stop and Average from the GUI
+    exit 1 # terminate and indicate error
+fi
+
 if [ -z "${group}" ]; then
   # No arguments provided, open the newest file
   group=$(ls -t ${mfx_dir}/common/results/averages/${run} | head -n 1)
