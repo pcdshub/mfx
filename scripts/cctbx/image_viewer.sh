@@ -78,7 +78,7 @@ case $type in
 
     cctbx.xfel.filter_experiments_by_rmsd combined.*
     dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
-    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
+    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined &
     echo
     echo "Your level 0 refinement file found Here:"
     echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
@@ -109,7 +109,7 @@ case $type in
     cd ${mfx_dir}/common/geom/refine_${group:3}
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
     cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
-    dxtbx.plot_detector_models refined_level0.expt refined_level1.exptls
+    dxtbx.plot_detector_models refined_level0.expt refined_level1.exptls &
     echo
     echo "Final refinement file found Here:"
     echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
