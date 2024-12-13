@@ -80,17 +80,60 @@ case $type in
     dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
     cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
     echo
-    echo "Final refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.*
+    echo "Your level 0 refinement file found Here:"
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
+
+    read -p "Refinement done. Would you like to Deploy? (y/n) " yn
+
+    case $yn in 
+      y) echo ok, we will proceed;;
+      n) echo exiting...;
+        exit;;
+      *) echo invalid response;
+        exit 1;;
+    esac
+
+    mkdir ${mfx_dir}/common/geom/refine_${group:3}/split
+    cd ${mfx_dir}/common/geom/refine_${group:3}/split/
+    dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
+    newest_split=$(ls -t split*.expt | head -n 1)
+    mv ${newest_split} ${mfx_dir}/common/geom
+    rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
+
+    echo
+    echo "Final refinement deployed Here:"
+    echo ${mfx_dir}/common/geom/${newest_split}
     ;;
 
   refinement1)
     cd ${mfx_dir}/common/geom/refine_${group:3}
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
+    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
+    dxtbx.plot_detector_models refined_level0.expt refined_level1.exptls
     echo
     echo "Final refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.*
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
+
+    read -p "Refinement done. Would you like to Deploy? (y/n) " yn
+
+    case $yn in 
+      y) echo ok, we will proceed;;
+      n) echo exiting...;
+        exit;;
+      *) echo invalid response;
+        exit 1;;
+    esac
+
+    mkdir ${mfx_dir}/common/geom/refine_${group:3}/split
+    cd ${mfx_dir}/common/geom/refine_${group:3}/split/
+    dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
+    newest_split=$(ls -t split*.expt | head -n 1)
+    mv ${newest_split} ${mfx_dir}/common/geom
+    rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
+
+    echo
+    echo "Final refinement deployed Here:"
+    echo ${mfx_dir}/common/geom/${newest_split}
     ;;
 
   refinement)
@@ -102,11 +145,36 @@ case $type in
     cctbx.xfel.filter_experiments_by_rmsd combined.*
     dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
     cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
+    echo
+    echo "Your level 0 refinement file found Here:"
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
 
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
+    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
+    dxtbx.plot_detector_models refined_level0.expt refined_level1.exptls
     echo
     echo "Final refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.*
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
+
+    read -p "Refinement done. Would you like to Deploy? (y/n) " yn
+
+    case $yn in 
+      y) echo ok, we will proceed;;
+      n) echo exiting...;
+        exit;;
+      *) echo invalid response;
+        exit 1;;
+    esac
+
+    mkdir ${mfx_dir}/common/geom/refine_${group:3}/split
+    cd ${mfx_dir}/common/geom/refine_${group:3}/split/
+    dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
+    newest_split=$(ls -t split*.expt | head -n 1)
+    mv ${newest_split} ${mfx_dir}/common/geom
+    rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
+
+    echo
+    echo "Final refinement deployed Here:"
+    echo ${mfx_dir}/common/geom/${newest_split}
     ;;
 esac
