@@ -97,12 +97,12 @@ case $type in
     cd ${mfx_dir}/common/geom/refine_${group:3}/split/
     dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
     newest_split=$(ls -t split*.expt | head -n 1)
-    mv ${newest_split} ${mfx_dir}/common/geom
+    mv ${newest_split} ${mfx_dir}/common/geom/refined_${group}.expt
     rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
 
     echo
     echo "Final refinement deployed Here:"
-    echo ${mfx_dir}/common/geom/${newest_split}
+    echo ${mfx_dir}/common/geom/refined_${group}.expt
     ;;
 
   refinement1)
@@ -128,12 +128,12 @@ case $type in
     cd ${mfx_dir}/common/geom/refine_${group:3}/split/
     dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
     newest_split=$(ls -t split*.expt | head -n 1)
-    mv ${newest_split} ${mfx_dir}/common/geom
+    mv ${newest_split} ${mfx_dir}/common/geom/refined_${group}.expt
     rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
 
     echo
     echo "Final refinement deployed Here:"
-    echo ${mfx_dir}/common/geom/${newest_split}
+    echo ${mfx_dir}/common/geom/refined_${group}.expt
     ;;
 
   refinement)
@@ -170,11 +170,11 @@ case $type in
     cd ${mfx_dir}/common/geom/refine_${group:3}/split/
     dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
     newest_split=$(ls -t split*.expt | head -n 1)
-    mv ${newest_split} ${mfx_dir}/common/geom
+    mv ${newest_split} ${mfx_dir}/common/geom/refined_${group}.expt
     rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
 
     echo
     echo "Final refinement deployed Here:"
-    echo ${mfx_dir}/common/geom/${newest_split}
+    echo ${mfx_dir}/common/geom/refined_${group}.expt
     ;;
 esac
