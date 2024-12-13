@@ -9,6 +9,7 @@ class cctbx:
         user: str,
         run: int,
         image_type: str,
+        group: str,
         facility: str = "S3DF",
         debug: bool = False):
         """Launch CCTBX XFEL GUI.
@@ -25,6 +26,8 @@ class cctbx:
 
             run (int): Enter -r for the run number
 
+            image_type (str): the trial and rungroup number in the format 000_rg005.
+            Default is newest trial_rungroup
 
         """
         import logging
@@ -34,7 +37,7 @@ class cctbx:
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
-            f"-e {self.experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run}"
+            f"-e {self.experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
             ]
 
         logging.info(proc)

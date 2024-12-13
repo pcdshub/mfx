@@ -19,6 +19,15 @@ case $facility in
     ;;
 esac
 
+if [ $5 -eq 0 ]; then
+  # No arguments provided, open the newest file
+  group=$(ls -t ${mfx_dir}/common/results/averages/${run} | head -n 1)
+  echo "no trial-rungroup provided so using the newest"
+else
+  # Arguments provided, use the first one as the file to open
+  echo "path provided"
+fi
+
 out="${mfx_dir}/common/results/averages/${run}/${group}/out"
 cd ${out}
 dials.import max.cbf wavelength=1.105

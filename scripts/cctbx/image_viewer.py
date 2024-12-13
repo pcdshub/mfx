@@ -12,7 +12,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-def image_viewer(exp, run, facility, type, debug):
+def image_viewer(exp, run, facility, type, group, debug):
     logging.info(f"Opening image viewer for {type}")
     run = str(run).zfill(4)
     run = f'r{run}'
@@ -88,6 +88,15 @@ def parse_args(args):
         default=None,
         help="Enter -r for the run number",
     )
+    parser.add_argument(
+        "--group",
+        "-g",
+        dest="group",
+        default=None,
+        help="Enter -g for the trial "+
+        "and rungroup number in the format 000_rg005."+
+        "Default is newest folder"
+    )
 
     return parser.parse_args(args)
 
@@ -105,8 +114,9 @@ def main(args):
     debug = bool(args.debug)
     type = args.type.lower()
     run = args.run
+    group = args.group
 
-    image_viewer(exp, run, facility, type, debug)
+    image_viewer(exp, run, facility, type, group, debug)
 
 
 def run():
