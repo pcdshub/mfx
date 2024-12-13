@@ -78,13 +78,19 @@ case $type in
 
     cctbx.xfel.filter_experiments_by_rmsd combined.*
     dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
-    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined &
+    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
+    echo
+    echo "Final refinement file found Here:"
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.*
     ;;
 
   refinement1)
     cd ${mfx_dir}/common/geom/refine_${group:3}
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
+    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
+    echo
+    echo "Final refinement file found Here:"
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.*
     ;;
 
   refinement)
@@ -98,6 +104,9 @@ case $type in
     cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
 
     dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined &
+    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
+    echo
+    echo "Final refinement file found Here:"
+    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.*
     ;;
 esac
