@@ -4,6 +4,7 @@ exp=$1
 run=$2
 facility=$3
 type=$4
+group=$5
 
 case $facility in
 
@@ -18,7 +19,7 @@ case $facility in
     ;;
 esac
 
-out="${mfx_dir}/common/results/averages/${run}/000/out"
+out="${mfx_dir}/common/results/averages/${run}/${group}/out"
 cd ${out}
 dials.import max.cbf wavelength=1.105
 
@@ -29,8 +30,8 @@ case $type in
     mkdir masks
     cd masks/
     dials.generate_mask ${out}/imported.expt border=1
-    mv pixels.mask border.mask
-    dials.image_viewer border.mask
+    mv pixels.mask test.mask
+    dials.image_viewer ${out}/avg.cbf mask=border.mask
     ;;
 
   geometry)
