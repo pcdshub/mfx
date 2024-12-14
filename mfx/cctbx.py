@@ -64,7 +64,7 @@ class cctbx:
         user: str,
         run: int,
         image_type: str,
-        group: str,
+        group: str = '',
         facility: str = "NERSC",
         exp: str = '',
         debug: bool = False):
