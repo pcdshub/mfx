@@ -10,11 +10,13 @@ case $facility in
 
   S3DF)
     mfx_dir="/sdf/data/lcls/ds/mfx/${exp}/results"
+    mfx3="/sdf/group/lcls/ds/tools/mfx"
     source /sdf/group/lcls/ds/tools/cctbx/setup.sh
     ;;
 
   NERSC)
     mfx_dir="/pscratch/sd/c/cctbx/${exp}"
+    mfx3="/global/common/software/lcls/mfx"
     source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
     ;;
 esac
@@ -43,11 +45,33 @@ case $type in
     cd ${out}
     dials.import max.cbf wavelength=1.105
     cd ${mfx_dir}/common/results
-    mkdir masks
-    cd masks/
-    dials.generate_mask ${out}/imported.expt border=1
-    mv pixels.mask test.mask
-    dials.image_viewer ${out}/avg.cbf mask=border.mask
+    mkdir -p ${mfx_dir}/common/results/masks
+    cd ${mfx_dir}/common/results/masks
+
+    echo "Would you like to make a new mask? (y/n) "
+    read yn
+
+    case $yn in 
+      y)
+        echo ok, we shall proceed with mask making
+        python ${mfx3}/scripts/cctbx/mask.py -e $experiment -r $run -f $facility -g $group
+        dials.generate_mask ${out}/imported.expt border=1
+        mv pixels.mask border.mask
+        dials.generate_masks border.mask ${run}_stddev.mask
+        mv pixels.mask ${run}_border_stddev.mask
+        dials.image_viewer ${out}/avg.cbf mask=${run}_border_stddev.mask
+        ;;
+
+      n)
+        echo we will look at an image with the newest mask...
+        newest_mask=$(ls -t ${mfx_dir}/common/results/masks/*.mask | head -n 1)
+        dials.image_viewer ${out}/avg.cbf mask=${newest_mask}
+        ;;
+
+      *) echo invalid response;
+        exit 1
+        ;;
+    esac
     ;;
 
   geometry)
