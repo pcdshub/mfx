@@ -21,8 +21,6 @@ esac
 
 runpath="${mfx_dir}/common/results/averages/${run}"
 
-out="${runpath}/${group}/out"
-
 if [[ ! -d ${runpath} ]]; then
     echo ERROR: Run not averaged yet. Please stop and Average from the GUI
     exit 1 # terminate and indicate error
@@ -36,6 +34,8 @@ else
   # Arguments provided, use the first one as the file to open
   echo "path provided"
 fi
+
+out="${runpath}/${group}/out"
 
 case $type in
 
