@@ -43,10 +43,9 @@ case $type in
 
   mask)
     cd ${out}
-    dials.import max.cbf wavelength=1.105
-    cd ${mfx_dir}/common/results
-    mkdir -p ${mfx_dir}/common/results/masks
-    cd ${mfx_dir}/common/results/masks
+    dials.import ${out}/max.cbf wavelength=1.105
+    mask_path="${mfx_dir}/common/masks"
+    mkdir -p ${mask_path}
 
     echo "Would you like to make a new mask? (y/n) "
     read yn
@@ -59,13 +58,14 @@ case $type in
         dials.generate_mask ${out}/imported.expt border=1
         mv pixels.mask border.mask
         dials.generate_mask border.mask ${run}_stddev.mask
-        mv pixels.mask ${run}_border_stddev.mask
-        dials.image_viewer ${out}/avg.cbf mask=${run}_border_stddev.mask
+        newest_mask=${mask_path}/${run}_border_stddev.mask
+        mv pixels.mask ${newest_mask}
+        dials.image_viewer ${out}/avg.cbf mask=${newest_mask}
         ;;
 
       n)
         echo we will look at an image with the newest mask...
-        newest_mask=$(ls -t ${mfx_dir}/common/results/masks/*.mask | head -n 1)
+        newest_mask=$(ls -t ${mfx_dir}/common/masks/*.mask | head -n 1)
         dials.image_viewer ${out}/avg.cbf mask=${newest_mask}
         ;;
 

@@ -25,11 +25,13 @@ def mask(exp, run, facility, group):
         logging.warning(f"Facility not found: {facility}")
 
     out_path=f"{mfx_dir}/common/results/averages/{run}/{group}/out"
-    mask_path=f"{mfx_dir}/common/results/masks"
+    mask_path=f"{mfx_dir}/common/masks"
 
     img = dxtbx.load(f'{out_path}/std.cbf')
+    logging.info(f'load: {out_path}/std.cbf')
     mask = [m > 0 for m in img.get_raw_data()]
-    easy_pickle.dump(f'{mask_path}/{run}stddev.mask', tuple(mask))
+    easy_pickle.dump(f'{out_path}/{run}_stddev.mask', tuple(mask))
+    logging.info(f'dump: {out_path}/{run}_stddev.mask')
 
 
 def parse_args(args):
