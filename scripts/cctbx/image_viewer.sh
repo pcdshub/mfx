@@ -28,7 +28,7 @@ if [[ ! -d ${runpath} ]]; then
     exit 1 # terminate and indicate error
 fi
 
-if [ -z "${group}" ] || [ "${group}" == "" ]; then
+if [ -z "${group}" ] || [ "${group}" == "None" ]; then
   # No arguments provided, open the newest file
   group=$(ls -t ${runpath} | head -n 1)
   echo "no trial-rungroup provided so using the newest"
