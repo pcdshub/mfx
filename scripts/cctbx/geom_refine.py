@@ -6,7 +6,6 @@ import argparse
 import sys
 import logging
 import os
-import subprocess
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
