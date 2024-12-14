@@ -54,10 +54,11 @@ case $type in
     case $yn in 
       y)
         echo ok, we shall proceed with mask making
-        python ${mfx3}/scripts/cctbx/mask.py -e $experiment -r $run -f $facility -g $group
+        echo ${mfx3}/scripts/cctbx/mask.py -e $exp -r $run -f $facility -g $group
+        libtbx.python ${mfx3}/scripts/cctbx/mask.py -e $exp -r $run -f $facility -g $group
         dials.generate_mask ${out}/imported.expt border=1
         mv pixels.mask border.mask
-        dials.generate_masks border.mask ${run}_stddev.mask
+        dials.generate_mask border.mask ${run}_stddev.mask
         mv pixels.mask ${run}_border_stddev.mask
         dials.image_viewer ${out}/avg.cbf mask=${run}_border_stddev.mask
         ;;

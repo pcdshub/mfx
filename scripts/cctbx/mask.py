@@ -14,7 +14,7 @@ logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 def mask(exp, run, facility, group):
-    logging.info(f"Making New Mask")
+    logging.info("Making New Mask")
 
     if facility == "NERSC":
         mfx_dir=f"/pscratch/sd/c/cctbx/{exp}"
@@ -24,7 +24,7 @@ def mask(exp, run, facility, group):
     else:
         logging.warning(f"Facility not found: {facility}")
 
-    out_path=f"{mfx_dir}/common/results/averages/${run}/{group}/out"
+    out_path=f"{mfx_dir}/common/results/averages/{run}/{group}/out"
     mask_path=f"{mfx_dir}/common/results/masks"
 
     img = dxtbx.load(f'{out_path}/std.cbf')
