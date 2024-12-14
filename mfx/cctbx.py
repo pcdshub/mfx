@@ -7,8 +7,8 @@ class cctbx:
     def geom_refine(
         self,
         user: str,
-        level: int,
         group: str,
+        level: int = None,
         facility: str = "NERSC",
         exp: str = ''):
         """Launch CCTBX XFEL GUI.
@@ -17,12 +17,12 @@ class cctbx:
 
             user (str): username for computer account at facility.
 
+            group (str): the trial and rungroup number in the format 000_rg005.
+            Default is newest trial_rungroup
+
             level (int): the level of geometry refinement.
             0 = whole detector and 1 = individual detector panels.
             Default is to systematically do both.
-
-            group (str): the trial and rungroup number in the format 000_rg005.
-            Default is newest trial_rungroup
 
             facility (str): Default: "NERSC". Options: "S3DF, NERSC".
 
@@ -42,7 +42,7 @@ class cctbx:
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
-            f"-e {experiment} -f {facility} -l {level} -g {group}"
+            f"-e {experiment} -f {facility} -g {group} -l {level} "
             ]
 
         logging.info(proc)

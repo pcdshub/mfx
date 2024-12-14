@@ -3,8 +3,8 @@
 exp=$1
 facility=$2
 type=$3
-group=$4
-run=$5
+run=$4
+group=$5
 
 case $facility in
 

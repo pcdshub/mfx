@@ -2,8 +2,8 @@
 
 exp=$1
 facility=$2
-level=$3
-group=$4
+group=$3
+level=$4
 
 case $facility in
 
@@ -18,7 +18,7 @@ case $facility in
     ;;
 esac
 
-if [ -z "${level}" ]; then
+if [ -z "${level}" ] || [ "${group}" == "None" ]; then
     level="all"
 fi
 

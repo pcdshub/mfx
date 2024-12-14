@@ -19,13 +19,13 @@ def geom_refine(exp, facility, level, group):
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/geom_refine.sh "
-                f"{exp} {facility} {level} {group}"
+                f"{exp} {facility} {group} {level}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.sh "
-                f"{exp} {facility} {level} {group}"
+                f"{exp} {facility} {group} {level}"
             ]
     else:
         logging.warning(f"Facility not found: {facility}")
