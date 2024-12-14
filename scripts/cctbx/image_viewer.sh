@@ -1,10 +1,10 @@
 #! /bin/bash
 
 exp=$1
-run=$2
-facility=$3
-type=$4
-group=$5
+facility=$2
+type=$3
+group=$4
+run=$5
 
 case $facility in
 
@@ -23,23 +23,23 @@ runpath="${mfx_dir}/common/results/averages/${run}"
 
 out="${runpath}/${group}/out"
 
+if [[ ! -d ${runpath} ]]; then
+    echo ERROR: Run not averaged yet. Please stop and Average from the GUI
+    exit 1 # terminate and indicate error
+fi
+
+if [ -z "${group}" ]; then
+  # No arguments provided, open the newest file
+  group=$(ls -t ${runpath} | head -n 1)
+  echo "no trial-rungroup provided so using the newest"
+else
+  # Arguments provided, use the first one as the file to open
+  echo "path provided"
+fi
+
 case $type in
 
   mask)
-    if [[ ! -d ${runpath} ]]; then
-        echo ERROR: Run not averaged yet. Please stop and Average from the GUI
-        exit 1 # terminate and indicate error
-    fi
-
-    if [ -z "${group}" ]; then
-      # No arguments provided, open the newest file
-      group=$(ls -t ${runpath} | head -n 1)
-      echo "no trial-rungroup provided so using the newest"
-    else
-      # Arguments provided, use the first one as the file to open
-      echo "path provided"
-    fi
-
     cd ${out}
     dials.import max.cbf wavelength=1.105
     cd ${mfx_dir}/common/results
@@ -51,133 +51,8 @@ case $type in
     ;;
 
   geometry)
-    if [[ ! -d ${runpath} ]]; then
-        echo ERROR: Run not averaged yet. Please stop and Average from the GUI
-        exit 1 # terminate and indicate error
-    fi
-
-    if [ -z "${group}" ]; then
-      # No arguments provided, open the newest file
-      group=$(ls -t ${runpath} | head -n 1)
-      echo "no trial-rungroup provided so using the newest"
-    else
-      # Arguments provided, use the first one as the file to open
-      echo "path provided"
-    fi
-
     cd ${out}
     dials.import max.cbf wavelength=1.105
     dials.image_viewer imported.expt
-    ;;
-
-  refinement0)
-    mkdir -p ${mfx_dir}/common/geom/refine_${group:3}
-    cd ${mfx_dir}/common/geom/refine_${group:3}
-    dials.combine_experiments ${mfx_dir}/common/results/r0*/${group}/out/*refined*.expt ${mfx_dir}/common/results/r0*/${group}/out/*indexed*.refl reference_from_experiment.detector=0
-    cctbx.xfel.detector_residuals combined.* hierarchy=1 tag=combined
-
-    cctbx.xfel.filter_experiments_by_rmsd combined.*
-    dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
-    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
-    echo
-    echo "Your level 0 refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
-
-    echo "Refinement done. Would you like to Deploy? (y/n) "
-    read yn
-
-    case $yn in 
-      y) echo ok, we shall proceed;;
-      n) echo exiting...;
-        exit;;
-      *) echo invalid response;
-        exit 1;;
-    esac
-
-    mkdir ${mfx_dir}/common/geom/refine_${group:3}/split
-    cd ${mfx_dir}/common/geom/refine_${group:3}/split/
-    dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
-    newest_split=$(ls -t split*.expt | head -n 1)
-    mv ${newest_split} ${mfx_dir}/common/geom/refined_${group}.expt
-    rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
-
-    echo
-    echo "Final refinement deployed Here:"
-    echo ${mfx_dir}/common/geom/refined_${group}.expt
-    ;;
-
-  refinement1)
-    cd ${mfx_dir}/common/geom/refine_${group:3}
-    dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
-    dxtbx.plot_detector_models refined_level0.expt refined_level1.expt
-    echo
-    echo "Final refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
-
-    echo "Refinement done. Would you like to Deploy? (y/n) "
-    read yn
-
-    case $yn in 
-      y) echo ok, we shall proceed;;
-      n) echo exiting...;
-        exit;;
-      *) echo invalid response;
-        exit 1;;
-    esac
-
-    mkdir ${mfx_dir}/common/geom/refine_${group:3}/split
-    cd ${mfx_dir}/common/geom/refine_${group:3}/split/
-    dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
-    newest_split=$(ls -t split*.expt | head -n 1)
-    mv ${newest_split} ${mfx_dir}/common/geom/refined_${group}.expt
-    rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
-
-    echo
-    echo "Final refinement deployed Here:"
-    echo ${mfx_dir}/common/geom/refined_${group}.expt
-    ;;
-
-  refinement)
-    mkdir -p ${mfx_dir}/common/geom/refine_${group:3}
-    cd ${mfx_dir}/common/geom/refine_${group:3}
-    dials.combine_experiments ${mfx_dir}/common/results/r0*/${group}/out/*refined*.expt ${mfx_dir}/common/results/r0*/${group}/out/*indexed*.refl reference_from_experiment.detector=0
-    cctbx.xfel.detector_residuals combined.* hierarchy=1 tag=combined
-
-    cctbx.xfel.filter_experiments_by_rmsd combined.*
-    dials.refine filtered.* ${mfx_dir}/common/geom/refine_level0.phil
-    cctbx.xfel.detector_residuals refined_level0.* hierarchy=1 tag=refined
-    echo
-    echo "Your level 0 refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level0.expt
-
-    dials.refine refined_level0.* ${mfx_dir}/common/geom/refine_level1.phil
-    cctbx.xfel.detector_residuals refined_level1.* hierarchy=1 tag=refined
-    dxtbx.plot_detector_models refined_level0.expt refined_level1.expt
-    echo
-    echo "Final refinement file found Here:"
-    echo ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
-
-    echo "Refinement done. Would you like to Deploy? (y/n) "
-    read yn
-
-    case $yn in 
-      y) echo ok, we shall proceed;;
-      n) echo exiting...;
-        exit;;
-      *) echo invalid response;
-        exit 1;;
-    esac
-
-    mkdir ${mfx_dir}/common/geom/refine_${group:3}/split
-    cd ${mfx_dir}/common/geom/refine_${group:3}/split/
-    dials.split_experiments ${mfx_dir}/common/geom/refine_${group:3}/refined_level1.expt
-    newest_split=$(ls -t split*.expt | head -n 1)
-    mv ${newest_split} ${mfx_dir}/common/geom/refined_${group}.expt
-    rm -rf ${mfx_dir}/common/geom/refine_${group:3}/split/
-
-    echo
-    echo "Final refinement deployed Here:"
-    echo ${mfx_dir}/common/geom/refined_${group}.expt
     ;;
 esac

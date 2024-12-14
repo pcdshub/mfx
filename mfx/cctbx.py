@@ -4,6 +4,61 @@ class cctbx:
         self.experiment = str(get_exp())
 
 
+    def geom_refine(
+        self,
+        user: str,
+        level: int,
+        group: str,
+        facility: str = "NERSC",
+        exp: str = '',
+        debug: bool = False):
+        """Launch CCTBX XFEL GUI.
+
+        Parameters:
+
+            user (str): username for computer account at facility.
+
+            level (int): the level of geometry refinement.
+            0 = whole detector and 1 = individual detector panels.
+            Default is to systematically do both.
+
+            group (str): the trial and rungroup number in the format 000_rg005.
+            Default is newest trial_rungroup
+
+            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+
+            exp (str): experiment number in format 'mfxp1047723'.
+                       If none selected default is the current experiment.
+
+            debug (bool): Default: False.
+        """
+        import logging
+        import os
+        import subprocess
+
+        if exp != '':
+            experiment = exp
+        else:
+            experiment = self.experiment
+
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
+            f"-e {experiment} -f {facility} -l {level} -g {group}"
+            ]
+
+        logging.info(proc)
+
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+        os.system(proc[0])
+
+
     def image_viewer(
         self,
         user: str,
@@ -57,7 +112,7 @@ class cctbx:
             if token.lower() == "n":
                 self.sshproxy(user)
 
-        if debug or 'refinement' in image_type:
+        if debug:
             os.system(proc[0])
         else:
             subprocess.Popen(

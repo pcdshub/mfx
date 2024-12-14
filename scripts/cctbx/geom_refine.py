@@ -12,34 +12,27 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-def image_viewer(exp, run, facility, image_type, group, debug):
-    logging.info(f"Opening image viewer for {image_type}")
-    run = str(run).zfill(4)
-    run = f'r{run}'
-
+def geom_refine(exp, facility, level, group):
+    logging.info(f"Refining Geometry")
     if facility == "NERSC":
         exp = exp[3:-2]
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
-                f"{exp} {facility} {image_type} {group} {run}"
+                f"{exp} {facility} {level} {group}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.sh "
-                f"{exp} {facility} {image_type} {group} {run}"
+                f"{exp} {facility} {level} {group}"
             ]
     else:
         logging.warning(f"Facility not found: {facility}")
 
     logging.info(proc)
-    if debug:
-        os.system(proc[0])
-    else:
-        subprocess.Popen(
-            proc, shell=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    os.system(proc[0])
+
 
 def parse_args(args):
     """Parse command line parameters
@@ -68,25 +61,11 @@ def parse_args(args):
         help="Enter -f to specify facility",
     )
     parser.add_argument(
-        "--debug",
-        "-d",
-        dest="debug",
-        default=str(False),
-        help="Enter -d to set debugging mode",
-    )
-    parser.add_argument(
-        "--image_type",
-        "-t",
-        dest="image_type",
+        "--level",
+        "-l",
+        dest="level",
         default=None,
-        help="Enter -t for type of image view",
-    )
-    parser.add_argument(
-        "--run",
-        "-r",
-        dest="run",
-        default=None,
-        help="Enter -r for the run number",
+        help="Enter -l for the level of geometry refinement",
     )
     parser.add_argument(
         "--group",
@@ -111,12 +90,10 @@ def main(args):
     args = parse_args(args)
     exp = args.experiment
     facility = args.facility
-    debug = bool(args.debug)
-    image_type = args.image_type.lower()
-    run = args.run
+    level = args.level
     group = args.group
 
-    image_viewer(exp, run, facility, image_type, group, debug)
+    geom_refine(exp, facility, level, group)
 
 
 def run():
