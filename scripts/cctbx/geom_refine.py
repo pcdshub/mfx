@@ -18,13 +18,13 @@ def geom_refine(exp, facility, level, group):
         exp = exp[3:-2]
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-                f"/global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
+                f"/global/common/software/lcls/mfx/scripts/cctbx/geom_refine.sh "
                 f"{exp} {facility} {level} {group}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.sh "
+                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.sh "
                 f"{exp} {facility} {level} {group}"
             ]
     else:

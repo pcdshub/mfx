@@ -10,8 +10,7 @@ class cctbx:
         level: int,
         group: str,
         facility: str = "NERSC",
-        exp: str = '',
-        debug: bool = False):
+        exp: str = ''):
         """Launch CCTBX XFEL GUI.
 
         Parameters:
@@ -34,7 +33,6 @@ class cctbx:
         """
         import logging
         import os
-        import subprocess
 
         if exp != '':
             experiment = exp
