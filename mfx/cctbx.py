@@ -10,7 +10,8 @@ class cctbx:
         run: int,
         image_type: str,
         group: str,
-        facility: str = "S3DF",
+        facility: str = "NERSC",
+        exp: str = '',
         debug: bool = False):
         """Launch CCTBX XFEL GUI.
 
@@ -18,26 +19,33 @@ class cctbx:
 
             user (str): username for computer account at facility.
 
-            facility (str): Default: "S3DF". Options: "S3DF, NERSC".
-
-            debug (bool): Default: False.
+            run (int): Enter -r for the run number
 
             image_type (str): Enter -t for type of image view
 
-            run (int): Enter -r for the run number
-
-            image_type (str): the trial and rungroup number in the format 000_rg005.
+            group (str): the trial and rungroup number in the format 000_rg005.
             Default is newest trial_rungroup
 
+            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+
+            exp (str): experiment number in format 'mfxp1047723'.
+                       If none selected default is the current experiment.
+
+            debug (bool): Default: False.
         """
         import logging
         import os
         import subprocess
 
+        if exp != '':
+            experiment = exp
+        else:
+            experiment = self.experiment
+
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
-            f"-e {self.experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
+            f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
             ]
 
         logging.info(proc)
@@ -88,7 +96,8 @@ class cctbx:
     def xfel_gui(
         self,
         user: str,
-        facility: str = "S3DF",
+        facility: str = "NERSC",
+        exp: str  = '',
         debug: bool = False,
     ):
         """Launch CCTBX XFEL GUI.
@@ -97,7 +106,10 @@ class cctbx:
 
             user (str): username for computer account at facility.
 
-            facility (str): Default: "S3DF". Options: "S3DF, NERSC".
+            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+
+            exp (str): experiment number in format 'mfxp1047723'.
+                       If none selected default is the current experiment.
 
             debug (bool): Default: False.
         """
@@ -105,10 +117,15 @@ class cctbx:
         import os
         import subprocess
 
+        if exp != '':
+            experiment = exp
+        else:
+            experiment = self.experiment
+
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
-            f"{user} {self.experiment} {facility} 1 {str(debug)} "
+            f"{user} {experiment} {facility} 1 {str(debug)} "
             ]
 
         logging.info(proc)
