@@ -18,7 +18,7 @@ case $facility in
     ;;
 esac
 
-if [ -z "${level}" ] || [ "${group}" == "None" ]; then
+if [ -z "${level}" ] || [ "${level}" == "None" ]; then
     level="all"
 fi
 
