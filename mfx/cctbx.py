@@ -57,7 +57,7 @@ class cctbx:
         os.system(proc[0])
 
 
-def average(
+    def average(
         self,
         user: str,
         run: int,
