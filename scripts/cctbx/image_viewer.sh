@@ -1,4 +1,12 @@
 #! /bin/bash
+#SBATCH --nodes 1
+#SBATCH --ntasks-per-node=128
+#SBATCH --qos realtime
+#SBATCH --time=00:45:00
+#SBATCH --job-name=image_viewer
+#SBATCH --account=lcls
+#SBATCH --constraint=cpu
+#SBATCH --time=120
 
 exp=$1
 facility=$2
@@ -21,20 +29,33 @@ case $facility in
     ;;
 esac
 
+dirpath="${mfx_dir}/common/results/${run}"
 runpath="${mfx_dir}/common/results/averages/${run}"
-
-if [[ ! -d ${runpath} ]]; then
-    echo ERROR: Run not averaged yet. Please stop and Average from the GUI
-    exit 1 # terminate and indicate error
-fi
 
 if [ -z "${group}" ] || [ "${group}" == "None" ]; then
   # No arguments provided, open the newest file
-  group=$(ls -t ${runpath} | head -n 1)
+  group=$(ls -t ${dirpath} | head -n 1)
   echo "no trial-rungroup provided so using the newest"
 else
   # Arguments provided, use the first one as the file to open
   echo "path provided"
+fi
+
+if [[ ! -d ${runpath} ]]; then
+    echo "Run not averaged yet. It is faster with the GUI but would you like to average locally? (y/n) "
+    read yn
+
+    case $yn in 
+      y)
+        ave_out="${runpath}/${group}/out"
+        mkdir -p ${ave_out}
+        dxtbx.image_average ${dirpath}/${group}/data.loc -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
+        ;;
+      n)
+        echo ERROR: Run not averaged yet. Please stop and Average from the GUI
+        exit 1 # terminate and indicate error
+        ;;
+    esac
 fi
 
 out="${runpath}/${group}/out"
