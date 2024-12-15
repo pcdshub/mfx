@@ -39,7 +39,7 @@ if [[ ! -d ${runpath} ]]; then
 
     case $yn in 
       y)
-        sbatch ${mfx3}/scripts/cctbx/average.sh
+        sbatch --wait ${mfx3}/scripts/cctbx/average.sh ${exp} ${facility} ${run}
         ;;
       n)
         echo ERROR: Run not averaged yet. Please stop and Average from the GUI

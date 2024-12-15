@@ -1,6 +1,8 @@
 #! /bin/bash
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node=128
+#SBATCH --output=/pscratch/sd/c/cctbx/l10477/common/results/averages/test/log.out
+#SBATCH --error=/pscratch/sd/c/cctbx/l10477/common/results/averages/test/err.out
 #SBATCH --qos realtime
 #SBATCH --time=00:45:00
 #SBATCH --job-name=image_viewer
@@ -40,4 +42,4 @@ if [[ ! -d ${runpath} ]]; then
     mkdir -p ${ave_out}
 fi
 
-srun -u dxtbx.image_average ${dirpath}/${group}/data.loc --mpi=True -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
+srun dxtbx.image_average ${dirpath}/${group}/data.loc --mpi=True -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
