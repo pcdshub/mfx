@@ -21,13 +21,13 @@ def average(exp, run, facility, debug):
         exp = exp[3:-2]
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-                f"/global/common/software/lcls/mfx/scripts/cctbx/average.sh "
+                f"sbatch /global/common/software/lcls/mfx/scripts/cctbx/average.sh "
                 f"{exp} {facility} {run}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.sh "
+                f"sbatch /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.sh "
                 f"{exp} {facility} {run}"
             ]
     else:
