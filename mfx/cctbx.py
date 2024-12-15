@@ -57,6 +57,60 @@ class cctbx:
         os.system(proc[0])
 
 
+def image_viewer(
+        self,
+        user: str,
+        run: int,
+        facility: str = "NERSC",
+        exp: str = '',
+        debug: bool = False):
+        """Launch CCTBX XFEL GUI.
+
+        Parameters:
+
+            user (str): username for computer account at facility.
+
+            run (int): Enter -r for the run number
+
+            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+
+            exp (str): experiment number in format 'mfxp1047723'.
+                       If none selected default is the current experiment.
+
+            debug (bool): Default: False.
+        """
+        import logging
+        import os
+        import subprocess
+
+        if exp != '':
+            experiment = exp
+        else:
+            experiment = self.experiment
+
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.py "
+            f"-e {experiment} -f {facility} -d {str(debug)} -r {run}"
+            ]
+
+        logging.info(proc)
+
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+        if debug:
+            os.system(proc[0])
+        else:
+            subprocess.Popen(
+                proc, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
     def image_viewer(
         self,
         user: str,
