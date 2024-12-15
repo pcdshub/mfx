@@ -49,7 +49,7 @@ if [[ ! -d ${runpath} ]]; then
       y)
         ave_out="${runpath}/${group}/out"
         mkdir -p ${ave_out}
-        dxtbx.image_average ${dirpath}/${group}/data.loc -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
+        srun dxtbx.image_average ${dirpath}/${group}/data.loc --mpi=True -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
         ;;
       n)
         echo ERROR: Run not averaged yet. Please stop and Average from the GUI
