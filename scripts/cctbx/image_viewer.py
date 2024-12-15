@@ -21,13 +21,13 @@ def image_viewer(exp, run, facility, image_type, group, debug):
         exp = exp[3:-2]
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-                f"sbatch /global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
+                f"/global/common/software/lcls/mfx/scripts/cctbx/image_viewer.sh "
                 f"{exp} {facility} {image_type} {run} {group}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
-                f"sbatch /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.sh "
+                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.sh "
                 f"{exp} {facility} {image_type} {run} {group}"
             ]
     else:

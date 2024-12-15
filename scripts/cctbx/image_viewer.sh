@@ -1,12 +1,4 @@
 #! /bin/bash
-#SBATCH --nodes 1
-#SBATCH --ntasks-per-node=128
-#SBATCH --qos realtime
-#SBATCH --time=00:45:00
-#SBATCH --job-name=image_viewer
-#SBATCH --account=lcls
-#SBATCH --constraint=cpu
-#SBATCH --time=120
 
 exp=$1
 facility=$2
@@ -47,9 +39,7 @@ if [[ ! -d ${runpath} ]]; then
 
     case $yn in 
       y)
-        ave_out="${runpath}/${group}/out"
-        mkdir -p ${ave_out}
-        srun dxtbx.image_average ${dirpath}/${group}/data.loc --mpi=True -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
+        sbatch ${mfx3}/scripts/cctbx/average.sh
         ;;
       n)
         echo ERROR: Run not averaged yet. Please stop and Average from the GUI
