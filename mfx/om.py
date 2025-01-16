@@ -299,7 +299,9 @@ class OM:
         import subprocess
 
         proc = [
-            f'source /cds/sw/ds/ana/conda1/manage/bin/psconda.sh | python {self.pwd}/om_reset_plots.py daq-mfx-mon10',
+            f'ssh -YAC mfx-monitor "source /reg/g/pcds/engineering_tools/mfx/scripts/pcds_conda; '
+            f'conda deactivate; source /cds/sw/ds/ana/conda1/manage/bin/psconda.sh; '
+            f'python {self.pwd}/om_reset_plots.py daq-mfx-mon10"',
             ]
 
         logging.info(proc)

@@ -54,7 +54,7 @@ facility {{
     }}
   }}
 }}
-output_folder = "/pscratch/sd/c/cctbx/l10451/common/results"
+output_folder = "/pscratch/sd/c/cctbx/{exp[3:-2]}/common/results"
 mp {{
   method = local lsf sge pbs *slurm shifter htcondor custom
   mpi_command = "srun"
@@ -73,8 +73,8 @@ mp {{
 }}
 experiment_tag = "common"
 db {{
-  host = "db-loadbalancer.mfxl1045123.production.svc.spin.nersc.org"
-  name = "mfxl1045123"
+  host = "db-lb.{exp}.production.svc.spin.nersc.org"
+  name = "{exp}"
   user = "user"
   password = "JohanWah1"
   server {{
@@ -180,30 +180,17 @@ def main(args):
         logging.info("Starting up cctbx")
 
         if facility == "S3DF":
-            preproc = None
             proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
                 f"{user} {exp} {facility} 2 {str(debug)}"
             ]
         elif facility == "NERSC":
-            preproc = [
-                f"/global/common/software/lcls/mfx/scripts/cctbx/sshproxy -c cctbx -u {user}"
-            ]
             proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/cctbx.sh "
                 f"{user} {exp} {facility} 2 {str(debug)}"
             ]
-
-        if preproc is not None:
-            logging.info(preproc)
-            if debug:
-                os.system(preproc[0])
-            else:
-                subprocess.Popen(
-                    preproc, shell=True,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
         logging.info(proc)
         if debug:
@@ -226,10 +213,8 @@ def main(args):
         if cctbx_dir is not None:
             if not os.path.exists(cctbx_dir):
                 os.makedirs(cctbx_dir)
-            #
+
             check_settings(exp, facility, cctbx_dir)
-
-
 
 
 def run():
