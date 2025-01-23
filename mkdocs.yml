@@ -1,0 +1,70 @@
+site_name: MFX Docs
+repo_url: https://github.com/pcdshub/mfx
+site_author: JTB
+copyright: © 2025 LCLS
+nav:
+  - Home: index.md
+  - Quick Start: Quick_Start.md
+  - Operating Procedures:
+    - General.md
+    - DoT.md
+  - Source:
+    - MFX:
+      - attenuator_scan.md
+      - autorun.md
+      - bash_utilities.md
+      - beamline.md
+      - cctbx.md
+      - debug.md
+      - delay_scan.md
+      - detector_image.md
+      - devices.md
+      - focus_scan.md
+      - macros.md
+      - mfx_timing.md
+      - rayonix.md
+      - suspenders.md
+      - timetool.md
+      - xlj_fast.md
+      - yano.md
+    - DoD:
+      - DropsDriver.md
+      - HTTPTransceiver.md
+      - JsonFileHandler.md
+      - ServerResponse.md
+      - SupporEndsHandler.md
+      - TestJsonFileHandler.md
+      - TestResponse.md
+      - codi.md
+      - common.md
+      - dod.md
+      - mfxDOD_old.md
+      - mfx_dod_old.md
+      - testServer.md
+      - testServerSpawner.md
+    - TFS:
+      - lens.md
+      - offline_calculator.md
+      - transfocator.md
+      - transfocator_scan.md
+      - utils.md
+    - scripts:
+      - auto_idle:
+        - idler.md
+      - cctbx:
+        - cctbx_start.md
+      - door_watcher:
+        - door_watcher.md
+
+plugins:
+- search
+- mkdocstrings
+- offline
+
+theme:
+  name: material
+  logo: media/logo_2.png
+  favicon: media/logo.png
+  palette:
+    primary: orange
+    accent: deep orange

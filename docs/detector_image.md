@@ -1,0 +1,1 @@
+::: mfx.detector_image
