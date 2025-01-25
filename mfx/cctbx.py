@@ -229,6 +229,8 @@ class cctbx:
         else:
             experiment = self.experiment
 
+        facility = facility.upper()
+
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
