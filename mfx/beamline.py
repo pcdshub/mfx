@@ -82,6 +82,10 @@ with safe_load('OM'):
     from mfx.om import *
     om = OM()
 
+with safe_load('align'):
+    from mfx.optimize.align import *
+    align = Align()
+
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
