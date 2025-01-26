@@ -1,5 +1,10 @@
 class Align:
     def __init__(self):
+        from bluesky import RunEngine
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
         self.beam_alignment_diagnostics = ["DG1", "DG2"]
         self.beam_alignment_methods = ["Xopt", "blop"]
 
@@ -25,7 +30,7 @@ class Align:
 
         if with_method == 'Xopt':
             from mfx.optimize.xopt_scans import get_xopt_obj, init_devices
-            xopt = get_xopt_obj(lower(on_diagnostic))
+            xopt = get_xopt_obj(on_diagnostic.lower())
             xopt.random_evaluate(3)
             for num in range(10):
                 print(f"Step {num + 1}")
@@ -40,7 +45,11 @@ class Align:
             return xopt
         elif with_method == 'blop':
             from mfx.optimize.blop_scans import get_blop_agent
-            agent = get_blop_agent(lower(on_diagnostic))
+            try:
+                from mfx.db import RE
+            except ImportError:
+                RE = RunEngine({})
+            agent = get_blop_agent(on_diagnostic.lower())
             RE(agent.learn("qr", n=16))
             RE(agent.learn("qei", n=4, iterations=4))
             RE(agent.go_to_best())
