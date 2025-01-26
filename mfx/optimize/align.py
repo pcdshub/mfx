@@ -16,16 +16,16 @@ class Align:
             with_method(str): method to use for alignment. Options: "blop, Xopt".
         """
         if on_diagnostic not in self.beam_alignment_diagnostics:
-            print(f"Diagnostic {diagnostic} not usable for beam alignment. Use {self.beam_alignment_diagnostics}.")
+            print(f"Diagnostic {on_diagnostic} not usable for beam alignment. Use {self.beam_alignment_diagnostics}.")
             return None
 
         if with_method not in self.beam_alignment_methods:
-            print(f"Alignment method {method} not implemented yet. Use {self.beam_alignment_methods}.")
+            print(f"Alignment method {with_method} not implemented yet. Use {self.beam_alignment_methods}.")
             return None
 
-        if method == 'Xopt':
+        if with_method == 'Xopt':
             from mfx.optimize.xopt_scans import get_xopt_obj, init_devices
-            xopt = get_xopt_obj(lower(diagnostic))
+            xopt = get_xopt_obj(lower(on_diagnostic))
             xopt.random_evaluate(3)
             for num in range(10):
                 print(f"Step {num + 1}")
@@ -38,9 +38,9 @@ class Align:
             print(f"pitch is at {mirror_pitch.position}")
             xopt.data.plot(y=xopt.vocs.objective_names)
             return xopt
-        elif method == 'blop':
+        elif with_method == 'blop':
             from mfx.optimize.blop_scans import get_blop_agent
-            agent = get_blop_agent(lower(diagnostic))
+            agent = get_blop_agent(lower(on_diagnostic))
             RE(agent.learn("qr", n=16))
             RE(agent.learn("qei", n=4, iterations=4))
             RE(agent.go_to_best())
