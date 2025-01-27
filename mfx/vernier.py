@@ -1,6 +1,6 @@
 class Vernier:
     def __init__(self):
-
+        pass
     def scan(
             self,
             energy_scan_start_eV: float,

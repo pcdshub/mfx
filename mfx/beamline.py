@@ -86,7 +86,7 @@ with safe_load('align'):
     from mfx.optimize.align import *
     align = Align()
 
-with safe_load('vernier_scan'):
+with safe_load('vernier'):
     from mfx.vernier import *
     vernier = Vernier()
 
