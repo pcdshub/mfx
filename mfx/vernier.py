@@ -29,6 +29,7 @@ class Vernier:
         try:
             from mfx.db import RE
         except ImportError:
+            from bluesky import RunEngine
             RE = RunEngine({})
         RE(
             bp.daq_scan(
