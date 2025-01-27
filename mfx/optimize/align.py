@@ -1,10 +1,5 @@
 class Align:
     def __init__(self):
-        from bluesky import RunEngine
-        try:
-            from mfx.db import RE
-        except ImportError:
-            RE = RunEngine({})
         self.beam_alignment_diagnostics = ["DG1", "DG2"]
         self.beam_alignment_methods = ["Xopt", "blop"]
 

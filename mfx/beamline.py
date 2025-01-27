@@ -86,6 +86,10 @@ with safe_load('align'):
     from mfx.optimize.align import *
     align = Align()
 
+with safe_load('vernier_scan'):
+    from mfx.vernier import *
+    vernier = Vernier()
+
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
