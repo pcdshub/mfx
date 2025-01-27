@@ -31,8 +31,9 @@ class Vernier:
         except ImportError:
             from bluesky import RunEngine
             RE = RunEngine({})
+        from nabs.plans import daq_scan
         RE(
-            bp.daq_scan(
+            daq_scan(
                 [],
                 EpicsSignal(mcc_pv, name='mcc'),
                 energy_scan_start_eV,
