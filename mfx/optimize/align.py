@@ -46,7 +46,7 @@ class Align:
                 RE = RunEngine({})
             agent = get_blop_agent(on_diagnostic.lower())
             RE(agent.learn("qr", n=16))
-            RE(agent.learn("qei", n=4, iterations=4))
+            RE(agent.learn("qei", n=16, iterations=5))
             RE(agent.go_to_best())
             agent.plot_objectives()
             return agent
