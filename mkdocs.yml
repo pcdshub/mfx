@@ -6,7 +6,7 @@ nav:
   - Home: index.md
   - Quick Start: Quick_Start.md
   - Operating Procedures:
-    - General.md
+    - Operators_Guide.md
     - DoT.md
   - Source:
     - MFX:
