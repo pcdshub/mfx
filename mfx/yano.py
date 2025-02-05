@@ -176,7 +176,7 @@ class yano:
         return delay
 
 
-    def post(self, sample='?', run_number=None, post=False, inspire=False, add_note=''):
+    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, add_note=''):
         """
         Posts a message to the elog
 
@@ -184,6 +184,9 @@ class yano:
         ----------
         sample: str, optional
             Sample Name
+
+        tag: str, optional
+            Run group tag
 
         run_number: int, optional
             Run Number. By default this is read off of the DAQ
@@ -212,6 +215,8 @@ class yano:
         """
         if add_note!='':
             add_note = '\n' + add_note
+        if tag is None:
+            tag = sample
         if inspire:
             comment = f"Running {sample}\n{quote()['quote']}{add_note}"
         else:
@@ -224,7 +229,7 @@ class yano:
         post_msg = post_template.format(*info)
         print('\n' + post_msg + '\n')
         if post:
-            elog.post(msg=post_msg, run=(run_number))
+            elog.post(msg=post_msg, tags=tag, run=(run_number))
         return post_msg
 
 
@@ -312,7 +317,7 @@ class yano:
                 return status
 
 
-    def yano_run(self, sample='?', run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
+    def yano_run(self, sample='?', tag=None, run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
         """
         Perform a single run of the experiment
 
@@ -320,6 +325,9 @@ class yano:
         ----------
         sample: str, optional
             Sample Name
+
+        tag: str, optional
+            Run group tag
 
         run_length: int, optional
             number of seconds for run 300 is default
@@ -396,6 +404,9 @@ class yano:
         if picker=='flip':
             pp.flipflop()
 
+        if tag is None:
+            tag = sample
+
         for i in range(runs):
             logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
             run_number = daq.run_number() + 1
@@ -411,7 +422,7 @@ class yano:
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
 
-            self.post(sample, run_number, record, inspire)
+            self.post(sample, tag, run_number, record, inspire)
             try:
                 sleep(daq_delay)
             except KeyboardInterrupt:

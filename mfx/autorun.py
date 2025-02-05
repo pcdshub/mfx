@@ -7,6 +7,9 @@ def post(sample='?', tag=None, run_number=None, post=False, inspire=False, add_n
     sample: str, optional
         Sample Name
 
+    tag: str, optional
+        Run group tag
+
     run_number: int, optional
         Run Number. By default this is read off of the DAQ
 
