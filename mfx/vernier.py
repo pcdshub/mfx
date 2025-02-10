@@ -22,7 +22,7 @@ class Vernier:
             facility (str): Default: "S3DF". Options: "S3DF, NERSC".
         """
         import logging
-        import subprocess
+        import os
         from mfx.db import daq
         from mfx.macros import get_exp
         logger = logging.getLogger(__name__)
@@ -57,15 +57,6 @@ class Vernier:
                 ]
         else:
             logging.warning(f"Facility not found: {facility}")
-
-        logging.info(proc)
-        os.system(proc[0])
-        
-        proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/cctbx/energy/fee_spec.sh "
-            f"runs"
-            ]
 
         logging.info(proc)
         os.system(proc[0])
