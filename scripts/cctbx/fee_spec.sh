@@ -1,7 +1,8 @@
 #! /bin/bash
 
-runs=$1
-facility=$2
+facility=$1
+shift
+runs=$@
 
 case $facility in
 

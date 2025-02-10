@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def output(
         exp: str = None,
-        runs: list = [],
+        runs: str =None,
         facility: str = "S3DF"):
     """Don't use this in hutch python.
 
@@ -33,13 +33,13 @@ def output(
         proc = [
                 f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
                 f"/global/common/software/lcls/mfx/scripts/cctbx/fee_spec.sh "
-                f"{runs} {facility}"
+                f"{facility} {runs}"
             ]
     elif facility == "S3DF":
         proc = [
                 f"ssh -YAC psana "
                 f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.sh "
-                f"{runs} {facility}"
+                f"{facility} {runs}"
             ]
     else:
         logging.warning(f"Facility not found: {facility}")
@@ -78,6 +78,7 @@ def parse_args(args):
         "--runs",
         "-r",
         dest="runs",
+        nargs='+',
         default=None,
         help="Enter -r for List of run numbers. Last run number by default"
     )
@@ -96,7 +97,12 @@ def main(args):
     exp = args.experiment
     facility = args.facility
     exp_run_list = args.runs
-    runs = " ".join(exp_run_list)
+
+    if len(exp_run_list) > 1:
+        runs = " ".join(exp_run_list)
+    else:
+        runs = exp_run_list[0]
+    print(runs)
     output(exp, runs, facility)
 
 
