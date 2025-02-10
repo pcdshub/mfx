@@ -40,7 +40,7 @@ class Vernier:
 
         for run in run_list:
             exp_run_list.append(f"{exp}:{run}")
-
+        exp_run_list = " ".join(exp_run_list)
         facility = facility.upper()
 
         proc = [
@@ -217,16 +217,16 @@ class Vernier:
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
 
-    def ref(self, energy)
+    def ref(self, energy):
         import os
         os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
 
 
-    def put(self, energy)
+    def put(self, energy):
         import os
         os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
 
 
-    def get(self)
+    def get(self):
         import os
         os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
