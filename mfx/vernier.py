@@ -26,7 +26,7 @@ class Vernier:
         import os
         from mfx.db import daq
         from mfx.macros import get_exp
-        from mfx.cctbx import sshproxy
+        import mfx.cctbx
         logger = logging.getLogger(__name__)
 
         logging.info("Plotting XRT-Spec Output")
@@ -47,7 +47,7 @@ class Vernier:
         proc = [
             f"ssh -Yt {user}@s3dflogin "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
-            f"-e {experiment} -f {facility} -r {runs}"
+            f"-e {exp} -f {facility} -r {runs}"
             ]
 
         logging.info(proc)
@@ -57,7 +57,7 @@ class Vernier:
             token = input("(y/n)? ")
 
             if token.lower() == "n":
-                sshproxy(user)
+                cctbx.sshproxy(user)
 
         os.system(proc[0])
 
