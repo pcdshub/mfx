@@ -4,7 +4,8 @@ fee_spec
 """
 import logging
 import os
-from mfx.macros import get_exp
+import sys
+import argparse
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def output(
         exp: str = None,
-        run_list: list = [],
+        runs: list = [],
         facility: str = "S3DF"):
     """Don't use this in hutch python.
 
@@ -78,7 +79,7 @@ def parse_args(args):
         "-r",
         dest="runs",
         default=None,
-        help="Enter -r for List of run numbers. Last run number by default
+        help="Enter -r for List of run numbers. Last run number by default"
     )
 
     return parser.parse_args(args)
@@ -96,7 +97,7 @@ def main(args):
     facility = args.facility
     runs = args.runs
 
-    output(exp, run_list, facility)
+    output(exp, runs, facility)
 
 
 def run():
