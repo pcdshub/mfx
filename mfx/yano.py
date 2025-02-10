@@ -15,7 +15,7 @@ class yano:
         self.evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
         # Laser parameter
-        self.opo_time_zero = 671765
+        self.opo_time_zero = 671630
 
         # Event code switch logic for longer delay
         self.opo_ec_short = 212
