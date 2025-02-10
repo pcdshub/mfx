@@ -154,8 +154,7 @@ class Vernier:
             picker: str = None,
             inspire: bool = False,
             daq_delay: int = 5,
-            record: bool = False,
-            mcc_pv: str = 'MFX:USER:MCC:EPHOT:SET1'):
+            record: bool = False):
         """Perform Vernier scan.
 
         Parameters:
@@ -185,11 +184,6 @@ class Vernier:
 
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
-
-            mcc_pv (str): 
-                Vernier PV. Optional. Default: 'MFX:USER:MCC:EPHOT:SET1'.
-        
-
         """
         import os
         import logging
@@ -221,3 +215,18 @@ class Vernier:
             sleep(daq_delay)
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+
+    def ref(self, energy)
+        import os
+        os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
+
+
+    def put(self, energy)
+        import os
+        os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
+
+
+    def get(self)
+        import os
+        os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
