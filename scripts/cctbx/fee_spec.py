@@ -95,8 +95,8 @@ def main(args):
     args = parse_args(args)
     exp = args.experiment
     facility = args.facility
-    runs = args.runs
-
+    exp_run_list = args.runs
+    runs = " ".join(exp_run_list)
     output(exp, runs, facility)
 
 
