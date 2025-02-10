@@ -197,19 +197,20 @@ class Vernier:
         if picker=='flip':
             pp.flipflop()
 
-        logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
         run_number = daq.run_number() + 1
 
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps))
+        logger.info(energies)
 
         for ev in energies:
-            os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {ev}')
-            
+            self.put(ev)
+            sleep(2)
             autorun(
                 sample=str(ev), 
                 tag=tag, 
                 run_length=run_length, 
-                record=record, 
+                record=record,
+                runs=1,
                 inspire=inspire, 
                 picker=picker)
             sleep(daq_delay)
