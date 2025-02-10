@@ -1,6 +1,76 @@
 class Vernier:
     def __init__(self):
         pass
+
+    def output(
+            self,
+            user: str,
+            exp: str = None,
+            run_list: list = [],
+            facility: str = "S3DF"):
+        """Perform Vernier scan.
+
+        Parameters:
+            user (str): username for computer account at facility.
+
+            exp (str): 
+                experiment number. Current experiment by default
+
+            run_list (list): 
+                List of run numbers. Last run number by default
+
+            facility (str): Default: "S3DF". Options: "S3DF, NERSC".
+        """
+        import logging
+        import subprocess
+        from mfx.db import daq
+        from mfx.macros import get_exp
+        logger = logging.getLogger(__name__)
+
+        logging.info("Plotting XRT-Spec Output")
+        if exp is None:
+            exp = str(get_exp())
+
+        if len(run_list) == 0:
+            run_list = [daq.run_number()]
+
+        exp_run_list=[]
+
+        for run in run_list:
+            exp_run_list.append(f"{exp}:{run}")
+
+        runs = " ".join(exp_run_list)
+        facility = facility.upper()
+
+        if facility == "NERSC":
+            exp = exp[3:-2]
+            proc = [
+                    f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
+                    f"/global/common/software/lcls/mfx/scripts/cctbx/fee_spec.sh "
+                    f"{runs} {facility}"
+                ]
+        elif facility == "S3DF":
+            proc = [
+                    f"ssh -YAC psana "
+                    f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.sh "
+                    f"{runs} {facility}"
+                ]
+        else:
+            logging.warning(f"Facility not found: {facility}")
+
+        logging.info(proc)
+        os.system(proc[0])
+        
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/cctbx/energy/fee_spec.sh "
+            f"runs"
+            ]
+
+        logging.info(proc)
+        os.system(proc[0])
+
+
     def scan(
             self,
             energy_scan_start_eV: float,
