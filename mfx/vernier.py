@@ -2,13 +2,14 @@ class Vernier:
     def __init__(self):
         pass
 
+
     def output(
             self,
             user: str,
             exp: str = None,
             run_list: list = [],
             facility: str = "S3DF"):
-        """Perform Vernier scan.
+        """Perform Vernier scan results analysis.
 
         Parameters:
             user (str): username for computer account at facility.
@@ -25,6 +26,7 @@ class Vernier:
         import os
         from mfx.db import daq
         from mfx.macros import get_exp
+        from mfx.cctbx import sshproxy
         logger = logging.getLogger(__name__)
 
         logging.info("Plotting XRT-Spec Output")
@@ -42,23 +44,21 @@ class Vernier:
         runs = " ".join(exp_run_list)
         facility = facility.upper()
 
-        if facility == "NERSC":
-            exp = exp[3:-2]
-            proc = [
-                    f"ssh -i ~/.ssh/cctbx -YAC cctbx@perlmutter-p1.nersc.gov "
-                    f"/global/common/software/lcls/mfx/scripts/cctbx/fee_spec.sh "
-                    f"{runs} {facility}"
-                ]
-        elif facility == "S3DF":
-            proc = [
-                    f"ssh -YAC psana "
-                    f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.sh "
-                    f"{runs} {facility}"
-                ]
-        else:
-            logging.warning(f"Facility not found: {facility}")
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+            f"-e {experiment} -f {facility} -r {runs}"
+            ]
 
         logging.info(proc)
+
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                sshproxy(user)
+
         os.system(proc[0])
 
 
