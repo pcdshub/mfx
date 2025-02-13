@@ -5,14 +5,20 @@ Or python -m mfx.optimize.blop_scans for a default sim run-through
 """
 from __future__ import annotations
 
+from blop import DOF, Agent, Objective
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
-from blop import DOF, Objective, Agent
 from databroker import Broker
 from matplotlib import pyplot as plt
 from pandas import DataFrame
 
-from mfx.optimize.mirror_hw import MIRROR_NOMINAL, DG1_WAVE8_XPOS, DG2_WAVE8_XPOS, init_devices, sim_devices
+from .mirror_hw import (
+    DG1_WAVE8_XPOS,
+    DG2_WAVE8_XPOS,
+    MIRROR_NOMINAL,
+    init_devices,
+    sim_devices,
+)
 
 bluesky_objs: dict[str, object] = {}
 re_setup_info = {
@@ -215,6 +221,7 @@ def run_sim_test() -> Agent:
     print(f"pitch is at {init_devices()['mr1l4_homs'].pitch.position}")
     print("Generating plots")
     agent.plot_objectives()
+    plt.show(block=True)
     return agent
 
 
