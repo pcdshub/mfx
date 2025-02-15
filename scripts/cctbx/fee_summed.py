@@ -45,7 +45,7 @@ print(total)
 data /= total
 #data = data[:-2]
 data /= np.max(data)
-x = data 
+x = range(len(data))
 # Uncomment the next line and add calibration numbers if you want to label the x-axis as energy.
 # x = np.array(range(len(data))) * 0.07512 + 9625.1
 
