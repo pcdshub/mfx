@@ -56,6 +56,7 @@ class Vernier:
         try:
             from mfx.db import RE, pp, daq
             from mfx.autorun import quote, post
+            from mfx.macros import get_exp
         except ImportError:
             from bluesky import RunEngine
             RE = RunEngine({})
@@ -92,7 +93,7 @@ class Vernier:
             user = input("Enter username to continue: ")
             facility = input("Enter facility (s3df or nersc) to continue: ")
             exp = str(get_exp())
-            output.scan(user=user, facility=facility, run_type='scan', exp=exp, run=run_number)
+            self.output.scan(user=user, facility=facility, run_type='scan', exp=exp, run=run_number)
 
 
     def series(
@@ -140,6 +141,7 @@ class Vernier:
         import logging
         from mfx.db import pp, daq
         from mfx.autorun import quote, autorun
+        from mfx.macros import get_exp
         from time import sleep
         logger = logging.getLogger(__name__)
 
@@ -150,11 +152,13 @@ class Vernier:
 
         run_number = daq.run_number() + 1
 
-        energies = list(range(energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps))
+        energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)
 
+        original_ev = self.get.set1()
+
         for ev in energies:
-            self.put(ev)
+            self.put.set1(ev)
             sleep(2)
             autorun(
                 sample=str(ev), 
@@ -169,6 +173,8 @@ class Vernier:
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+        yself.put.set1(original_ev)
+
         logging.warning(f"Series completed. Would you like to analyze the output?")
         answer = input("(y/n)? ")
 
@@ -176,10 +182,10 @@ class Vernier:
             user = input("Enter username to continue: ")
             facility = input("Enter facility (s3df or nersc) to continue: ")
             exp = str(get_exp())
-            output.series(
+            self.output.series(
                 user=user, 
                 facility=facility, 
-                run_type='scan', 
+                run_type='series', 
                 exp=exp, 
                 run=run_number, 
                 energy=energy_scan_start_eV, 
@@ -250,7 +256,7 @@ class Vernier:
         def series(
                 user: str,
                 facility: str = "S3DF",
-                run_type: str = None,
+                run_type: str = 'series',
                 exp: str = None,
                 run: str = None,
                 energy: float = None,
@@ -298,7 +304,7 @@ class Vernier:
 
             proc = [
                 f"ssh -Yt {user}@s3dflogin "
-                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
                 f"-f {facility} -t {run_type} -e {exp} -r {run} -z {energy} -s {step} -n {num}"
                 ]
 
@@ -309,7 +315,7 @@ class Vernier:
         def scan(
                 user: str,
                 facility: str = "S3DF",
-                run_type: str = None,
+                run_type: str = 'scan',
                 exp: str = None,
                 run: str = None):
             """Perform Vernier scan results analysis.
@@ -348,7 +354,7 @@ class Vernier:
 
             proc = [
                 f"ssh -Yt {user}@s3dflogin "
-                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
                 f"-f {facility} -t {run_type} -e {exp} -r {run}"
                 ]
 
