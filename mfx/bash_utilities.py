@@ -71,6 +71,15 @@ class bs:
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
+    def lecroy(self, res='2560x1440'):
+        import subprocess
+        import logging
+        logging.info("Opening the fast Lecroy")
+        subprocess.Popen(
+            [f"xfreerdp -g {res} -u lecroyuser -p pcds scope-ics-mfx-lecroy01"],
+            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
     def cameras(self, time=12):   
         import subprocess
         import logging

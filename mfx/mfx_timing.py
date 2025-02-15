@@ -172,7 +172,7 @@ class MFX_Timing:
                 self._seq_init(sync_mark=30)
                 self._seq_put(self._seq_30hz())
             elif rep == 20:
-                self._seq_init(sync_mark=20)
+                self._seq_init(sync_mark=60)
                 self._seq_put(self._seq_20hz())
 
         self.seq.start()

@@ -171,7 +171,7 @@ def main(args):
     args = parse_args(args)
     user = args.username
     exp = args.experiment
-    facility = args.facility
+    facility = args.facility.upper()
     debug = bool(args.debug)
     step = args.step
 

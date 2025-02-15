@@ -271,12 +271,15 @@ class OM:
         logging.info(proc)
 
         if debug:
+            logging.info(proc[0])
             subprocess.Popen(
                 proc[0], shell=True, 
                     stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            logging.info(proc[1])
             subprocess.Popen(
                 proc[1], shell=True, 
                     stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            logging.info(proc[-1])
             os.system(proc[-1])
         else:
             for cmd in proc:
