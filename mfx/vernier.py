@@ -3,64 +3,6 @@ class Vernier:
         pass
 
 
-    def output(
-            self,
-            user: str,
-            exp: str = None,
-            run_list: list = [],
-            facility: str = "S3DF"):
-        """Perform Vernier scan results analysis.
-
-        Parameters:
-            user (str): username for computer account at facility.
-
-            exp (str): 
-                experiment number. Current experiment by default
-
-            run_list (list): 
-                List of run numbers. Last run number by default
-
-            facility (str): Default: "S3DF". Options: "S3DF, NERSC".
-        """
-        import logging
-        import os
-        from mfx.db import daq
-        from mfx.macros import get_exp
-        import mfx.cctbx
-        logger = logging.getLogger(__name__)
-
-        logging.info("Plotting XRT-Spec Output")
-        if exp is None:
-            exp = str(get_exp())
-
-        if len(run_list) == 0:
-            run_list = [daq.run_number()]
-
-        exp_run_list=[]
-
-        for run in run_list:
-            exp_run_list.append(f"{exp}:{run}")
-        exp_run_list = " ".join(exp_run_list)
-        facility = facility.upper()
-
-        proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
-            f"-e {exp} -f {facility} -r {exp_run_list}"
-            ]
-
-        logging.info(proc)
-
-        if facility == 'NERSC':
-            logging.warning(f"Have you renewed your token with sshproxy today?")
-            token = input("(y/n)? ")
-
-            if token.lower() == "n":
-                cctbx.sshproxy(user)
-
-        os.system(proc[0])
-
-
     def scan(
             self,
             energy_scan_start_eV: float,
@@ -143,6 +85,15 @@ class Vernier:
         post(sample, tag, run_number, record, inspire)
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+        logging.warning(f"Scan completed. Would you like to analyze the output?")
+        answer = input("(y/n)? ")
+
+        if answer.lower() == "y":
+            user = input("Enter username to continue: ")
+            facility = input("Enter facility (s3df or nersc) to continue: ")
+            exp = str(get_exp())
+            output.scan(user=user, facility=facility, run_type='scan', exp=exp, run=run_number)
+
 
     def series(
             self,
@@ -218,17 +169,214 @@ class Vernier:
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+        logging.warning(f"Series completed. Would you like to analyze the output?")
+        answer = input("(y/n)? ")
 
-    def ref(self, energy):
-        import os
-        os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
+        if answer.lower() == "y":
+            user = input("Enter username to continue: ")
+            facility = input("Enter facility (s3df or nersc) to continue: ")
+            exp = str(get_exp())
+            output.series(
+                user=user, 
+                facility=facility, 
+                run_type='scan', 
+                exp=exp, 
+                run=run_number, 
+                energy=energy_scan_start_eV, 
+                step=energy_scan_steps, 
+                num=len(energies))
 
 
-    def put(self, energy):
-        import os
-        os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
+    class output:
+        def __init__(self):
+            pass
+
+        def multi_run(
+                user: str,
+                exp: str = None,
+                run_list: list = [],
+                facility: str = "S3DF"):
+            """Perform Vernier scan results analysis.
+
+            Parameters:
+                user (str): username for computer account at facility.
+
+                exp (str): 
+                    experiment number. Current experiment by default
+
+                run_list (list): 
+                    List of run numbers. Last run number by default
+
+                facility (str): Default: "S3DF". Options: "S3DF, NERSC".
+            """
+            import logging
+            import os
+            from mfx.db import daq
+            from mfx.macros import get_exp
+            import mfx.cctbx
+            logger = logging.getLogger(__name__)
+
+            logging.info("Plotting XRT-Spec Output")
+            if exp is None:
+                exp = str(get_exp())
+
+            if len(run_list) == 0:
+                run_list = [daq.run_number()]
+
+            exp_run_list=[]
+
+            for run in run_list:
+                exp_run_list.append(f"{exp}:{run}")
+            exp_run_list = " ".join(exp_run_list)
+
+            facility = facility.upper()
+            if facility == 'NERSC':
+                logging.warning(f"Have you renewed your token with sshproxy today?")
+                token = input("(y/n)? ")
+
+                if token.lower() == "n":
+                    cctbx.sshproxy(user)
+
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+                f"-e {exp} -f {facility} -r {exp_run_list}"
+                ]
+
+            logging.info(proc)
+            os.system(proc[0])
 
 
-    def get(self):
-        import os
-        os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
+        def series(
+                user: str,
+                facility: str = "S3DF",
+                run_type: str = None,
+                exp: str = None,
+                run: str = None,
+                energy: float = None,
+                step: float = None,
+                num: int = None):
+            """Perform Vernier scan results analysis.
+
+            Parameters:
+                facility (str):
+                    Default: "S3DF". Options: "S3DF, NERSC
+                type (str):
+                    specify whether it is a vernier 'scan' or 'series'
+                exp (str): 
+                    experiment number. Current experiment by default
+                run (str): 
+                    The run you'd like to process
+                energy (float):
+                    specify the starting energy in eV (only for 'series')
+                step (float):
+                    specify the energy step size in eV (only for 'series')
+                num (int):
+                    specify the total number of runs (only for 'series')
+            """
+            import logging
+            import os
+            from mfx.db import daq
+            from mfx.macros import get_exp
+            import mfx.cctbx
+            logger = logging.getLogger(__name__)
+
+            logging.info("Plotting XRT-Spec Output")
+            if exp is None:
+                exp = str(get_exp())
+
+            if run is None:
+                run = [daq.run_number()]
+
+            facility = facility.upper()
+            if facility == 'NERSC':
+                logging.warning(f"Have you renewed your token with sshproxy today?")
+                token = input("(y/n)? ")
+
+                if token.lower() == "n":
+                    cctbx.sshproxy(user)
+
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+                f"-f {facility} -t {run_type} -e {exp} -r {run} -z {energy} -s {step} -n {num}"
+                ]
+
+            logging.info(proc)
+            os.system(proc[0])
+
+
+        def scan(
+                user: str,
+                facility: str = "S3DF",
+                run_type: str = None,
+                exp: str = None,
+                run: str = None):
+            """Perform Vernier scan results analysis.
+
+            Parameters:
+                facility (str):
+                    Default: "S3DF". Options: "S3DF, NERSC
+                type (str):
+                    specify whether it is a vernier 'scan' or 'series'
+                exp (str): 
+                    experiment number. Current experiment by default
+                run (str): 
+                    The run you'd like to process
+            """
+            import logging
+            import os
+            from mfx.db import daq
+            from mfx.macros import get_exp
+            import mfx.cctbx
+            logger = logging.getLogger(__name__)
+
+            logging.info("Plotting XRT-Spec Output")
+            if exp is None:
+                exp = str(get_exp())
+
+            if run is None:
+                run = [daq.run_number()]
+
+            facility = facility.upper()
+            if facility == 'NERSC':
+                logging.warning(f"Have you renewed your token with sshproxy today?")
+                token = input("(y/n)? ")
+
+                if token.lower() == "n":
+                    cctbx.sshproxy(user)
+
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+                f"-f {facility} -t {run_type} -e {exp} -r {run}"
+                ]
+
+            logging.info(proc)
+            os.system(proc[0])
+
+
+    class get:
+        def __init__(self):
+            pass
+
+        def ref():
+            import os
+            os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
+
+        def set1():
+            import os
+            os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
+
+
+    class put:
+        def __init__(self):
+            pass
+
+        def ref(energy):
+            import os
+            os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
+    
+        def set1(energy):
+            import os
+            os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
