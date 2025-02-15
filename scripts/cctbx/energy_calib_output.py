@@ -39,7 +39,7 @@ def output(
             specify the total number of runs (only for 'series')
     """
 
-    if run_type != 'scan' or != 'series'
+    if run_type != 'scan' and run_type != 'series':
         logging.error("Enter -t to specify whether it is a vernier 'scan' or 'series'. Program Exit.")
         sys.exit()
 

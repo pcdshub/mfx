@@ -26,40 +26,10 @@ esac
 case $type in
 
   scan)
-    echo "Would you like to see the scan output? (y/n) "
-    read yn
-
-    case $yn in 
-      y)
-        libtbx.python ${mfx3}/scripts/cctbx/fee_summed.py ${exp} ${run}
-        ;;
-
-      n)
-        echo no problem you can always check later...
-        ;;
-
-      *) echo invalid response;
-        exit 1
-        ;;
-    esac
+    libtbx.python ${mfx3}/scripts/cctbx/fee_summed.py ${exp} ${run}
     ;;
 
   series)
-    echo "Would you like to see the scan output? (y/n) "
-    read yn
-
-    case $yn in 
-      y)
-        libtbx.python ${mfx3}/scripts/cctbx/fee_calib.py exp=${exp} run_start=${run} energy_start=${energy} energy_step=${step} n_runs=${num}
-        ;;
-
-      n)
-        echo no problem you can always check later...
-        ;;
-
-      *) echo invalid response;
-        exit 1
-        ;;
-    esac
+    libtbx.python ${mfx3}/scripts/cctbx/fee_calib.py exp=${exp} run_start=${run} energy_start=${energy} energy_step=${step} n_runs=${num}
     ;;
 esac
