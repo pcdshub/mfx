@@ -215,6 +215,7 @@ def run_sim_test() -> Agent:
     print(f"pitch is at {init_devices()['mr1l4_homs'].pitch.position}")
     print("Generating plots")
     agent.plot_objectives()
+    plt.show(block=True)
     return agent
 
 
