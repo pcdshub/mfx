@@ -178,7 +178,7 @@ def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
 
 
 def autorun(sample='?', tag=None, run_length=300, record=True,
-            runs=5, inspire=False, daq_delay=5, picker=None, cam=None):
+            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True):
     """
     Automate runs.... With optional quotes
 
@@ -207,6 +207,10 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
 
     picker: str, optional
         If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+
+    close: bool, optional
+        If False does not close pulse picker after when all runs finish
+        but still closes when a run is canceled. True by default for safety.
 
     Operations
     ----------
@@ -256,7 +260,8 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
     if status:
-        pp.close()
+        if close is True:
+            pp.close()
         daq.end_run()
         daq.disconnect()
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
