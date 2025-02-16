@@ -3,7 +3,7 @@ from bluesky import RunEngine
 
 class Align:
     def __init__(self):
-        self.beam_alignment_diagnostics = ["DG1", "DG2"]
+        self.beam_alignment_diagnostics = ["XCS1", "DG1", "DG2"]
         self.beam_alignment_methods = ["Xopt", "blop"]
         self.beam_alignment_devices = ["yag", "wave8"]
 
@@ -12,12 +12,14 @@ class Align:
             with_goal: float,
             on_diagnostic: str = "DG1",
             with_method: str = 'Xopt',
-            using_device: str = "yag"):
+            using_device: str = "yag",
+            xopt_turbo_option: str = "safety",
+            ):
         """Perform Beam Alignment
 
         Parameters:
 
-            on_diagnostic (str): diagnostic to use for alignment. Options: "DG1, DG2".
+            on_diagnostic (str): diagnostic to use for alignment. Options: "XCS1, DG1, DG2".
 
             with_method(str): method to use for alignment. Options: "blop, Xopt".
         """
@@ -39,11 +41,15 @@ class Align:
                 device_type=using_device,
                 location=on_diagnostic,
                 goal=with_goal,
+                xopt_generator_turbo_controller=xopt_turbo_option,
             )
-            xopt.random_evaluate(3)
+            customized_boundaries = {'mirror_pitch': [-549.0,-546.0]}
+            xopt.random_evaluate(3, custom_bounds=customized_boundaries)
+            print(xopt.data)
             for num in range(10):
                 print(f"Step {num + 1}")
                 xopt.step()
+                print(xopt.data)
             _, val, params = xopt.vocs.select_best(xopt.data)
             print(f"Best objective value {val}")
             print(f"Best point {params}")

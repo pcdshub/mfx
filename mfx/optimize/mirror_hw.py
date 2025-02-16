@@ -20,12 +20,13 @@ HAPPI_NAMES = (
 )
 # Default constants so I can re-use them
 # Default starting point for searches
-MIRROR_NOMINAL = -544
+MIRROR_NOMINAL = -548
 # Used for sim devices and as default goal positions
 DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41
-DG1_YAG_XPOS = 320
-DG2_YAG_XPOS = 320
+XCS_YAG_XPOS = 337
+DG1_YAG_XPOS = 191
+DG2_YAG_XPOS = 191
 IP_YAG_XPOS = 344
 
 
@@ -62,6 +63,8 @@ def init_devices(force: bool = False) -> dict[str, Device]:
         name = f"mfx_{stand}_yag"
         devices[name] = LCLSImagePlugin(f"MFX:{stand.upper()}:P6740:IMAGE1:", name=name)
         devices[name].kind = "hinted"
+    name = "xcs_yag1"
+    devices[name] = LCLSImagePlugin(f"XCS:GIGE:YAG1:IMAGE1:", name=name)
 
     devices["mfx_ip_yag"] = LCLSImagePlugin("MFX:GIGE:LBL:01:IMAGE1:", name="mfx_ip1_yag")
     devices["mfx_ip_yag"].kind = "hinted"
