@@ -26,7 +26,7 @@ runpath="${mfx_dir}/common/results/averages/${run}"
 
 if [ -z "${group}" ] || [ "${group}" == "None" ]; then
   # No arguments provided, open the newest file
-  group=$(ls -t ${dirpath} | head -n 1)
+  group=$(ls -t ${runpath} | head -n 1)
   echo "no trial-rungroup provided so using the newest"
 else
   # Arguments provided, use the first one as the file to open
