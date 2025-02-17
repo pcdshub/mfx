@@ -239,7 +239,13 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             ioc_cam_recorder(cam, run_length, tag)
         if status is False:
             pp.close()
-            post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
+            post(
+                sample=sample, 
+                tag=tag, 
+                run_number=run_number, 
+                post=True, 
+                inspire=inspire, 
+                add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
             sleep(5)
             daq.stop()
@@ -247,7 +253,12 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             logger.warning('Run ended prematurely. Probably sample delivery problem')
             break
 
-        post(sample, tag, run_number, record, inspire)
+        post(
+            sample=sample, 
+            tag=tag, 
+            run_number=run_number, 
+            post=True, 
+            inspire=inspire)
         try:
             sleep(daq_delay)
         except KeyboardInterrupt:
