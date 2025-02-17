@@ -160,7 +160,7 @@ class Vernier:
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)
 
-        original_ev = int(os.popen("caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'").read().strip())
+        original_ev = self.get.set1()
 
         for ev in energies:
             self.put.set1(ev)
@@ -375,11 +375,14 @@ class Vernier:
         def ref():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
+            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:REF1 | awk '{print $2}'").read().strip())
+            return energy
 
         def set1():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
-
+            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'").read().strip())
+            return energy
 
     class put:
         def __init__(self):
