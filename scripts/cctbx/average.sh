@@ -1,24 +1,22 @@
 #! /bin/bash
 #SBATCH --nodes 1
-#SBATCH --ntasks-per-node=128
-#SBATCH --output=/pscratch/sd/c/cctbx/l10477/common/results/averages/test/log.out
-#SBATCH --error=/pscratch/sd/c/cctbx/l10477/common/results/averages/test/err.out
-#SBATCH --qos realtime
-#SBATCH --time=00:45:00
-#SBATCH --job-name=image_viewer
-#SBATCH --account=lcls
-#SBATCH --constraint=cpu
-#SBATCH --time=120
+#SBATCH --ntasks-per-node=120
+#SBATCH --output=/sdf/data/lcls/ds/mfx/mfxl1033223/results/common/results/averages/r0758/006_rg031/stdout/log.out
+#SBATCH --error=/sdf/data/lcls/ds/mfx/mfxl1033223/results/common/results/averages/r0758/006_rg031/stdout/err.out
+#SBATCH --partition milano
+#SBATCH --job-name=r756
+#SBATCH --account=lcls:mfxl1033223 --reservation=lcls:onshift
 
 exp=$1
 facility=$2
 run=$3
+group=$4
 
 case $facility in
 
   S3DF)
     mfx_dir="/sdf/data/lcls/ds/mfx/${exp}/results"
-    source /sdf/group/lcls/ds/tools/cctbx/setup.sh
+    source /sdf/group/lcls/ds/tools/cctbx/build/conda_setpaths.sh
     ;;
 
   NERSC)
@@ -37,9 +35,10 @@ else
   echo "path provided"
 fi
 
-if [[ ! -d ${runpath} ]]; then
-    ave_out="${runpath}/${group}/out"
+ave_out="${runpath}/${group}/out"
+
+if [[ ! -d ${ave_out} ]]; then
     mkdir -p ${ave_out}
 fi
 
-srun dxtbx.image_average ${dirpath}/${group}/data.loc --mpi=True -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf
+mpirun dxtbx.image_average ${dirpath}/${group}/data.loc --mpi=True --skip-images=1 -v -a ${ave_out}/avg.cbf -m ${ave_out}/max.cbf -s ${ave_out}/std.cbf

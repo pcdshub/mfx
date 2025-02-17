@@ -24,6 +24,21 @@ esac
 dirpath="${mfx_dir}/common/results/${run}"
 runpath="${mfx_dir}/common/results/averages/${run}"
 
+if [[ ! -d ${runpath} ]]; then
+    echo "Run not averaged yet. It is faster with the GUI but would you like to average locally? (y/n) "
+    read yn
+
+    case $yn in 
+      y)
+        sbatch --wait ${mfx3}/scripts/cctbx/average.sh ${exp} ${facility} ${run} ${group}
+        ;;
+      n)
+        echo ERROR: Run not averaged yet. Please stop and Average from the GUI
+        exit 1 # terminate and indicate error
+        ;;
+    esac
+fi
+
 if [ -z "${group}" ] || [ "${group}" == "None" ]; then
   # No arguments provided, open the newest file
   group=$(ls -t ${runpath} | head -n 1)
@@ -31,21 +46,6 @@ if [ -z "${group}" ] || [ "${group}" == "None" ]; then
 else
   # Arguments provided, use the first one as the file to open
   echo "path provided"
-fi
-
-if [[ ! -d ${runpath} ]]; then
-    echo "Run not averaged yet. It is faster with the GUI but would you like to average locally? (y/n) "
-    read yn
-
-    case $yn in 
-      y)
-        sbatch --wait ${mfx3}/scripts/cctbx/average.sh ${exp} ${facility} ${run}
-        ;;
-      n)
-        echo ERROR: Run not averaged yet. Please stop and Average from the GUI
-        exit 1 # terminate and indicate error
-        ;;
-    esac
 fi
 
 out="${runpath}/${group}/out"
