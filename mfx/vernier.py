@@ -93,7 +93,12 @@ class Vernier:
             facility = input("Enter facility (s3df or nersc) to continue: ")
             user = input("Enter username to continue: ")
             exp = str(get_exp())
-            self.output.scan(user=user, facility=facility, run_type='scan', exp=exp, run=run_number)
+            self.output.scan(
+                user=user, 
+                facility=facility, 
+                run_type='scan', 
+                exp=exp, 
+                run=run_number)
 
 
     def series(
@@ -173,6 +178,7 @@ class Vernier:
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+        logger.info(f'Moving energy back to original energy: {original_ev}')
         self.put.set1(original_ev)
 
         logging.warning(f"Series completed. Would you like to analyze the output?")
