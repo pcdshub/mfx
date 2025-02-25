@@ -413,13 +413,13 @@ class yano:
             status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
             if status is False:
                 pp.close()
-            post(
-                sample=sample, 
-                tag=tag, 
-                run_number=run_number, 
-                post=True, 
-                inspire=inspire, 
-                add_note='Run ended prematurely. Probably sample delivery problem')
+                post(
+                    sample=sample, 
+                    tag=tag, 
+                    run_number=run_number, 
+                    post=True, 
+                    inspire=inspire, 
+                    add_note='Run ended prematurely. Probably sample delivery problem')
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
                 logger.warning("[*] Stopping Run and exiting???...")
                 sleep(5)
@@ -428,12 +428,12 @@ class yano:
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
 
-        post(
-            sample=sample, 
-            tag=tag, 
-            run_number=run_number, 
-            post=True, 
-            inspire=inspire)
+            post(
+                sample=sample, 
+                tag=tag, 
+                run_number=run_number, 
+                post=True, 
+                inspire=inspire)
             try:
                 sleep(daq_delay)
             except KeyboardInterrupt:
