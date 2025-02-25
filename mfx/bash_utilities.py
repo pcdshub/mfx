@@ -145,3 +145,12 @@ class bs:
 
         logging.info("Running Focus Scan")
         os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -s")
+
+        tfs_position = input(
+            "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
+
+        if 0 < int(tfs_position) < 300:
+            logging.info(f"Moving TFS to {tfs_position}")
+            os.system(f'caput MFX:TFS:MMS:21.VAL {tfs_position}')
+        else:
+            logging.error(f"{tfs_position} is not a valid position please use an interger between 1 and 299")
