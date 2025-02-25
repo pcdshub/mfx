@@ -243,7 +243,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                 sample=sample, 
                 tag=tag, 
                 run_number=run_number, 
-                post=True, 
+                post=record, 
                 inspire=inspire, 
                 add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
@@ -257,7 +257,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             sample=sample, 
             tag=tag, 
             run_number=run_number, 
-            post=True, 
+            post=record, 
             inspire=inspire)
         try:
             sleep(daq_delay)

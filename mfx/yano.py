@@ -21,6 +21,7 @@ class yano:
         self.opo_ec_short = 212
         self.opo_ec_long = 211
         self.opo_ec_longer = 210
+        self.opo_ec_longest = 213
         self.PP = 197
         self.DAQ = 198
         self.WATER = 211
@@ -130,13 +131,21 @@ class yano:
             Requested laser delay in nanoseconds.
         """
         import logging
+        import sys
         logger = logging.getLogger(__name__)
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
         self.delay = delay
         opo_delay = self.opo_time_zero - delay
         opo_ec = self.opo_ec_short
-        if delay > self.opo_time_zero + 1e9/120:
+        if delay > self.opo_time_zero + 3e9/120:
+            logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
+            sys.exit()
+        elif delay > self.opo_time_zero + 2e9/120:
+            opo_delay += 3e9/120
+            opo_ec = self.opo_ec_longest
+            logger.info('Laser is 3 buckets before the beam')
+        elif delay > self.opo_time_zero + 1e9/120:
             opo_delay += 2e9/120
             opo_ec = self.opo_ec_longer
             logger.info('Laser is 2 buckets before the beam')
@@ -317,7 +326,7 @@ class yano:
                 return status
 
 
-    def yano_run(self, sample='?', tag=None, run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
+    def run(self, sample='?', tag=None, run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
         """
         Perform a single run of the experiment
 
@@ -413,11 +422,11 @@ class yano:
             status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
             if status is False:
                 pp.close()
-                post(
+                self.post(
                     sample=sample, 
                     tag=tag, 
                     run_number=run_number, 
-                    post=True, 
+                    post=record, 
                     inspire=inspire, 
                     add_note='Run ended prematurely. Probably sample delivery problem')
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
@@ -428,11 +437,11 @@ class yano:
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
 
-            post(
+            self.post(
                 sample=sample, 
                 tag=tag, 
                 run_number=run_number, 
-                post=True, 
+                post=record, 
                 inspire=inspire)
             try:
                 sleep(daq_delay)

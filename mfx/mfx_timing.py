@@ -14,6 +14,7 @@ class MFX_Timing:
             'ray1':211,
             'ray2':212,
             'ray3':213,
+            'blank':209
         }
         self.sync_markers = {0.5:0, 1:1, 5:2, 10:3, 30:4, 60:5, 120:6, 360:7}
         self.sequence = []
@@ -97,8 +98,8 @@ class MFX_Timing:
                  ['ray1', 1],
                  ['ray2', 1],
                  ['daq_readout', 0],
-                 ['ray3', 1],
-                 ['ray3', 1],
+                 ['blank', 1],
+                 ['blank', 1],
                  ['ray3', 1]]
         return steps
 
@@ -109,14 +110,14 @@ class MFX_Timing:
                  ['ray1', 1],
                  ['ray2', 1],
                  ['daq_readout', 0],
-                 ['ray3', 1],
-                 ['ray3', 1],
-                 ['ray3', 1],
-                 ['ray3', 1],
-                 ['ray3', 1],
-                 ['ray3', 1],
-                 ['ray3', 1],
-                 ['ray3', 1],
+                 ['blank', 1],
+                 ['blank', 1],
+                 ['blank', 1],
+                 ['blank', 1],
+                 ['blank', 1],
+                 ['blank', 1],
+                 ['blank', 1],
+                 ['blank', 1],
                  ['ray3', 1]]
         return steps
 
