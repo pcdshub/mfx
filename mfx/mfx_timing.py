@@ -103,6 +103,24 @@ class MFX_Timing:
         return steps
 
 
+    def _seq_10hz(self):
+        steps = [['ray_readout', 1],
+                 ['pp_trig', 0],
+                 ['ray1', 1],
+                 ['ray2', 1],
+                 ['daq_readout', 0],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1],
+                 ['ray3', 1]]
+        return steps
+
+
     def set_seq(self, rep=None, sequencer=None, laser=None):
         """
     Set your event sequencer
@@ -110,7 +128,7 @@ class MFX_Timing:
     Parameters
     ----------
     rep: int, optional
-        Set repitition rate only 120, 60, 30, and 20 Hz are currently available
+        Set repitition rate only 120, 60, 30, 20 and 10 Hz are currently available
 
     sequencer: str, optional
         default is event sequencer 7 and use 'spare' to run sequencer 12
@@ -161,6 +179,14 @@ class MFX_Timing:
                     block.append(laser_evt)
                     block.append(sequence[-1])
                     self._seq_put(block)
+            elif rep == 10:
+                self._seq_init(sync_mark=120)
+                for laser_evt in laser:
+                    sequence = self._seq_10hz()
+                    block = sequence[:-1]
+                    block.append(laser_evt)
+                    block.append(sequence[-1])
+                    self._seq_put(block)
         else:
             if rep is None or rep == 120:
                 self._seq_init(sync_mark=120)
@@ -174,6 +200,9 @@ class MFX_Timing:
             elif rep == 20:
                 self._seq_init(sync_mark=60)
                 self._seq_put(self._seq_20hz())
+            elif rep == 10:
+                self._seq_init(sync_mark=120)
+                self._seq_put(self._seq_10hz())
 
         self.seq.start()
         return self.sequence
