@@ -80,14 +80,23 @@ class bs:
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-    def cameras(self, time=12):   
+    def grabber(self):
+        import subprocess
+        import logging
+        logging.info("Opening elog grabber")
+        subprocess.Popen(
+            [f"/reg/g/pcds/engineering_tools/mfx/scripts/eloggrabber"],
+            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
+    def cameras(self):   
         import subprocess
         import logging
         logging.info("Opening Cam Viewer")
         subprocess.Popen(
-            [f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}"],
+            [f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer"],
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        
+
 
     def camera_list_out(self):
         import re   
