@@ -7,6 +7,9 @@ def post(sample='?', tag=None, run_number=None, post=False, inspire=False, add_n
     sample: str, optional
         Sample Name
 
+    tag: str, optional
+        Run group tag
+
     run_number: int, optional
         Run Number. By default this is read off of the DAQ
 
@@ -175,7 +178,7 @@ def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
 
 
 def autorun(sample='?', tag=None, run_length=300, record=True,
-            runs=5, inspire=False, daq_delay=5, picker=None, cam=None):
+            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True):
     """
     Automate runs.... With optional quotes
 
@@ -205,6 +208,10 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     picker: str, optional
         If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
 
+    close: bool, optional
+        If False does not close pulse picker after when all runs finish
+        but still closes when a run is canceled. True by default for safety.
+
     Operations
     ----------
 
@@ -232,7 +239,13 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             ioc_cam_recorder(cam, run_length, tag)
         if status is False:
             pp.close()
-            post(sample, run_number, record, inspire, 'Run ended prematurely. Probably sample delivery problem')
+            post(
+                sample=sample, 
+                tag=tag, 
+                run_number=run_number, 
+                post=record, 
+                inspire=inspire, 
+                add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
             sleep(5)
             daq.stop()
@@ -240,7 +253,12 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             logger.warning('Run ended prematurely. Probably sample delivery problem')
             break
 
-        post(sample, tag, run_number, record, inspire)
+        post(
+            sample=sample, 
+            tag=tag, 
+            run_number=run_number, 
+            post=record, 
+            inspire=inspire)
         try:
             sleep(daq_delay)
         except KeyboardInterrupt:
@@ -253,7 +271,8 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
     if status:
-        pp.close()
+        if close is True:
+            pp.close()
         daq.end_run()
         daq.disconnect()
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')

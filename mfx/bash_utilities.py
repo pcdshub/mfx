@@ -71,14 +71,32 @@ class bs:
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-    def cameras(self, time=12):   
+    def lecroy(self, res='2560x1440'):
+        import subprocess
+        import logging
+        logging.info("Opening the fast Lecroy")
+        subprocess.Popen(
+            [f"xfreerdp -g {res} -u lecroyuser -p pcds scope-ics-mfx-lecroy01"],
+            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
+    def grabber(self):
+        import subprocess
+        import logging
+        logging.info("Opening elog grabber")
+        subprocess.Popen(
+            [f"/reg/g/pcds/engineering_tools/mfx/scripts/eloggrabber"],
+            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+
+    def cameras(self):   
         import subprocess
         import logging
         logging.info("Opening Cam Viewer")
         subprocess.Popen(
-            [f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer -w {time}"],
+            [f"/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer"],
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        
+
 
     def camera_list_out(self):
         import re   
@@ -127,3 +145,12 @@ class bs:
 
         logging.info("Running Focus Scan")
         os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -s")
+
+        tfs_position = input(
+            "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
+
+        if 0 < int(tfs_position) < 300:
+            logging.info(f"Moving TFS to {tfs_position}")
+            os.system(f'caput MFX:TFS:MMS:21.VAL {tfs_position}')
+        else:
+            logging.error(f"{tfs_position} is not a valid position please use an interger between 1 and 299")
