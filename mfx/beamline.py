@@ -41,9 +41,6 @@ with safe_load('beam_suspender'):
 with safe_load('macros'):
     from mfx.macros import *
 
-with safe_load('FakeDetector'):
-    from mfx.fake_detector import *
-
 with safe_load('MFX_Timing'):
     from mfx.mfx_timing import *
     mfx_timing = MFX_Timing(sequencer)
@@ -100,7 +97,7 @@ with safe_load('yano-kern_code'):
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *
     codi = CoDI()
-    
+
 with safe_load('Droplet_on_Demand'):
     from dod.dod import *
     dod = DoD(modules = 'codi')
