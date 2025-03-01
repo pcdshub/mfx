@@ -11,6 +11,12 @@ from mfx.db import (mfx_reflaser,
 import numpy as np
 import time
 
+def determine_dccm_bragg(energy):
+#energy in eV 
+    d_space=3.136
+    x = 12398.52/energy / (2 * d_space)
+    theta = np.arcsin(x) * 180 / np.pi
+    return theta
 
 def laser_in(wait=False, timeout=10):
     """
