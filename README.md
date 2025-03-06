@@ -1,5 +1,7 @@
 # MFX Docs Guide
 
+The documentation is available on [github pages](https://pcdshub.github.io/mfx/) and a mirror is served from [S3DF pages](https://s3df.slac.stanford.edu/data/lcls/mfx/). 
+
 For those with access to the MFX repo, you are welcome to contribute to the documentation and the main steps are outlined below. 
 ### Installing MkDocs 
 Install [MkDocs](https://www.mkdocs.org/) on your local machine. This is not strictly necessary, however MkDocs has a built-in html server means you can update and debug the documentation fast and easy locally. Then when everything looks good you can push your changes to the repo. 
@@ -39,5 +41,4 @@ mkdocs serve
 ``` 
 Open  http://127.0.0.1:8000/ in your browser and you should see the MFX docs homepage. As you edit `mkdocs.yml` or files in the `docs` directory, the server should automatically load and build the changes in your browser.
 
-Once your satisfied with the documents, you can push the changes to the MFX `documentation` branch. 
-
+Once your satisfied with the documents, you can push the changes to the MFX `documentation` branch. The build process is trigger when changes are pushed to the `documentation branch` so you should be able to see them after a few minutes. 
