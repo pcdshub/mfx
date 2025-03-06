@@ -25,13 +25,13 @@ class DCCMono():
         self.tx = BeckhoffAxis("SP1L0:DCCM:MMS:TX", name='tx')
 
 
-    def insert(self)
+    def insert(self):
         import logging
         logger.info(f'Moving the DCCM IN')
         self.tx.umv(-1.3)
 
 
-    def out(self)
+    def out(self):
         import logging
         logger.info(f'Moving the DCCM OUT')
         self.tx.umv(-10)
