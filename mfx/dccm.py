@@ -25,6 +25,18 @@ class DCCMono():
         self.tx = BeckhoffAxis("SP1L0:DCCM:MMS:TX", name='tx')
 
 
+    def insert(self)
+        import logging
+        logger.info(f'Moving the DCCM IN')
+        self.tx.umv(-1.3)
+
+
+    def out(self)
+        import logging
+        logger.info(f'Moving the DCCM OUT')
+        self.tx.umv(-10)
+
+
     def series(
             self,
             energy_scan_start_eV: float,
@@ -92,16 +104,16 @@ class DCCMono():
             self.th1.umv(bragg_angle)
             self.th2.umv(bragg_angle)
 
-            # autorun(
-            #     sample=str(ev), 
-            #     tag=tag, 
-            #     run_length=run_length, 
-            #     record=record,
-            #     runs=1,
-            #     inspire=inspire, 
-            #     picker=picker,
-            #     close=False)
-            # sleep(daq_delay)
+            autorun(
+                sample=str(ev), 
+                tag=tag, 
+                run_length=run_length, 
+                record=record,
+                runs=1,
+                inspire=inspire, 
+                picker=picker,
+                close=False)
+            sleep(daq_delay)
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
