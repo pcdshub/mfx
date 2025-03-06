@@ -31,7 +31,7 @@ class DCCMono():
         self.tx.umv(-1.3)
 
 
-    def out(self):
+    def remove(self):
         import logging
         logger.info(f'Moving the DCCM OUT')
         self.tx.umv(-10)
