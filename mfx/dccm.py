@@ -37,6 +37,40 @@ class DCCMono():
         self.tx.umv(-10)
 
 
+    def set_energy(self, energy):
+        """
+        Changes Bragg angle for DCCM for chosen energy
+
+        Parameters
+        ----------
+        energy : int,optional
+            Select which energy in eV you want for DCCM mono beam
+
+        """
+        import logging
+        from time import sleep, time
+        from mfx.macros import determine_dccm_bragg
+
+        start_time = time()
+        bragg_angle = determine_dccm_bragg(energy)
+        self.th1.mv(bragg_angle)
+        self.th2.umv(bragg_angle)
+
+        while round(self.th1(), 3) != round(bragg_angle, 3) or round(self.th1(), 3) != round(bragg_angle, 3):
+            sleep(0.1)
+
+            if time() - start_time > 180:
+                logging.error("Timeout occurred: DCCM could not move to correct position. Try again.")
+                status = False
+                break
+
+        if round(self.th1(), 3) == round(bragg_angle, 3) and round(self.th1(), 3) == round(bragg_angle, 3):
+            logging.warning(f"DCCM is now in the correct position: {round(bragg_angle, 3)}")
+            status = True
+
+        return status
+
+
     def series(
             self,
             energy_scan_start_eV: float,
@@ -100,9 +134,7 @@ class DCCMono():
         original_th2 = self.th2()
 
         for ev in energies: 
-            bragg_angle = determine_dccm_bragg(ev)
-            self.th1.umv(bragg_angle)
-            self.th2.umv(bragg_angle)
+            self.set_energy(ev)
 
             autorun(
                 sample=str(ev), 
