@@ -117,9 +117,13 @@ class DCCMono():
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
-        logger.info(f'Moving energy back to original bragg angle: {original_th1}')
-        self.th1.umv(original_th1)
-        self.th2.umv(original_th2)
+        logging.warning(f"Series completed. Would you like to move back to original bragg angle?")
+        answer = input("(y/n)? ")
+
+        if answer.lower() == "y":
+            logger.info(f'Moving back to original bragg angle: {original_th1}')
+            self.th1.umv(original_th1)
+            self.th2.umv(original_th2)
 
         logging.warning(f"Series completed. Would you like to analyze the output?")
         answer = input("(y/n)? ")
