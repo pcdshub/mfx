@@ -10,7 +10,7 @@ from tfs.lens import LensConnect, LensTripLimits
 from tfs.lens import MFXLens as Lens
 from tfs.offline_calculator import TFS_Calculator
 from functools import wraps
-from tfs.utils import estimate_beam_fwhm, focal_length
+from tfs.utils import estimate_beam_fwhm, focal_length, MFX_prefocus_energy_range
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,8 @@ class MFXTransfocator(TransfocatorBase):
             return math.nan
         # Calculate the image from this set of lenses
         return LensConnect(*inserted).image(0.0) - self.nominal_sample
+
+
     def remove_all(self):
         """
         Removes all tfs lenses.
@@ -184,6 +186,7 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_09.remove()
         self.tfs_10.remove()
 
+
     def find_best_combo(self, target=None, energy=None, show=True, **kwargs):
         """
         Calculate the best lens array to hit the nominal sample point
@@ -192,7 +195,11 @@ class MFXTransfocator(TransfocatorBase):
         ----------
         target : float, optional
             The target image of the lens array. By default this is
-            `nominal_sample`
+            `nominal_sample i.e. 399.88`
+
+        energy : int, optional 
+            Select the energy in eV.
+            Default uses the beam energy given by acr which is usually wrong
 
         show : bool, optional
             Print a table of the of the calculated lens combination
@@ -208,6 +215,8 @@ class MFXTransfocator(TransfocatorBase):
             combo.show_info()
             logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
             radius = combo.tfs_radius
+            logger.info(f'Given Energy: {energy} eV')
+            logger.info(f'Given Sample Position: {target} mm')
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
@@ -217,6 +226,84 @@ class MFXTransfocator(TransfocatorBase):
         else:
             logger.error("Unable to find a valid solution for target")
         return combo
+
+
+    def try_combo(self, target=None, energy=None, show=True, prefocus = None, tfs = [], **kwargs):
+        """
+        Calculates the focus based on the lens combo you select
+
+        Parameters
+        ----------
+        target : float, optional
+            The target image of the lens array. By default this is
+            `nominal_sample i.e. 399.88`
+
+        energy : int, optional 
+            Select the energy in eV.
+            Default uses the beam energy given by acr which is usually wrong
+
+        show : bool, optional
+            Print a table of the of the calculated lens combination
+
+        prefocus : int, optional
+            Select either 333, 428, or 750 um radius lens
+
+        tfs : list, optional
+            Select your lens combination from tfs lenes #2-10 as list i.e. [2,6,8,10]
+
+        kwargs:
+            Passed to :meth:`.Calculator.find_solution`
+        """
+        energy = energy or self.beam_energy.get()
+        target = target or self.nominal_sample
+
+        for e_range, lens in MFX_prefocus_energy_range.items():
+            if energy >= e_range[0] and energy < e_range[1]:
+                prefocus_rec = lens[1]
+
+        if prefocus_rec != prefocus:
+            logging.error(
+                f'{prefocus_rec} um prefocusing lens is reccommended for {energy} eV '
+                f'You are not using the recommended prefocusing lens.')
+
+        if prefocus == int(750):
+            prefocus_idx = 2
+        elif prefocus == 428:
+            prefocus_idx = 1
+        elif prefocus == 333:
+            prefocus_idx = 0
+        elif prefocus is None:
+            prefocus_idx = None
+        else:
+            logging.error(
+                'No proper prefocusing lens selected. '
+                'Select either 333, 428, or 750 um radius lens (as int)')
+
+        if prefocus_idx is None:
+            tfs_combo = []
+        else:
+            tfs_combo = [self.xrt_lenses[prefocus_idx]]
+
+        for lens in tfs:
+            tfs_combo.append(self.tfs_lenses[int(lens) - 2])
+
+        combo = LensConnect(*tfs_combo)
+
+        if combo:
+            combo.show_info()
+            radius = combo.tfs_radius
+            logger.info(f'Given Energy: {energy} eV')
+            logger.info(f'Given Sample Position: {target} mm')
+            logger.info(f'Calculated Radius: {round(radius, 2)} um')
+            estimate_beam_fwhm(radius=radius, energy=energy)
+            focal = focal_length(radius=radius, energy=energy)
+
+            logger.info(f'Calculated Focal Length: {focal} um\n')
+
+        else:
+            logger.error("Unable to find a valid solution for target")
+        return combo
+
 
     def set(self, value, **kwargs):
         """
