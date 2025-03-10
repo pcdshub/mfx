@@ -6,7 +6,7 @@ class yano:
 
         # Declare shutter objects
         self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
-        self.evo_shutter1 = LaserShutter('MFX:USR:ao1:7', name='evo_shutter1')
+        self.evo_shutter1 = LaserShutter('MFX:USR:ao1:8', name='evo_shutter1')
         self.evo_shutter2 = LaserShutter('MFX:USR:ao1:2', name='evo_shutter2')
         self.evo_shutter3 = LaserShutter('MFX:USR:ao1:3', name='evo_shutter3')
 

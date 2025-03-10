@@ -116,6 +116,10 @@ with safe_load('XLJ_Fast'):
     xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
+with safe_load('DCCM'):
+    from mfx.dccm import *
+    dccm = DCCMono()
+
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
 #     class LXE(LaserEnergyPositioner):
