@@ -137,7 +137,7 @@ class DCCMono():
             self.set_energy(ev)
 
             autorun(
-                sample=str(ev), 
+                sample=f'Notch scan with energy currently set to {str(ev)} eV', 
                 tag=tag, 
                 run_length=run_length, 
                 record=record,
