@@ -108,7 +108,7 @@ def get_evaluator_yag(
         raise ValueError("Can only use xcs1, dg1, dg2, ip yags.")
     if yag_xpos is None:
         if yag == 'xcs1':
-            yag_pos = XCS_YAG_XPOS
+            yag_xpos = XCS_YAG_XPOS
         elif yag == "dg1":
             yag_xpos = DG1_YAG_XPOS
         elif yag == "dg2":
