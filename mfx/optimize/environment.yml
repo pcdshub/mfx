@@ -13,6 +13,6 @@ dependencies:
   - ipython
   - pip
   - pip:
-      - blop @ git+https://github.com/NSLS-II/blop.git
+      - blop
       - lcls-tools @ git+https://github.com/slaclab/lcls-tools.git
       - pcdsdevices @ git+https://github.com/pcdshub/pcdsdevices.git
