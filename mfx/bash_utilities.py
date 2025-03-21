@@ -33,6 +33,10 @@ class bs:
         
 
     def takepeds(self):
+        """Run takepeds. 
+
+
+        """
         import os
         import logging
         logging.info("Taking Pedestals")
@@ -40,6 +44,14 @@ class bs:
 
 
     def makepeds(self, username, run_number=None, onshift=False):
+        """Run makepeds. 
+
+        Args:
+            username: Unix username
+            run_number: Optional. Run number. Automatically detects run number if not given.
+            onshift: Boolean to define if on or off shift
+
+        """
         import os
         import logging
         from mfx.db import daq
@@ -63,6 +75,10 @@ class bs:
 
 
     def restartdaq(self):
+        """Run restart the DAQ. 
+
+
+        """
         import subprocess
         import logging
         logging.info("Restarting the DAQ")
