@@ -6,34 +6,28 @@ def attenuator_scan_separate_runs(
     **kwargs
 ) -> None:
     """
-    Runs through attenuator conditions and records each as an individual run
+    Runs through attenuator conditions and records each as an individual run.
 
-    Parameters
-    ----------
-    duration: int, optional
-        When using the DAQ this corresponds to the number of events. If not
-        using the DAQ, it corresponds to the number of seconds to wait at ech
-        attenuator step. Default is 240 events (with DAQ), or 3 seconds (no DAQ).
+    Args: 
+        duration (int): When using the DAQ this corresponds to the number of events. If not
+            using the DAQ, it corresponds to the number of seconds to wait at ech
+            attenuator step. Default is 240 events (with DAQ), or 3 seconds (no DAQ).
 
-    record: bool, optional
-        set True to record
+        record: bool, optional
+            set True to record
 
-    transmissions: list of floats, optional
-        list of transmissions to run through. default [0.01,0.02,0.03]
+        transmissions: list of floats, optional
+            list of transmissions to run through. default [0.01,0.02,0.03]
 
-    use_daq: bool, optional
-        Whether to include the DAQ or not. Default: True. If False can run the
-        scans while using the DAQ elsewhere.
+        use_daq: bool, optional
+            Whether to include the DAQ or not. Default: True. If False can run the
+            scans while using the DAQ elsewhere.
 
-    **kwargs - Additional optional keyword arguments
+    Keyword Args:
         events: int
             Provided for backwards compatibility. When using the DAQ, if this
             keyword argument is passed, and `duration` is not, it will be used
             as the number of events.
-
-    Operations
-    ----------
-
     """
     from time import sleep
     from mfx.db import att, pp
@@ -107,8 +101,8 @@ def attenuator_scan_single_run(
     if use_daq:
         from mfx.db import daq
 
-        #daq.end_run()
-        #daq.disconnect()
+        # daq.end_run()
+        # daq.disconnect()
 
     evts = kwargs.get("events")
     if duration is None:
@@ -128,7 +122,8 @@ def attenuator_scan_single_run(
             att(i, wait=True)
             if use_daq:
                 sleep(3)
-                daq.begin(events=duration, record=record, wait=True, use_l3t=False)
+                daq.begin(events=duration, record=record,
+                          wait=True, use_l3t=False)
             else:
                 sleep(duration)
     finally:

@@ -1,9 +1,10 @@
-# MFX Hutch Python Documentation Guide
+# Welcome to the MFX Beamline
 
 ![MFX](media/MFX.jpg)
 
-For full documentation visit the private [MFX repo](https://github.com/pcdshub/mfx) on github.
 
 ## Quick links
-- [LCLS MFX Homepage](https://lcls.slac.stanford.edu/instruments/mfx)
+- [User Cheat Sheet](user_cheat_sheet.html)
+- [MFX Hutch Python Repo](https://github.com/pcdshub/mfx) 
 - [MFX Confluence](https://confluence.slac.stanford.edu/display/MFX/MFX@LCLS+Home)
+- [LCLS MFX Homepage](https://lcls.slac.stanford.edu/instruments/mfx)
