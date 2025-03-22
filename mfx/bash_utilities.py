@@ -33,7 +33,8 @@ class bs:
         
 
     def takepeds(self):
-        """Run takepeds. 
+        """
+        Run takepeds. 
 
 
         """
@@ -44,12 +45,19 @@ class bs:
 
 
     def makepeds(self, username, run_number=None, onshift=False):
-        """Run makepeds. 
+        """
+        Run makepeds
 
-        Args:
-            username: Unix username
-            run_number: Optional. Run number. Automatically detects run number if not given.
-            onshift: Boolean to define if on or off shift
+        Parameters
+        ----------
+        username: 
+            Unix username
+
+        run_number: int, optional
+            Run number. Automatically detects run number if not given.
+
+        onshift: bool
+            define if on or off shift
 
         """
         import os
@@ -75,7 +83,8 @@ class bs:
 
 
     def restartdaq(self):
-        """Run restart the DAQ. 
+        """
+        Run restart the DAQ. 
 
 
         """

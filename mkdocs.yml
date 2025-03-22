@@ -58,7 +58,11 @@ nav:
 
 plugins:
 - search
-- mkdocstrings
+- mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
 - offline
 
 markdown_extensions:

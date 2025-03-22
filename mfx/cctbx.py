@@ -11,25 +11,33 @@ class cctbx:
         level: int = None,
         facility: str = "NERSC",
         exp: str = ''):
-        """Launch CCTBX XFEL GUI.
+        """
+        Launch CCTBX XFEL GUI.
 
-        Parameters:
+        Parameters
+        ----------
+        user: str
+            Username for computer account at facility.
 
-            user (str): username for computer account at facility.
-
-            group (str): the trial and rungroup number in the format 000_rg005.
+        group: str
+            The trial and rungroup number in the format 000_rg005.
             Default is newest trial_rungroup
 
-            level (int): the level of geometry refinement.
+        level: int
+            The level of geometry refinement.
             0 = whole detector and 1 = individual detector panels.
             Default is to systematically do both.
 
-            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+        facility: str
+            Default: "NERSC". Options: "S3DF, NERSC".
 
-            exp (str): experiment number in format 'mfxp1047723'.
-                       If none selected default is the current experiment.
+        exp: str
+            Experiment number in format 'mfxp1047723'.
+            If none selected default is the current experiment.
 
-            debug (bool): Default: False.
+        debug: bool
+            Default: False.
+
         """
         import logging
         import os
@@ -64,20 +72,22 @@ class cctbx:
         facility: str = "NERSC",
         exp: str = '',
         debug: bool = False):
-        """Launch CCTBX XFEL GUI.
+        """
+        Launch CCTBX XFEL GUI.
 
-        Parameters:
-
-            user (str): username for computer account at facility.
-
-            run (int): Enter -r for the run number
-
-            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
-
-            exp (str): experiment number in format 'mfxp1047723'.
-                       If none selected default is the current experiment.
-
-            debug (bool): Default: False.
+        Parameters
+        ----------
+        user: str
+            Username for computer account at facility.
+        run: int
+            Enter -r for the run number
+        facility: str
+            Default: "NERSC". Options: "S3DF, NERSC".
+        exp: str
+            Experiment number in format 'mfxp1047723'.
+            If none selected default is the current experiment.
+        debug: bool
+            Default: False.
         """
         import logging
         import os
@@ -120,25 +130,33 @@ class cctbx:
         facility: str = "NERSC",
         exp: str = '',
         debug: bool = False):
-        """Launch CCTBX XFEL GUI.
+        """
+        Launch CCTBX XFEL GUI.
 
-        Parameters:
+        Parameters
+        ----------
+        user: str
+            username for computer account at facility.
 
-            user (str): username for computer account at facility.
+        run: int
+            Enter -r for the run number
 
-            run (int): Enter -r for the run number
+        image_type: str
+            Enter -t for type of image view
 
-            image_type (str): Enter -t for type of image view
-
-            group (str): the trial and rungroup number in the format 000_rg005.
+        group: str
+            The trial and rungroup number in the format 000_rg005.
             Default is newest trial_rungroup
 
-            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+        facility: str
+            Default: "NERSC". Options: "S3DF, NERSC".
 
-            exp (str): experiment number in format 'mfxp1047723'.
-                       If none selected default is the current experiment.
+        exp: str
+            Experiment number in format 'mfxp1047723'.
+            If none selected default is the current experiment.
 
-            debug (bool): Default: False.
+        debug: bool
+            Default: False.
         """
         import logging
         import os
@@ -177,13 +195,16 @@ class cctbx:
         user: str,
     ):
 
-        """Launch sshproxy check for getting NERSC token if needed
+        """
+        Launch sshproxy check for getting NERSC token if needed
 
-        Parameters:
+        Parameters
+        ----------
+        user: str
+            Username for computer account at facility.
 
-            user (str): username for computer account at facility.
-
-            debug (bool): Default: False.
+        debug: bool
+                Default: False.
         """
         import logging
         import os
@@ -207,18 +228,23 @@ class cctbx:
         exp: str  = '',
         debug: bool = False,
     ):
-        """Launch CCTBX XFEL GUI.
+        """
+        Launch CCTBX XFEL GUI.
 
-        Parameters:
+        Parameters
+        ----------
+        user: str
+            Username for computer account at facility.
 
-            user (str): username for computer account at facility.
+        facility: str
+            Default: "NERSC". Options: "S3DF, NERSC".
 
-            facility (str): Default: "NERSC". Options: "S3DF, NERSC".
+        exp: str
+            Experiment number in format 'mfxp1047723'.
+            If none selected default is the current experiment.
 
-            exp (str): experiment number in format 'mfxp1047723'.
-                       If none selected default is the current experiment.
-
-            debug (bool): Default: False.
+        debug: bool
+            Default: False.
         """
         import logging
         import os
