@@ -117,6 +117,11 @@ class FakeDetector:
                 self.pixel_size_mm = 0.100
                 self.pixel_per_side = 1650 # approximate
                 self.beam_stop_radius_mm = 9 # approximate
+            elif detname == 'jungfrau16M':
+                # see https://www.psi.ch/en/lxn/jungfrau
+                self.pixel_size_mm = 0.075
+                self.pixel_per_side = 4096 # approximate lower bound
+                self.beam_stop_radius_mm = 9 # approximate, no idea
         except:
             print('Detector not implemented.')
 
@@ -173,6 +178,7 @@ class FakeDetector:
         print(f">>> Low q    : {low_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(low_q_invA):.2f} A")
         print(f">>> High q   : {high_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(high_q_invA):.2f} A (detector edge)")
         print(f">>> Highest q: {highest_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(highest_q_invA):.2f} A (detector corner)")
+
 
 
 def get_exp():

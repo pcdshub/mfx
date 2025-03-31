@@ -97,7 +97,7 @@ with safe_load('yano-kern_code'):
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *
     codi = CoDI()
-    
+
 with safe_load('Droplet_on_Demand'):
     from dod.dod import *
     dod = DoD(modules = 'codi')
