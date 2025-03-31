@@ -89,12 +89,18 @@ def laser_out(wait=False, timeout=10):
                     timeout=timeout)
 
 
-def mfxslits(pos):
-    """Set all the slits to specific position"""
-    dg1 = mfx_dg1_slits.move(pos, wait=False)
-    dg2_us = mfx_dg2_upstream_slits.move(pos, wait=False)
-    dg2_ms = mfx_dg2_midstream_slits.move(pos, wait=False)
-    dg2_ds = mfx_dg2_downstream_slits.move(pos, wait=False)
+def mfxslits(pos, dg1=None, dg2_us=None, dg2_ms=None, dg2_ds=None):
+    """Set the slits to specific position. Pos sets the apurature of all of the slits. 
+    If dg1, dg2_us, dg2_ms, or dg2_ds are set, they will override the pos setting."""
+    if pos is not None:
+        dg1 = dg2_us = dg2_ms = dg2_ds = mfx_dg1_slits.move(pos, wait=False)
+
+    dg1=mfx_dg1_slits.move(dg1, wait=False) if dg1 is not None else None
+    dg2_us=mfx_dg2_upstream_slits.move(dg2_us, wait=False) if dg2_us is not None else None
+    dg2_ms=mfx_dg2_midstream_slits.move(dg2_ms, wait=False) if dg2_ms is not None else None
+    dg2_ds=mfx_dg2_downstream_slits.move(dg2_ds, wait=False) if dg2_ds is not None else None
+
+    print({'dg1': dg1, 'dg2_us': dg2_us, 'dg2_ms': dg2_ms, 'dg2_ds': dg2_ds})
 
 
 class FakeDetector:
