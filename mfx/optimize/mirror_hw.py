@@ -28,7 +28,11 @@ XCS_YAG_XPOS = 337
 DG1_YAG_XPOS = 191
 DG2_YAG_XPOS = 191
 IP_YAG_XPOS = 344
-
+# Default min/max values for centroid positions
+YAG_CENTROID_X_MIN_MAX = (180, 430)
+YAG_CENTROID_Y_MIN_MAX = (400, 600)
+WAVE8_CENTROID_X_MIN_MAX = (None, None)
+WAVE8_CENTROID_Y_MIN_MAX = (None, None)
 
 devices: dict[str, Device] = {}
 
@@ -175,7 +179,7 @@ def sim_devices() -> dict[str, Device]:
     print(f"default alignment on dg2 wave8 should pick {MIRROR_NOMINAL - dg2_wave8_offset}")
     print(f"default alignment on dg1 yag should pick {MIRROR_NOMINAL - dg1_yag_offset}")
     print(f"default alignment on dg2 yag should pick {MIRROR_NOMINAL - dg2_yag_offset}")
-    print(f"detault alignment on ip yag should pick {MIRROR_NOMINAL - ip_yag_offset}")
+    print(f"default alignment on ip yag should pick {MIRROR_NOMINAL - ip_yag_offset}")
 
     return devices
 
