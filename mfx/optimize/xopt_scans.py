@@ -22,6 +22,10 @@ from .mirror_hw import (
     MIRROR_NOMINAL,
     init_devices,
     sim_devices,
+    YAG_CENTROID_X_MIN_MAX,
+    YAG_CENTROID_Y_MIN_MAX,
+    WAVE8_CENTROID_X_MIN_MAX,
+    WAVE8_CENTROID_Y_MIN_MAX
 )
 
 
@@ -33,14 +37,15 @@ def get_vocs(
     yag_size_max: float | None = None,
     yag_intensity_min: float | None = None,
     yag_intensity_max: float | None = None,
-    centroid_x_min: float = 180,
-    centroid_x_max: float = 430,
-    centroid_y_min: float = 400,
-    centroid_y_max: float = 600,
+    centroid_x_min: float = None,
+    centroid_x_max: float = None,
+    centroid_y_min: float = None,
+    centroid_y_max: float = None,
 ) -> VOCS:
     constrants = {}
+
     if wave8_max_value is not None:
-        constrants["abs_xpos"] = ["LESS_THAN", wave8_max_value]
+        constrants["abs_centroid_x"] = ["LESS_THAN", wave8_max_value]
     if yag_size_min is not None:
         constrants["rms_size_x"] = ["GREATER_THAN", yag_size_min]
         constrants["rms_size_y"] = ["GREATER_THAN", yag_size_min]
@@ -90,8 +95,8 @@ def get_evaluator_wave8(
         xpos_device.trigger().wait(timeout=10)
         xpos = xpos_device.get()
         results = {}
-        results["xpos"] = xpos
-        results["abs_xpos"] = abs(xpos)
+        results["centroid_x"] = xpos
+        results["abs_centroid_x"] = abs(xpos)
         results["objective"] = abs(xpos - wave8_xpos)
         print(f"Distance from goal is {results['objective']}")
         return results
@@ -154,10 +159,10 @@ def get_xopt_obj(
     yag_size_max: float | None = None,
     yag_intensity_min: float | None = None,
     yag_intensity_max: float | None = None,
-    centroid_x_min: float = 180,
-    centroid_x_max: float = 430,
-    centroid_y_min: float = 400,
-    centroid_y_max: float = 600,
+    centroid_x_min: float = None,
+    centroid_x_max: float = None,
+    centroid_y_min: float = None,
+    centroid_y_max: float = None,
     xopt_generator_turbo_controller: str | None = None,
 ) -> Xopt:
     """
@@ -200,6 +205,18 @@ def get_xopt_obj(
         raise ValueError("location must be one of xcs1, dg1, dg2, or ip")
     if device_type == "wave8" and location == "ip":
         raise ValueError("There is no wave8 at the ip")
+
+    # Set min/max values for centroid_x and centroid_y based on device
+    if device_type == "yag":
+        centroid_x_min = centroid_x_min or YAG_CENTROID_X_MIN_MAX[0]
+        centroid_x_max = centroid_x_max or YAG_CENTROID_X_MIN_MAX[1]
+        centroid_y_min = centroid_y_min or YAG_CENTROID_Y_MIN_MAX[0]
+        centroid_y_max = centroid_y_max or YAG_CENTROID_Y_MIN_MAX[1]
+    elif device_type == "wave8":
+        centroid_x_min = centroid_x_min or WAVE8_CENTROID_X_MIN_MAX[0]
+        centroid_x_max = centroid_x_max or WAVE8_CENTROID_X_MIN_MAX[1]
+        centroid_y_min = centroid_y_min or WAVE8_CENTROID_Y_MIN_MAX[0]
+        centroid_y_max = centroid_y_max or WAVE8_CENTROID_Y_MIN_MAX[1]
 
     vocs = get_vocs(
         mirror_nominal=mirror_nominal,
