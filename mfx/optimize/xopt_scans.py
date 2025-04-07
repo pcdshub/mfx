@@ -127,9 +127,9 @@ def get_evaluator_yag(
         devices = init_devices()
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
         if yag == 'xcs1':
-            image_device = devices["xcs_yag1"].shaped_image
+            image_device = devices["xcs_yag1"].image1.shaped_image
         else:
-            image_device = devices[f"mfx_{yag}_yag"].shaped_image
+            image_device = devices[f"mfx_{yag}_yag"].image1.shaped_image
         image_device.trigger().wait(timeout=10)
         image = image_device.get()
         print(f"image shape: {image.shape}")
