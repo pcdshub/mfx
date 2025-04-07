@@ -82,7 +82,8 @@ class CamViewerCoords(Device):
         New camviewer versions allow the user to change all four markers
         as global markers, so if these are all placed at the four corners
         the average of four markers may be preferrable to the average of two
-        markers.
+        markers. This makes it so the function is not sentitive to
+        marker ordering, for example.
         """
         return self.average_marker_target((1, 2, 3, 4))
 
