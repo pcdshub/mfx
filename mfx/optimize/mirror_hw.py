@@ -155,6 +155,13 @@ def sim_devices() -> dict[str, Device]:
     devices["xcs_yag1"].image1.sim_install_updater(update_fake_xcs_yag1)
     devices["mfx_ip_yag"].image1.sim_install_updater(update_fake_ip1_yag)
 
+    # Aim vaguely toward 300, 300 for the 2d camviewer marker test
+    for name in ("mfx_dg1_yag", "mfx_dg2_yag", "xcs_yag1", "mfx_ip_yag"):
+        devices[name].coords.marker1.xpos.put(100)
+        devices[name].coords.marker1.ypos.put(100)
+        devices[name].coords.marker2.xpos.put(500)
+        devices[name].coords.marker2.ypos.put(500)
+
     devices["mfx_dg1_wave8"].kind = "hinted"
     devices["mfx_dg2_wave8"].kind = "hinted"
     devices["mfx_dg1_yag"].kind = "hinted"

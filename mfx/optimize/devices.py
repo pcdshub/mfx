@@ -26,11 +26,11 @@ class Marker(Device):
     xpos = Cpt(EpicsSignalRO, "X")
     ypos = Cpt(EpicsSignalRO, "Y")
 
-    def get_coordinate(self) -> np.ndarray[int]:
+    def get_coordinate(self) -> tuple[int, int]:
         coords = (self.xpos.get(), self.ypos.get())
         if coords == (0, 0):
             raise RuntimeError(f"Marker coordinates for {self.name} not initialized!")
-        return np.ndarray(coords)
+        return coords
 
 
 class CamViewerCoords(Device):
