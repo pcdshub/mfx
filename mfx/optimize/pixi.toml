@@ -1,0 +1,22 @@
+[project]
+authors = ["MFX Team"]
+channels = ["conda-forge", "main", "r", "msys2"]
+name = "mfx-optimize"
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[tasks]
+
+[dependencies]
+python = ">=3.11"
+xopt = "*"
+bloptools = "*"
+bluesky = "*"
+ophyd = "*"
+happi = "*"
+matplotlib = "*"
+ipython = "*"
+pip = "*"
+
+[pypi-dependencies]
+lcls-tools = { git = "https://github.com/slaclab/lcls-tools.git" }
+pcdsdevices = { git = "https://github.com/pcdshub/pcdsdevices.git" }

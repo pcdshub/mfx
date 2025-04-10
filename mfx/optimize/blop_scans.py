@@ -160,6 +160,7 @@ def get_blop_agent(
         Objective(
             name=df_name,
             trust_domain=(-1 * wave8_max_value, wave8_max_value),
+            active=False,
         ),
     ]
     detectors = [devices[wave8_name].xpos]
