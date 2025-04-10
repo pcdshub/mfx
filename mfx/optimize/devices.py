@@ -150,6 +150,9 @@ class FakeLCLSImagePlugin(LCLSImagePlugin):
             peak=self.__peak,
         )
 
+    def get_centroid(self):
+        return self.__centroid
+
     def sim_set_image(
         self,
         size: tuple[int, int] | None = None,

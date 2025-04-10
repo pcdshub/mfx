@@ -443,24 +443,36 @@ def run_sim_test_yag_2d() -> Xopt:
     print("Randomly evaluate 3 points")
     xopt.random_evaluate(3)
     print("Step xopt object 10 times")
+    imager = init_devices()["mfx_dg1_yag"]
+    centroids = [imager.image1.get_centroid()]
     for num in range(10):
         print(f"Step {num + 1}")
         xopt.step()
+        centroids.append(imager.image1.get_centroid())
     print("Get best point")
     _, val, params = xopt.vocs.select_best(xopt.data)
     print(f"Best objective value {val}")
     print(f"Best point {params}")
     print("Move to best point")
-    mirror_pitch = init_devices()["mr1l4_homs"].pitch
+    devices = init_devices()
+    mirror_pitch = devices["mr1l4_homs"].pitch
     mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
     print(f"pitch is at {mirror_pitch.position}")
+    goal = devices["mfx_dg1_yag"].coords.standard_two_corners_target()
+    print(f"Goal was {goal}")
     print("Generating plots")
     xopt.data.plot(y=xopt.vocs.objective_names)
-    imager = init_devices()["mfx_dg1_yag"]
+
     imager.image1.shaped_image.trigger()
     fit = ImageProjectionFit()
-    fit_result = fit.fit_image(imager.image1.shaped_image.get())
+    image = imager.image1.shaped_image.get()
+    fit_result = fit.fit_image(image)
     plot_image_projection_fit(fit_result)
+    plt.figure()
+    plt.imshow(image)
+    plt.plot(*goal, marker="o", color="red")
+    for pt in centroids:
+        plt.plot(*pt, marker=".", color="white")
     plt.show()
     return xopt
 

@@ -160,7 +160,7 @@ def sim_devices() -> dict[str, Device]:
         devices[name].coords.marker1.xpos.put(100)
         devices[name].coords.marker1.ypos.put(100)
         devices[name].coords.marker2.xpos.put(500)
-        devices[name].coords.marker2.ypos.put(500)
+        devices[name].coords.marker2.ypos.put(950)
 
     devices["mfx_dg1_wave8"].kind = "hinted"
     devices["mfx_dg2_wave8"].kind = "hinted"
