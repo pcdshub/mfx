@@ -193,7 +193,7 @@ def get_evaluator_yag_2d(
         results["rms_size_x"] = fit_result.rms_size[0]
         results["rms_size_y"] = fit_result.rms_size[1]
         results["total_intensity"] = fit_result.total_intensity
-        results["objective"] = np.sqrt((fit_result.centroid[0] - goal[0])**2 + (fit_result.centroid[1] - goal[1]))
+        results["objective"] = np.sqrt((fit_result.centroid[0] - goal[0])**2 + (fit_result.centroid[1] - goal[1])**2)
         print(f"Distance from goal is {results['objective']}")
         return results
 
