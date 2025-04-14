@@ -1,6 +1,7 @@
 from ophyd.device import Component as Cpt
 from pcdsdevices.epics_motor import BeckhoffAxis
-from pcdsdevices.spectrometer import VonHamosCrystal_2, VonHamos6Crystal
+from pcdsdevices.interface import BaseInterface
+from pcdsdevices.device import GroupDevice
 
 class DeterministicBeckhoffAxis(BeckhoffAxis):
 
@@ -142,7 +143,7 @@ class DeterministicBeckhoffAxis(BeckhoffAxis):
         )
 
 
-class DeterministicCrystal(VonHamosCrystal_2):
+class DeterministicCrystal(BaseInterface, GroupDevice):
     """
     Wrapper for von Hamos crystal that adds deterministic movement capabilities.
     """
@@ -153,7 +154,7 @@ class DeterministicCrystal(VonHamosCrystal_2):
     rot = Cpt(DeterministicBeckhoffAxis, ":ROT", kind="normal")
     tilt = Cpt(DeterministicBeckhoffAxis, ":TILT", kind="normal")
 
-class DeterministicVonHamos6Crystal(VonHamos6Crystal):
+class DeterministicVonHamos6Crystal(BaseInterface, GroupDevice):
     """
     Wrapper for von Hamos 6-crystal spectrometer that adds deterministic movement capabilities.
     """
