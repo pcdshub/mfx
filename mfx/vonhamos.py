@@ -153,9 +153,6 @@ class DeterministicCrystal(VonHamosCrystal_2):
     rot = Cpt(DeterministicBeckhoffAxis, ":ROT", kind="normal")
     tilt = Cpt(DeterministicBeckhoffAxis, ":TILT", kind="normal")
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
 class DeterministicVonHamos6Crystal(VonHamos6Crystal):
     """
     Wrapper for von Hamos 6-crystal spectrometer that adds deterministic movement capabilities.
@@ -175,5 +172,3 @@ class DeterministicVonHamos6Crystal(VonHamos6Crystal):
     x_bottom = Cpt(BeckhoffAxis, ":T2", kind="normal")
     x_top = Cpt(BeckhoffAxis, ":T3", kind="normal")
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
