@@ -4,6 +4,9 @@ from pcdsdevices.spectrometer import VonHamosCrystal_2, VonHamos6Crystal
 
 class DeterministicBeckhoffAxis(BeckhoffAxis):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def go(self, target: float, epsilon: float = 0.0001, 
            n_iterations_max: int = 10, wait: bool = True) -> None:
         """
@@ -150,10 +153,14 @@ class DeterministicCrystal(VonHamosCrystal_2):
     rot = Cpt(DeterministicBeckhoffAxis, ":ROT", kind="normal")
     tilt = Cpt(DeterministicBeckhoffAxis, ":TILT", kind="normal")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
 class DeterministicVonHamos6Crystal(VonHamos6Crystal):
     """
     Wrapper for von Hamos 6-crystal spectrometer that adds deterministic movement capabilities.
     """
+
     tab_component_names = True
 
     c1 = Cpt(DeterministicCrystal, ":C1", kind="normal")
@@ -167,3 +174,6 @@ class DeterministicVonHamos6Crystal(VonHamos6Crystal):
     y = Cpt(BeckhoffAxis, ":T1", kind="normal")
     x_bottom = Cpt(BeckhoffAxis, ":T2", kind="normal")
     x_top = Cpt(BeckhoffAxis, ":T3", kind="normal")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
