@@ -41,47 +41,35 @@ Author: Pamela Schleissner
 5.  X-ray attenuation: **att(1e-16)** max. **att(1)** min attenuation →
     100% transmission
 
-6.  Moving the Rayonix detector:
+6. Moving the Rayonix detector:
+   a. **Use small step sizes!** If you move the detector in one step, you will crash the detector into the spectrometer, because it overshoots in the end.  
+   b. Pull out the flight tube (slowly) before moving the detector.  
+   c. Remember to put the flight tube in against the Kapton before data collection.
+ ![](./media/ops_guide_rayonix2.png)  
+   ![](./media/ops_guide_rayonix.png)
+7. Pedestals:
 
-![](./media/ops_guide_rayonix2.png)
-![](./media/ops_guide_rayonix.png)
+    a.  For epix100 and epix10k2M: From a terminal >>**takepeds** (will take control of daq, need to disconnect DAQ if not done before), confirm X-rays are blocked (**stopper S4.5 is inserted**) and it will start taking pedestals
 
-a.  **Use small step sizes!** If you move the detector in one step, you
-    will crash the detector into the spectrometer, because it overshoots
-    in the end!
+       Once takepeds is done, run **makepeds** following the prompt
+       (eg. **makepeds -u \<userid\> -q milano -r 28** )
 
-b.  Pull out the flight tube out (slowly) before moving the detector in
+    b.  For the Rayonix detector: From a terminal:
 
-c.  Remember to put the flight tube in against the kapton before data
-    collection
-
-7.  Pedestals:
-
-    a.  For epix100 and epix10k2M:
-
-        i.  From a terminal: **takepeds** (will take control of daq,
-            need to disconnect DAQ if not done before), confirm X-rays
-            are blocked (**stopper S4.5 is inserted**) and it will start
-            taking pedestals
-
-        ii. Once takepeds is done, run **makepeds** following the prompt
-            (eg. **makepeds -u \<userid\> -q milano -r 28** )
-
-    b.  For the Rayonix detector:
-
-        i.  From a terminal:\
-            \>\> **ssh -X hsuser@con-ics-mfx-rayonix**\
-            \>\> **killall procServ**\
-            \>\> **capxure**\
-            \
-            A new window will appear. Change the "single trigger" option
-            to "none". Change "exposure" to "dark". Click "collect new
-            background". Change "exposure" to "normal". Click "collect
-            new background". Change "single trigger" back to frame. Exit
+            >> ssh -X hsuser@con-ics-mfx-rayonix
+            >> killall procServ
+            >> capxure
+         
+	A new window will appear. Change the **"single trigger"** option
+            to **"none"**. Change **"exposure"** to **"dark"**. Click **"collect new
+            background"**. Change **"exposure"** to **"normal"**. Click **"collect
+            new background"**. Change **"single trigger"** back to **"frame"**. Exit
             this window, file → quit\
-            \
-            In the previous terminal: \>\>
-            **./startDaqInterface_newcradyl**
+            
+	In the previous terminal: 
+
+	    >>cd slac
+	    >>./startDaqInterface_newcradyl
 
     c.  *After collecting and deploying a pedestal, allocate to the
         DAQ.* In the DAQ window: Shutdown → Allocate → Begin Running
