@@ -1,6 +1,6 @@
 from ophyd.device import Component as Cpt
-from .epics_motor import BeckhoffAxis
-from .spectrometer import VonHamosCrystal_2, VonHamos6Crystal
+from pcdsdevices.epics_motor import BeckhoffAxis
+from pcdsdevices.spectrometer import VonHamosCrystal_2, VonHamos6Crystal
 
 class DeterministicBeckhoffAxis(BeckhoffAxis):
 
@@ -97,7 +97,7 @@ class DeterministicBeckhoffAxis(BeckhoffAxis):
         )
 
     def go_smart(self, target: float, epsilon: float = 0.0001, stuck_epsilon: float = 0.01, 
-                 n_iterations_max: int = 10, wait: bool = True) -> None:
+                 n_iterations_max: int = 10, factor: float = 1.2, wait: bool = True) -> None:
         """
         Move to target using a smart strategy that detects stuck movement.
 
@@ -123,15 +123,16 @@ class DeterministicBeckhoffAxis(BeckhoffAxis):
             if abs(error) <= epsilon:
                 return
 
+            overshoot = error
             # Detect stuck movement
-            if previous_error is not None and abs(error - previous_error) >= stuck_epsilon :
+            if previous_error is not None and abs(error - previous_error) <= stuck_epsilon :
                 print("Detected stuck movement. Applying extra correction.")
-                previous_error = error
-                error *= 1.2 
+                
+                overshoot *= factor 
 
-            next_target = current_pos + error
+            next_target = current_pos + overshoot
             self.move(next_target, wait=wait)
-            # previous_error = error
+            previous_error = error
 
         print(
             f"Failed to reach target {target} after {n_iterations_max} iterations."
