@@ -2,6 +2,7 @@ from ophyd.device import Component as Cpt
 from pcdsdevices.epics_motor import BeckhoffAxis
 from pcdsdevices.interface import BaseInterface
 from pcdsdevices.device import GroupDevice
+from mfx.db import mfx_von_hamos_6crystal as vh
 
 class DeterministicBeckhoffAxis(BeckhoffAxis):
 
@@ -188,9 +189,10 @@ class SimpleDeterministicVH:
     
     # Movement with more retries
     >>> vh.go('c2', 'tilt', 30.0, n_iterations_max=20)  # Allow more attempts to reach target
-
     """
-    from mfx.db import mfx_von_hamos_6crystal as vh
+
+    def __init__(self):
+        self.vh = vh
 
     def get_motor(self, c, axis):
         """
