@@ -8,6 +8,7 @@ nav:
   - Staff Operating Procedures:
     - Operators_Guide.md
     - DoT.md
+    - Uploading Code: docs/UploadCode.md
   - Source Code:
     - MFX:
       - attenuator_scan.md
