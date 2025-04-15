@@ -65,6 +65,8 @@ def init_devices(force: bool = False) -> dict[str, Device]:
     devices["xcs_yag1"] = YagCamera("XCS:GIGE:YAG1:", name="xcs_yag1")
     devices["mfx_ip_yag"] = YagCamera("MFX:GIGE:LBL:01:", name="mfx_ip1_yag")
     devices["mfx_ip_yag"].kind = "hinted"
+    devices["mfx_spec_yag"] = YagCamera("MFX:GIGE:05:", name="mfx_spec_yag")
+    devices["mfx_spec_yag"].kind = "hinted"
 
     return devices
 

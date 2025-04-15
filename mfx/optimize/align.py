@@ -1,5 +1,38 @@
 from bluesky import RunEngine
 
+class VonHamos:
+    def __init__(self):
+        from mfx.db import mfx_von_hamos_6crystal as vh
+        from mfx.optimize.mirror_hw import init_devices
+        self.vh = vh
+        devices = init_devices()
+        imager = devices["mfx_spec_yag"]
+        self.image_device = imager.image1.shaped_image
+
+    def c4_scan(self, axis="x", start=None, end=None,step=None):
+        import numpy as np
+        from tqdm import tqdm
+        if axis == "x":
+            motor = self.vh.c4.x
+        elif axis == "rot":
+            motor = self.vh.c4.rot
+        elif axis == "tilt":
+            motor = self.vh.c4.tilt
+        else:
+            print("wrong axis")
+            return
+        if start is None:
+            return
+        if end is None:
+            return
+        if step is None:
+            return
+        for v in tqdm(np.arange(start,end,step)):
+            motor.move(v)
+            image = self.image_device.get()
+            filename=f"vonhamos_rl/c4_x_{self.vh.c4.x.position}_rot_{self.vh.c4.rot.position}_tilt_{self.vh.c4.tilt.position}.npy"
+            np.save(filename,image)
+
 
 class Align:
     def __init__(self):
