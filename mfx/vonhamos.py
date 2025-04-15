@@ -39,7 +39,7 @@ class SimpleDeterministicVH:
         """
         return getattr(getattr(self.vh, c), axis)
 
-    def go(self, c, axis, target, epsilon=0.0001, n_iterations_max=10, wait=True):
+    def go(self, c, axis, target, epsilon=0.001, n_iterations_max=10, wait=True):
         """
         Move a motor to target position with guaranteed accuracy.
         
@@ -61,7 +61,7 @@ class SimpleDeterministicVH:
         motor = self.get_motor(c, axis)
 
         low_limit, high_limit = motor.limits
-        
+
         if target < low_limit or target > high_limit:
             raise ValueError(f"Target {target} is out of limits {low_limit} to {high_limit}")
         
