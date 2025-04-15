@@ -1,0 +1,14 @@
+# default group
+* @pcdshub/mfx-members
+
+# language-specific group(s)
+## PYTHON files
+*.py @pcdshub/python-reviewers @pcdshub/mfx-members
+*.pyi @pcdshub/python-reviewers @pcdshub/mfx-members
+*.pyc @pcdshub/python-reviewers @pcdshub/mfx-members
+*.pyw @pcdshub/python-reviewers @pcdshub/mfx-members
+*.pyx @pcdshub/python-reviewers @pcdshub/mfx-members
+*.pyd @pcdshub/python-reviewers @pcdshub/mfx-members
+
+# github folder holds administrative files
+.github/** @pcdshub/software-admin
