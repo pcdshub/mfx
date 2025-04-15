@@ -52,7 +52,7 @@ class SimpleDeterministicVH:
         target : float
             Target position to move to
         epsilon : float, optional
-            Maximum allowed deviation from target, by default 0.0001
+            Maximum allowed deviation from target, by default 0.001
         n_iterations_max : int, optional
             Maximum number of iterations to attempt, by default 10
         wait : bool, optional
