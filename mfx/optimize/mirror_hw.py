@@ -32,7 +32,6 @@ YAG_CENTROID_Y_MIN_MAX = (400, 600)
 WAVE8_CENTROID_X_MIN_MAX = (None, None)
 WAVE8_CENTROID_Y_MIN_MAX = (None, None)
 
-
 devices: dict[str, Device] = {}
 
 
