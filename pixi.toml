@@ -4,9 +4,7 @@ channels = ["conda-forge", "main", "r", "msys2"]
 name = "mfx-optimize"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
-[tasks]
-
-[dependencies]
+[feature.optimize.dependencies]
 python = ">=3.11"
 xopt = "*"
 bloptools = "*"
@@ -17,6 +15,9 @@ matplotlib = "*"
 ipython = "*"
 pip = "*"
 
-[pypi-dependencies]
+[feature.optimize.pypi-dependencies]
 lcls-tools = { git = "https://github.com/slaclab/lcls-tools.git" }
 pcdsdevices = { git = "https://github.com/pcdshub/pcdsdevices.git" }
+
+[environments]
+optimize = ["optimize"]
