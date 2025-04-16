@@ -11,7 +11,7 @@ Turbo = Literal["safety", "optimize"]
 
 def validate_w_lowercase_args(func):
     """
-   Decorator to make string inputs lowercase before validating.
+    Decorator to make string inputs lowercase, and then validate.
 
     Parameters:
     -----------
@@ -61,9 +61,9 @@ class Align:
         with_goal : float
             Goal to align to.
         on_diagnostic : str, optional
-            Diagnostic to use for alignment. Options: "XCS1, DG1, DG2". Default is "dg1".
+            Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
         with_method : str, optional
-            Method to use for alignment. Options: "blop, Xopt". Default is "xopt".
+            Method to use for alignment. Options: "blop, xopt". Default is "xopt".
         using_device : str, optional
             Device to use for alignment. Options: "yag, wave8". Default is "yag".
         xopt_turbo_option : str, optional
