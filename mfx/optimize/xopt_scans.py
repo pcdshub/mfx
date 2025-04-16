@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 from xopt import VOCS, Evaluator, Xopt
 from xopt.generators.bayesian import ExpectedImprovementGenerator
 
 from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit
 
+from .align import Devices, Diagnostics, Turbo, validate_w_lowercase_args
 from .mirror_hw import (
     XCS_YAG_XPOS,
     DG1_WAVE8_XPOS,
@@ -200,9 +202,10 @@ def get_evaluator_yag_2d(
     return Evaluator(function=evaluate)
 
 
+@validate_w_lowercase_args
 def get_xopt_obj(
-    device_type: str,
-    location: str,
+    device_type: Devices,
+    location: Diagnostics,
     goal: float,
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
@@ -211,11 +214,11 @@ def get_xopt_obj(
     yag_size_max: float | None = None,
     yag_intensity_min: float | None = None,
     yag_intensity_max: float | None = None,
-    centroid_x_min: float = None,
-    centroid_x_max: float = None,
-    centroid_y_min: float = None,
-    centroid_y_max: float = None,
-    xopt_generator_turbo_controller: str | None = None,
+    centroid_x_min: float | None = None,
+    centroid_x_max: float | None = None,
+    centroid_y_min: float | None = None,
+    centroid_y_max: float | None = None,
+    xopt_generator_turbo_controller: Turbo | None = None,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -230,33 +233,56 @@ def get_xopt_obj(
 
     Parameters
     ----------
-    device_type: str
+    device_type : str
         One of "yag" or "wave8"
     location : str
-        One of "xcs1", "dg1", "dg2", "ip"
+        One of "xcs1", "dg1", "dg2", "ip" # TODO: should IP be added to Diagnostics?
     goal : float
         Either the wave8 xpos to aim for, or the x coordinate to aim for on a yag.
     mirror_nominal : float
         The starting mirror pitch position and midpoint of the optimization search.
     search_delta : float
         How far +/- we check away from the mirror nominal pitch position
+    wave8_max_value: float, optional
+        Constraint on maximum wave8 xpos for data to be valid
     yag_size_min : float, optional
-        Constraint on minimum yag spot size for data to be valid
+        Constraint on minimum yag spot size (RMS) for data to be valid
     yag_size_max : float, optional
-        Constraint on maximum yag spot size for data to be valid
+        Constraint on maximum yag spot size (RMS) for data to be valid
     yag_intensity_min : float, optional
         Constraint on minimum yag total intensity count for data to be valid
     yag_intensity_max : float, optional
         Constraint on maximum yag total intensity count for data to be valid
+    centroid_x_min : float, optional
+        Constraint on minimum centroid x value for data to be valid
+    centroid_x_max : float, optional
+        Constraint on maximum centroid x value for data to be valid
+    centroid_y_min : float, optional
+    Constraint on minimum centroid y value for data to be valid
+    centroid_y_max : float, optional
+        Constraint on maximum centroid y value for data to be valid
+    xopt_generator_turbo_controller : str, optional
+        Which turbo controller to use. Options: "safety, optimize"
     """
     device_type = device_type.lower()
-    if device_type not in ("yag", "wave8"):
-        raise ValueError("device_type must be yag or wave8")
     location = location.lower()
-    if location not in ("xcs1", "dg1", "dg2", "ip"):
-        raise ValueError("location must be one of xcs1, dg1, dg2, or ip")
-    if device_type == "wave8" and location == "ip":
-        raise ValueError("There is no wave8 at the ip")
+
+    if device_type == "wave8":
+        if location == "ip":
+            raise ValueError("There is no wave8 at the ip.")
+        if {yag_size_min, yag_size_max, yag_intensity_min, yag_intensity_max} != {None}:
+            raise ValueError(
+                "Arguments yag_size_min, yag_size_max, yag_intensity_min, and yag_intensity_max "
+                "are only valid for yag devices. "
+                "Set to None to run with wave8 devices. Current values: "
+                f"yag_size_min={yag_size_min}, yag_size_max={yag_size_max}, "
+                f"yag_intensity_min={yag_intensity_min}, yag_intensity_max={yag_intensity_max}"
+            )
+    if device_type == "yag" and wave8_max_value is not None:
+        raise ValueError(
+            "Argument wave8_max_value is only valid for wave8 devices. "
+            "Set to None to run with yag devices."
+        )
 
     # Set min/max values for centroid_x and centroid_y based on device
     if device_type == "yag":
@@ -294,7 +320,6 @@ def get_xopt_obj(
             wave8=location,
             wave8_xpos=goal,
         )
-    #generator = ExpectedImprovementGenerator(vocs=vocs)
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
     return Xopt(
