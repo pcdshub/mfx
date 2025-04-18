@@ -5,6 +5,7 @@ Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
 
+import numpy as np
 import matplotlib.pyplot as plt
 from xopt import VOCS, Evaluator, Xopt
 from xopt.generators.bayesian import ExpectedImprovementGenerator
@@ -22,6 +23,10 @@ from .mirror_hw import (
     MIRROR_NOMINAL,
     init_devices,
     sim_devices,
+    YAG_CENTROID_X_MIN_MAX,
+    YAG_CENTROID_Y_MIN_MAX,
+    WAVE8_CENTROID_X_MIN_MAX,
+    WAVE8_CENTROID_Y_MIN_MAX
 )
 
 
@@ -33,14 +38,15 @@ def get_vocs(
     yag_size_max: float | None = None,
     yag_intensity_min: float | None = None,
     yag_intensity_max: float | None = None,
-    centroid_x_min: float = 180,
-    centroid_x_max: float = 430,
-    centroid_y_min: float = 400,
-    centroid_y_max: float = 600,
+    centroid_x_min: float = None,
+    centroid_x_max: float = None,
+    centroid_y_min: float = None,
+    centroid_y_max: float = None,
 ) -> VOCS:
     constrants = {}
+
     if wave8_max_value is not None:
-        constrants["abs_xpos"] = ["LESS_THAN", wave8_max_value]
+        constrants["abs_centroid_x"] = ["LESS_THAN", wave8_max_value]
     if yag_size_min is not None:
         constrants["rms_size_x"] = ["GREATER_THAN", yag_size_min]
         constrants["rms_size_y"] = ["GREATER_THAN", yag_size_min]
@@ -90,13 +96,20 @@ def get_evaluator_wave8(
         xpos_device.trigger().wait(timeout=10)
         xpos = xpos_device.get()
         results = {}
-        results["xpos"] = xpos
-        results["abs_xpos"] = abs(xpos)
+        results["centroid_x"] = xpos
+        results["abs_centroid_x"] = abs(xpos)
         results["objective"] = abs(xpos - wave8_xpos)
         print(f"Distance from goal is {results['objective']}")
         return results
 
     return Evaluator(function=evaluate)
+
+
+def get_yag_key(yag: str):
+    if yag == 'xcs1':
+        return "xcs_yag1"
+    else:
+        return f"mfx_{yag}_yag"
 
 
 def get_evaluator_yag(
@@ -121,10 +134,7 @@ def get_evaluator_yag(
         print(f"Trying {input['mirror_pitch']}")
         devices = init_devices()
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
-        if yag == 'xcs1':
-            image_device = devices["xcs_yag1"].shaped_image
-        else:
-            image_device = devices[f"mfx_{yag}_yag"].shaped_image
+        image_device = devices[get_yag_key(yag)].image1.shaped_image
         image_device.trigger().wait(timeout=10)
         image = image_device.get()
         print(f"image shape: {image.shape}")
@@ -143,6 +153,53 @@ def get_evaluator_yag(
     return Evaluator(function=evaluate)
 
 
+def get_evaluator_yag_2d(
+    yag: str = "dg1",
+    goal: tuple[float, float] | None = None,
+):
+    """
+    Alternate evaluator in 2d space.
+
+    As a default, uses the automatic selection of goal position from the
+    user marker PVs.
+    """
+    yag = yag.lower()
+    if yag not in ("xcs1", "dg1", "dg2", "ip"):
+        raise ValueError("Can only use xcs1, dg1, dg2, ip yags.")
+    devices = init_devices()
+    imager = devices[get_yag_key(yag)]
+    image_device = imager.image1.shaped_image
+    mirror = devices["mr1l4_homs"]
+
+    if goal is None:
+        goal = imager.coords.standard_two_corners_target()
+        print(f"Goal is {goal} from camviewer markers")
+    else:
+        print(f"Goal is {goal} from function input")
+
+    fit = ImageProjectionFit()
+
+    def evaluate(input: dict[str, float]) -> dict[str, float]:
+        print(f"Trying {input['mirror_pitch']}")
+        mirror.pitch.set(input["mirror_pitch"]).wait(timeout=20)
+        image_device.trigger().wait(timeout=10)
+        image = image_device.get()
+        print(f"image shape: {image.shape}")
+        # NOTE/TODO: consider adding an averaging step here before fitting
+        fit_result = fit.fit_image(image)
+        results = {}
+        results["centroid_x"] = fit_result.centroid[0]
+        results["centroid_y"] = fit_result.centroid[1]
+        results["rms_size_x"] = fit_result.rms_size[0]
+        results["rms_size_y"] = fit_result.rms_size[1]
+        results["total_intensity"] = fit_result.total_intensity
+        results["objective"] = np.sqrt((fit_result.centroid[0] - goal[0])**2 + (fit_result.centroid[1] - goal[1])**2)
+        print(f"Distance from goal is {results['objective']}")
+        return results
+
+    return Evaluator(function=evaluate)
+
+
 def get_xopt_obj(
     device_type: str,
     location: str,
@@ -154,10 +211,10 @@ def get_xopt_obj(
     yag_size_max: float | None = None,
     yag_intensity_min: float | None = None,
     yag_intensity_max: float | None = None,
-    centroid_x_min: float = 180,
-    centroid_x_max: float = 430,
-    centroid_y_min: float = 400,
-    centroid_y_max: float = 600,
+    centroid_x_min: float = None,
+    centroid_x_max: float = None,
+    centroid_y_min: float = None,
+    centroid_y_max: float = None,
     xopt_generator_turbo_controller: str | None = None,
 ) -> Xopt:
     """
@@ -201,6 +258,18 @@ def get_xopt_obj(
     if device_type == "wave8" and location == "ip":
         raise ValueError("There is no wave8 at the ip")
 
+    # Set min/max values for centroid_x and centroid_y based on device
+    if device_type == "yag":
+        centroid_x_min = centroid_x_min or YAG_CENTROID_X_MIN_MAX[0]
+        centroid_x_max = centroid_x_max or YAG_CENTROID_X_MIN_MAX[1]
+        centroid_y_min = centroid_y_min or YAG_CENTROID_Y_MIN_MAX[0]
+        centroid_y_max = centroid_y_max or YAG_CENTROID_Y_MIN_MAX[1]
+    elif device_type == "wave8":
+        centroid_x_min = centroid_x_min or WAVE8_CENTROID_X_MIN_MAX[0]
+        centroid_x_max = centroid_x_max or WAVE8_CENTROID_X_MIN_MAX[1]
+        centroid_y_min = centroid_y_min or WAVE8_CENTROID_Y_MIN_MAX[0]
+        centroid_y_max = centroid_y_max or WAVE8_CENTROID_Y_MIN_MAX[1]
+
     vocs = get_vocs(
         mirror_nominal=mirror_nominal,
         search_delta=search_delta,
@@ -226,6 +295,67 @@ def get_xopt_obj(
             wave8_xpos=goal,
         )
     #generator = ExpectedImprovementGenerator(vocs=vocs)
+    generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
+    generator.gp_constructor.use_low_noise_prior = False
+    return Xopt(
+        vocs=vocs,
+        generator=generator,
+        evaluator=evaluator,
+    )
+
+
+def get_xopt_obj_2d_markers(
+    location: str,
+    mirror_nominal: float = MIRROR_NOMINAL,
+    search_delta: float = 5,
+    yag_size_min: float | None = None,
+    yag_size_max: float | None = None,
+    yag_intensity_min: float | None = None,
+    yag_intensity_max: float | None = None,
+    centroid_x_min: float = None,
+    centroid_x_max: float = None,
+    centroid_y_min: float = None,
+    centroid_y_max: float = None,
+    xopt_generator_turbo_controller: str | None = None,
+) -> Xopt:
+    """
+    Create an appropriate xopt optimization object for a 2D YAG optimization.
+
+    Uses the camviewer markers as a goal only by using the default goal
+    argument in get_evaluator_yag_2d.
+
+    Parameters
+    ----------
+    location : str
+        One of "xcs1", "dg1", "dg2", "ip"
+    mirror_nominal : float
+        The starting mirror pitch position and midpoint of the optimization search.
+    search_delta : float
+        How far +/- we check away from the mirror nominal pitch position
+    """
+    if location not in ("xcs1", "dg1", "dg2", "ip"):
+        raise ValueError("location must be one of xcs1, dg1, dg2, or ip")
+
+    centroid_x_min = centroid_x_min or YAG_CENTROID_X_MIN_MAX[0]
+    centroid_x_max = centroid_x_max or YAG_CENTROID_X_MIN_MAX[1]
+    centroid_y_min = centroid_y_min or YAG_CENTROID_Y_MIN_MAX[0]
+    centroid_y_max = centroid_y_max or YAG_CENTROID_Y_MIN_MAX[1]
+
+    vocs = get_vocs(
+        mirror_nominal=mirror_nominal,
+        search_delta=search_delta,
+        yag_size_min=yag_size_min,
+        yag_size_max=yag_size_max,
+        yag_intensity_min=yag_intensity_min,
+        yag_intensity_max=yag_intensity_max,
+        centroid_x_min=centroid_x_min,
+        centroid_x_max=centroid_x_max,
+        centroid_y_min=centroid_y_min,
+        centroid_y_max=centroid_y_max,
+    )
+    print(vocs)
+    evaluator = get_evaluator_yag_2d(yag=location)
+
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
     return Xopt(
@@ -297,10 +427,52 @@ def run_sim_test_yag() -> Xopt:
     print("Generating plots")
     xopt.data.plot(y=xopt.vocs.objective_names)
     imager = init_devices()["mfx_dg1_yag"]
-    imager.shaped_image.trigger()
+    imager.image1.shaped_image.trigger()
     fit = ImageProjectionFit()
-    fit_result = fit.fit_image(imager.shaped_image.get())
+    fit_result = fit.fit_image(imager.image1.shaped_image.get())
     plot_image_projection_fit(fit_result)
+    plt.show()
+    return xopt
+
+
+def run_sim_test_yag_2d() -> Xopt:
+    print("Create Xopt")
+    xopt = get_xopt_obj_2d_markers(
+        location="dg1",
+    )
+    print("Randomly evaluate 3 points")
+    xopt.random_evaluate(3)
+    print("Step xopt object 10 times")
+    imager = init_devices()["mfx_dg1_yag"]
+    centroids = [imager.image1.get_centroid()]
+    for num in range(10):
+        print(f"Step {num + 1}")
+        xopt.step()
+        centroids.append(imager.image1.get_centroid())
+    print("Get best point")
+    _, val, params = xopt.vocs.select_best(xopt.data)
+    print(f"Best objective value {val}")
+    print(f"Best point {params}")
+    print("Move to best point")
+    devices = init_devices()
+    mirror_pitch = devices["mr1l4_homs"].pitch
+    mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
+    print(f"pitch is at {mirror_pitch.position}")
+    goal = devices["mfx_dg1_yag"].coords.standard_two_corners_target()
+    print(f"Goal was {goal}")
+    print("Generating plots")
+    xopt.data.plot(y=xopt.vocs.objective_names)
+
+    imager.image1.shaped_image.trigger()
+    fit = ImageProjectionFit()
+    image = imager.image1.shaped_image.get()
+    fit_result = fit.fit_image(image)
+    plot_image_projection_fit(fit_result)
+    plt.figure()
+    plt.imshow(image)
+    plt.plot(*goal, marker="o", color="red")
+    for pt in centroids:
+        plt.plot(*pt, marker=".", color="white")
     plt.show()
     return xopt
 
