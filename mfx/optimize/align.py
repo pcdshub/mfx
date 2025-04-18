@@ -114,3 +114,5 @@ class Align:
             RE(agent.go_to_best())
             agent.plot_objectives()
             return agent
+        else:
+            raise ValueError("Only 'xopt' and 'blop' methods are supported.")
