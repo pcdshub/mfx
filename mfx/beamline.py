@@ -120,6 +120,10 @@ with safe_load('DCCM'):
     from mfx.dccm import *
     dccm = DCCMono()
 
+with safe_load('Compact_Spectrometer'):
+    from mfx.vonhamos import *
+    spec = SimpleDeterministicVH()
+
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
 #     class LXE(LaserEnergyPositioner):
