@@ -120,8 +120,8 @@ class FakeDetector:
             elif detname == 'jungfrau16M':
                 # see https://www.psi.ch/en/lxn/jungfrau
                 self.pixel_size_mm = 0.075
-                self.pixel_per_side = 4096 # approximate lower bound
-                self.beam_stop_radius_mm = 9 # approximate, no idea
+                self.pixel_per_side = 4400 # approximate lower bound. Vertical could be closer to 4870
+                self.beam_stop_radius_mm = 10 # approximate
         except:
             print('Detector not implemented.')
 
