@@ -1,0 +1,18 @@
+# conda env create -f environment.yml
+name: mfx-opt-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.11
+  - xopt
+  - bloptools
+  - bluesky
+  - ophyd
+  - happi
+  - matplotlib
+  - ipython
+  - pip
+  - pip:
+      - lcls-tools @ git+https://github.com/slaclab/lcls-tools.git
+      - pcdsdevices @ git+https://github.com/pcdshub/pcdsdevices.git
