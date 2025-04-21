@@ -35,13 +35,13 @@ def validate_w_lowercase_args(func):
     return wrapper
 
 
-class Align:
+class Beam:
     @validate_call
     def __init__(self, mirror_pitch: list[float] = [-549.0, -546.0]):
         self.mirror_pitch: list[float] = mirror_pitch
 
     @validate_w_lowercase_args
-    def beam(
+    def align(
             self,
             with_goal: float,
             on_diagnostic: Diagnostics = "dg1",

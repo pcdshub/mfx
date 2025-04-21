@@ -14,7 +14,7 @@ from xopt.generators.bayesian import ExpectedImprovementGenerator
 from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit
 
-from .align import Devices, Diagnostics, Turbo, validate_w_lowercase_args
+from .beam import Devices, Diagnostics, Turbo, validate_w_lowercase_args
 from .mirror_hw import (
     XCS_YAG_XPOS,
     DG1_WAVE8_XPOS,
