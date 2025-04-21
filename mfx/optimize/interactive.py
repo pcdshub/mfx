@@ -47,9 +47,9 @@ def get_objects(sim: bool = False):
     This wraps imports, etc. to avoid polluting the global namespace.
     """
     print("Importing support modules...")
-    from mfx.optimize.align import Align
+    from mfx.optimize.beam import Beam
+    from mfx.optimize.beamline_hw import init_devices, sim_devices
     from mfx.optimize.blop_scans import get_blop_agent
-    from mfx.optimize.mirror_hw import init_devices, sim_devices
     from mfx.optimize.xopt_scans import get_xopt_obj, get_xopt_obj_2d_markers
 
     if sim:
@@ -62,7 +62,7 @@ def get_objects(sim: bool = False):
     print(f"Available devices are {list(devices)}")
 
     optimizers = {
-        "align": Align(),
+        "beam": Beam(),
         "get_blop_agent": get_blop_agent,
         "get_xopt_obj": get_xopt_obj,
         "get_xopt_obj_2d_markers": get_xopt_obj_2d_markers,
