@@ -1,3 +1,4 @@
+import traceback
 from typing import Literal
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
@@ -34,14 +35,21 @@ def validate_w_lowercase_args(func):
 
     return wrapper
 
+class FeasibilityError(Exception):
+    """
+    A custom exception class to tell users when no Xopt sample points are feasible,
+    e.g. due to the constraints being too tight.
+    """
+    pass
 
-class Align:
+
+class Beam:
     @validate_call
     def __init__(self, mirror_pitch: list[float] = [-549.0, -546.0]):
         self.mirror_pitch: list[float] = mirror_pitch
 
     @validate_w_lowercase_args
-    def beam(
+    def align(
             self,
             with_goal: float,
             on_diagnostic: Diagnostics = "dg1",
@@ -92,9 +100,36 @@ class Align:
             print(xopt.data)
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
-                xopt.step()
+                try:
+                    xopt.step()
+                except RuntimeError:
+                    trb = traceback.format_exc()
+                    if "turbo requires at least one valid point in the training dataset" in str(trb):
+                        raise FeasibilityError(
+                            f"No feasible points within acceptable region. "
+                            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
+                            f"Current constraints: {xopt.vocs.constraints}"
+                        )
+                except ValueError as e:
+                    trb = traceback.format_exc()
+                    if xopt_turbo_option == "safety" and "no data available to build model" in str(trb):
+                        raise FeasibilityError(
+                            f"No feasible points within TuRBO trust region. "
+                            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
+                            f"Current constraints: {xopt.vocs.constraints}"
+                        )
+
                 print(xopt.data)
-            _, val, params = xopt.vocs.select_best(xopt.data)
+            try:
+                _, val, params = xopt.vocs.select_best(xopt.data)
+            except IndexError:
+                # Make error more user-friendly/readable
+                raise FeasibilityError(
+                    f"No feasible points within acceptable region. "
+                    f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
+                    f"Current constraints: {xopt.vocs.constraints}"
+                )
+
             print(f"Best objective value {val}")
             print(f"Best point {params}")
             mirror_pitch = init_devices()["mr1l4_homs"].pitch

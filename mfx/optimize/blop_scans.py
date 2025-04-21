@@ -12,8 +12,8 @@ from databroker import Broker
 from matplotlib import pyplot as plt
 from pandas import DataFrame
 
-from .align import Diagnostics, validate_w_lowercase_args
-from .mirror_hw import (
+from .beam import Diagnostics, validate_w_lowercase_args
+from .beamline_hw import (
     DG1_WAVE8_XPOS,
     DG2_WAVE8_XPOS,
     MIRROR_NOMINAL,
