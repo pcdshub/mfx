@@ -15,7 +15,7 @@ from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit
 
 from .beam import Devices, Diagnostics, Turbo, validate_w_lowercase_args, FeasibilityError
-from .mirror_hw import (
+from .beamline_hw import (
     XCS_YAG_XPOS,
     DG1_WAVE8_XPOS,
     DG1_YAG_XPOS,
