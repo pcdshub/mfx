@@ -23,4 +23,4 @@ Then you can run the notebook from the same session. We store notebooks under `/
 ```bash
 (pcds-5.9.1)mfxopr@mfx-monitor:jupyter$ jupyter-notebook
 ```
-If you want to control the DAQ, then the jupyter-nootback process must be run on the same linux host that the DAQ is running on.
+If you want to control the DAQ, then the jupyter-notebook process must be run on the same linux host that the DAQ is running on.
