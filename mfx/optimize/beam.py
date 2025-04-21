@@ -35,9 +35,11 @@ def validate_w_lowercase_args(func):
 
     return wrapper
 
-class ConstraintsError(Exception):
-    """A custom exception class to tell users when the constraints are too tight,
-    leading to no feasible data for Xopt to use for the next iteration."""
+class FeasibilityError(Exception):
+    """
+    A custom exception class to tell users when no Xopt sample points are feasible,
+    e.g. due to the constraints being too tight.
+    """
     pass
 
 
@@ -103,19 +105,28 @@ class Beam:
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
-                        raise ConstraintsError(
+                        raise FeasibilityError(
                             f"No feasible points within acceptable region. "
-                            f"Adjust constraints in 'xopt_scans.get_xopt_obj'.\n"
+                            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
                             f"Current constraints: {xopt.vocs.constraints}"
                         )
+                except ValueError as e:
+                    trb = traceback.format_exc()
+                    if xopt_turbo_option == "safety" and "no data available to build model" in str(trb):
+                        raise FeasibilityError(
+                            f"No feasible points within TuRBO trust region. "
+                            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
+                            f"Current constraints: {xopt.vocs.constraints}"
+                        )
+
                 print(xopt.data)
             try:
                 _, val, params = xopt.vocs.select_best(xopt.data)
             except IndexError:
                 # Make error more user-friendly/readable
-                raise ConstraintsError(
+                raise FeasibilityError(
                     f"No feasible points within acceptable region. "
-                    f"Adjust constraints in 'xopt_scans.get_xopt_obj'.\n"
+                    f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
                     f"Current constraints: {xopt.vocs.constraints}"
                 )
 

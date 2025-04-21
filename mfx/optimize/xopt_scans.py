@@ -14,7 +14,7 @@ from xopt.generators.bayesian import ExpectedImprovementGenerator
 from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit
 
-from .beam import Devices, Diagnostics, Turbo, validate_w_lowercase_args
+from .beam import Devices, Diagnostics, Turbo, validate_w_lowercase_args, FeasibilityError
 from .mirror_hw import (
     XCS_YAG_XPOS,
     DG1_WAVE8_XPOS,
@@ -436,9 +436,10 @@ def run_sim_test_wave8() -> Xopt:
         _, val, params = xopt.vocs.select_best(xopt.data)
     except IndexError:
         # Make error more user-friendly/readable
-        raise IndexError(
-            "No feasible points within acceptable region. "
-            "Adjust constraints in 'xopt_scans.get_xopt_obj'."
+        raise FeasibilityError(
+            f"No feasible points within acceptable region. "
+            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
+            f"Current constraints: {xopt.vocs.constraints}"
         )
     print(f"Best objective value {val}")
     print(f"Best point {params}")
@@ -469,9 +470,10 @@ def run_sim_test_yag() -> Xopt:
         _, val, params = xopt.vocs.select_best(xopt.data)
     except IndexError:
         # Make error more user-friendly/readable
-        raise IndexError(
-            "No feasible points within acceptable region. "
-            "Adjust constraints in 'xopt_scans.get_xopt_obj'."
+        raise FeasibilityError(
+            f"No feasible points within acceptable region. "
+            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
+            f"Current constraints: {xopt.vocs.constraints}"
         )
     print(f"Best objective value {val}")
     print(f"Best point {params}")
@@ -509,9 +511,10 @@ def run_sim_test_yag_2d() -> Xopt:
         _, val, params = xopt.vocs.select_best(xopt.data)
     except IndexError:
         # Make error more user-friendly/readable
-        raise IndexError(
-            "No feasible points within acceptable region. "
-            "Adjust constraints in 'xopt_scans.get_xopt_obj_2d_markers'."
+        raise FeasibilityError(
+            f"No feasible points within acceptable region. "
+            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj_2d_markers'.\n"
+            f"Current constraints: {xopt.vocs.constraints}"
         )
     print(f"Best objective value {val}")
     print(f"Best point {params}")
