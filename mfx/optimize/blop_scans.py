@@ -12,6 +12,7 @@ from databroker import Broker
 from matplotlib import pyplot as plt
 from pandas import DataFrame
 
+from .align import Diagnostics, validate_w_lowercase_args
 from .mirror_hw import (
     DG1_WAVE8_XPOS,
     DG2_WAVE8_XPOS,
@@ -91,9 +92,9 @@ def clean_re(re: RunEngine, bec: BestEffortCallback):
         bec.enable_plots()
         re_setup_info["bec_starting_state"] = None
 
-
+@validate_w_lowercase_args
 def get_blop_agent(
-    wave8: str = "dg1",
+    wave8: Diagnostics = "dg1",
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
     wave8_xpos: float | None = None,
@@ -159,7 +160,7 @@ def get_blop_agent(
         # Data validity
         Objective(
             name=df_name,
-            trust_domain=(-1 * wave8_max_value, wave8_max_value),
+            constraint=(-1 * wave8_max_value, wave8_max_value),
         ),
     ]
     detectors = [devices[wave8_name].xpos]
@@ -180,13 +181,13 @@ def get_blop_agent(
     return Agent(
         dofs=dofs,
         objectives=objectives,
-        dets=detectors,         # blop =0.7.0
-        # detectors=detectors,  # blop >0.7.0
+        #dets=detectors,         # blop =0.7.0
+        detectors=detectors,  # blop >0.7.0
         digestion=digestion,
         verbose=True,
         db=bluesky_objs["broker"],
         tolerate_acquisition_errors=False,
-        # enforce_all_objectives_valid=True,  # blop >0.7.0
+        enforce_all_objectives_valid=True,  # blop >0.7.0
         train_every=1,
     )
 
