@@ -1,3 +1,4 @@
+import traceback
 from typing import Literal
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
@@ -33,6 +34,11 @@ def validate_w_lowercase_args(func):
         return validated_func(*new_args, **new_kwargs)
 
     return wrapper
+
+class ConstraintsError(Exception):
+    """A custom exception class to tell users when the constraints are too tight,
+    leading to no feasible data for Xopt to use for the next iteration."""
+    pass
 
 
 class Beam:
@@ -92,9 +98,27 @@ class Beam:
             print(xopt.data)
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
-                xopt.step()
+                try:
+                    xopt.step()
+                except RuntimeError:
+                    trb = traceback.format_exc()
+                    if "turbo requires at least one valid point in the training dataset" in str(trb):
+                        raise ConstraintsError(
+                            f"No feasible points within acceptable region. "
+                            f"Adjust constraints in 'xopt_scans.get_xopt_obj'.\n"
+                            f"Current constraints: {xopt.vocs.constraints}"
+                        )
                 print(xopt.data)
-            _, val, params = xopt.vocs.select_best(xopt.data)
+            try:
+                _, val, params = xopt.vocs.select_best(xopt.data)
+            except IndexError:
+                # Make error more user-friendly/readable
+                raise ConstraintsError(
+                    f"No feasible points within acceptable region. "
+                    f"Adjust constraints in 'xopt_scans.get_xopt_obj'.\n"
+                    f"Current constraints: {xopt.vocs.constraints}"
+                )
+
             print(f"Best objective value {val}")
             print(f"Best point {params}")
             mirror_pitch = init_devices()["mr1l4_homs"].pitch

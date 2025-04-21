@@ -432,7 +432,14 @@ def run_sim_test_wave8() -> Xopt:
         print(f"Step {num + 1}")
         xopt.step()
     print("Get best point")
-    _, val, params = xopt.vocs.select_best(xopt.data)
+    try:
+        _, val, params = xopt.vocs.select_best(xopt.data)
+    except IndexError:
+        # Make error more user-friendly/readable
+        raise IndexError(
+            "No feasible points within acceptable region. "
+            "Adjust constraints in 'xopt_scans.get_xopt_obj'."
+        )
     print(f"Best objective value {val}")
     print(f"Best point {params}")
     print("Move to best point")
@@ -458,7 +465,14 @@ def run_sim_test_yag() -> Xopt:
         print(f"Step {num + 1}")
         xopt.step()
     print("Get best point")
-    _, val, params = xopt.vocs.select_best(xopt.data)
+    try:
+        _, val, params = xopt.vocs.select_best(xopt.data)
+    except IndexError:
+        # Make error more user-friendly/readable
+        raise IndexError(
+            "No feasible points within acceptable region. "
+            "Adjust constraints in 'xopt_scans.get_xopt_obj'."
+        )
     print(f"Best objective value {val}")
     print(f"Best point {params}")
     print("Move to best point")
@@ -491,7 +505,14 @@ def run_sim_test_yag_2d() -> Xopt:
         xopt.step()
         centroids.append(imager.image1.get_centroid())
     print("Get best point")
-    _, val, params = xopt.vocs.select_best(xopt.data)
+    try:
+        _, val, params = xopt.vocs.select_best(xopt.data)
+    except IndexError:
+        # Make error more user-friendly/readable
+        raise IndexError(
+            "No feasible points within acceptable region. "
+            "Adjust constraints in 'xopt_scans.get_xopt_obj_2d_markers'."
+        )
     print(f"Best objective value {val}")
     print(f"Best point {params}")
     print("Move to best point")
