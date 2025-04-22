@@ -85,7 +85,7 @@ def misc_setup(autoreload: bool = False):
             raise RuntimeError("Not in an IPython shell, can't setup autoreload!")
         ip.run_line_magic("load_ext", "autoreload")
         ip.run_line_magic("autoreload", "1")
-        line = [f"mfx.optimize.{imp}" for imp in ("align", "blop_scans", "devices", "mirror_hw", "xopt_scans")]
+        line = [f"mfx.optimize.{imp}" for imp in ("beam", "beamline_hw", "blop_scans", "devices", "xopt_scans")]
         ip.run_line_magic("aimport", ",".join(line))
 
 
