@@ -18,6 +18,9 @@ from pcdsdevices.sim import FastMotor
 from ophyd import EpicsSignal
 from event_model import compose_event_page
 from pprint import pprint, pformat
+from xopt import Xopt
+from mfx.db import daq
+
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
 Methods = Literal["xopt", "blop"]
@@ -446,3 +449,71 @@ class AggLivePlot(LivePlot):
     #         new_doc = compose_event_page(self._descriptor["uid"], self.num_points, self._cached_events,{}, [])
     #         print(f"\n\n\nevent page\n{pformat(new_doc)}")
     #         super().event_page(new_doc)
+
+    
+    @validate_w_lowercase_args
+    def scan(
+            self,
+            on_diagnostic: Diagnostics = "dg1",
+            using_device: Devices = "yag",
+            mirror_pitch_start = self.mirror_pitch[0],
+            mirror_pitch_end = self.mirror_pitch[1],
+            num_steps: int = 51,
+            sequencer_fps: int = 120,
+            num_events_per_step: int = 120,
+            record: bool = True
+            ):
+        """Perform Beam Alignment
+
+        Parameters
+        ----------
+        on_diagnostic : str, optional
+            Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
+        using_device : str, optional
+            Device to use for alignment. Options: "yag, wave8". Default is "yag".
+        mirror_pitch_start : int, optional
+            Starting mirror pitch for scan.
+        mirror_pitch_end : int, optional
+            Final mirror pitch for scan.
+        num_steps : int, optional
+            Number of steps in scan.
+        sequencer_fps : int, optional
+            Sequencer rate in fps.
+        num_events_per_step : int, optional
+            Number of events to record per step.
+        record : bool, optional
+            Whether to record or not.
+        """
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
+
+        try:
+            from mfx.db import daq
+        except ImportError:
+            print("> access to the daq is required to scan the beam.")
+
+        from .xopt_scans import init_devices
+
+        if using_device == "yag":
+            from mfx.autorun import ioc_cam_recorder
+            cam_pv = f"MFX:GIGE:{on_diagnostic.upper()}:YAG:"
+            cam_record_length = 1.5 * num_steps * num_events_per_step / sequencer_fps
+            tag = f"{on_diagnostic}_mr1l4_scan"
+            ioc_cam_recorder(cam_pv,
+                             cam_record_length,
+                             tag=tag)
+            print(f"beam.scan: writing {tag} to /cds/data/iocData while scanning...")
+
+        RE(
+            bp.scan(
+                daq,
+                init_devices()["mr1l4_homs"].pitch,
+                mirror_pitch_start,
+                mirror_pitch_end,
+                num_steps,
+                events=num_events_per_step,
+                record=record
+            )
+        )
