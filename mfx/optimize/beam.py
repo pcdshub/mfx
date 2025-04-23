@@ -151,3 +151,57 @@ class Beam:
             return agent
         else:
             raise ValueError("Only 'xopt' and 'blop' methods are supported.")
+
+    @validate_w_lowercase_args
+    def scan(
+            self,
+            on_diagnostic: Diagnostics = "dg1",
+            using_device: Devices = "yag",
+            mirror_pitch_start = self.mirror_pitch[0],
+            mirror_pitch_end = self.mirror_pitch[1],
+            num_steps: int = 51,
+            sequencer_fps: int = 120,
+            num_events_per_step: int = 120,
+            record=True
+            ):
+        """Perform Beam Alignment
+
+        Parameters
+        ----------
+        on_diagnostic : str, optional
+            Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
+        using_device : str, optional
+            Device to use for alignment. Options: "yag, wave8". Default is "yag".
+        mirror_pitch_start : int, optional
+            Starting mirror pitch for scan.
+        mirror_pitch_end : int, optional
+            Final mirror pitch for scan.
+        num_steps : int, optional
+            Number of steps in scan.
+        sequencer_fps : int, optional
+            Sequencer rate in fps.
+        num_events_per_step : int, optional
+            Number of events to record per step.
+        record : bool, optional
+            Whether to record or not.
+        """
+        from .xopt_scans import get_xopt_obj, init_devices
+
+        if using_device == "yag":
+            from mfx.autorun import ioc_cam_recorder
+            cam_record_length = 1.5 * num_steps * num_events_per_step / sequencer_fps
+            ioc_cam_recorder(f"MFX:GIGE:{on_diagnostic.upper()}:YAG:",
+                             cam_record_length,
+                             tag=f"{on_diagnostic}_mr1l4_scan")
+
+        RE(
+            daq_scan(
+                [],
+                init_devices()["mr1l4_homs"].pitch,
+                mirror_pitch_start,
+                mirror_pitch_end,
+                num_steps,
+                events=num_events_per_step,
+                record=record
+            )
+        )
