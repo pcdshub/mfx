@@ -162,7 +162,7 @@ class Beam:
             num_steps: int = 51,
             sequencer_fps: int = 120,
             num_events_per_step: int = 120,
-            record=True
+            record: bool = True
             ):
         """Perform Beam Alignment
 
