@@ -185,14 +185,17 @@ class Beam:
         record : bool, optional
             Whether to record or not.
         """
-        from .xopt_scans import get_xopt_obj, init_devices
+        from .xopt_scans import init_devices
 
         if using_device == "yag":
             from mfx.autorun import ioc_cam_recorder
+            cam_pv = f"MFX:GIGE:{on_diagnostic.upper()}:YAG:"
             cam_record_length = 1.5 * num_steps * num_events_per_step / sequencer_fps
-            ioc_cam_recorder(f"MFX:GIGE:{on_diagnostic.upper()}:YAG:",
+            tag = f"{on_diagnostic}_mr1l4_scan"
+            ioc_cam_recorder(cam_pv,
                              cam_record_length,
-                             tag=f"{on_diagnostic}_mr1l4_scan")
+                             tag=tag)
+            print(f"beam.scan: writing {tag} to /cds/data/iocData while scanning...")
 
         RE(
             daq_scan(
