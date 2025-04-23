@@ -5,6 +5,8 @@ Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
 
+from typing import Optional
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -30,6 +32,7 @@ from .beamline_hw import (
     WAVE8_CENTROID_X_MIN_MAX,
     WAVE8_CENTROID_Y_MIN_MAX
 )
+from .plots import centroid_path_plot
 
 
 def get_vocs(
@@ -209,15 +212,15 @@ def get_xopt_obj(
     goal: float,
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    wave8_max_value: float | None = None,
-    yag_size_min: float | None = None,
-    yag_size_max: float | None = None,
-    yag_intensity_min: float | None = None,
-    yag_intensity_max: float | None = None,
-    centroid_x_min: float | None = None,
-    centroid_x_max: float | None = None,
-    centroid_y_min: float | None = None,
-    centroid_y_max: float | None = None,
+    wave8_max_value: Optional[float] = None,
+    yag_size_min: Optional[float]  = None,
+    yag_size_max: Optional[float]  = None,
+    yag_intensity_min: Optional[float]  = None,
+    yag_intensity_max: Optional[float]  = None,
+    centroid_x_min: Optional[float]  = None,
+    centroid_x_max: Optional[float]  = None,
+    centroid_y_min: Optional[float]  = None,
+    centroid_y_max: Optional[float]  = None,
     xopt_generator_turbo_controller: Turbo | None = None,
 ) -> Xopt:
     """
@@ -331,15 +334,15 @@ def get_xopt_obj_2d_markers(
     location: Diagnostics,
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    yag_size_min: float | None = None,
-    yag_size_max: float | None = None,
-    yag_intensity_min: float | None = None,
-    yag_intensity_max: float | None = None,
-    centroid_x_min: float | None = None,
-    centroid_x_max: float | None = None,
-    centroid_y_min: float | None = None,
-    centroid_y_max: float | None = None,
-    xopt_generator_turbo_controller: str | None = None,
+    yag_size_min: Optional[float]  = None,
+    yag_size_max: Optional[float]  = None,
+    yag_intensity_min: Optional[float]  = None,
+    yag_intensity_max: Optional[float]  = None,
+    centroid_x_min: Optional[float]  = None,
+    centroid_x_max: Optional[float]  = None,
+    centroid_y_min: Optional[float]  = None,
+    centroid_y_max: Optional[float]  = None,
+    xopt_generator_turbo_controller: Optional[float]  = None,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object for a 2D YAG optimization.
@@ -533,12 +536,11 @@ def run_sim_test_yag_2d() -> Xopt:
     image = imager.image1.shaped_image.get()
     fit_result = fit.fit_image(image)
     plot_image_projection_fit(fit_result)
-    plt.figure()
-    plt.imshow(image)
-    plt.plot(*goal, marker="o", color="red")
-    for pt in centroids:
-        plt.plot(*pt, marker=".", color="white")
-    plt.show()
+    centroid_path_plot(
+        image=image,
+        goal=goal,
+        centroids=centroids,
+    )
     return xopt
 
 
