@@ -1,7 +1,9 @@
 import traceback
+import datetime
 from typing import Literal
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
+from xopt import Xopt
 
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
@@ -51,7 +53,7 @@ class Beam:
     @validate_w_lowercase_args
     def align(
             self,
-            with_goal: float,
+            with_goal: float | None = None,
             on_diagnostic: Diagnostics = "dg1",
             with_method: Methods = "xopt",
             using_device: Devices = "yag",
@@ -60,14 +62,18 @@ class Beam:
             xopt_steps: int = 10,
             blop_qr_n: int = 16,
             blop_qei_n: int = 16,
-            blop_qei_iterations: int = 5
+            blop_qei_iterations: int = 5,
+            use_2d_markers: bool = False,
+            with_goal_2d: tuple[float, float] | None = None,
+            xopt_obj: Xopt | None = None,
+            save_run: bool = True
             ):
         """Perform Beam Alignment
 
         Parameters
         ----------
-        with_goal : float
-            Goal to align to.
+        with_goal : float or tuple[float, float], optional
+            Goal to align to. A float for regular optimization, a tuple for using 2D YAG optimization.
         on_diagnostic : str, optional
             Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
         with_method : str, optional
@@ -86,17 +92,34 @@ class Beam:
             Number of qei iterations to perform in blop. Default is 16.
         blop_qei_iterations : int, optional
             Number of iterations to perform in blop. Default is 5.
+        use_2d_markers: bool, optional
+            Run a 2D YAG optimization using camera markers. Default is False.
+        with_goal_2d: tuple(float, float), optional
+            The 2D optimization goal if running a 2D YAG optimization. Default is False.
+        save_run: bool, optional
+            Save the Xopt run to YAML. Default is True.
         """
+        # Validate goal with not doing 2d optimization using camera markers
+        if (using_device=="wave8" or not use_2d_markers) and not with_goal:
+            raise ValueError("Must provide parameter with_goal (float) for running YAG or wave8 optimization.")
+
         if with_method == "xopt":
             from .xopt_scans import get_xopt_obj, init_devices
-            xopt = get_xopt_obj(
-                device_type=using_device,
-                location=on_diagnostic,
-                goal=with_goal,
-                xopt_generator_turbo_controller=xopt_turbo_option,
-            )
-            customized_boundaries = {"mirror_pitch": self.mirror_pitch}
-            xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
+            # Allow the loading of an already instantiated xopt object, e.g. to take more steps
+            if xopt_obj:
+                xopt = xopt_obj
+                print("Loading Xopt object.")
+            else:
+                xopt = get_xopt_obj(
+                    device_type=using_device,
+                    location=on_diagnostic,
+                    goal=with_goal,
+                    xopt_generator_turbo_controller=xopt_turbo_option,
+                    use_2d_markers=use_2d_markers,
+                    goal_2d=with_goal_2d
+                )
+                customized_boundaries = {"mirror_pitch": self.mirror_pitch}
+                xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
             print(xopt.data)
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
@@ -136,6 +159,11 @@ class Beam:
             mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
             print(f"pitch is at {mirror_pitch.position}")
             xopt.data.plot(y=xopt.vocs.objective_names)
+            if save_run:
+                now = datetime.datetime.now()
+                formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
+                filename  = f"xopt_run_{on_diagnostic}_{using_device}_{formatted_string}.yaml"
+                xopt.dump(filename)
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent
