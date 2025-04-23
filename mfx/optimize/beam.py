@@ -2,6 +2,7 @@ import traceback
 from typing import Literal
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
+from mfx.db import daq
 
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
@@ -185,6 +186,16 @@ class Beam:
         record : bool, optional
             Whether to record or not.
         """
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
+
+        try:
+            from mfx.db import daq
+        except ImportError:
+            print("> access to the daq is required to scan the beam.")
+
         from .xopt_scans import init_devices
 
         if using_device == "yag":
@@ -198,8 +209,8 @@ class Beam:
             print(f"beam.scan: writing {tag} to /cds/data/iocData while scanning...")
 
         RE(
-            daq_scan(
-                [],
+            bp.scan(
+                daq,
                 init_devices()["mr1l4_homs"].pitch,
                 mirror_pitch_start,
                 mirror_pitch_end,
