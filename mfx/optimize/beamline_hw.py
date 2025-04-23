@@ -26,6 +26,14 @@ MIRROR_NOMINAL = constraint_data.mirr.range_center
 DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41
 IP_YAG_XPOS = 344
+<<<<<<< HEAD
+=======
+# Default min/max values for centroid positions
+YAG_CENTROID_X_MIN_MAX = (180, 540)
+YAG_CENTROID_Y_MIN_MAX = (400, 600)
+WAVE8_CENTROID_X_MIN_MAX = (None, None)
+WAVE8_CENTROID_Y_MIN_MAX = (None, None)
+>>>>>>> 1970dd8 (add xopt plotting + adjust exceptions)
 
 devices: dict[str, Device] = {}
 
