@@ -144,7 +144,7 @@ class Beam:
             mirror_pitch = init_devices()["mr1l4_homs"].pitch
             mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
             print(f"pitch is at {mirror_pitch.position}")
-            ax = xopt.data.plot(y=xopt.vocs.objective_names) # TODO: make this prettier
+            ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
             ax.set_ylabel("mirror pitch")
             xopt.generator.visualize_model()
