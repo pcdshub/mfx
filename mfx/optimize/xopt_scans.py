@@ -32,7 +32,7 @@ from .beamline_hw import (
     WAVE8_CENTROID_X_MIN_MAX,
     WAVE8_CENTROID_Y_MIN_MAX
 )
-from .plots import centroid_path_plot
+from .plots import UpdatingDeviceCentroidPathPlot
 
 
 def get_vocs(
@@ -504,11 +504,17 @@ def run_sim_test_yag_2d() -> Xopt:
     xopt.random_evaluate(3)
     print("Step xopt object 10 times")
     imager = init_devices()["mfx_dg1_yag"]
-    centroids = [imager.image1.get_centroid()]
+    path_plot = UpdatingDeviceCentroidPathPlot(
+        imager=imager,
+        goal=imager.coords.standard_two_corners_target(),
+    )
+    imager.image1.shaped_image.trigger()
+    path_plot.add_point(imager.image1.get_centroid())
     for num in range(10):
         print(f"Step {num + 1}")
         xopt.step()
-        centroids.append(imager.image1.get_centroid())
+        imager.image1.shaped_image.trigger()
+        path_plot.add_point(imager.image1.get_centroid())
     print("Get best point")
     try:
         _, val, params = xopt.vocs.select_best(xopt.data)
@@ -531,16 +537,11 @@ def run_sim_test_yag_2d() -> Xopt:
     print("Generating plots")
     xopt.data.plot(y=xopt.vocs.objective_names)
 
-    imager.image1.shaped_image.trigger()
     fit = ImageProjectionFit()
     image = imager.image1.shaped_image.get()
     fit_result = fit.fit_image(image)
     plot_image_projection_fit(fit_result)
-    centroid_path_plot(
-        image=image,
-        goal=goal,
-        centroids=centroids,
-    )
+    path_plot.refresh()
     return xopt
 
 
