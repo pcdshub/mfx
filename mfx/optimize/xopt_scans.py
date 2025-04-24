@@ -434,8 +434,10 @@ def run_sim_test_yag() -> Xopt:
 
 def run_sim_test_yag_2d() -> Xopt:
     print("Create Xopt")
-    xopt = get_xopt_obj_2d_markers(
+    xopt = get_xopt_obj(
+        device_type="yag",
         location="dg1",
+        use_2d_markers=True
     )
     print("Randomly evaluate 3 points")
     xopt.random_evaluate(3)
@@ -453,7 +455,7 @@ def run_sim_test_yag_2d() -> Xopt:
         # Make error more user-friendly/readable
         raise FeasibilityError(
             f"No feasible points within acceptable region. "
-            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj_2d_markers'.\n"
+            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
             f"Current constraints: {xopt.vocs.constraints}"
         )
     print(f"Best objective value {val}")
