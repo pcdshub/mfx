@@ -174,17 +174,17 @@ class Beam:
         using_device : str, optional
             Device to use for alignment. Options: "yag, wave8". Default is "yag".
         mirror_pitch_start : int, optional
-            Starting mirror pitch for scan.
+            Starting mirror pitch for scan. Default is mirror_pitch[0].
         mirror_pitch_end : int, optional
-            Final mirror pitch for scan.
+            Final mirror pitch for scan. Default is mirror_pitch[1]/
         num_steps : int, optional
-            Number of steps in scan.
+            Number of steps in scan. Default is 51.
         sequencer_fps : int, optional
-            Sequencer rate in fps.
+            Sequencer rate in fps. Default is 120.
         num_events_per_step : int, optional
-            Number of events to record per step.
+            Number of events to record per step. Default is 120.
         record : bool, optional
-            Whether to record or not.
+            Whether to record or not. Default is True.
         """
         try:
             from mfx.db import RE
