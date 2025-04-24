@@ -198,8 +198,8 @@ class Beam:
             self,
             on_diagnostic: Diagnostics = "dg1",
             using_device: Devices = "yag",
-            mirror_pitch_start = self.mirror_pitch[0],
-            mirror_pitch_end = self.mirror_pitch[1],
+            mirror_pitch_start = None,
+            mirror_pitch_end = None,
             num_steps: int = 51,
             sequencer_fps: int = 120,
             num_events_per_step: int = 120,
@@ -237,6 +237,11 @@ class Beam:
             print("> access to the daq is required to scan the beam.")
 
         from .xopt_scans import init_devices
+
+        if mirror_pitch_start is None:
+            mirror_pitch_start = self.mirror_pitch[0]
+        if mirror_pitch_end is None:
+            mirror_pitch_end = self.mirror_pitch[1]
 
         if using_device == "yag":
             from mfx.autorun import ioc_cam_recorder
