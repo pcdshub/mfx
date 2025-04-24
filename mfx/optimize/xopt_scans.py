@@ -119,20 +119,20 @@ def get_yag_key(yag: str):
 
 def get_evaluator_yag(
     yag: str = "dg1",
-    yag_xpos: float | None = None,
+    goal: float | None = None,
 ) -> Evaluator:
     yag = yag.lower()
     if yag not in ("xcs1", "dg1", "dg2", "ip"):
         raise ValueError("Can only use xcs1, dg1, dg2, ip yags.")
-    if yag_xpos is None:
+    if goal is None:
         if yag == 'xcs1':
-            yag_xpos = XCS_YAG_XPOS
+            goal = XCS_YAG_XPOS
         elif yag == "dg1":
-            yag_xpos = DG1_YAG_XPOS
+            goal = DG1_YAG_XPOS
         elif yag == "dg2":
-            yag_xpos = DG2_YAG_XPOS
+            goal = DG2_YAG_XPOS
         else:
-            yag_xpos = IP_YAG_XPOS
+            goal = IP_YAG_XPOS
     fit = ImageProjectionFit()
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
@@ -151,7 +151,7 @@ def get_evaluator_yag(
         results["rms_size_x"] = fit_result.rms_size[0]
         results["rms_size_y"] = fit_result.rms_size[1]
         results["total_intensity"] = fit_result.total_intensity
-        results["objective"] = abs(fit_result.centroid[0] - yag_xpos)
+        results["objective"] = abs(fit_result.centroid[0] - goal)
         print(f"Distance from goal is {results['objective']}")
         return results
 
@@ -209,9 +209,9 @@ def get_evaluator_yag_2d(
 def get_xopt_obj(
     device_type: Devices,
     location: Diagnostics,
-    goal: float,
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
+    goal: Optional[float] = None,
     wave8_max_value: Optional[float] = None,
     yag_size_min: Optional[float]  = None,
     yag_size_max: Optional[float]  = None,
@@ -222,6 +222,8 @@ def get_xopt_obj(
     centroid_y_min: Optional[float]  = None,
     centroid_y_max: Optional[float]  = None,
     xopt_generator_turbo_controller: Turbo | None = None,
+    use_2d_markers: bool = False,
+    goal_2d: tuple[float, float] | None = None
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -240,12 +242,12 @@ def get_xopt_obj(
         One of "yag" or "wave8"
     location : Diagnostics
         One of "xcs1", "dg1", "dg2", "ip"
-    goal : float
-        Either the wave8 xpos to aim for, or the x coordinate to aim for on a yag.
     mirror_nominal : float
         The starting mirror pitch position and midpoint of the optimization search.
     search_delta : float
         How far +/- we check away from the mirror nominal pitch position
+    goal : float, optional
+        Either the wave8 xpos to aim for, or the x coordinate to aim for on a yag.
     wave8_max_value : float, optional
         Constraint on maximum wave8 xpos for data to be valid
     yag_size_min : float, optional
@@ -266,7 +268,14 @@ def get_xopt_obj(
         Constraint on maximum centroid y value for data to be valid
     xopt_generator_turbo_controller : str, optional
         Which turbo controller to use. Options: "safety, optimize"
+    use_2d_markers: bool, optional
+        Run a 2D YAG optimization using camera markers
+    goal_2d: tuple[float, float] or None, optional
+        The 2D optimization goal if running a 2D YAG optimization
     """
+    if (device_type=="wave8" or not use_2d_markers) and not goal:
+        raise ValueError("Must provide a goal (float) for running YAG or wave8 optimization.")
+
     if device_type == "wave8":
         if location == "ip":
             raise ValueError("There is no wave8 at the ip.")
@@ -311,95 +320,21 @@ def get_xopt_obj(
     )
     print(vocs)
     if device_type == "yag":
-        evaluator = get_evaluator_yag(
-            yag=location,
-            yag_xpos=goal,
-        )
+        if use_2d_markers:
+            evaluator = get_evaluator_yag_2d(
+                yag=location,
+                goal=goal_2d,
+            )
+        else:
+            evaluator = get_evaluator_yag(
+                yag=location,
+                goal=goal,
+            )
     else:
         evaluator = get_evaluator_wave8(
             wave8=location,
             wave8_xpos=goal,
         )
-    generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
-    generator.gp_constructor.use_low_noise_prior = False
-    return Xopt(
-        vocs=vocs,
-        generator=generator,
-        evaluator=evaluator,
-    )
-
-
-@validate_w_lowercase_args
-def get_xopt_obj_2d_markers(
-    location: Diagnostics,
-    mirror_nominal: float = MIRROR_NOMINAL,
-    search_delta: float = 5,
-    yag_size_min: Optional[float]  = None,
-    yag_size_max: Optional[float]  = None,
-    yag_intensity_min: Optional[float]  = None,
-    yag_intensity_max: Optional[float]  = None,
-    centroid_x_min: Optional[float]  = None,
-    centroid_x_max: Optional[float]  = None,
-    centroid_y_min: Optional[float]  = None,
-    centroid_y_max: Optional[float]  = None,
-    xopt_generator_turbo_controller: Optional[float]  = None,
-) -> Xopt:
-    """
-    Create an appropriate xopt optimization object for a 2D YAG optimization.
-
-    Uses the camviewer markers as a goal only by using the default goal
-    argument in get_evaluator_yag_2d.
-
-    Parameters
-    ----------
-    location : Diagnostics
-        One of "xcs1", "dg1", "dg2", "ip"
-    mirror_nominal : float
-        The starting mirror pitch position and midpoint of the optimization search.
-    search_delta : float
-        How far +/- we check away from the mirror nominal pitch position
-        yag_size_min : float, optional
-        Constraint on minimum yag spot size (RMS) for data to be valid
-    yag_size_max : float, optional
-        Constraint on maximum yag spot size (RMS) for data to be valid
-    yag_intensity_min : float, optional
-        Constraint on minimum yag total intensity count for data to be valid
-    yag_intensity_max : float, optional
-        Constraint on maximum yag total intensity count for data to be valid
-    centroid_x_min : float, optional
-        Constraint on minimum centroid x value for data to be valid
-    centroid_x_max : float, optional
-        Constraint on maximum centroid x value for data to be valid
-    centroid_y_min : float, optional
-        Constraint on minimum centroid y value for data to be valid
-    centroid_y_max : float, optional
-        Constraint on maximum centroid y value for data to be valid
-    xopt_generator_turbo_controller : str, optional
-        Which turbo controller to use. Options: "safety, optimize"
-    """
-    if location not in ("xcs1", "dg1", "dg2", "ip"):
-        raise ValueError("location must be one of xcs1, dg1, dg2, or ip")
-
-    centroid_x_min = centroid_x_min or YAG_CENTROID_X_MIN_MAX[0]
-    centroid_x_max = centroid_x_max or YAG_CENTROID_X_MIN_MAX[1]
-    centroid_y_min = centroid_y_min or YAG_CENTROID_Y_MIN_MAX[0]
-    centroid_y_max = centroid_y_max or YAG_CENTROID_Y_MIN_MAX[1]
-
-    vocs = get_vocs(
-        mirror_nominal=mirror_nominal,
-        search_delta=search_delta,
-        yag_size_min=yag_size_min,
-        yag_size_max=yag_size_max,
-        yag_intensity_min=yag_intensity_min,
-        yag_intensity_max=yag_intensity_max,
-        centroid_x_min=centroid_x_min,
-        centroid_x_max=centroid_x_max,
-        centroid_y_min=centroid_y_min,
-        centroid_y_max=centroid_y_max,
-    )
-    print(vocs)
-    evaluator = get_evaluator_yag_2d(yag=location)
-
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
     return Xopt(
