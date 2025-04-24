@@ -1,11 +1,10 @@
 import traceback
 import datetime
-from typing import Literal
+from typing import Literal, Optional
 import matplotlib.pyplot as plt
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
 from xopt import Xopt
-from mfx.db import daq
 
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
@@ -55,7 +54,7 @@ class Beam:
     @validate_w_lowercase_args
     def align(
             self,
-            with_goal: float | None = None,
+            with_goal: Optional[float] = None,
             on_diagnostic: Diagnostics = "dg1",
             with_method: Methods = "xopt",
             using_device: Devices = "yag",
@@ -66,8 +65,8 @@ class Beam:
             blop_qei_n: int = 16,
             blop_qei_iterations: int = 5,
             use_2d_markers: bool = False,
-            with_goal_2d: tuple[float, float] | None = None,
-            xopt_obj: Xopt | None = None,
+            with_goal_2d: Optional[tuple[float, float]] = None,
+            xopt_obj: Optional[Xopt] = None,
             save_run: bool = True
             ):
         """Perform Beam Alignment
@@ -198,8 +197,8 @@ class Beam:
             self,
             on_diagnostic: Diagnostics = "dg1",
             using_device: Devices = "yag",
-            mirror_pitch_start = self.mirror_pitch[0],
-            mirror_pitch_end = self.mirror_pitch[1],
+            mirror_pitch_start = None,
+            mirror_pitch_end = None,
             num_steps: int = 51,
             sequencer_fps: int = 120,
             num_events_per_step: int = 120,
@@ -226,6 +225,8 @@ class Beam:
         record : bool, optional
             Whether to record or not. Default is True.
         """
+        mirror_pitch_start = mirror_pitch_start or self.mirror_pitch[0]
+        mirror_pitch_end = mirror_pitch_end or self.mirror_pitch[1]
         try:
             from mfx.db import RE
         except ImportError:

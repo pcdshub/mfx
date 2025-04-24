@@ -221,9 +221,9 @@ def get_xopt_obj(
     centroid_x_max: Optional[float]  = None,
     centroid_y_min: Optional[float]  = None,
     centroid_y_max: Optional[float]  = None,
-    xopt_generator_turbo_controller: Turbo | None = None,
+    xopt_generator_turbo_controller: Optional[Turbo] = None,
     use_2d_markers: bool = False,
-    goal_2d: tuple[float, float] | None = None
+    goal_2d: Optional[tuple[float, float]] = None
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -432,8 +432,10 @@ def run_sim_test_yag() -> Xopt:
 
 def run_sim_test_yag_2d() -> Xopt:
     print("Create Xopt")
-    xopt = get_xopt_obj_2d_markers(
+    xopt = get_xopt_obj(
+        device_type="yag",
         location="dg1",
+        use_2d_markers=True,
     )
     print("Randomly evaluate 3 points")
     xopt.random_evaluate(3)
