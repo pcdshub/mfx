@@ -19,7 +19,13 @@ from ophyd import EpicsSignal
 from event_model import compose_event_page
 from pprint import pprint, pformat
 from xopt import Xopt
-
+from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky.callbacks import CallbackBase, LivePlot
+import numpy as np
+from pcdsdevices.sim import FastMotor
+from ophyd import EpicsSignal
+from event_model import compose_event_page
+from pprint import pprint, pformat
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
 Methods = Literal["xopt", "blop"]
