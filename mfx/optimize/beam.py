@@ -239,6 +239,11 @@ class Beam:
 
         from .xopt_scans import init_devices
 
+        if mirror_pitch_start is None:
+            mirror_pitch_start = self.mirror_pitch[0]
+        if mirror_pitch_end is None:
+            mirror_pitch_end = self.mirror_pitch[1]
+
         if using_device == "yag":
             from mfx.autorun import ioc_cam_recorder
             cam_pv = f"MFX:GIGE:{on_diagnostic.upper()}:YAG:"
