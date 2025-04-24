@@ -76,16 +76,20 @@ def misc_setup(autoreload: bool = False):
     """
     Other setup actions that don't create objects
     """
+    from IPython import get_ipython
+    ip = get_ipython()
+
     if autoreload:
         print("Enabling autoreload...")
-        from IPython import get_ipython
-        ip = get_ipython()
         if ip is None:
             raise RuntimeError("Not in an IPython shell, can't setup autoreload!")
         ip.run_line_magic("load_ext", "autoreload")
         ip.run_line_magic("autoreload", "1")
-        line = [f"mfx.optimize.{imp}" for imp in ("beam", "beamline_hw", "blop_scans", "devices", "xopt_scans")]
+        line = [f"mfx.optimize.{imp}" for imp in ("beam", "beamline_hw", "blop_scans", "devices", "plots", "xopt_scans")]
         ip.run_line_magic("aimport", ",".join(line))
+
+    if ip is not None:
+        ip.run_line_magic("matplotlib", "qt")
 
 
 if __name__ == "__main__":

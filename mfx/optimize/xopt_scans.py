@@ -5,6 +5,8 @@ Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
 
+from typing import Optional
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -30,6 +32,7 @@ from .beamline_hw import (
     WAVE8_CENTROID_X_MIN_MAX,
     WAVE8_CENTROID_Y_MIN_MAX
 )
+from .plots import UpdatingDeviceCentroidPathPlot
 
 
 def get_vocs(
@@ -208,19 +211,19 @@ def get_xopt_obj(
     location: Diagnostics,
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    goal: float | None = None,
-    wave8_max_value: float | None = None,
-    yag_size_min: float | None = None,
-    yag_size_max: float | None = None,
-    yag_intensity_min: float | None = None,
-    yag_intensity_max: float | None = None,
-    centroid_x_min: float | None = None,
-    centroid_x_max: float | None = None,
-    centroid_y_min: float | None = None,
-    centroid_y_max: float | None = None,
-    xopt_generator_turbo_controller: Turbo | None = None,
+    goal: Optional[float] = None,
+    wave8_max_value: Optional[float] = None,
+    yag_size_min: Optional[float]  = None,
+    yag_size_max: Optional[float]  = None,
+    yag_intensity_min: Optional[float]  = None,
+    yag_intensity_max: Optional[float]  = None,
+    centroid_x_min: Optional[float]  = None,
+    centroid_x_max: Optional[float]  = None,
+    centroid_y_min: Optional[float]  = None,
+    centroid_y_max: Optional[float]  = None,
+    xopt_generator_turbo_controller: Optional[Turbo] = None,
     use_2d_markers: bool = False,
-    goal_2d: tuple[float, float] | None = None
+    goal_2d: Optional[tuple[float, float]] = None
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -429,18 +432,26 @@ def run_sim_test_yag() -> Xopt:
 
 def run_sim_test_yag_2d() -> Xopt:
     print("Create Xopt")
-    xopt = get_xopt_obj_2d_markers(
+    xopt = get_xopt_obj(
+        device_type="yag",
         location="dg1",
+        use_2d_markers=True,
     )
     print("Randomly evaluate 3 points")
     xopt.random_evaluate(3)
     print("Step xopt object 10 times")
     imager = init_devices()["mfx_dg1_yag"]
-    centroids = [imager.image1.get_centroid()]
+    path_plot = UpdatingDeviceCentroidPathPlot(
+        imager=imager,
+        goal=imager.coords.standard_two_corners_target(),
+    )
+    imager.image1.shaped_image.trigger()
+    path_plot.add_point(imager.image1.get_centroid())
     for num in range(10):
         print(f"Step {num + 1}")
         xopt.step()
-        centroids.append(imager.image1.get_centroid())
+        imager.image1.shaped_image.trigger()
+        path_plot.add_point(imager.image1.get_centroid())
     print("Get best point")
     try:
         _, val, params = xopt.vocs.select_best(xopt.data)
@@ -463,17 +474,11 @@ def run_sim_test_yag_2d() -> Xopt:
     print("Generating plots")
     xopt.data.plot(y=xopt.vocs.objective_names)
 
-    imager.image1.shaped_image.trigger()
     fit = ImageProjectionFit()
     image = imager.image1.shaped_image.get()
     fit_result = fit.fit_image(image)
     plot_image_projection_fit(fit_result)
-    plt.figure()
-    plt.imshow(image)
-    plt.plot(*goal, marker="o", color="red")
-    for pt in centroids:
-        plt.plot(*pt, marker=".", color="white")
-    plt.show()
+    path_plot.refresh()
     return xopt
 
 
