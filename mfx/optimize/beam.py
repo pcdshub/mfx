@@ -55,7 +55,7 @@ class Beam:
     @validate_w_lowercase_args
     def align(
             self,
-            with_goal: float | None = None,
+            with_goal: float | None = None, # FIXME
             on_diagnostic: Diagnostics = "dg1",
             with_method: Methods = "xopt",
             using_device: Devices = "yag",
