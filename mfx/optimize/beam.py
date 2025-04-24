@@ -1,6 +1,6 @@
 import traceback
 import datetime
-from typing import Literal
+from typing import Literal, Optional
 import matplotlib.pyplot as plt
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
@@ -55,7 +55,7 @@ class Beam:
     @validate_w_lowercase_args
     def align(
             self,
-            with_goal: float | None = None, # FIXME
+            with_goal: Optional[float] = None,
             on_diagnostic: Diagnostics = "dg1",
             with_method: Methods = "xopt",
             using_device: Devices = "yag",
@@ -66,8 +66,8 @@ class Beam:
             blop_qei_n: int = 16,
             blop_qei_iterations: int = 5,
             use_2d_markers: bool = False,
-            with_goal_2d: tuple[float, float] | None = None,
-            xopt_obj: Xopt | None = None,
+            with_goal_2d: Optional[tuple[float, float]] = None,
+            xopt_obj: Optional[Xopt] = None,
             save_run: bool = True
             ):
         """Perform Beam Alignment
