@@ -225,8 +225,6 @@ class Beam:
         record : bool, optional
             Whether to record or not. Default is True.
         """
-        mirror_pitch_start = mirror_pitch_start or self.mirror_pitch[0]
-        mirror_pitch_end = mirror_pitch_end or self.mirror_pitch[1]
         try:
             from mfx.db import RE
         except ImportError:
