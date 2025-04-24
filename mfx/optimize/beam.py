@@ -165,7 +165,7 @@ class Beam:
             num_events_per_step: int = 120,
             record: bool = True
             ):
-        """Perform Beam Alignment
+        """Perform Beam Scan
 
         Parameters
         ----------
