@@ -415,8 +415,8 @@ class Crystal:
         # tfs_translation = FastMotor()
         #det = EpicsSignal('MFX:GIGE:02:IMAGE1:ArrayData', name='gige-cam')
         from ophyd.sim import det, motor as tfs_translation
-        self.RE.subscribe(AggLivePlot(y=det.name, x=tfs_translation.name))
-        #self.RE.subscribe(print)
+        #self.RE.subscribe(AggLivePlot(y=det.name, x=tfs_translation.name))
+        self.RE.subscribe(print)
         self.RE(bp.scan([det], tfs_translation, tfs_positions[0], tfs_positions[-1], len(tfs_positions)))
         
 
@@ -436,7 +436,7 @@ class AggLivePlot(LivePlot):
         print(f"\n\n\nevent\n{pformat(doc)}")
         self._cached_events.append(doc)
         if len(self._cached_events) >= self.num_points:
-            new_doc = compose_event_page(descriptor=self._descriptor["uid"], event_counters={'det':self.num_points}, data=self._cached_events,timestamps={}, seq_num=[])
+            new_doc = compose_event_page(self._descriptor["uid"], self.num_points, self._cached_events,{}, [])
             print(f"\n\n\nevent new doc\n{pformat(new_doc)}")
             super().event_page(new_doc)
             self._cached_events = []
