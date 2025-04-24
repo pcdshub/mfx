@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 from pydantic import validate_call
 from bluesky import RunEngine
 from xopt import Xopt
-from .beamline_hw import select_diagnostic
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot
 from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
+from .user_select import select_diagnostic
 
 
 class Beam:
@@ -38,8 +38,8 @@ class Beam:
 
         Parameters
         ----------
-        with_goal : float or tuple[float, float], optional
-            Goal to align to. A float for regular optimization, a tuple for using 2D YAG optimization.
+        with_goal : float, optional
+            1D Goal to align to. This can be omitted if other goal arguments are used.
         on_diagnostic : str, optional
             Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
         with_method : str, optional

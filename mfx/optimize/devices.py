@@ -56,7 +56,7 @@ class CamViewerCoords(Device):
 
     def average_marker_target(
         self, marker_nums: tuple[int, ...] | list[int]
-    ) -> tuple[int, int]:
+    ) -> tuple[float, float]:
         """
         Get the coordinate of the average position of the numbered markers.
         """
@@ -65,7 +65,7 @@ class CamViewerCoords(Device):
         tot = sum(np.array(self.specific_marker_target(num)) for num in marker_nums)
         return tuple(tot / len(marker_nums))
 
-    def standard_two_corners_target(self) -> tuple[int, int]:
+    def standard_two_corners_target(self) -> tuple[float, float]:
         """
         Get the coordinate defined by markers 1 and 2 placed at the corners.
 
@@ -75,7 +75,7 @@ class CamViewerCoords(Device):
         """
         return self.average_marker_target((1, 2))
 
-    def standard_box_target(self) -> tuple[int, int]:
+    def standard_box_target(self) -> tuple[float, float]:
         """
         Get the coordinate defined by all four markers placed at the corners.
 

@@ -3,7 +3,6 @@ Initialize hardware for blop_scans and xopt_scans
 """
 import random
 from types import SimpleNamespace
-from typing import Union
 
 from happi import Client
 from ophyd.device import Device
@@ -11,7 +10,7 @@ from ophyd.sim import SynAxis, SynSignal
 from pcdsdevices.ipm import Wave8
 
 from .devices import FakeLCLSImagePlugin, FakeYagCamera, YagCamera
-from .type_checking import Diagnostics, Devices, validate_w_lowercase_args
+
 
 HAPPI_NAMES = (
     "mr1l4_homs",
@@ -185,36 +184,3 @@ def sim_devices() -> dict[str, Device]:
     print(f"default alignment on ip yag should pick {MIRROR_NOMINAL - ip_yag_offset}")
 
     return devices
-
-
-@validate_w_lowercase_args
-def select_diagnostic(
-    device_type: Devices,
-    location: Diagnostics,
-) -> Union[YagCamera, Wave8]:
-    """
-    Standard selector used to assemble the blop/xopt scans.
-
-    From some standard set of options, return the
-    diagnostic device we'll be use using in the optimization.
-
-    Parameters
-    ----------
-    device_type : Devices
-        One of "yag" or "wave8"
-    location : Diagnostics
-        One of "xcs1", "dg1", "dg2", "ip"
-    """
-    devices = init_devices()
-    if device_type == "yag":
-        if location == "xcs1":
-            return devices["xcs_yag1"]
-        else:
-            return devices[f"mfx_{location}_yag"]
-    elif device_type == "wave8":
-        if location in ("dg1", "dg2"):
-            return devices[f"mfx_{location}_wave8"]
-        else:
-            raise ValueError(f"Invalid wave8 {location}, expected dg1 or dg2")
-    else:
-        raise RuntimeError(f"Invalid device_type {device_type} selected, pydantic broke?")
