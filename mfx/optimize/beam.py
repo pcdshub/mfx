@@ -210,7 +210,7 @@ class Beam:
 
         RE(
             bp.scan(
-                daq,
+                [daq],
                 init_devices()["mr1l4_homs"].pitch,
                 mirror_pitch_start,
                 mirror_pitch_end,
