@@ -30,11 +30,11 @@ from .beamline_hw import (
     YAG_CENTROID_Y_MIN_MAX,
     WAVE8_CENTROID_X_MIN_MAX,
     WAVE8_CENTROID_Y_MIN_MAX,
-    select_diagnostic,
 )
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot
 from .type_checking import validate_w_lowercase_args, Devices, Diagnostics, Turbo
+from .user_select import select_diagnostic, select_goal
 
 
 def get_vocs(
@@ -268,8 +268,13 @@ def get_xopt_obj(
     goal_2d: tuple[float, float] or None, optional
         The 2D optimization goal if running a 2D YAG optimization
     """
-    if (device_type=="wave8" or not use_2d_markers) and not goal:
-        raise ValueError("Must provide a goal (float) for running YAG or wave8 optimization.")
+    goal_value = select_goal(
+        device_type=device_type,
+        location=location,
+        goal=goal,
+        goal_2d=goal_2d,
+        use_2d_markers=use_2d_markers,
+    )
 
     if device_type == "wave8":
         if any(v is not None for v in (yag_size_min, yag_size_max, yag_intensity_min, yag_intensity_max)):
@@ -313,20 +318,20 @@ def get_xopt_obj(
     )
     print(vocs)
     if device_type == "yag":
-        if use_2d_markers:
+        if isinstance(goal_value, tuple):
             evaluator = get_evaluator_yag_2d(
                 yag=location,
-                goal=goal_2d,
+                goal=goal_value,
             )
         else:
             evaluator = get_evaluator_yag(
                 yag=location,
-                goal=goal,
+                goal=goal_value,
             )
     else:
         evaluator = get_evaluator_wave8(
             wave8=location,
-            wave8_xpos=goal,
+            wave8_xpos=goal_value,
         )
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
@@ -436,7 +441,11 @@ def run_sim_test_yag_2d() -> Xopt:
     imager = select_diagnostic("yag", "dg1")
     path_plot = UpdatingDeviceCentroidPathPlot(
         imager=imager,
-        goal=imager.coords.standard_two_corners_target(),
+        goal=select_goal(
+            device_type="yag",
+            location="dg1",
+            use_2d_markers=True,
+        ),
     )
     imager.image1.shaped_image.trigger()
     path_plot.add_point(imager.image1.get_centroid())

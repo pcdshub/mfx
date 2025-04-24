@@ -8,7 +8,7 @@ from xopt import Xopt
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot
 from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
-from .user_select import select_diagnostic
+from .user_select import select_diagnostic, select_goal
 
 
 class Beam:
@@ -101,7 +101,13 @@ class Beam:
                     print("Generating path plot")
                     path_plot = UpdatingDeviceCentroidPathPlot(
                         imager=select_diagnostic("yag", on_diagnostic),
-                        goal=(1, 1),
+                        goal=select_goal(
+                            device_type=using_device,
+                            location=on_diagnostic,
+                            goal=with_goal,
+                            goal_2d=with_goal_2d,
+                            use_2d_markers=use_2d_markers,
+                        ),
                     )
                     xopt._cached_path_plot = path_plot
                 xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
@@ -118,9 +124,10 @@ class Beam:
                 try:
                     xopt.step()
                     xopt.generator.visualize_model(show_acquisition=False)
-                    path_plot.add_point(
-                        (xopt.data.get("centroid_x").iat[-1], xopt.data.get("centroid_y").iat[-1])
-                    )
+                    if path_plot is not None:
+                        path_plot.add_point(
+                            (xopt.data.get("centroid_x").iat[-1], xopt.data.get("centroid_y").iat[-1])
+                        )
                     plt.show()
                 except RuntimeError:
                     trb = traceback.format_exc()
@@ -170,6 +177,8 @@ class Beam:
             ax.set_xlabel("steps")
             ax.set_ylabel("mirror pitch")
             xopt.generator.visualize_model()
+            if path_plot is not None:
+                path_plot.refresh()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent

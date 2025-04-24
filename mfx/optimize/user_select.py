@@ -47,6 +47,7 @@ def select_diagnostic(
         )
 
 
+@validate_w_lowercase_args
 def select_goal(
     device_type: Devices,
     location: Diagnostics,
@@ -85,15 +86,9 @@ def select_goal(
     goal : float or tuple[float, float]
         The location to align to, given the settings.
     """
-    goal_count = 0
-    if goal is not None:
-        goal_count += 1
-    if goal_2d is not None:
-        goal_count += 1
-    if use_2d_markers:
-        goal_count += 1
+    goal_count = sum((goal is not None, goal_2d is not None, use_2d_markers))
     if goal_count != 1:
-        raise ValueError(f"Exactly one goal position be chosen! Recieved {goal_count} goals!")
+        raise ValueError(f"Exactly one goal position must be chosen! Recieved {goal_count} goals!")
 
     # goal is compatible with any hardware
     if goal is not None:
@@ -104,7 +99,10 @@ def select_goal(
         if device_type == "yag":
             return goal_2d
         else:
-            raise ValueError(f"goal_2d is only compatible with yag, not with {device_type}!")
+            raise ValueError(
+                f"goal_2d is only compatible with yag, not with {device_type}! "
+                "Try providing goal (float) instead."
+            )
 
     # use_2d_markers is compatible only with yags
     if use_2d_markers:
@@ -112,6 +110,9 @@ def select_goal(
             yag_camera = select_diagnostic(device_type=device_type, location=location)
             return yag_camera.coords.standard_two_corners_target()
         else:
-            raise ValueError(f"use_2d_markers is only compatible with yag, not with {device_type}!")
+            raise ValueError(
+                f"use_2d_markers is only compatible with yag, not with {device_type}! "
+                "Try providing goal (float) instead."
+            )
     
     raise RuntimeError("Invalid codepath in select_goal, how did you get here?")
