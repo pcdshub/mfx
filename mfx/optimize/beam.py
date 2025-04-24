@@ -6,7 +6,7 @@ from pydantic import validate_call
 from bluesky import RunEngine
 from xopt import Xopt
 from .errors import FeasibilityError
-from .plots import UpdatingDeviceCentroidPathPlot
+from .plots import UpdatingDeviceCentroidPathPlot, refresh_mpl_plots
 from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
 from .user_select import select_diagnostic, select_goal
 
@@ -118,6 +118,7 @@ class Beam:
                 x_series = xopt.data.get("centroid_x")
                 y_series = xopt.data.get("centroid_y")
                 path_plot.add_points([(xpt, ypt) for xpt, ypt in zip(x_series, y_series)])
+                refresh_mpl_plots()
 
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
@@ -128,7 +129,7 @@ class Beam:
                         path_plot.add_point(
                             (xopt.data.get("centroid_x").iat[-1], xopt.data.get("centroid_y").iat[-1])
                         )
-                    plt.show()
+                    refresh_mpl_plots()
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
@@ -178,7 +179,8 @@ class Beam:
             ax.set_ylabel("mirror pitch")
             xopt.generator.visualize_model()
             if path_plot is not None:
-                path_plot.refresh()
+                path_plot.update_plot()
+            refresh_mpl_plots()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent

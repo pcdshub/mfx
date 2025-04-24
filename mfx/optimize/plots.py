@@ -11,6 +11,22 @@ import numpy as np
 from .devices import YagCamera
 
 
+def refresh_mpl_plots():
+    """
+    Call the required magic incantations to:
+    - Show all open figures that haven't been shown yet
+    - Make every figure do a draw update right away.
+
+    Do this outside of the plotting logic so we can
+    decide when to draw updates and when not to.
+
+    For example, you can do this once to update all
+    four of your plots.
+    """
+    plt.show(block=False)
+    plt.pause(0.01)
+
+
 def centroid_path_plot(
     image: np.ndarray,
     goal: tuple[float, float],
@@ -33,6 +49,9 @@ def centroid_path_plot(
     system has an issue or the markers are set strangely
     it will become more obvious using this plot.
 
+    Call refresh_mpl_plots afterwards if you'd like
+    an immediate redraw.
+
     Parameters
     ----------
     image : np.ndarray
@@ -47,8 +66,6 @@ def centroid_path_plot(
     for mk in markers:
         plt.plot(*mk, marker="+", color="lime")
     plt.plot(*goal, marker="x", color="red")
-    plt.show(block=False)
-    plt.pause(0.01)
     return fig
 
 
@@ -94,7 +111,7 @@ class UpdatingDeviceCentroidPathPlot:
             The point to add.
         """
         self.points.append(centroid)
-        self.refresh()
+        self.update_plot()
 
     def add_points(self, centroids: list[tuple[float, float]]):
         """
@@ -106,11 +123,14 @@ class UpdatingDeviceCentroidPathPlot:
             The points to add.
         """
         self.points.extend(centroids)
-        self.refresh()
+        self.update_plot()
 
-    def refresh(self):
+    def update_plot(self):
         """
-        Re-render without adding any points, e.g. to update the YAG image.
+        Update plots without adding any points, e.g. to update the YAG image.
+
+        Note: you still need to call refresh_mpl_plots or self.refresh to
+        display the updated image.
         """
         self.fig = centroid_path_plot(
             image=self.imager.image1.image,
@@ -119,3 +139,10 @@ class UpdatingDeviceCentroidPathPlot:
             centroids=self.points,
             figure=self.fig,
         )
+
+    def refresh(self):
+        """
+        Convenience helper if this is the only updating plot you have.
+        """
+        self._plot_updates()
+        refresh_mpl_plots()
