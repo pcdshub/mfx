@@ -1,9 +1,11 @@
 import traceback
 import datetime
 from typing import Literal
+import matplotlib.pyplot as plt
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
 from xopt import Xopt
+from mfx.db import daq
 
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
@@ -125,6 +127,8 @@ class Beam:
                 print(f"Step {num + 1}")
                 try:
                     xopt.step()
+                    xopt.generator.visualize_model(show_acquisition=False)
+                    plt.show()
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
@@ -133,7 +137,10 @@ class Beam:
                             f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
                             f"Current constraints: {xopt.vocs.constraints}"
                         )
-                except ValueError as e:
+                    else:
+                        # Raise if it's something else
+                        raise
+                except ValueError:
                     trb = traceback.format_exc()
                     if xopt_turbo_option == "safety" and "no data available to build model" in str(trb):
                         raise FeasibilityError(
@@ -141,6 +148,9 @@ class Beam:
                             f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
                             f"Current constraints: {xopt.vocs.constraints}"
                         )
+                    else:
+                        # Raise if it's something else
+                        raise
 
                 print(xopt.data)
             try:
@@ -158,12 +168,15 @@ class Beam:
             mirror_pitch = init_devices()["mr1l4_homs"].pitch
             mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
             print(f"pitch is at {mirror_pitch.position}")
-            xopt.data.plot(y=xopt.vocs.objective_names)
             if save_run:
                 now = datetime.datetime.now()
                 formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
                 filename  = f"xopt_run_{on_diagnostic}_{using_device}_{formatted_string}.yaml"
                 xopt.dump(filename)
+            ax = xopt.data.plot(y=xopt.vocs.objective_names)
+            ax.set_xlabel("steps")
+            ax.set_ylabel("mirror pitch")
+            xopt.generator.visualize_model()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent
@@ -179,3 +192,70 @@ class Beam:
             return agent
         else:
             raise ValueError("Only 'xopt' and 'blop' methods are supported.")
+
+    @validate_w_lowercase_args
+    def scan(
+            self,
+            on_diagnostic: Diagnostics = "dg1",
+            using_device: Devices = "yag",
+            mirror_pitch_start = self.mirror_pitch[0],
+            mirror_pitch_end = self.mirror_pitch[1],
+            num_steps: int = 51,
+            sequencer_fps: int = 120,
+            num_events_per_step: int = 120,
+            record: bool = True
+            ):
+        """Perform Beam Scan
+
+        Parameters
+        ----------
+        on_diagnostic : str, optional
+            Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
+        using_device : str, optional
+            Device to use for alignment. Options: "yag, wave8". Default is "yag".
+        mirror_pitch_start : int, optional
+            Starting mirror pitch for scan. Default is mirror_pitch[0].
+        mirror_pitch_end : int, optional
+            Final mirror pitch for scan. Default is mirror_pitch[1]/
+        num_steps : int, optional
+            Number of steps in scan. Default is 51.
+        sequencer_fps : int, optional
+            Sequencer rate in fps. Default is 120.
+        num_events_per_step : int, optional
+            Number of events to record per step. Default is 120.
+        record : bool, optional
+            Whether to record or not. Default is True.
+        """
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
+
+        try:
+            from mfx.db import daq
+        except ImportError:
+            print("> access to the daq is required to scan the beam.")
+
+        from .xopt_scans import init_devices
+
+        if using_device == "yag":
+            from mfx.autorun import ioc_cam_recorder
+            cam_pv = f"MFX:GIGE:{on_diagnostic.upper()}:YAG:"
+            cam_record_length = 1.5 * num_steps * num_events_per_step / sequencer_fps
+            tag = f"{on_diagnostic}_mr1l4_scan"
+            ioc_cam_recorder(cam_pv,
+                             cam_record_length,
+                             tag=tag)
+            print(f"beam.scan: writing {tag} to /cds/data/iocData while scanning...")
+
+        RE(
+            bp.scan(
+                [daq],
+                init_devices()["mr1l4_homs"].pitch,
+                mirror_pitch_start,
+                mirror_pitch_end,
+                num_steps,
+                events=num_events_per_step,
+                record=record
+            )
+        )
