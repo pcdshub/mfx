@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
 from xopt import Xopt
-from mfx.db import daq
 
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
