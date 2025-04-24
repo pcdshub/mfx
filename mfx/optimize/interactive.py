@@ -75,6 +75,8 @@ def get_objects(sim: bool = False):
 def misc_setup(autoreload: bool = False):
     """
     Other setup actions that don't create objects
+
+    This wraps imports, etc. to avoid polluting the global namespace.
     """
     from IPython import get_ipython
     ip = get_ipython()
@@ -83,9 +85,13 @@ def misc_setup(autoreload: bool = False):
         print("Enabling autoreload...")
         if ip is None:
             raise RuntimeError("Not in an IPython shell, can't setup autoreload!")
+
+        import pkgutil
+        from pathlib import Path
+
         ip.run_line_magic("load_ext", "autoreload")
         ip.run_line_magic("autoreload", "1")
-        line = [f"mfx.optimize.{imp}" for imp in ("beam", "beamline_hw", "blop_scans", "devices", "plots", "xopt_scans")]
+        line = [f"mfx.optimize.{info.name}" for info in pkgutil.iter_modules([Path(__file__).parent]) if info.name != "interactive"]
         ip.run_line_magic("aimport", ",".join(line))
 
     if ip is not None:
