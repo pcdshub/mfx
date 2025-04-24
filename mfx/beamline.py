@@ -121,7 +121,7 @@ with safe_load('DCCM'):
     dccm = DCCMono()
 
 with safe_load('Compact_Spectrometer'):
-    from mfx.vonhamos import *
+    from mfx.vonhamos import DeterministicVonHamos6Crystal
     spec = DeterministicVonHamos6Crystal("MFX:SPEC", name="dvh")
 
 # with safe_load("laser wp power"):
