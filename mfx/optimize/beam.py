@@ -1,5 +1,6 @@
 import traceback
 from typing import Literal
+import matplotlib.pyplot as plt
 from pydantic import validate_call, ConfigDict
 from bluesky import RunEngine
 from mfx.db import daq
@@ -103,6 +104,8 @@ class Beam:
                 print(f"Step {num + 1}")
                 try:
                     xopt.step()
+                    xopt.generator.visualize_model(show_acquisition=False)
+                    plt.show()
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
@@ -111,7 +114,10 @@ class Beam:
                             f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
                             f"Current constraints: {xopt.vocs.constraints}"
                         )
-                except ValueError as e:
+                    else:
+                        # Raise if it's something else
+                        raise
+                except ValueError:
                     trb = traceback.format_exc()
                     if xopt_turbo_option == "safety" and "no data available to build model" in str(trb):
                         raise FeasibilityError(
@@ -119,6 +125,9 @@ class Beam:
                             f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
                             f"Current constraints: {xopt.vocs.constraints}"
                         )
+                    else:
+                        # Raise if it's something else
+                        raise
 
                 print(xopt.data)
             try:
@@ -136,7 +145,10 @@ class Beam:
             mirror_pitch = init_devices()["mr1l4_homs"].pitch
             mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
             print(f"pitch is at {mirror_pitch.position}")
-            xopt.data.plot(y=xopt.vocs.objective_names)
+            ax = xopt.data.plot(y=xopt.vocs.objective_names)
+            ax.set_xlabel("steps")
+            ax.set_ylabel("mirror pitch")
+            xopt.generator.visualize_model()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent
