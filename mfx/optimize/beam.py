@@ -19,7 +19,6 @@ from ophyd import EpicsSignal
 from event_model import compose_event_page
 from pprint import pprint, pformat
 from xopt import Xopt
-from mfx.db import daq
 
 
 Diagnostics = Literal["xcs1", "dg1", "dg2"]
@@ -291,6 +290,8 @@ class Beam:
         sequencer_fps : int, optional
             Sequencer rate in fps. Default is 120.
         """
+        mirror_pitch_start = mirror_pitch_start or self.mirror_pitch[0]
+        mirror_pitch_end = mirror_pitch_end or self.mirror_pitch[1]
         try:
             from mfx.db import RE
         except ImportError:
