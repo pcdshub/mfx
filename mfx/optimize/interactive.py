@@ -50,7 +50,7 @@ def get_objects(sim: bool = False):
     from mfx.optimize.beam import Beam
     from mfx.optimize.beamline_hw import init_devices, sim_devices
     from mfx.optimize.blop_scans import get_blop_agent
-    from mfx.optimize.xopt_scans import get_xopt_obj, get_xopt_obj_2d_markers
+    from mfx.optimize.xopt_scans import get_xopt_obj
 
     if sim:
         print("Creating sim device objects...")
@@ -65,7 +65,6 @@ def get_objects(sim: bool = False):
         "beam": Beam(),
         "get_blop_agent": get_blop_agent,
         "get_xopt_obj": get_xopt_obj,
-        "get_xopt_obj_2d_markers": get_xopt_obj_2d_markers,
     }
     print(f"Available optimizers are {list(optimizers)}")
 
