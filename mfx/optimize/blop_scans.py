@@ -4,6 +4,7 @@ To test with sim, ipython -i mfx/optimize/blop_scans.py
 Or python -m mfx.optimize.blop_scans for a default sim run-through
 """
 from __future__ import annotations
+from typing import Optional
 
 from blop import DOF, Agent, Objective
 from bluesky import RunEngine
@@ -97,7 +98,7 @@ def get_blop_agent(
     wave8: Diagnostics = "dg1",
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    wave8_xpos: float | None = None,
+    wave8_xpos: Optional[float] = None,
     wave8_max_value: float = 10,
     setup_re: bool = True,
 ) -> Agent:
