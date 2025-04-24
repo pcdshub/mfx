@@ -3,17 +3,16 @@
 This is a procedure for uploading and testing scripts on MFX-DAQ
 
 ### Test a branch 
-These are the steps to test a branch while not affecting the main hutch python setup on mfx-daq  
-
+These are the steps to test a branch while not affecting the main hutch python setup on mfx-daq
 1. Clone the `mfx` repository into home, e.g. `/cds/home/f/fpoitevi/mfx`
 
-2. Checkout the branch you want to work on
+2. Checkout the branch you want to work on  
 
 	a. `git fetch --all`
 
 	b. `git checkout -b <branch name>`
 
-3. Put local repo in python path: `export PYTHONPATH={PWD}:$PYTHONPATH`
+3. Put local repo in python path: `export PYTHONPATH=$PWD:$PYTHONPATH`
 
 4. Edit the `conf.yaml` file to speed up hutch python session loading. For example:
 
@@ -31,8 +30,10 @@ db: /reg/g/pcds/pyps/apps/hutch-python/device_config/db.json
 
 #experiment: lu5017
 ``` 
-5. Source the mfx environment: `source /cds/group/pcds/pyps/apps/hutch-python/mfx/mfxenv`  
-6. Launch a hutch python session with their edited configuration: `hutch-python --cfg conf.yaml` (or `conf.yml`)
+
+5. Source the mfx environment: `source /cds/group/pcds/pyps/apps/hutch-python/mfx/mfxenv`
+
+6. 6. Launch a hutch python session with their edited configuration: `hutch-python --cfg conf.yaml` (or `conf.yml`)
 
 ```python
 In [1]: from mfx.macros import FakeDetector
@@ -58,7 +59,7 @@ Accessing your home directory
 Alternatively, you can access `cds` home directory on `mfx-daq` or `mfx-monitor`
 
 Configure web proxy settings on a per-host basis.
-```bash
+```python
 # Tools like ``wget`` or ``curl`` will use the environment variable settings to
 # proxy requests through the host "psproxy.pcdsn".
 case $(hostname -s) in
