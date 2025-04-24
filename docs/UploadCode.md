@@ -12,7 +12,8 @@ These are the steps to test a branch while not affecting the main hutch python s
 
 	b. `git checkout -b <branch name>`
 
-3. Put local repo in python path: `export PYTHONPATH=$PWD:$PYTHONPATH`
+3. Put local repo in python path: `export PYTHONPATH=$PWD:$PYTHONPATH`  
+	a. verify path: `echo $PYTHONPATH` beginning should be `/cds/home/<u>/<username>/mfx:/cds/group/pcds/pyps/apps/hutch-python/mfx:/`
 
 4. Edit the `conf.yaml` file to speed up hutch python session loading. For example:
 
@@ -33,7 +34,7 @@ db: /reg/g/pcds/pyps/apps/hutch-python/device_config/db.json
 
 5. Source the mfx environment: `source /cds/group/pcds/pyps/apps/hutch-python/mfx/mfxenv`
 
-6. 6. Launch a hutch python session with their edited configuration: `hutch-python --cfg conf.yaml` (or `conf.yml`)
+6. Launch a hutch python session with their edited configuration: `hutch-python --cfg conf.yaml` (or `conf.yml`)
 
 ```python
 In [1]: from mfx.macros import FakeDetector
