@@ -1,6 +1,7 @@
 """
 Matplotlib plotting utilities for tracking the optimizer's decisions.
 """
+
 from typing import Optional
 
 import matplotlib.figure
@@ -36,7 +37,7 @@ def centroid_path_plot(
     ----------
     image : np.ndarray
         The actual image of the YAG as a background.
-    
+
     """
     fig = plt.figure(figure)
     plt.clf()
@@ -65,6 +66,7 @@ class UpdatingDeviceCentroidPathPlot:
     goal : tuple[float, float]
         The position we'd like the centroid to reach.
     """
+
     def __init__(self, imager: YagCamera, goal: tuple[float, float]):
         self.fig = None
         self.imager = imager
@@ -76,7 +78,7 @@ class UpdatingDeviceCentroidPathPlot:
         markers = []
         for num in range(4):
             try:
-                coord = getattr(self.imager.coords, f"marker{num+1}").get_coordinate()
+                coord = getattr(self.imager.coords, f"marker{num + 1}").get_coordinate()
             except RuntimeError:
                 continue
             markers.append(coord)
@@ -92,6 +94,18 @@ class UpdatingDeviceCentroidPathPlot:
             The point to add.
         """
         self.points.append(centroid)
+        self.refresh()
+
+    def add_points(self, centroids: list[tuple[float, float]]):
+        """
+        Add multiple centroids to the plot at once and re-render.
+
+        Parameters
+        ----------
+        centroids : list[tuple[float, float]]
+            The points to add.
+        """
+        self.points.extend(centroids)
         self.refresh()
 
     def refresh(self):
