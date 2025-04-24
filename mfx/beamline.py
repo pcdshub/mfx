@@ -122,7 +122,7 @@ with safe_load('DCCM'):
 
 with safe_load('Compact_Spectrometer'):
     from mfx.vonhamos import *
-    spec = SimpleDeterministicVH()
+    spec = DeterministicVonHamos6Crystal("MFX:SPEC", name="dvh")
 
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
