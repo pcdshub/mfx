@@ -11,6 +11,7 @@ from pcdsdevices.ipm import Wave8
 
 from .devices import FakeLCLSImagePlugin, FakeYagCamera, YagCamera
 
+
 HAPPI_NAMES = (
     "mr1l4_homs",
     "mfx_dg1_ipm",
@@ -183,4 +184,3 @@ def sim_devices() -> dict[str, Device]:
     print(f"default alignment on ip yag should pick {MIRROR_NOMINAL - ip_yag_offset}")
 
     return devices
-

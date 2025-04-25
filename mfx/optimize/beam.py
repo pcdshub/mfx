@@ -1,49 +1,14 @@
 import traceback
 import datetime
-from typing import Literal, Optional
+from typing import Optional
 import matplotlib.pyplot as plt
-from pydantic import validate_call, ConfigDict
+from pydantic import validate_call
 from bluesky import RunEngine
 from xopt import Xopt
-
-
-Diagnostics = Literal["xcs1", "dg1", "dg2"]
-Methods = Literal["xopt", "blop"]
-Devices = Literal["yag", "wave8"]
-Turbo = Literal["safety", "optimize"]
-
-
-def validate_w_lowercase_args(func):
-    """
-    Decorator to make string inputs lowercase, and then validate.
-
-    Parameters:
-    -----------
-    func (Callable): 
-        The function to decorate.
-
-    Returns:
-    --------
-    Callable: 
-        The decorated function with string arguments converted to lowercase.
-    """
-    def wrapper(*args, **kwargs):
-        # Convert all string arguments to lowercase
-        new_args = tuple(arg.lower() if isinstance(arg, str) else arg for arg in args)
-        new_kwargs = {k: v.lower() if isinstance(v, str) else v for k, v in kwargs.items()}
-
-        # Call the original function with the modified arguments, validated by Pydantic
-        validated_func = validate_call(func, config=ConfigDict(validate_default=True))
-        return validated_func(*new_args, **new_kwargs)
-
-    return wrapper
-
-class FeasibilityError(Exception):
-    """
-    A custom exception class to tell users when no Xopt sample points are feasible,
-    e.g. due to the constraints being too tight.
-    """
-    pass
+from .errors import FeasibilityError
+from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot, refresh_mpl_plots
+from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
+from .user_select import select_diagnostic, select_goal
 
 
 class Beam:
@@ -73,8 +38,8 @@ class Beam:
 
         Parameters
         ----------
-        with_goal : float or tuple[float, float], optional
-            Goal to align to. A float for regular optimization, a tuple for using 2D YAG optimization.
+        with_goal : float, optional
+            1D Goal to align to. This can be omitted if other goal arguments are used.
         on_diagnostic : str, optional
             Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
         with_method : str, optional
@@ -104,13 +69,25 @@ class Beam:
         if (using_device=="wave8" or not use_2d_markers) and not with_goal:
             raise ValueError("Must provide parameter with_goal (float) for running YAG or wave8 optimization.")
 
+        path_plot = None
         if with_method == "xopt":
             from .xopt_scans import get_xopt_obj, init_devices
             # Allow the loading of an already instantiated xopt object, e.g. to take more steps
             if xopt_obj:
+                print("Using existing Xopt object.")
                 xopt = xopt_obj
-                print("Loading Xopt object.")
+                try:
+                    old_path_plot = xopt._cached_path_plot
+                except AttributeError:
+                    ...
+                else:
+                    print("Generating new path plot from cached settings")
+                    path_plot = UpdatingDeviceCentroidPathPlot(
+                        imager=old_path_plot.imager,
+                        goal=old_path_plot.goal,
+                    )
             else:
+                print("Loading Xopt object.")
                 xopt = get_xopt_obj(
                     device_type=using_device,
                     location=on_diagnostic,
@@ -120,14 +97,38 @@ class Beam:
                     goal_2d=with_goal_2d
                 )
                 customized_boundaries = {"mirror_pitch": self.mirror_pitch}
+                if using_device == "yag":
+                    print("Generating path plot")
+                    path_plot = UpdatingDeviceCentroidPathPlot(
+                        imager=select_diagnostic("yag", on_diagnostic),
+                        goal=select_goal(
+                            device_type=using_device,
+                            location=on_diagnostic,
+                            goal=with_goal,
+                            goal_2d=with_goal_2d,
+                            use_2d_markers=use_2d_markers,
+                        ),
+                    )
+                    xopt._cached_path_plot = path_plot
                 xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
             print(xopt.data)
+            xopt_eval_plot = UpdatingXoptVisualizeModelPlot(xopt)
+
+            # Seed the path plot with all the random points
+            if path_plot is not None:
+                x_series = xopt.data.get("centroid_x")
+                y_series = xopt.data.get("centroid_y")
+                path_plot.add_points([(xpt, ypt) for xpt, ypt in zip(x_series, y_series)])
+
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
                 try:
                     xopt.step()
-                    xopt.generator.visualize_model(show_acquisition=False)
-                    plt.show()
+                    xopt_eval_plot.refresh()
+                    if path_plot is not None:
+                        path_plot.add_point(
+                            (xopt.data.get("centroid_x").iat[-1], xopt.data.get("centroid_y").iat[-1])
+                        )
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
@@ -175,7 +176,9 @@ class Beam:
             ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
             ax.set_ylabel("mirror pitch")
-            xopt.generator.visualize_model()
+            xopt_eval_plot.refresh()
+            if path_plot is not None:
+                path_plot.refresh()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent

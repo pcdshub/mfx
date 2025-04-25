@@ -16,7 +16,6 @@ from xopt.generators.bayesian import ExpectedImprovementGenerator
 from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit
 
-from .beam import Devices, Diagnostics, Turbo, validate_w_lowercase_args, FeasibilityError
 from .beamline_hw import (
     XCS_YAG_XPOS,
     DG1_WAVE8_XPOS,
@@ -30,9 +29,12 @@ from .beamline_hw import (
     YAG_CENTROID_X_MIN_MAX,
     YAG_CENTROID_Y_MIN_MAX,
     WAVE8_CENTROID_X_MIN_MAX,
-    WAVE8_CENTROID_Y_MIN_MAX
+    WAVE8_CENTROID_Y_MIN_MAX,
 )
+from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot
+from .type_checking import validate_w_lowercase_args, Devices, Diagnostics, Turbo
+from .user_select import select_diagnostic, select_goal
 
 
 def get_vocs(
@@ -97,7 +99,7 @@ def get_evaluator_wave8(
         print(f"Trying {input['mirror_pitch']}")
         devices = init_devices()
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
-        xpos_device = devices[f"mfx_{wave8}_wave8"].xpos
+        xpos_device = select_diagnostic("wave8", wave8).xpos
         xpos_device.trigger().wait(timeout=10)
         xpos = xpos_device.get()
         results = {}
@@ -108,13 +110,6 @@ def get_evaluator_wave8(
         return results
 
     return Evaluator(function=evaluate)
-
-
-def get_yag_key(yag: str):
-    if yag == 'xcs1':
-        return "xcs_yag1"
-    else:
-        return f"mfx_{yag}_yag"
 
 
 def get_evaluator_yag(
@@ -139,12 +134,12 @@ def get_evaluator_yag(
         print(f"Trying {input['mirror_pitch']}")
         devices = init_devices()
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
-        image_device = devices[get_yag_key(yag)].image1.shaped_image
+        image_device = select_diagnostic("yag", yag).image1.shaped_image
         image_device.trigger().wait(timeout=10)
         image = image_device.get()
         print(f"image shape: {image.shape}")
         # NOTE/TODO: consider adding an averaging step here before fitting
-        fit_result = fit.fit_image(image.T)
+        fit_result = fit.fit_image(image)
         results = {}
         results["centroid_x"] = fit_result.centroid[0]
         results["centroid_y"] = fit_result.centroid[1]
@@ -158,29 +153,18 @@ def get_evaluator_yag(
     return Evaluator(function=evaluate)
 
 
+@validate_w_lowercase_args
 def get_evaluator_yag_2d(
-    yag: str = "dg1",
-    goal: tuple[float, float] | None = None,
+    yag: Diagnostics,
+    goal: tuple[float, float],
 ) -> Evaluator:
     """
     Alternate evaluator in 2d space.
-
-    As a default, uses the automatic selection of goal position from the
-    user marker PVs.
     """
-    yag = yag.lower()
-    if yag not in ("xcs1", "dg1", "dg2", "ip"):
-        raise ValueError("Can only use xcs1, dg1, dg2, ip yags.")
     devices = init_devices()
-    imager = devices[get_yag_key(yag)]
+    imager = select_diagnostic("yag", yag)
     image_device = imager.image1.shaped_image
     mirror = devices["mr1l4_homs"]
-
-    if goal is None:
-        goal = imager.coords.standard_two_corners_target()
-        print(f"Goal is {goal} from camviewer markers")
-    else:
-        print(f"Goal is {goal} from function input")
 
     fit = ImageProjectionFit()
 
@@ -273,12 +257,15 @@ def get_xopt_obj(
     goal_2d: tuple[float, float] or None, optional
         The 2D optimization goal if running a 2D YAG optimization
     """
-    if (device_type=="wave8" or not use_2d_markers) and not goal:
-        raise ValueError("Must provide a goal (float) for running YAG or wave8 optimization.")
+    goal_value = select_goal(
+        device_type=device_type,
+        location=location,
+        goal=goal,
+        goal_2d=goal_2d,
+        use_2d_markers=use_2d_markers,
+    )
 
     if device_type == "wave8":
-        if location == "ip":
-            raise ValueError("There is no wave8 at the ip.")
         if any(v is not None for v in (yag_size_min, yag_size_max, yag_intensity_min, yag_intensity_max)):
             raise ValueError(
                 "Arguments yag_size_min, yag_size_max, yag_intensity_min, and yag_intensity_max "
@@ -320,20 +307,20 @@ def get_xopt_obj(
     )
     print(vocs)
     if device_type == "yag":
-        if use_2d_markers:
+        if isinstance(goal_value, tuple):
             evaluator = get_evaluator_yag_2d(
                 yag=location,
-                goal=goal_2d,
+                goal=goal_value,
             )
         else:
             evaluator = get_evaluator_yag(
                 yag=location,
-                goal=goal,
+                goal=goal_value,
             )
     else:
         evaluator = get_evaluator_wave8(
             wave8=location,
-            wave8_xpos=goal,
+            wave8_xpos=goal_value,
         )
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
@@ -421,7 +408,7 @@ def run_sim_test_yag() -> Xopt:
     print(f"pitch is at {mirror_pitch.position}")
     print("Generating plots")
     xopt.data.plot(y=xopt.vocs.objective_names)
-    imager = init_devices()["mfx_dg1_yag"]
+    imager = select_diagnostic("yag", "dg1")
     imager.image1.shaped_image.trigger()
     fit = ImageProjectionFit()
     fit_result = fit.fit_image(imager.image1.shaped_image.get())
@@ -440,10 +427,14 @@ def run_sim_test_yag_2d() -> Xopt:
     print("Randomly evaluate 3 points")
     xopt.random_evaluate(3)
     print("Step xopt object 10 times")
-    imager = init_devices()["mfx_dg1_yag"]
+    imager = select_diagnostic("yag", "dg1")
     path_plot = UpdatingDeviceCentroidPathPlot(
         imager=imager,
-        goal=imager.coords.standard_two_corners_target(),
+        goal=select_goal(
+            device_type="yag",
+            location="dg1",
+            use_2d_markers=True,
+        ),
     )
     imager.image1.shaped_image.trigger()
     path_plot.add_point(imager.image1.get_centroid())
