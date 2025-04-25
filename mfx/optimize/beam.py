@@ -6,7 +6,7 @@ from pydantic import validate_call
 from bluesky import RunEngine
 from xopt import Xopt
 from .errors import FeasibilityError
-from .plots import UpdatingDeviceCentroidPathPlot, refresh_mpl_plots
+from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot, refresh_mpl_plots
 from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
 from .user_select import select_diagnostic, select_goal
 
@@ -112,24 +112,23 @@ class Beam:
                     xopt._cached_path_plot = path_plot
                 xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
             print(xopt.data)
+            xopt_eval_plot = UpdatingXoptVisualizeModelPlot(xopt)
 
             # Seed the path plot with all the random points
             if path_plot is not None:
                 x_series = xopt.data.get("centroid_x")
                 y_series = xopt.data.get("centroid_y")
                 path_plot.add_points([(xpt, ypt) for xpt, ypt in zip(x_series, y_series)])
-                refresh_mpl_plots()
 
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
                 try:
                     xopt.step()
-                    xopt.generator.visualize_model(show_acquisition=False)
+                    xopt_eval_plot.refresh()
                     if path_plot is not None:
                         path_plot.add_point(
                             (xopt.data.get("centroid_x").iat[-1], xopt.data.get("centroid_y").iat[-1])
                         )
-                    refresh_mpl_plots()
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
@@ -177,10 +176,9 @@ class Beam:
             ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
             ax.set_ylabel("mirror pitch")
-            xopt.generator.visualize_model()
+            xopt_eval_plot.refresh()
             if path_plot is not None:
-                path_plot.update_plot()
-            refresh_mpl_plots()
+                path_plot.refresh()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent

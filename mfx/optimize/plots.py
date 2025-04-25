@@ -2,11 +2,14 @@
 Matplotlib plotting utilities for tracking the optimizer's decisions.
 """
 
-from typing import Optional
+from typing import Optional, Union
 
+import matplotlib.axes
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
+
+from xopt import Xopt
 
 from .devices import YagCamera
 
@@ -15,7 +18,7 @@ def refresh_mpl_plots():
     """
     Call the required magic incantations to:
     - Show all open figures that haven't been shown yet
-    - Make every figure do a draw update right away.
+    - Make the active figure update in place right away
 
     Do this outside of the plotting logic so we can
     decide when to draw updates and when not to.
@@ -29,7 +32,7 @@ def refresh_mpl_plots():
 
 def centroid_path_plot(
     image: np.ndarray,
-    goal: tuple[float, float],
+    goal: Union[float, tuple[float, float]],
     markers: list[tuple[float, float]],
     centroids: list[tuple[float, float]],
     figure: Optional[matplotlib.figure.Figure] = None,
@@ -39,7 +42,7 @@ def centroid_path_plot(
 
     The will include:
     - The YAG image in the background
-    - The goal as a red x
+    - The goal as a red x (or a vertical line)
     - The measured centroids as white dots
     - The camviewer markers as green + marks
 
@@ -56,7 +59,14 @@ def centroid_path_plot(
     ----------
     image : np.ndarray
         The actual image of the YAG as a background.
-
+    goal : float or tuple of floats
+        The 1d goal (x) or 2d goal (x, y)
+    markers : list of tuples of floats
+        The locations of the markers to plot
+    centroids : list of tuples of floats
+        The locations of the centroids to plot
+    figure : Figure, optional
+        A figure to re-use (instead of making a new figure).
     """
     fig = plt.figure(figure)
     plt.clf()
@@ -65,7 +75,11 @@ def centroid_path_plot(
         plt.plot(*pt, marker=".", color="white")
     for mk in markers:
         plt.plot(*mk, marker="+", color="lime")
-    plt.plot(*goal, marker="x", color="red")
+    if isinstance(goal, float):
+        plt.axvline(goal, color="red")
+    else:
+        plt.plot(*goal, marker="x", color="red")
+
     return fig
 
 
@@ -111,7 +125,7 @@ class UpdatingDeviceCentroidPathPlot:
             The point to add.
         """
         self.points.append(centroid)
-        self.update_plot()
+        self.refresh()
 
     def add_points(self, centroids: list[tuple[float, float]]):
         """
@@ -123,14 +137,11 @@ class UpdatingDeviceCentroidPathPlot:
             The points to add.
         """
         self.points.extend(centroids)
-        self.update_plot()
+        self.refresh()
 
-    def update_plot(self):
+    def refresh(self):
         """
         Update plots without adding any points, e.g. to update the YAG image.
-
-        Note: you still need to call refresh_mpl_plots or self.refresh to
-        display the updated image.
         """
         self.fig = centroid_path_plot(
             image=self.imager.image1.image,
@@ -139,10 +150,29 @@ class UpdatingDeviceCentroidPathPlot:
             centroids=self.points,
             figure=self.fig,
         )
+        refresh_mpl_plots()
+
+
+class UpdatingXoptVisualizeModelPlot:
+    """
+    Helpers for updating XOpt model plots in place.
+    """
+
+    def __init__(self, xopt: Xopt):
+        self.xopt = xopt
+        self.fig: Optional[matplotlib.figure.Figure] = None
+        self.axes: Optional[list[matplotlib.axes.Axes]] = None
 
     def refresh(self):
         """
-        Convenience helper if this is the only updating plot you have.
+        Re-render the new plot in place.
         """
-        self._plot_updates()
+        if self.axes is not None:
+            for ax in self.axes:
+                ax.clear()
+        self.fig, self.axes = self.xopt.generator.visualize_model(
+            show_acquisition=False,
+            axes=self.axes
+        )
+        plt.figure(self.fig)
         refresh_mpl_plots()

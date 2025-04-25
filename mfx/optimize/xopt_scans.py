@@ -139,7 +139,7 @@ def get_evaluator_yag(
         image = image_device.get()
         print(f"image shape: {image.shape}")
         # NOTE/TODO: consider adding an averaging step here before fitting
-        fit_result = fit.fit_image(image.T)
+        fit_result = fit.fit_image(image)
         results = {}
         results["centroid_x"] = fit_result.centroid[0]
         results["centroid_y"] = fit_result.centroid[1]

@@ -4,6 +4,7 @@ Type checking utilities for use in other submodules.
 Keep this separate to avoid circular imports.
 """
 
+import functools
 from typing import Literal
 
 from pydantic import ConfigDict, validate_call
@@ -28,7 +29,7 @@ def validate_w_lowercase_args(func):
     Callable:
         The decorated function with string arguments converted to lowercase.
     """
-
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Convert all string arguments to lowercase
         new_args = tuple(arg.lower() if isinstance(arg, str) else arg for arg in args)
