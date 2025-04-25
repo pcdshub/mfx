@@ -449,13 +449,11 @@ def run_sim_test_yag_2d() -> Xopt:
     )
     imager.image1.shaped_image.trigger()
     path_plot.add_point(imager.image1.get_centroid())
-    path_plot.refresh()
     for num in range(10):
         print(f"Step {num + 1}")
         xopt.step()
         imager.image1.shaped_image.trigger()
         path_plot.add_point(imager.image1.get_centroid())
-        path_plot.refresh()
     print("Get best point")
     try:
         _, val, params = xopt.vocs.select_best(xopt.data)

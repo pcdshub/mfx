@@ -20,11 +20,8 @@ def refresh_mpl_plots():
     - Show all open figures that haven't been shown yet
     - Make the active figure update in place right away
 
-    Do this outside of the plotting logic so we can
-    decide when to draw updates and when not to.
-
-    For example, you can do this once to update all
-    four of your plots.
+    To make something the "active figure", you simply
+    need to call plt.figure(figure) on it.
     """
     plt.show(block=False)
     plt.pause(0.01)
