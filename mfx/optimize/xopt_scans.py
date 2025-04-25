@@ -153,29 +153,18 @@ def get_evaluator_yag(
     return Evaluator(function=evaluate)
 
 
+@validate_w_lowercase_args
 def get_evaluator_yag_2d(
-    yag: str = "dg1",
-    goal: tuple[float, float] | None = None,
+    yag: Diagnostics,
+    goal: tuple[float, float],
 ) -> Evaluator:
     """
     Alternate evaluator in 2d space.
-
-    As a default, uses the automatic selection of goal position from the
-    user marker PVs.
     """
-    yag = yag.lower()
-    if yag not in ("xcs1", "dg1", "dg2", "ip"):
-        raise ValueError("Can only use xcs1, dg1, dg2, ip yags.")
     devices = init_devices()
     imager = select_diagnostic("yag", yag)
     image_device = imager.image1.shaped_image
     mirror = devices["mr1l4_homs"]
-
-    if goal is None:
-        goal = imager.coords.standard_two_corners_target()
-        print(f"Goal is {goal} from camviewer markers")
-    else:
-        print(f"Goal is {goal} from function input")
 
     fit = ImageProjectionFit()
 
