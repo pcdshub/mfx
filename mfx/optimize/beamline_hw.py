@@ -8,6 +8,7 @@ from happi import Client
 from ophyd.device import Device
 from ophyd.sim import SynAxis, SynSignal
 from pcdsdevices.ipm import Wave8
+from pcdsdevices.signal import AvgSignal
 
 from .devices import FakeLCLSImagePlugin, FakeYagCamera, YagCamera
 
@@ -56,6 +57,12 @@ def init_devices(force: bool = False) -> dict[str, Device]:
         name = f"mfx_{stand}_wave8"
         devices[name] = Wave8(f"MFX:{stand.upper()}:BMMON", name=name)
         devices[name].kind = "hinted"
+        
+        # a bit of a hack but should work...
+        x_avg = AvgSignal(devices[name].xpos,120,2,name=stand+'_xavg')
+        y_avg = AvgSignal(devices[name].ypos,120,2,name=stand+'_yavg')
+        devices[name].xpos_avg = x_avg
+        devices[name].ypos_avg = y_avg
 
     # Happi PIMs don't work how I want them to, add manually
     for stand in ("dg1", "dg2"):
