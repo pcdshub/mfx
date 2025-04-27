@@ -16,6 +16,7 @@ HAPPI_NAMES = (
     "mr1l4_homs",
     "mfx_dg1_ipm",
     "mfx_dg2_ipm",
+    "mfx_von_hamos_6crystal",
 )
 # Default constants so I can re-use them
 # Default starting point for searches

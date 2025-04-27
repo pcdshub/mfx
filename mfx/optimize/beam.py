@@ -207,9 +207,7 @@ class Beam:
             mirror_pitch_start = None,
             mirror_pitch_end = None,
             num_steps: int = 51,
-            sequencer_fps: int = 120,
-            num_events_per_step: int = 120,
-            record: bool = True
+            sequencer_fps: int = 120
             ):
         """Perform Beam Scan
 
@@ -266,6 +264,73 @@ class Beam:
                 init_devices()["mr1l4_homs"].pitch,
                 mirror_pitch_start,
                 mirror_pitch_end,
+                num_steps
+            )
+        )
+
+class Crystal:
+    @validate_call
+    def __init__(self, name: str = "c1", dof: str = "x"):
+        self.crystal_name_list = ["c1","c2","c3","c4","c5","c6"]
+        self.crystal_dof_list = ["x", "rot", "tilt"]
+
+        self.name = None
+        if name in self.crystal_name_list:
+            self.name: str = name
+
+        self.dof = None
+        if dof in self.crystal_dof_list:
+            self.dof: str = dof
+
+        if self.dof == "x":
+            self.boundaries: list[float] = [0., 78.]
+        elif self.dof == "rot":
+            self.boundaries: list[float] = [10., 30.]
+        elif self.dof == "tilt":
+            self.boundaries: list[float] = [10., 30.]
+
+
+    @validate_w_lowercase_args
+    def scan(
+            self,
+            scan_start=self.boundaries[0],
+            scan_end=self.boundaries[1],
+            num_steps: int = 51
+    ):
+        """Perform Crystal Scan
+
+        Parameters
+        ----------
+        scan_start : int, optional
+            Starting mirror pitch for scan. Default is mirror_pitch[0].
+        scan_end : int, optional
+            Final mirror pitch for scan. Default is mirror_pitch[1]/
+        num_steps : int, optional
+            Number of steps in scan. Default is 51.
+        """
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
+
+        try:
+            import bluesky.plans as bp
+        except ImportError:
+            print("could not import bp")
+
+        try:
+            from mfx.db import daq
+        except ImportError:
+            print("> access to the daq is required to scan the beam.")
+
+        from .xopt_scans import init_devices
+
+        RE(
+            bp.scan(
+                [daq],
+                getattr(getattr(init_devices()["mfx_von_hamos_6crystal"],self.name),self.dof),
+                scan_start,
+                scan_end,
                 num_steps
             )
         )
