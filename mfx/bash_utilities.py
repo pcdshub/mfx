@@ -75,7 +75,7 @@ class bs:
             logging.error("Please select daq 1 or 2")
 
 
-    def makepeds(self, username, run_number=None, onshift=False, daq=2, det=None):
+    def makepeds(self, username, run_number=None, onshift=False, daq=2, det='all'):
         import os
         import logging
         from mfx.db import daq
