@@ -19,7 +19,7 @@ HAPPI_NAMES = (
 )
 # Default constants so I can re-use them
 # Default starting point for searches
-MIRROR_NOMINAL = -548
+MIRROR_NOMINAL = -544 #-548
 # Used for sim devices and as default goal positions
 DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41

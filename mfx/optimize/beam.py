@@ -238,6 +238,11 @@ class Beam:
             RE = RunEngine({})
 
         try:
+            import bluesky.plans as bp
+        except ImportError:
+            print("could not import bp")
+
+        try:
             from mfx.db import daq
         except ImportError:
             print("> access to the daq is required to scan the beam.")

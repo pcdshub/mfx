@@ -195,7 +195,7 @@ def get_xopt_obj(
     device_type: Devices,
     location: Diagnostics,
     mirror_nominal: float = MIRROR_NOMINAL,
-    search_delta: float = 5,
+    search_delta: float = 2,
     goal: Optional[float] = None,
     wave8_max_value: Optional[float] = None,
     yag_size_min: Optional[float]  = None,
