@@ -100,7 +100,7 @@ def get_evaluator_wave8(
         print(f"Trying {input['mirror_pitch']}")
         devices = init_devices()
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
-        xpos_device = select_diagnostic("wave8", wave8).xpos
+        xpos_device = select_diagnostic("wave8", wave8).xpos_avg
         xpos_device.trigger().wait(timeout=10)
         xpos = xpos_device.get()
         results = {}
