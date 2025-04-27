@@ -227,10 +227,6 @@ class Beam:
             Number of steps in scan. Default is 51.
         sequencer_fps : int, optional
             Sequencer rate in fps. Default is 120.
-        num_events_per_step : int, optional
-            Number of events to record per step. Default is 120.
-        record : bool, optional
-            Whether to record or not. Default is True.
         """
         try:
             from mfx.db import RE
@@ -270,8 +266,6 @@ class Beam:
                 init_devices()["mr1l4_homs"].pitch,
                 mirror_pitch_start,
                 mirror_pitch_end,
-                num_steps,
-                events=num_events_per_step,
-                record=record
+                num_steps
             )
         )
