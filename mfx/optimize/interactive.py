@@ -50,7 +50,7 @@ def get_objects(sim: bool = False):
     from mfx.optimize.beam import Beam
     from mfx.optimize.beamline_hw import init_devices, sim_devices
     from mfx.optimize.blop_scans import get_blop_agent
-    from mfx.optimize.xopt_scans import get_xopt_obj, get_xopt_obj_2d_markers
+    from mfx.optimize.xopt_scans import get_xopt_obj
 
     if sim:
         print("Creating sim device objects...")
@@ -65,7 +65,6 @@ def get_objects(sim: bool = False):
         "beam": Beam(),
         "get_blop_agent": get_blop_agent,
         "get_xopt_obj": get_xopt_obj,
-        "get_xopt_obj_2d_markers": get_xopt_obj_2d_markers,
     }
     print(f"Available optimizers are {list(optimizers)}")
 
@@ -76,17 +75,27 @@ def get_objects(sim: bool = False):
 def misc_setup(autoreload: bool = False):
     """
     Other setup actions that don't create objects
+
+    This wraps imports, etc. to avoid polluting the global namespace.
     """
+    from IPython import get_ipython
+    ip = get_ipython()
+
     if autoreload:
         print("Enabling autoreload...")
-        from IPython import get_ipython
-        ip = get_ipython()
         if ip is None:
             raise RuntimeError("Not in an IPython shell, can't setup autoreload!")
+
+        import pkgutil
+        from pathlib import Path
+
         ip.run_line_magic("load_ext", "autoreload")
         ip.run_line_magic("autoreload", "1")
-        line = [f"mfx.optimize.{imp}" for imp in ("beam", "beamline_hw", "blop_scans", "devices", "xopt_scans")]
+        line = [f"mfx.optimize.{info.name}" for info in pkgutil.iter_modules([Path(__file__).parent]) if info.name != "interactive"]
         ip.run_line_magic("aimport", ",".join(line))
+
+    if ip is not None:
+        ip.run_line_magic("matplotlib", "qt")
 
 
 if __name__ == "__main__":

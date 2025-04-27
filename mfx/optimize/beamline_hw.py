@@ -11,6 +11,7 @@ from pcdsdevices.ipm import Wave8
 
 from .devices import FakeLCLSImagePlugin, FakeYagCamera, YagCamera
 
+
 HAPPI_NAMES = (
     "mr1l4_homs",
     "mfx_dg1_ipm",
@@ -19,7 +20,7 @@ HAPPI_NAMES = (
 )
 # Default constants so I can re-use them
 # Default starting point for searches
-MIRROR_NOMINAL = -548
+MIRROR_NOMINAL = -544 #-548
 # Used for sim devices and as default goal positions
 DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41
@@ -120,7 +121,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(1388, 1038),
             centroid=((pitch - MIRROR_NOMINAL) * 60 + DG1_YAG_XPOS + dg1_yag_offset + random.uniform(-6, 6), 519 + random.uniform(-3, 3)),
-            fwhm=30,
+            fwhm=100,
             peak=255,
         )
 
@@ -129,7 +130,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(1388, 1038),
             centroid=((pitch - MIRROR_NOMINAL) * 80 + DG2_YAG_XPOS + dg2_yag_offset + random.uniform(-8, 8), 519 + random.uniform(-5, 5)),
-            fwhm=50,
+            fwhm=150,
             peak=255,
         )
 
@@ -138,7 +139,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(728, 544),
             centroid=((pitch - MIRROR_NOMINAL) * 70 + XCS_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7), 274 + random.uniform(-7, 7)),
-            fwhm=70,
+            fwhm=200,
             peak=255,
         )
 
@@ -147,7 +148,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(688, 538),
             centroid=((pitch - MIRROR_NOMINAL) * 70 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7), 269 + random.uniform(-7, 7)),
-            fwhm=70,
+            fwhm=200,
             peak=255,
         )
 
@@ -158,10 +159,10 @@ def sim_devices() -> dict[str, Device]:
 
     # Aim vaguely toward 300, 300 for the 2d camviewer marker test
     for name in ("mfx_dg1_yag", "mfx_dg2_yag", "xcs_yag1", "mfx_ip_yag"):
-        devices[name].coords.marker1.xpos.put(100)
-        devices[name].coords.marker1.ypos.put(100)
-        devices[name].coords.marker2.xpos.put(500)
-        devices[name].coords.marker2.ypos.put(950)
+        devices[name].coords.marker1.xpos.put(200)
+        devices[name].coords.marker1.ypos.put(425)
+        devices[name].coords.marker2.xpos.put(400)
+        devices[name].coords.marker2.ypos.put(625)
 
     devices["mfx_dg1_wave8"].kind = "hinted"
     devices["mfx_dg2_wave8"].kind = "hinted"
@@ -184,4 +185,3 @@ def sim_devices() -> dict[str, Device]:
     print(f"default alignment on ip yag should pick {MIRROR_NOMINAL - ip_yag_offset}")
 
     return devices
-

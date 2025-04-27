@@ -1,48 +1,14 @@
 import traceback
-from typing import Literal
+import datetime
+from typing import Optional
 import matplotlib.pyplot as plt
-from pydantic import validate_call, ConfigDict
+from pydantic import validate_call
 from bluesky import RunEngine
-from mfx.db import daq
-
-
-Diagnostics = Literal["xcs1", "dg1", "dg2"]
-Methods = Literal["xopt", "blop"]
-Devices = Literal["yag", "wave8"]
-Turbo = Literal["safety", "optimize"]
-
-
-def validate_w_lowercase_args(func):
-    """
-    Decorator to make string inputs lowercase, and then validate.
-
-    Parameters:
-    -----------
-    func (Callable): 
-        The function to decorate.
-
-    Returns:
-    --------
-    Callable: 
-        The decorated function with string arguments converted to lowercase.
-    """
-    def wrapper(*args, **kwargs):
-        # Convert all string arguments to lowercase
-        new_args = tuple(arg.lower() if isinstance(arg, str) else arg for arg in args)
-        new_kwargs = {k: v.lower() if isinstance(v, str) else v for k, v in kwargs.items()}
-
-        # Call the original function with the modified arguments, validated by Pydantic
-        validated_func = validate_call(func, config=ConfigDict(validate_default=True))
-        return validated_func(*new_args, **new_kwargs)
-
-    return wrapper
-
-class FeasibilityError(Exception):
-    """
-    A custom exception class to tell users when no Xopt sample points are feasible,
-    e.g. due to the constraints being too tight.
-    """
-    pass
+from xopt import Xopt
+from .errors import FeasibilityError
+from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot, refresh_mpl_plots
+from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
+from .user_select import select_diagnostic, select_goal
 
 
 class Beam:
@@ -53,23 +19,28 @@ class Beam:
     @validate_w_lowercase_args
     def align(
             self,
-            with_goal: float,
+            with_goal: Optional[float] = None,
             on_diagnostic: Diagnostics = "dg1",
             with_method: Methods = "xopt",
             using_device: Devices = "yag",
             xopt_turbo_option: Turbo = "safety",
             xopt_rand_evaluate: int = 3,
             xopt_steps: int = 10,
+            xopt_max_iter: int = 2000,
             blop_qr_n: int = 16,
             blop_qei_n: int = 16,
-            blop_qei_iterations: int = 5
+            blop_qei_iterations: int = 5,
+            use_2d_markers: bool = False,
+            with_goal_2d: Optional[tuple[float, float]] = None,
+            xopt_obj: Optional[Xopt] = None,
+            save_run: bool = True
             ):
         """Perform Beam Alignment
 
         Parameters
         ----------
-        with_goal : float
-            Goal to align to.
+        with_goal : float, optional
+            1D Goal to align to. This can be omitted if other goal arguments are used.
         on_diagnostic : str, optional
             Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
         with_method : str, optional
@@ -82,30 +53,86 @@ class Beam:
             Number of random evaluations to perform in Xopt. Default is 3.
         xopt_steps : int, optional
             Number of steps to perform in Xopt. Default is 10.
+        xopt_max_iter: int, optional
+            Max number of steps for maximizing the acquisition function in Xopt. Default is 2000.
         blop_qr_n : int, optional
             Number of qr iterations to perform in blop. Default is 16.
         blop_qei_n : int, optional
             Number of qei iterations to perform in blop. Default is 16.
         blop_qei_iterations : int, optional
             Number of iterations to perform in blop. Default is 5.
+        use_2d_markers: bool, optional
+            Run a 2D YAG optimization using camera markers. Default is False.
+        with_goal_2d: tuple(float, float), optional
+            The 2D optimization goal if running a 2D YAG optimization. Default is False.
+        save_run: bool, optional
+            Save the Xopt run to YAML. Default is True.
         """
+        # Validate goal with not doing 2d optimization using camera markers
+        if (using_device=="wave8" or not use_2d_markers) and not with_goal:
+            raise ValueError("Must provide parameter with_goal (float) for running YAG or wave8 optimization.")
+
+        path_plot = None
         if with_method == "xopt":
             from .xopt_scans import get_xopt_obj, init_devices
-            xopt = get_xopt_obj(
-                device_type=using_device,
-                location=on_diagnostic,
-                goal=with_goal,
-                xopt_generator_turbo_controller=xopt_turbo_option,
-            )
-            customized_boundaries = {"mirror_pitch": self.mirror_pitch}
-            xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
+            # Allow the loading of an already instantiated xopt object, e.g. to take more steps
+            if xopt_obj:
+                print("Using existing Xopt object.")
+                xopt = xopt_obj
+                try:
+                    old_path_plot = xopt._cached_path_plot
+                except AttributeError:
+                    ...
+                else:
+                    print("Generating new path plot from cached settings")
+                    path_plot = UpdatingDeviceCentroidPathPlot(
+                        imager=old_path_plot.imager,
+                        goal=old_path_plot.goal,
+                    )
+            else:
+                print("Loading Xopt object.")
+                xopt = get_xopt_obj(
+                    device_type=using_device,
+                    location=on_diagnostic,
+                    goal=with_goal,
+                    xopt_generator_turbo_controller=xopt_turbo_option,
+                    use_2d_markers=use_2d_markers,
+                    goal_2d=with_goal_2d,
+                    max_iter=xopt_max_iter
+                )
+                customized_boundaries = {"mirror_pitch": self.mirror_pitch}
+                if using_device == "yag":
+                    print("Generating path plot")
+                    path_plot = UpdatingDeviceCentroidPathPlot(
+                        imager=select_diagnostic("yag", on_diagnostic),
+                        goal=select_goal(
+                            device_type=using_device,
+                            location=on_diagnostic,
+                            goal=with_goal,
+                            goal_2d=with_goal_2d,
+                            use_2d_markers=use_2d_markers,
+                        ),
+                    )
+                    xopt._cached_path_plot = path_plot
+                xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
             print(xopt.data)
+            xopt_eval_plot = UpdatingXoptVisualizeModelPlot(xopt)
+
+            # Seed the path plot with all the random points
+            if path_plot is not None:
+                x_series = xopt.data.get("centroid_x")
+                y_series = xopt.data.get("centroid_y")
+                path_plot.add_points([(xpt, ypt) for xpt, ypt in zip(x_series, y_series)])
+
             for num in range(xopt_steps):
                 print(f"Step {num + 1}")
                 try:
                     xopt.step()
-                    xopt.generator.visualize_model(show_acquisition=False)
-                    plt.show()
+                    xopt_eval_plot.refresh()
+                    if path_plot is not None:
+                        path_plot.add_point(
+                            (xopt.data.get("centroid_x").iat[-1], xopt.data.get("centroid_y").iat[-1])
+                        )
                 except RuntimeError:
                     trb = traceback.format_exc()
                     if "turbo requires at least one valid point in the training dataset" in str(trb):
@@ -145,10 +172,17 @@ class Beam:
             mirror_pitch = init_devices()["mr1l4_homs"].pitch
             mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
             print(f"pitch is at {mirror_pitch.position}")
+            if save_run:
+                now = datetime.datetime.now()
+                formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
+                filename  = f"xopt_run_{on_diagnostic}_{using_device}_{formatted_string}.yaml"
+                xopt.dump(filename)
             ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
             ax.set_ylabel("mirror pitch")
-            xopt.generator.visualize_model()
+            xopt_eval_plot.refresh()
+            if path_plot is not None:
+                path_plot.refresh()
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent
@@ -170,8 +204,8 @@ class Beam:
             self,
             on_diagnostic: Diagnostics = "dg1",
             using_device: Devices = "yag",
-            mirror_pitch_start = self.mirror_pitch[0],
-            mirror_pitch_end = self.mirror_pitch[1],
+            mirror_pitch_start = None,
+            mirror_pitch_end = None,
             num_steps: int = 51,
             sequencer_fps: int = 120,
             num_events_per_step: int = 120,
@@ -193,10 +227,6 @@ class Beam:
             Number of steps in scan. Default is 51.
         sequencer_fps : int, optional
             Sequencer rate in fps. Default is 120.
-        num_events_per_step : int, optional
-            Number of events to record per step. Default is 120.
-        record : bool, optional
-            Whether to record or not. Default is True.
         """
         try:
             from mfx.db import RE
@@ -204,11 +234,21 @@ class Beam:
             RE = RunEngine({})
 
         try:
+            import bluesky.plans as bp
+        except ImportError:
+            print("could not import bp")
+
+        try:
             from mfx.db import daq
         except ImportError:
             print("> access to the daq is required to scan the beam.")
 
         from .xopt_scans import init_devices
+
+        if mirror_pitch_start is None:
+            mirror_pitch_start = self.mirror_pitch[0]
+        if mirror_pitch_end is None:
+            mirror_pitch_end = self.mirror_pitch[1]
 
         if using_device == "yag":
             from mfx.autorun import ioc_cam_recorder
@@ -226,9 +266,7 @@ class Beam:
                 init_devices()["mr1l4_homs"].pitch,
                 mirror_pitch_start,
                 mirror_pitch_end,
-                num_steps,
-                events=num_events_per_step,
-                record=record
+                num_steps
             )
         )
 
