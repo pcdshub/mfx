@@ -307,10 +307,6 @@ class Crystal:
             Final mirror pitch for scan. Default is mirror_pitch[1]/
         num_steps : int, optional
             Number of steps in scan. Default is 51.
-        num_events_per_step : int, optional
-            Number of events to record per step. Default is 120.
-        record : bool, optional
-            Whether to record or not. Default is True.
         """
         try:
             from mfx.db import RE
