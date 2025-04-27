@@ -116,13 +116,23 @@ class bs:
             logging.error("Please select daq 1 or 2")
 
 
-    def restartdaq(self):
+    def restartdaq(self, daq=2):
         import subprocess
         import logging
         logging.info("Restarting the DAQ")
-        subprocess.Popen(
-            ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
-            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        if daq == 1:
+            subprocess.Popen(
+                ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
+                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        elif daq ==2:
+            subprocess.Popen(
+                ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq"],
+                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        else:
+            logging.error("Please select daq 1 or 2")
+
 
 
     def lecroy(self, res='2560x1440'):
