@@ -207,9 +207,7 @@ class Beam:
             mirror_pitch_start = None,
             mirror_pitch_end = None,
             num_steps: int = 51,
-            sequencer_fps: int = 120,
-            num_events_per_step: int = 120,
-            record: bool = True
+            sequencer_fps: int = 120
             ):
         """Perform Beam Scan
 
@@ -297,9 +295,7 @@ class Crystal:
             self,
             scan_start=self.boundaries[0],
             scan_end=self.boundaries[1],
-            num_steps: int = 51,
-            num_events_per_step: int = 120,
-            record: bool = True
+            num_steps: int = 51
     ):
         """Perform Crystal Scan
 
@@ -322,6 +318,11 @@ class Crystal:
             RE = RunEngine({})
 
         try:
+            import bluesky.plans as bp
+        except ImportError:
+            print("could not import bp")
+
+        try:
             from mfx.db import daq
         except ImportError:
             print("> access to the daq is required to scan the beam.")
@@ -334,8 +335,6 @@ class Crystal:
                 getattr(getattr(init_devices()["mfx_von_hamos_6crystal"],self.name),self.dof),
                 scan_start,
                 scan_end,
-                num_steps,
-                events=num_events_per_step,
-                record=record
+                num_steps
             )
         )
