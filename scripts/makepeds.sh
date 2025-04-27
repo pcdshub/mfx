@@ -17,13 +17,20 @@ case $daq in
 
     jungfrau)
         echo making jungfrau
-        jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
-        jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
+        ssh -Y psana jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
+        ssh -Y psana jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
         ;;
 
     epix)
         echo making epix
-        det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
+        ssh -Y psana det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
+        ;;
+
+    all)
+        echo making jungfrau
+        ssh -Y psana jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
+        ssh -Y psana jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
+        ssh -Y psana det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
         ;;
     esac
     ;;
