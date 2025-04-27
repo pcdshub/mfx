@@ -26,6 +26,7 @@ class Beam:
             xopt_turbo_option: Turbo = "safety",
             xopt_rand_evaluate: int = 3,
             xopt_steps: int = 10,
+            xopt_max_iter: int = 2000,
             blop_qr_n: int = 16,
             blop_qei_n: int = 16,
             blop_qei_iterations: int = 5,
@@ -52,6 +53,8 @@ class Beam:
             Number of random evaluations to perform in Xopt. Default is 3.
         xopt_steps : int, optional
             Number of steps to perform in Xopt. Default is 10.
+        xopt_max_iter: int, optional
+            Max number of steps for maximizing the acquisition function in Xopt. Default is 2000.
         blop_qr_n : int, optional
             Number of qr iterations to perform in blop. Default is 16.
         blop_qei_n : int, optional
@@ -94,7 +97,8 @@ class Beam:
                     goal=with_goal,
                     xopt_generator_turbo_controller=xopt_turbo_option,
                     use_2d_markers=use_2d_markers,
-                    goal_2d=with_goal_2d
+                    goal_2d=with_goal_2d,
+                    max_iter=xopt_max_iter
                 )
                 customized_boundaries = {"mirror_pitch": self.mirror_pitch}
                 if using_device == "yag":

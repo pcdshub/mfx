@@ -4,6 +4,7 @@ To test with sim, ipython -i mfx/optimize/xopt_scans.py for an interactive test
 Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
+from typing import Optional
 
 from typing import Optional
 
@@ -40,11 +41,11 @@ from .user_select import select_diagnostic, select_goal
 def get_vocs(
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    wave8_max_value: float | None = None,
-    yag_size_min: float | None = None,
-    yag_size_max: float | None = None,
-    yag_intensity_min: float | None = None,
-    yag_intensity_max: float | None = None,
+    wave8_max_value: Optional[float] = None,
+    yag_size_min: Optional[float] = None,
+    yag_size_max: Optional[float] = None,
+    yag_intensity_min: Optional[float] = None,
+    yag_intensity_max: Optional[float] = None,
     centroid_x_min: float = None,
     centroid_x_max: float = None,
     centroid_y_min: float = None,
@@ -85,7 +86,7 @@ def get_vocs(
 
 def get_evaluator_wave8(
     wave8: str = "dg1",
-    wave8_xpos: float | None = None,
+    wave8_xpos: Optional[float] = None,
 ) -> Evaluator:
     if wave8_xpos is None:
         if wave8 == "dg1":
@@ -114,7 +115,7 @@ def get_evaluator_wave8(
 
 def get_evaluator_yag(
     yag: str = "dg1",
-    goal: float | None = None,
+    goal: Optional[float] = None,
 ) -> Evaluator:
     yag = yag.lower()
     if yag not in ("xcs1", "dg1", "dg2", "ip"):
@@ -256,6 +257,8 @@ def get_xopt_obj(
         Run a 2D YAG optimization using camera markers
     goal_2d: tuple[float, float] or None, optional
         The 2D optimization goal if running a 2D YAG optimization
+    max_iter: int, optional
+        Max number of steps for maximizing the acquisition function
     """
     goal_value = select_goal(
         device_type=device_type,
@@ -324,6 +327,7 @@ def get_xopt_obj(
         )
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
+    generator.numerical_optimizer.max_iter = max_iter
     return Xopt(
         vocs=vocs,
         generator=generator,
@@ -450,7 +454,7 @@ def run_sim_test_yag_2d() -> Xopt:
         # Make error more user-friendly/readable
         raise FeasibilityError(
             f"No feasible points within acceptable region. "
-            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj_2d_markers'.\n"
+            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
             f"Current constraints: {xopt.vocs.constraints}"
         )
     print(f"Best objective value {val}")
