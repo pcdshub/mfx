@@ -53,11 +53,9 @@ class bs:
             instr = daq_control.getInstrument()
             if instr is None:
                 logger.error('Failed to connect to LCLS-II DAQ')
-                break
             start_state = daq_control.getState()
             if start_state == 'error':
                 logger.error('DAQ is in an error state.')
-                break
             daq.control.setState("configured")
             while daq.control.getState() != "configured":
                 ...
@@ -111,6 +109,28 @@ class bs:
             cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {2} {det} {get_exp()} {run_number}"
             logging.info(cmd)
             os.system(cmd)
+
+            from psdaq.control.DaqControl import DaqControl  # NOQA
+            daq_control = DaqControl(
+                host=daq_host,
+                platform=daq_platform,
+                timeout=10000,
+            )
+            instr = daq_control.getInstrument()
+            if instr is None:
+                logger.error('Failed to connect to LCLS-II DAQ')
+            start_state = daq_control.getState()
+            if start_state == 'error':
+                logger.error('DAQ is in an error state.')
+            daq.control.setState("connected")
+            while daq.control.getState() != "connected":
+                ...
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setState("running")
+            while daq.control.getState() != "running":
+                ...
 
         else:
             logging.error("Please select daq 1 or 2")
