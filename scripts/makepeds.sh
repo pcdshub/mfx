@@ -17,20 +17,21 @@ case $daq in
 
     jungfrau)
         echo making jungfrau
-        ssh -Y psana jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
-        ssh -Y psana jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
+        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
+        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
         ;;
 
     epix)
         echo making epix
-        ssh -Y psana det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
+        echo ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh\; det_dark_proc -k "{'exp':'$exp','run':$run,'detectors':['epix100']}" -d epix100 -D
+        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; det_dark_proc -k "{'exp':'$exp','run':$run,'detectors':['epix100']}" -d epix100 -D
         ;;
 
     all)
         echo making jungfrau
-        ssh -Y psana jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
-        ssh -Y psana jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
-        ssh -Y psana det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
+        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
+        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
+        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
         ;;
     esac
     ;;
