@@ -32,34 +32,88 @@ class bs:
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         
 
-    def takepeds(self):
+    def takepeds(self, daq=2):
         import os
         import logging
+        from pcdsdaq.daq.lcls1 import DaqLCLS1
+
+        logger = logging.getLogger(__name__)
+
+        daq1=DaqLCLS1()
         logging.info("Taking Pedestals")
-        os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
+        if daq == 1:
+            os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
+        elif daq ==2:
+            from psdaq.control.DaqControl import DaqControl  # NOQA
+            daq_control = DaqControl(
+                host=daq_host,
+                platform=daq_platform,
+                timeout=10000,
+            )
+            instr = daq_control.getInstrument()
+            if instr is None:
+                logger.error('Failed to connect to LCLS-II DAQ')
+                break
+            start_state = daq_control.getState()
+            if start_state == 'error':
+                logger.error('DAQ is in an error state.')
+                break
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setRecord(True)
+
+            os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
+            daq.control.setRecord(False)
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setState("running")
+            while daq.control.getState() != "running":
+                ...
+        else:
+            logging.error("Please select daq 1 or 2")
 
 
-    def makepeds(self, username, run_number=None, onshift=False):
+    def makepeds(self, username, run_number=None, onshift=False, daq=2, det=None):
         import os
         import logging
         from mfx.db import daq
         from mfx.macros import get_exp
+        from pcdsdaq.daq.lcls1 import DaqLCLS1
+
+        logger = logging.getLogger(__name__)
+
+        daq1=DaqLCLS1()
         logging.info("Making Pedestals")
+
         if run_number is None:
             try:
-                run_number = daq.run_number()
+                run_number = daq1.run_number()
             except NameError:
                 logging.error(
-                    f"daq.run_number() not working please enter run manually as follows\n"
+                    f"daq1.run_number() not working please enter run manually as follows\n"
                     f"bs.makepeds('{username}', run_number=XXX)")
         username = str(username)
         run_number = str(int(run_number))
-        if onshift:
-            cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()} --reservation lcls:onshift"
+
+        if daq == 1:
+            if onshift:
+                cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {1} {None} {get_exp()} {run_number} --reservation lcls:onshift"
+            else:
+                cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {1} {None} {get_exp()} {run_number}"
+            logging.info(cmd)
+            os.system(cmd)
+
+        elif daq ==2:
+            if det != jungfrau or det != epix:
+                logging.error("please enter either 'jungfrau' or 'epix' or 'all'")
+            cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {2} {det} {get_exp()} {run_number}"
+            logging.info(cmd)
+            os.system(cmd)
+
         else:
-            cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {run_number} {get_exp()}"
-        logging.info(cmd)
-        os.system(cmd)
+            logging.error("Please select daq 1 or 2")
 
 
     def restartdaq(self):
