@@ -1,9 +1,36 @@
 #! /bin/bash
 
+if [ $# -ne 4 ]; then
+  echo "Usage error: $0 <daq number> <det nickname> <experiment> <run>"
+  exit
+fi
+
 daq=$1
 det=$2
 exp=$3
 run=$4
+
+#============================#
+function makepeds_jungfrau ()
+{
+echo making jungfrau
+ssh -Y psana << EOF1
+source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh
+jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
+jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
+EOF1
+}
+
+function makepeds_epix ()
+{
+echo making epix
+ssh -Y psana << EOF2
+source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh 
+det_dark_proc -k "{'exp':'$exp','run':$run,'detectors':['epix100']}" -d epix100 -D
+EOF2
+}
+#=============================#
+
 
 case $daq in
   1)
@@ -11,27 +38,19 @@ case $daq in
     ;;
 
   2)
-    source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh
-
     case $det in
 
     jungfrau)
-        echo making jungfrau
-        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
-        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
+        makepeds_jungfrau
         ;;
 
     epix)
-        echo making epix
-        echo ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh\; det_dark_proc -k "{'exp':'$exp','run':$run,'detectors':['epix100']}" -d epix100 -D
-        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; det_dark_proc -k "{'exp':'$exp','run':$run,'detectors':['epix100']}" -d epix100 -D
+        makepeds_epix
         ;;
 
     all)
-        echo making jungfrau
-        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_dark_proc -k exp=$exp,run=$run -d jungfrau -o ~/work
-        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; jungfrau_deploy_constants -k exp=$exp,run=$run -d jungfrau -o ~/work -D
-        ssh -Y psana source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh; det_dark_proc -k "{'exp':'$exp','run':$run,'dir':'/sdf/data/lcls/drpsrcf/ffb/mfx/$exp/xtc/','detectors':['epix100']}" -d epix100 -D
+        makepeds_jungfrau
+	makepeds_epix
         ;;
     esac
     ;;
