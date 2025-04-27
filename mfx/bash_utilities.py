@@ -100,7 +100,7 @@ class bs:
             os.system(cmd)
 
         elif daq_num ==2:
-            if det != jungfrau or det != epix:
+            if det != 'jungfrau' or det != 'epix':
                 logging.error("please enter either 'jungfrau' or 'epix' or 'all'")
             cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {2} {det} {get_exp()} {run_number}"
             logging.info(cmd)
