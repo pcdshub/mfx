@@ -32,28 +32,24 @@ class bs:
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         
 
-    def takepeds(self, daq=2):
+    def takepeds(self, daq_num=2):
         import os
         import logging
+        from mfx.db import daq
         from pcdsdaq.daq.lcls1 import DaqLCLS1
 
         logger = logging.getLogger(__name__)
 
         daq1=DaqLCLS1()
         logging.info("Taking Pedestals")
-        if daq == 1:
+        if daq_num == 1:
             os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
-        elif daq ==2:
+        elif daq_num ==2:
             from psdaq.control.DaqControl import DaqControl  # NOQA
-            daq_control = DaqControl(
-                host=daq_host,
-                platform=daq_platform,
-                timeout=10000,
-            )
-            instr = daq_control.getInstrument()
+            instr = daq.control.getInstrument()
             if instr is None:
                 logger.error('Failed to connect to LCLS-II DAQ')
-            start_state = daq_control.getState()
+            start_state = daq.control.getState()
             if start_state == 'error':
                 logger.error('DAQ is in an error state.')
             daq.control.setState("configured")
@@ -70,10 +66,10 @@ class bs:
             while daq.control.getState() != "running":
                 ...
         else:
-            logging.error("Please select daq 1 or 2")
+            logging.error("Please select daq_num 1 or 2")
 
 
-    def makepeds(self, username, run_number=None, onshift=False, daq=2, det='all'):
+    def makepeds(self, username, run_number=None, onshift=False, daq_num=2, det='all'):
         import os
         import logging
         from mfx.db import daq
@@ -95,7 +91,7 @@ class bs:
         username = str(username)
         run_number = str(int(run_number))
 
-        if daq == 1:
+        if daq_num == 1:
             if onshift:
                 cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {1} {None} {get_exp()} {run_number} --reservation lcls:onshift"
             else:
@@ -103,7 +99,7 @@ class bs:
             logging.info(cmd)
             os.system(cmd)
 
-        elif daq ==2:
+        elif daq_num ==2:
             if det != jungfrau or det != epix:
                 logging.error("please enter either 'jungfrau' or 'epix' or 'all'")
             cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {2} {det} {get_exp()} {run_number}"
@@ -111,15 +107,10 @@ class bs:
             os.system(cmd)
 
             from psdaq.control.DaqControl import DaqControl  # NOQA
-            daq_control = DaqControl(
-                host=daq_host,
-                platform=daq_platform,
-                timeout=10000,
-            )
-            instr = daq_control.getInstrument()
+            instr = daq.control.getInstrument()
             if instr is None:
                 logger.error('Failed to connect to LCLS-II DAQ')
-            start_state = daq_control.getState()
+            start_state = daq.control.getState()
             if start_state == 'error':
                 logger.error('DAQ is in an error state.')
             daq.control.setState("connected")
@@ -133,25 +124,25 @@ class bs:
                 ...
 
         else:
-            logging.error("Please select daq 1 or 2")
+            logging.error("Please select daq_num 1 or 2")
 
 
-    def restartdaq(self, daq=2):
+    def restartdaq(self, daq_num=2):
         import subprocess
         import logging
         logging.info("Restarting the DAQ")
-        if daq == 1:
+        if daq_num == 1:
             subprocess.Popen(
                 ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-        elif daq ==2:
+        elif daq_num ==2:
             subprocess.Popen(
                 ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
         else:
-            logging.error("Please select daq 1 or 2")
+            logging.error("Please select daq_num 1 or 2")
 
 
 

@@ -295,16 +295,16 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
         try:
             for i in range(runs):
                 from psdaq.control.DaqControl import DaqControl  # NOQA
-                daq_control = DaqControl(
+                daq.control = DaqControl(
                     host=daq_host,
                     platform=daq_platform,
                     timeout=10000,
                 )
-                instr = daq_control.getInstrument()
+                instr = daq.control.getInstrument()
                 if instr is None:
                     logger.error('Failed to connect to LCLS-II DAQ')
                     break
-                start_state = daq_control.getState()
+                start_state = daq.control.getState()
                 if start_state == 'error':
                     logger.error('DAQ is in an error state.')
                     break
