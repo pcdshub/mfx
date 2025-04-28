@@ -50,7 +50,7 @@ case $daq in
 
     all)
         makepeds_jungfrau
-	makepeds_epix
+        makepeds_epix
         ;;
     esac
     ;;
