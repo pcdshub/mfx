@@ -9,7 +9,7 @@ source "${HERE}/mfxenv"
 
 if [ -n "$exp" ] || [ $daq == 1 ]; then
     # Launch alt hutch-python with all devices and functions
-    python conf_edit.py -e $exp -d $daq
+    python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/conf_edit.py -e $exp -d $daq
     hutch-python --cfg "${HERE}/alt_conf.yml" "$@"
 else
     # Launch hutch-python with all devices and functions
