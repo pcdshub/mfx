@@ -250,6 +250,7 @@ class Beam:
 
         if using_device == "yag":
             from mfx.autorun import ioc_cam_recorder
+            num_events_per_step=120
             cam_pv = f"MFX:GIGE:{on_diagnostic.upper()}:YAG:"
             cam_record_length = 1.5 * num_steps * num_events_per_step / sequencer_fps
             tag = f"{on_diagnostic}_mr1l4_scan"
@@ -293,8 +294,8 @@ class Crystal:
     @validate_w_lowercase_args
     def scan(
             self,
-            scan_start=self.boundaries[0],
-            scan_end=self.boundaries[1],
+            scan_start=None, #self.boundaries[0],
+            scan_end=None, #self.boundaries[1],
             num_steps: int = 51
     ):
         """Perform Crystal Scan
