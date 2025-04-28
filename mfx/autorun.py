@@ -233,6 +233,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     logger = logging.getLogger(__name__)
 
     daq1=DaqLCLS1()
+    run_number = daq1.run_number() + 1
 
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
@@ -246,8 +247,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
 
     if daq_num == 1:
         for i in range(runs):
-            logger.info(f"Run Number {daq1.run_number() + 1} Running {sample}......{quote()['quote']}")
-            run_number = daq1.run_number() + 1
+            logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
             status = begin(duration = run_length, record = record, wait = True, end_run = True)
             if cam is not None:
                 ioc_cam_recorder(cam, run_length, tag)
@@ -295,11 +295,6 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
         try:
             for i in range(runs):
                 from psdaq.control.DaqControl import DaqControl  # NOQA
-                daq.control = DaqControl(
-                    host=daq_host,
-                    platform=daq_platform,
-                    timeout=10000,
-                )
                 instr = daq.control.getInstrument()
                 if instr is None:
                     logger.error('Failed to connect to LCLS-II DAQ')
@@ -309,8 +304,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                     logger.error('DAQ is in an error state.')
                     break
 
-                logger.info(f"Run Number {daq1.run_number() + 1} Running {sample}......{quote()['quote']}")
-                run_number = daq1.run_number() + 1
+                logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
                 if cam is not None:
                     ioc_cam_recorder(cam, run_length, tag)
 
