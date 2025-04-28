@@ -54,13 +54,6 @@ def parse_args(args):
         description="startup script for cctbx on iana."
     )
     parser.add_argument(
-        "--daq",
-        "-d",
-        dest="daq_num",
-        default=None,
-        help="Enter -u to specify username",
-    )
-    parser.add_argument(
         "--experiment",
         "-e",
         dest="experiment",
@@ -80,7 +73,6 @@ def main(args):
     """
     args = parse_args(args)
     exp = args.experiment
-    daq_num = args.daq_num
 
     if exp is None:
         ws_url = "https://pswww.slac.stanford.edu/ws/lgbk"
@@ -91,8 +83,9 @@ def main(args):
     else:
         exp_input = exp
 
-    if daq_num == 1 or exp is not None:
+    if exp is not None:
         update_yaml(exp_input)
+
     else:
         logging.warning('No change requested to conf.yml')
 
