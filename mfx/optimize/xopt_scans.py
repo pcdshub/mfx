@@ -208,7 +208,8 @@ def get_xopt_obj(
     centroid_y_max: Optional[float]  = None,
     xopt_generator_turbo_controller: Optional[Turbo] = None,
     use_2d_markers: bool = False,
-    goal_2d: Optional[tuple[float, float]] = None
+    goal_2d: Optional[tuple[float, float]] = None,
+    max_iter: Optional[int] = None,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
