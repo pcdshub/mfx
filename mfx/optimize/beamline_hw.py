@@ -132,8 +132,8 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                mdpitch * 60 - undp_dx * 0.6 + DG1_YAG_XPOS + dg1_yag_offset + random.uniform(-6, 6),
-                256 + undp_dy * 0.6 + random.uniform(-3, 3)
+                mdpitch * 60 - undp_dx * 3 + DG1_YAG_XPOS + dg1_yag_offset + random.uniform(-6, 6),
+                256 + undp_dy * 3 + random.uniform(-3, 3)
             ),
             fwhm=100,
             peak=255,
@@ -144,8 +144,8 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                mdpitch * 80 - undp_dx * 0.8 + DG2_YAG_XPOS + dg2_yag_offset + random.uniform(-8, 8),
-                256 + undp_dy * 0.8 + random.uniform(-5, 5)
+                mdpitch * 80 - undp_dx * 4 + DG2_YAG_XPOS + dg2_yag_offset + random.uniform(-8, 8),
+                256 + undp_dy * 4 + random.uniform(-5, 5)
             ),
             fwhm=150,
             peak=255,
@@ -156,8 +156,8 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(728, 544),
             centroid=(
-                mdpitch * 40 - undp_dx * 0.4 + XCS_YAG_XPOS + ip_yag_offset + random.uniform(-4, 4),
-                274 + undp_dy * 0.4 + random.uniform(-7, 7)
+                mdpitch * 40 - undp_dx * 2 + XCS_YAG_XPOS + ip_yag_offset + random.uniform(-4, 4),
+                274 + undp_dy * 2 + random.uniform(-7, 7)
             ),
             fwhm=200,
             peak=255,
@@ -168,8 +168,8 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(688, 538),
             centroid=(
-                mdpitch * 70 - undp_dx * 0.7 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7),
-                269 + undp_dy * 0.7 + random.uniform(-7, 7)
+                mdpitch * 70 - undp_dx * 3.5 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7),
+                269 + undp_dy * 3.5 + random.uniform(-7, 7)
             ),
             fwhm=80,
             peak=255,
@@ -180,11 +180,16 @@ def sim_devices() -> dict[str, Device]:
     devices["xcs_yag1"].image1.sim_install_updater(update_fake_xcs_yag1)
     devices["mfx_ip_yag"].image1.sim_install_updater(update_fake_ip1_yag)
 
-    for name in ("mfx_dg1_yag", "mfx_dg2_yag", "xcs_yag1", "mfx_ip_yag"):
+    # MFX yags use opposite slit corners as the goal
+    for name in ("mfx_dg1_yag", "mfx_dg2_yag", "mfx_ip_yag"):
         devices[name].coords.marker1.xpos.put(150)
         devices[name].coords.marker1.ypos.put(150)
         devices[name].coords.marker2.xpos.put(350)
         devices[name].coords.marker2.ypos.put(350)
+
+    # XCS yag uses the location of marker 2 as the goal
+    devices["xcs_yag1"].coords.marker2.xpos.put(360)
+    devices["xcs_yag1"].coords.marker2.xpos.put(274)
 
     devices["mfx_dg1_wave8"].kind = "hinted"
     devices["mfx_dg2_wave8"].kind = "hinted"

@@ -8,14 +8,19 @@ from bluesky import RunEngine
 from xopt import Xopt
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot, refresh_mpl_plots
-from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo
-from .user_select import select_diagnostic, select_goal
+from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo, Movers
+from .user_select import select_diagnostic, select_goal, select_var_range, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
 
 
 class Beam:
     @validate_call
-    def __init__(self, mirror_pitch: list[float] = [-546.0, -542.0]):
+    def __init__(
+        self,
+        mirror_pitch: list[float] = [-546.0, -542.0],
+        und_search_delta: float = 50.0,
+    ):
         self.mirror_pitch: list[float] = mirror_pitch
+        self.und_search_delta: float = und_search_delta
 
     @validate_w_lowercase_args
     def align(
@@ -24,6 +29,7 @@ class Beam:
             on_diagnostic: Diagnostics = "dg1",
             with_method: Methods = "xopt",
             using_device: Devices = "yag",
+            mover: Movers = "mirr",
             xopt_turbo_option: Turbo = "safety",
             xopt_rand_evaluate: int = 3,
             xopt_steps: int = 10,
@@ -48,6 +54,8 @@ class Beam:
             Method to use for alignment. Options: "blop, xopt". Default is "xopt".
         using_device : str, optional
             Device to use for alignment. Options: "yag, wave8". Default is "yag".
+        mover : str, optional
+            Motion device to steer the beam. Options: "mirr, und". Default is "mirr".
         xopt_turbo_option : str, optional
             Xopt turbo controller option. Options: "safety, optimize". Default is "safety".
         xopt_rand_evaluate : int, optional
@@ -75,7 +83,7 @@ class Beam:
 
         path_plot = None
         if with_method == "xopt":
-            from .xopt_scans import get_xopt_obj, init_devices
+            from .xopt_scans import get_xopt_obj, init_devices, evaluator_move
             # Allow the loading of an already instantiated xopt object, e.g. to take more steps
             if xopt_obj:
                 print("Using existing Xopt object.")
@@ -92,16 +100,31 @@ class Beam:
                     )
             else:
                 print("Loading Xopt object.")
-                xopt = get_xopt_obj(
-                    device_type=using_device,
-                    location=on_diagnostic,
-                    goal=with_goal,
-                    xopt_generator_turbo_controller=xopt_turbo_option,
-                    use_2d_markers=use_2d_markers,
-                    goal_2d=with_goal_2d,
-                    max_iter=xopt_max_iter
-                )
-                customized_boundaries = {"mirror_pitch": self.mirror_pitch}
+                xopt_kw = {
+                    "device_type": using_device,
+                    "location": on_diagnostic,
+                    "mover": mover,
+                    "goal": with_goal,
+                    "xopt_generator_turbo_controller": xopt_turbo_option,
+                    "use_2d_markers": use_2d_markers,
+                    "goal_2d": with_goal_2d,
+                    "max_iter": xopt_max_iter,
+                }
+                if mover == "mirr":
+                    xopt_kw["search_range"] = tuple(self.mirror_pitch)
+                    customized_boundaries = select_var_range(
+                        mover=mover,
+                        search_range=tuple(self.mirror_pitch),
+                    )
+                elif mover == "und":
+                    xopt_kw["search_delta"] = self.und_search_delta
+                    customized_boundaries = select_var_range(
+                        mover=mover,
+                        search_delta=self.und_search_delta,
+                    )
+                else:
+                    raise NotImplementedError(f"Mover {mover} not implemented for xopt in beam.align.")
+                xopt = get_xopt_obj(**xopt_kw)
                 if using_device == "yag":
                     print("Generating path plot")
                     path_plot = UpdatingDeviceCentroidPathPlot(
@@ -170,9 +193,10 @@ class Beam:
 
             print(f"Best objective value {val}")
             print(f"Best point {params}")
-            mirror_pitch = init_devices()["mr1l4_homs"].pitch
-            mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
-            print(f"pitch is at {mirror_pitch.position}")
+            evaluator_move(
+                mover=mover,
+                input=params,
+            )
             if save_run:
                 now = datetime.datetime.now()
                 formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
@@ -183,7 +207,7 @@ class Beam:
                 xopt.dump(str(logs_folder / filename))
             ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
-            ax.set_ylabel("mirror pitch")
+            ax.set_ylabel("objective (to minimize)")
             xopt_eval_plot.refresh()
             if path_plot is not None:
                 path_plot.refresh()
