@@ -1,6 +1,7 @@
 import traceback
 import datetime
 from typing import Optional
+from pathlib import Path
 import matplotlib.pyplot as plt
 from pydantic import validate_call
 from bluesky import RunEngine
@@ -13,7 +14,7 @@ from .user_select import select_diagnostic, select_goal
 
 class Beam:
     @validate_call
-    def __init__(self, mirror_pitch: list[float] = [-549.0, -546.0]):
+    def __init__(self, mirror_pitch: list[float] = [-546.0, -542.0]):
         self.mirror_pitch: list[float] = mirror_pitch
 
     @validate_w_lowercase_args
@@ -176,7 +177,10 @@ class Beam:
                 now = datetime.datetime.now()
                 formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
                 filename  = f"xopt_run_{on_diagnostic}_{using_device}_{formatted_string}.yaml"
-                xopt.dump(filename)
+                # The logs folder at the root of the repo should exist and be writeable
+                logs_folder = Path(__file__).parent.parent.parent / "logs" / "xopt"
+                logs_folder.mkdir(parents=True, exist_ok=True)
+                xopt.dump(str(logs_folder / filename))
             ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
             ax.set_ylabel("mirror pitch")

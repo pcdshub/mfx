@@ -19,13 +19,13 @@ HAPPI_NAMES = (
 )
 # Default constants so I can re-use them
 # Default starting point for searches
-MIRROR_NOMINAL = -544 #-548
+MIRROR_NOMINAL = -544
 # Used for sim devices and as default goal positions
 DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41
 XCS_YAG_XPOS = 337
-DG1_YAG_XPOS = 191
-DG2_YAG_XPOS = 191
+DG1_YAG_XPOS = 300
+DG2_YAG_XPOS = 300
 IP_YAG_XPOS = 344
 # Default min/max values for centroid positions
 YAG_CENTROID_X_MIN_MAX = (180, 600)
