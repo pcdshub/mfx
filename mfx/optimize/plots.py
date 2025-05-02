@@ -164,12 +164,18 @@ class UpdatingXoptVisualizeModelPlot:
         """
         Re-render the new plot in place.
         """
-        #if self.axes is not None:
-        #    for ax in self.axes:
-        #        ax.clear()
+        if self.axes is not None:
+            try:
+                self.axes.clear()
+            except Exception:
+                for ax in self.axes:
+                    try:
+                        ax.clear()
+                    except Exception:
+                        ...
         self.fig, self.axes = self.xopt.generator.visualize_model(
             show_acquisition=False,
-            #axes=self.axes
+            axes=self.axes
         )
         plt.figure(self.fig)
         refresh_mpl_plots()
