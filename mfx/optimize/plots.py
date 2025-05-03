@@ -4,8 +4,8 @@ Matplotlib plotting utilities for tracking the optimizer's decisions.
 
 from typing import Optional, Union
 
-import matplotlib.axes
-import matplotlib.figure
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -32,8 +32,8 @@ def centroid_path_plot(
     goal: Union[float, tuple[float, float]],
     markers: list[tuple[float, float]],
     centroids: list[tuple[float, float]],
-    figure: Optional[matplotlib.figure.Figure] = None,
-) -> matplotlib.figure.Figure:
+    figure: Optional[Figure] = None,
+) -> Figure:
     """
     Plot the path of a centroid alignment.
 
@@ -157,25 +157,21 @@ class UpdatingXoptVisualizeModelPlot:
 
     def __init__(self, xopt: Xopt):
         self.xopt = xopt
-        self.fig: Optional[matplotlib.figure.Figure] = None
-        self.axes: Optional[list[matplotlib.axes.Axes]] = None
+        self.fig: Optional[Figure] = None
+        self.axs: Optional[Union[Axes, np.ndarray]] = None
 
     def refresh(self):
         """
-        Re-render the new plot in place.
+        Close the old plot and render the new plot.
+
+        Re-rendering this in place without aberrations has been surprisingly difficult.
         """
-        if self.axes is not None:
-            try:
-                self.axes.clear()
-            except Exception:
-                for ax in self.axes:
-                    try:
-                        ax.clear()
-                    except Exception:
-                        ...
-        self.fig, self.axes = self.xopt.generator.visualize_model(
+        newfig, newaxs = self.xopt.generator.visualize_model(
             show_acquisition=False,
-            axes=self.axes
         )
         plt.figure(self.fig)
+        plt.close()
+        plt.figure(newfig)
         refresh_mpl_plots()
+        self.fig = newfig
+        self.axs = newaxs

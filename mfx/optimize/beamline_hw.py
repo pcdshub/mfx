@@ -189,7 +189,7 @@ def sim_devices() -> dict[str, Device]:
 
     # XCS yag uses the location of marker 2 as the goal
     devices["xcs_yag1"].coords.marker2.xpos.put(360)
-    devices["xcs_yag1"].coords.marker2.xpos.put(274)
+    devices["xcs_yag1"].coords.marker2.ypos.put(274)
 
     devices["mfx_dg1_wave8"].kind = "hinted"
     devices["mfx_dg2_wave8"].kind = "hinted"
