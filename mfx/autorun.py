@@ -1,4 +1,4 @@
-def post(sample='?', tag=None, run_number=None, post=False, inspire=False, add_note=''):
+def post(sample='?', tag=None, run_number=None, post=False, inspire=False, exp=None, add_note=''):
     """
     Posts a message to the elog
 
@@ -19,12 +19,21 @@ def post(sample='?', tag=None, run_number=None, post=False, inspire=False, add_n
     inspire: bool, optional
         Set false by default because it makes Sandra sad. Set True to inspire
 
+    exp: str, optional
+        Experiment name if needed
+
     add_note: string, optional
         adds additional note to elog message 
     """
     from mfx.db import elog
     from pcdsdaq.daq.lcls1 import DaqLCLS1
+    from mfx.macros import get_exp
     daq1=DaqLCLS1()
+
+    if exp is not None:
+        experiment = exp
+    else:
+        experiment = str(get_exp())
     
     if add_note!='':
         add_note = '\n' + add_note
@@ -40,7 +49,7 @@ def post(sample='?', tag=None, run_number=None, post=False, inspire=False, add_n
     post_msg = post_template.format(*info)
     print('\n' + post_msg + '\n')
     if post:
-        elog.post(msg=post_msg, tags=tag, run=(run_number))
+        elog.post(msg=post_msg, tags=tag, run=(run_number), experiment=experiment)
     return post_msg
 
 
@@ -92,26 +101,24 @@ def begin(events=None, duration=300,
     """
     import logging
     from time import sleep
-    from pcdsdaq.daq.lcls1 import DaqLCLS1
+    from mfx.db import daq
     from ophyd.utils import StatusTimeoutError, WaitTimeoutError
     logger = logging.getLogger(__name__)
-
-    daq1=DaqLCLS1()
 
     logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
                     'use_l3t=%s, controls=%s, wait=%s)'),
                     events, duration, record, use_l3t, controls, wait)
     status = True
     try:
-        if record is not None and record != daq1.record:
-            old_record = daq1.record
-            daq1.preconfig(record=record, show_queued_cfg=False)
-        begin_status = daq1.kickoff(events=events, duration=duration,
+        if record is not None and record != daq.record:
+            old_record = daq.record
+            daq.preconfig(record=record, show_queued_cfg=False)
+        begin_status = daq.kickoff(events=events, duration=duration,
                                     use_l3t=use_l3t, controls=controls)
         try:
-            begin_status.wait(timeout=daq1._begin_timeout)
+            begin_status.wait(timeout=daq._begin_timeout)
         except (StatusTimeoutError, WaitTimeoutError) as e:
-            msg = (f'Timeout after {daq1._begin_timeout} seconds waiting '
+            msg = (f'Timeout after {daq._begin_timeout} seconds waiting '
                     'for daq to begin. Exception: {type(e).__name__}')
             logger.info(msg)
             #raise DaqTimeoutError(msg) from None
@@ -119,13 +126,13 @@ def begin(events=None, duration=300,
         # In some daq configurations the begin status returns very early,
         # so we allow the user to configure an emperically derived extra
         # sleep.
-        sleep(daq1.config['begin_sleep'])
+        sleep(daq.config['begin_sleep'])
         if wait:
-            daq1.wait()
+            daq.wait()
             if end_run:
-                daq1.end_run()
+                daq.end_run()
         if end_run and not wait:
-            threading.Thread(target=daq1._ender_thread, args=()).start()
+            threading.Thread(target=daq._ender_thread, args=()).start()
         return status
     except KeyboardInterrupt:
             status = False
@@ -183,7 +190,7 @@ def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
 
 
 def autorun(sample='?', tag=None, run_length=300, record=True,
-            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2):
+            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2, exp=None):
     """
     Automate runs.... With optional quotes
 
@@ -220,6 +227,9 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     daq_num: int, optional
         Switch between daq 1 and 2. Default 2
 
+    exp: str, optional
+        Experiment name if needed
+
     Operations
     ----------
 
@@ -233,6 +243,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     logger = logging.getLogger(__name__)
 
     daq1=DaqLCLS1()
+    run_number = daq1.run_number() + 1
 
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
@@ -246,8 +257,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
 
     if daq_num == 1:
         for i in range(runs):
-            logger.info(f"Run Number {daq1.run_number() + 1} Running {sample}......{quote()['quote']}")
-            run_number = daq1.run_number() + 1
+            logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
             status = begin(duration = run_length, record = record, wait = True, end_run = True)
             if cam is not None:
                 ioc_cam_recorder(cam, run_length, tag)
@@ -256,30 +266,31 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                 post(
                     sample=sample, 
                     tag=tag, 
-                    run_number=run_number, 
+                    run_number=1, 
                     post=record, 
                     inspire=inspire, 
                     add_note='Run ended prematurely. Probably sample delivery problem')
                 logger.warning("[*] Stopping Run and exiting???...")
                 sleep(5)
-                daq1.stop()
-                daq1.disconnect()
+                daq.stop()
+                daq.disconnect()
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
                 break
 
             post(
                 sample=sample, 
                 tag=tag, 
-                run_number=run_number, 
+                run_number=1, 
                 post=record, 
-                inspire=inspire)
+                inspire=inspire,
+                exp=exp)
             try:
                 sleep(daq_delay)
             except KeyboardInterrupt:
                 pp.close()
                 logger.warning("[*] Stopping Run and exiting???...")
                 sleep(5)
-                daq1.disconnect()
+                daq.disconnect()
                 status = False
                 if status is False:
                     logger.warning('Run ended prematurely. Probably sample delivery problem')
@@ -287,15 +298,29 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
         if status:
             if close is True:
                 pp.close()
-            daq1.end_run()
-            daq1.disconnect()
+            daq.end_run()
+            daq.disconnect()
             logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     elif daq_num == 2:
         try:
             for i in range(runs):
-                logger.info(f"Run Number {daq1.run_number() + 1} Running {sample}......{quote()['quote']}")
-                run_number = daq1.run_number() + 1
+                from psdaq.control.DaqControl import DaqControl  # NOQA
+                daq.control = DaqControl(
+                    host=daq.control.host,
+                    platform=daq.control.platform,
+                    timeout=10000,
+                )
+                instr = daq.control.getInstrument()
+                if instr is None:
+                    logger.error('Failed to connect to LCLS-II DAQ')
+                    break
+                start_state = daq.control.getState()
+                if start_state == 'error':
+                    logger.error('DAQ is in an error state.')
+                    break
+
+                logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
                 if cam is not None:
                     ioc_cam_recorder(cam, run_length, tag)
 
@@ -338,7 +363,8 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                         tag=tag, 
                         run_number=run_number, 
                         post=record, 
-                        inspire=inspire)
+                        inspire=inspire,
+                        exp=exp)
 
                 sleep(daq_delay)
 
@@ -355,7 +381,8 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                     tag=tag, 
                     run_number=run_number, 
                     post=record, 
-                    inspire=inspire, 
+                    inspire=inspire,
+                    exp=exp, 
                     add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
             logger.warning('Run ended prematurely. Probably sample delivery problem')

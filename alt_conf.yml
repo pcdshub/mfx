@@ -1,0 +1,7 @@
+hutch: mfx
+db: /reg/g/pcds/pyps/apps/hutch-python/device_config/db.json
+load: mfx.beamline
+daq_type: lcls1
+daq_platform:
+  default: 0
+experiment: mfx101332124
