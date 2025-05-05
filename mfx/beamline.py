@@ -128,6 +128,14 @@ with safe_load('Undulator_Pointing'):
     from mfx.optimize.undpoint import UndulatorPointingMFX
     undp=UndulatorPointingMFX()
 
+with safe_load('RE_Scans'):
+    from mfx.scan import *
+    scan = Scan()
+
+with safe_load('Find_PV'):
+    from mfx.find import *
+    find = Find()
+
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
 #     class LXE(LaserEnergyPositioner):
