@@ -4,4 +4,4 @@ load: mfx.beamline
 daq_type: lcls1
 daq_platform:
   default: 0
-experiment: mfx101332124
+experiment: mfx100824024
