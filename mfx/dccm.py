@@ -27,13 +27,13 @@ class DCCMono():
 
     def insert(self):
         import logging
-        logger.info(f'Moving the DCCM IN')
+        logging.info(f'Moving the DCCM IN')
         self.tx.umv(-1.3)
 
 
     def remove(self):
         import logging
-        logger.info(f'Moving the DCCM OUT')
+        logging.info(f'Moving the DCCM OUT')
         self.tx.umv(-10)
 
 
