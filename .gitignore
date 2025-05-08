@@ -2,6 +2,7 @@ logs
 
 # Ignore generated database file
 mfx/db.txt
+alt_conf.yml
 
 # Ignore changed presets
 presets/
