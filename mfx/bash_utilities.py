@@ -36,35 +36,16 @@ class bs:
         import os
         import logging
         from mfx.db import daq
-        from pcdsdaq.daq.lcls1 import DaqLCLS1
+        from mfx.macros import get_run
 
         logger = logging.getLogger(__name__)
 
         daq1=DaqLCLS1()
         logging.info("Taking Pedestals")
         if daq_num == 1:
-            os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
+            os.system(f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/takepeds1.sh")
         elif daq_num ==2:
-            from psdaq.control.DaqControl import DaqControl  # NOQA
-            instr = daq.control.getInstrument()
-            if instr is None:
-                logger.error('Failed to connect to LCLS-II DAQ')
-            start_state = daq.control.getState()
-            if start_state == 'error':
-                logger.error('DAQ is in an error state.')
-            daq.control.setState("configured")
-            while daq.control.getState() != "configured":
-                ...
-            daq.control.setRecord(True)
-
-            os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
-            daq.control.setRecord(False)
-            daq.control.setState("configured")
-            while daq.control.getState() != "configured":
-                ...
-            daq.control.setState("running")
-            while daq.control.getState() != "running":
-                ...
+            os.system(f"/reg/g/pcds/engineering_tools/mfx/scripts/takepeds")
         else:
             logging.error("Please select daq_num 1 or 2")
 
@@ -74,19 +55,17 @@ class bs:
         import logging
         from mfx.db import daq
         from mfx.macros import get_exp
-        from pcdsdaq.daq.lcls1 import DaqLCLS1
 
         logger = logging.getLogger(__name__)
 
-        daq1=DaqLCLS1()
         logging.info("Making Pedestals")
 
         if run_number is None:
             try:
-                run_number = daq1.run_number()
+                run_number = get_run(station=1)
             except NameError:
                 logging.error(
-                    f"daq1.run_number() not working please enter run manually as follows\n"
+                    f"get_run(station=1) not working please enter run manually as follows\n"
                     f"bs.makepeds('{username}', run_number=XXX)")
         username = str(username)
         run_number = str(int(run_number))
@@ -133,12 +112,14 @@ class bs:
         logging.info("Restarting the DAQ")
         if daq_num == 1:
             subprocess.Popen(
-                ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq -w"],
+                [
+                    "/cds/group/pcds/dist/pds/mfx/current/tools/procmgr/procmgr "
+                    "restart /cds/group/pcds/dist/pds/mfx/scripts/mfx.cnf"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
         elif daq_num ==2:
             subprocess.Popen(
-                ["/reg/g/pcds/engineering_tools/latest-released/scripts/restartdaq"],
+                ["/reg/g/pcds/engineering_tools/mfx/scripts/restartdaq"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
         else:

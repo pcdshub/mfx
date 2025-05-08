@@ -70,7 +70,7 @@ class Scan:
         from ophyd import EpicsSignal
         import logging
         logger = logging.getLogger(__name__)
-        from pcdsdaq.daq.lcls1 import DaqLCLS1
+        from mfx.macros import get_run
         daq1=DaqLCLS1()
         try:
             from mfx.db import RE, pp, daq, lxt_fast
@@ -86,7 +86,7 @@ class Scan:
         except ImportError:
             print("could not import bp")
 
-        run_number = daq1.run_number() + 1
+        run_number = get_run(station=1) + 1
 
         if picker=='open':
             pp.open()

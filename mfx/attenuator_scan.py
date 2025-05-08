@@ -124,7 +124,7 @@ def attenuator_scan_single_run(
     from time import sleep
     from mfx.db import att, pp
     from mfx.autorun import quote, post
-    from pcdsdaq.daq.lcls1 import DaqLCLS1
+    from mfx.macros import get_run
 
     logger = logging.getLogger(__name__)
 
@@ -145,8 +145,8 @@ def attenuator_scan_single_run(
         pp.flipflop()
 
     for i in range(runs):
-        logger.info(f"Run Number {daq1.run_number() + 1} Running {sample}......{quote()['quote']}")
-        run_number = daq1.run_number() + 1
+        logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
+        run_number = get_run(station=1) + 1
         if use_daq:
             if daq_num == 2:
                 daq.control.setState("configured")
