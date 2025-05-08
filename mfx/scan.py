@@ -221,7 +221,7 @@ class Scan:
         import os
         import logging
         from mfx.db import pp, daq
-        from mfx.autorun import quote, autorun
+        from mfx.autorun import quote
         from mfx.macros import get_exp
         from time import sleep
         logger = logging.getLogger(__name__)
