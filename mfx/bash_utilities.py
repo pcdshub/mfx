@@ -36,11 +36,9 @@ class bs:
         import os
         import logging
         from mfx.db import daq
-        from mfx.macros import get_run
 
         logger = logging.getLogger(__name__)
 
-        daq1=DaqLCLS1()
         logging.info("Taking Pedestals")
         if daq_num == 1:
             os.system(f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/takepeds1.sh")
@@ -54,7 +52,7 @@ class bs:
         import os
         import logging
         from mfx.db import daq
-        from mfx.macros import get_exp
+        from mfx.macros import get_run
 
         logger = logging.getLogger(__name__)
 
@@ -72,26 +70,33 @@ class bs:
 
         if daq_num == 1:
             if onshift:
-                cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {1} {None} {get_exp()} {run_number} --reservation lcls:onshift"
+                cmd = f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/makepeds1.sh -q milano -r {run_number} -u {username} --reservation lcls:onshift"
             else:
-                cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {1} {None} {get_exp()} {run_number}"
+                cmd = f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/makepeds1.sh -q milano -r {run_number} -u {username}"
             logging.info(cmd)
             os.system(cmd)
 
         elif daq_num ==2:
-            if det != 'jungfrau' or det != 'epix':
-                logging.error("please enter either 'jungfrau' or 'epix' or 'all'")
-            cmd = f"ssh -Y {username}@s3dflogin /sdf/group/lcls/ds/tools/mfx/scripts/makepeds.sh {2} {det} {get_exp()} {run_number}"
+            if onshift:
+                cmd = f"/reg/g/pcds/engineering_tools/mfx/scripts/makepeds -q milano -r {run_number} -u {username} --reservation lcls:onshift"
+            else:
+                cmd = f"/reg/g/pcds/engineering_tools/mfx/scripts/makepeds -q milano -r {run_number} -u {username}"
             logging.info(cmd)
             os.system(cmd)
 
             from psdaq.control.DaqControl import DaqControl  # NOQA
+            daq.control = DaqControl(
+                host=daq.control.host,
+                platform=daq.control.platform,
+                timeout=10000,
+            )
             instr = daq.control.getInstrument()
             if instr is None:
                 logger.error('Failed to connect to LCLS-II DAQ')
             start_state = daq.control.getState()
             if start_state == 'error':
                 logger.error('DAQ is in an error state.')
+
             daq.control.setState("connected")
             while daq.control.getState() != "connected":
                 ...
@@ -101,7 +106,6 @@ class bs:
             daq.control.setState("running")
             while daq.control.getState() != "running":
                 ...
-
         else:
             logging.error("Please select daq_num 1 or 2")
 
@@ -116,12 +120,10 @@ class bs:
                     "/cds/group/pcds/dist/pds/mfx/current/tools/procmgr/procmgr "
                     "restart /cds/group/pcds/dist/pds/mfx/scripts/mfx.cnf"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
         elif daq_num ==2:
             subprocess.Popen(
                 ["/reg/g/pcds/engineering_tools/mfx/scripts/restartdaq"],
                 shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
         else:
             logging.error("Please select daq_num 1 or 2")
 
