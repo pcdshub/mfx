@@ -81,8 +81,10 @@ class DCCMono():
             picker: str = None,
             inspire: bool = False,
             daq_delay: int = 5,
-            record: bool = False):
-        """Perform Vernier scan.
+            record: bool = False,
+            daq_num: int = 2,
+            exp: str = None):
+        """Perform DCCM scan.
 
         Parameters:
             energy_scan_start_eV (float): 
@@ -111,7 +113,13 @@ class DCCMono():
 
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
-        """
+
+            daq_num: int, optional
+                Switch between daq 1 and 2. Default 2
+
+            exp: str, optional
+                Experiment name if needed
+                """
         import os
         import logging
         from mfx.db import pp, daq
@@ -144,7 +152,8 @@ class DCCMono():
                 runs=1,
                 inspire=inspire, 
                 picker=picker,
-                close=False)
+                close=False,
+                daq_num=daq_num)
             sleep(daq_delay)
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
