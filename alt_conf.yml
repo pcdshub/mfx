@@ -1,7 +1,19 @@
 hutch: mfx
+
+# Locate happi database
 db: /reg/g/pcds/pyps/apps/hutch-python/device_config/db.json
+
+# Hutch-specific imports
 load: mfx.beamline
+
+#daq_platform:
+#    default: 0
+
+# DAQ interface configuration
 daq_type: lcls1
+
 daq_platform:
   default: 0
-experiment: mfx100824024
+
+
+#experiment: lu5017
