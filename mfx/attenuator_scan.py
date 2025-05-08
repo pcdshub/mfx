@@ -131,8 +131,6 @@ def attenuator_scan_single_run(
     if use_daq:
         from mfx.db import daq
 
-    daq1=DaqLCLS1()
-
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
 

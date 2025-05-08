@@ -71,7 +71,6 @@ class Scan:
         import logging
         logger = logging.getLogger(__name__)
         from mfx.macros import get_run
-        daq1=DaqLCLS1()
         try:
             from mfx.db import RE, pp, daq, lxt_fast
             from mfx.autorun import quote, post
