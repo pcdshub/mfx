@@ -172,7 +172,6 @@ class DCCMono():
         if answer.lower() == "y":
             facility = input("Enter facility (s3df or nersc) to continue: ")
             user = input("Enter username to continue: ")
-            exp = str(get_exp())
             self.output.series(
                 user=user, 
                 facility=facility, 
@@ -181,7 +180,8 @@ class DCCMono():
                 run=run_number, 
                 energy=energy_scan_start_eV, 
                 step=energy_scan_steps, 
-                num=len(energies))
+                num=len(energies),
+                daq_num=daq_num)
 
 
     class output:
@@ -197,7 +197,8 @@ class DCCMono():
                 run: str = None,
                 energy: float = None,
                 step: float = None,
-                num: int = None):
+                num: int = None,
+                daq_num: int = 2):
             """Perform Vernier scan results analysis.
 
             Parameters:
@@ -215,20 +216,30 @@ class DCCMono():
                     specify the energy step size in eV (only for 'series')
                 num (int):
                     specify the total number of runs (only for 'series')
+                daq_num: int, optional
+                    Switch between daq 1 and 2. Default 2
+
             """
             import logging
             import os
             from mfx.db import daq
-            from mfx.macros import get_exp
+            from mfx.macros import get_exp, get_run
             import mfx.cctbx
             logger = logging.getLogger(__name__)
 
+            if daq == 2:
+                station=0
+            elif daq == 1:
+                station=1
+            else:
+                logging.error('Please enter daq 1 or 2.')
+
             logging.info("Plotting XRT-Spec Output")
             if exp is None:
-                exp = str(get_exp())
+                exp = str(get_exp(station=station))
 
             if run is None:
-                run = [daq.run_number()]
+                run = int(get_run(station=station))
 
             facility = facility.upper()
             if facility == 'NERSC':
