@@ -128,6 +128,23 @@ class bs:
             logging.error("Please select daq_num 1 or 2")
 
 
+    def stopdaq(self, daq_num=2):
+        import subprocess
+        import logging
+        logging.info("Stopping the DAQ")
+        if daq_num == 1:
+            subprocess.Popen(
+                [
+                    "/cds/group/pcds/dist/pds/mfx/current/tools/procmgr/procmgr "
+                    "stop /cds/group/pcds/dist/pds/mfx/scripts/mfx.cnf"],
+                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        elif daq_num ==2:
+            subprocess.Popen(
+                ["/reg/g/pcds/engineering_tools/mfx/scripts/stopdaq"],
+                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        else:
+            logging.error("Please select daq_num 1 or 2")
+
 
     def lecroy(self, res='2560x1440'):
         import subprocess
