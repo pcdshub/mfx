@@ -115,7 +115,7 @@ class Scan:
                         run_number=run_number, 
                         post=record, 
                         inspire=inspire,
-                        exp=exp,
+                        daq_num=daq_num,
                         add_note=f'pv: {pv}, scan_start: {scan_start}, scan_end: {scan_end}, scan_steps: {scan_steps}')
 
         except KeyboardInterrupt:
@@ -132,7 +132,7 @@ class Scan:
                     run_number=run_number, 
                     post=record, 
                     inspire=inspire,
-                    exp=exp, 
+                    daq_num=daq_num, 
                     add_note=f'Run ended prematurely. Probably sample delivery problem. ' +
                     f'pv: {pv}, scan_start: {scan_start}, scan_end: {scan_end}, scan_steps: {scan_steps}')
             logger.warning("[*] Stopping Run and exiting???...")

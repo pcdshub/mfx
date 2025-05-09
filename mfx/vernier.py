@@ -83,7 +83,13 @@ class Vernier:
                 record=record))
         pp.close()
         daq.disconnect()
-        post(sample, tag, run_number, record, inspire)
+        post(
+            sample=sample, 
+            tag=tag, 
+            run_number=run_number, 
+            post=record, 
+            inspire=inspire,
+            daq_num=daq_num)
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
         logging.warning(f"Scan completed. Would you like to analyze the output?")

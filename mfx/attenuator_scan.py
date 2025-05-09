@@ -187,5 +187,6 @@ def attenuator_scan_single_run(
                 tag=tag, 
                 run_number=run_number, 
                 post=record, 
-                inspire=inspire)
+                inspire=inspire,
+                daq_num=daq_num)
         pp.close()
