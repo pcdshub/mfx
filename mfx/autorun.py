@@ -1,4 +1,4 @@
-def post(sample='?', tag=None, run_number=None, post=False, inspire=False, exp=None, add_note=''):
+def post(sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, add_note=''):
     """
     Posts a message to the elog
 
@@ -19,21 +19,18 @@ def post(sample='?', tag=None, run_number=None, post=False, inspire=False, exp=N
     inspire: bool, optional
         Set false by default because it makes Sandra sad. Set True to inspire
 
-    exp: str, optional
-        Experiment name if needed
+    daq_num: int, optional
+        Switch between daq 1 and 2. Default 2
 
     add_note: string, optional
         adds additional note to elog message 
     """
     from mfx.db import elog
-    from pcdsdaq.daq.lcls1 import DaqLCLS1
     from mfx.macros import get_exp
-    daq1=DaqLCLS1()
 
-    if exp is not None:
-        experiment = exp
-    else:
-        experiment = str(get_exp())
+    if daq_num==1:
+        from elog import HutchELog
+        elog=HutchELog.from_conf(instrument='MFX',station=1)
     
     if add_note!='':
         add_note = '\n' + add_note
@@ -44,12 +41,12 @@ def post(sample='?', tag=None, run_number=None, post=False, inspire=False, exp=N
     else:
         comment = f"Running {sample}{add_note}"
     if run_number is None:
-        run_number = daq1.run_number()
+        run_number = get_run(station=0)
     info = [run_number, comment]
     post_msg = post_template.format(*info)
     print('\n' + post_msg + '\n')
     if post:
-        elog.post(msg=post_msg, tags=tag, run=(run_number), experiment=experiment)
+        elog.post(msg=post_msg, tags=tag, run=(run_number))
     return post_msg
 
 
@@ -103,6 +100,7 @@ def begin(events=None, duration=300,
     from time import sleep
     from mfx.db import daq
     from ophyd.utils import StatusTimeoutError, WaitTimeoutError
+
     logger = logging.getLogger(__name__)
 
     logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
@@ -190,7 +188,7 @@ def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
 
 
 def autorun(sample='?', tag=None, run_length=300, record=True,
-            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2, exp=None):
+            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2):
     """
     Automate runs.... With optional quotes
 
@@ -227,9 +225,6 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     daq_num: int, optional
         Switch between daq 1 and 2. Default 2
 
-    exp: str, optional
-        Experiment name if needed
-
     Operations
     ----------
 
@@ -238,12 +233,9 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     import sys
     from time import sleep, time
     from mfx.db import daq, pp
-    from pcdsdaq.daq.lcls1 import DaqLCLS1
+    from mfx.macros import get_run, get_exp
 
     logger = logging.getLogger(__name__)
-
-    daq1=DaqLCLS1()
-    run_number = daq1.run_number() + 1
 
     if sample.lower()=='water' or sample.lower()=='h2o':
         inspire=True
@@ -257,6 +249,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
 
     if daq_num == 1:
         for i in range(runs):
+            run_number = get_run(station=1) + 1
             logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
             status = begin(duration = run_length, record = record, wait = True, end_run = True)
             if cam is not None:
@@ -266,9 +259,10 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                 post(
                     sample=sample, 
                     tag=tag, 
-                    run_number=1, 
+                    run_number=run_number, 
                     post=record, 
-                    inspire=inspire, 
+                    inspire=inspire,
+                    daq_num=daq_num,
                     add_note='Run ended prematurely. Probably sample delivery problem')
                 logger.warning("[*] Stopping Run and exiting???...")
                 sleep(5)
@@ -280,10 +274,10 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             post(
                 sample=sample, 
                 tag=tag, 
-                run_number=1, 
+                run_number=run_number, 
                 post=record, 
                 inspire=inspire,
-                exp=exp)
+                daq_num=daq_num)
             try:
                 sleep(daq_delay)
             except KeyboardInterrupt:
@@ -305,6 +299,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     elif daq_num == 2:
         try:
             for i in range(runs):
+                run_number = get_run(station=0) + 1
                 from psdaq.control.DaqControl import DaqControl  # NOQA
                 daq.control = DaqControl(
                     host=daq.control.host,
@@ -364,7 +359,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                         run_number=run_number, 
                         post=record, 
                         inspire=inspire,
-                        exp=exp)
+                        daq_num=daq_num)
 
                 sleep(daq_delay)
 
@@ -382,7 +377,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                     run_number=run_number, 
                     post=record, 
                     inspire=inspire,
-                    exp=exp, 
+                    daq_num=daq_num, 
                     add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
             logger.warning('Run ended prematurely. Probably sample delivery problem')

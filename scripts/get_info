@@ -1,0 +1,17 @@
+#!/bin/bash
+HERE="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
+PYTHON_OPTIONS=(
+  /cds/group/pcds/pyps/conda/py36/envs/pcds-3.4.0/bin/python
+  /sdf/group/lcls/ds/ana/sw/conda1/inst/envs/ana-4.0.60-py3/bin/python
+)
+
+for PYTHON in "${PYTHON_OPTIONS[@]}"
+do
+  if [ -x "${PYTHON}" ]; then
+    "${PYTHON}" "${HERE}/get_info.py" "${@}"
+    exit $?
+  fi
+done
+
+echo "No known python executable is available! Tried all of" "${PYTHON_OPTIONS[@]}"
+exit 1

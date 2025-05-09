@@ -70,8 +70,7 @@ class Scan:
         from ophyd import EpicsSignal
         import logging
         logger = logging.getLogger(__name__)
-        from pcdsdaq.daq.lcls1 import DaqLCLS1
-        daq1=DaqLCLS1()
+        from mfx.macros import get_run
         try:
             from mfx.db import RE, pp, daq, lxt_fast
             from mfx.autorun import quote, post
@@ -86,8 +85,6 @@ class Scan:
         except ImportError:
             print("could not import bp")
 
-        run_number = daq1.run_number() + 1
-
         if picker=='open':
             pp.open()
         if picker=='flip':
@@ -98,6 +95,7 @@ class Scan:
         
         try:
             for i in range(runs):
+                run_number = get_run(station=1) + 1
                 logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
 
                 daq.configure(motors=[lxt_fast], group_mask=0x1, events=events_per_step, record=True)
@@ -116,7 +114,7 @@ class Scan:
                         run_number=run_number, 
                         post=record, 
                         inspire=inspire,
-                        exp=exp,
+                        daq_num=daq_num,
                         add_note=f'pv: {pv}, scan_start: {scan_start}, scan_end: {scan_end}, scan_steps: {scan_steps}')
 
         except KeyboardInterrupt:
@@ -133,7 +131,7 @@ class Scan:
                     run_number=run_number, 
                     post=record, 
                     inspire=inspire,
-                    exp=exp, 
+                    daq_num=daq_num, 
                     add_note=f'Run ended prematurely. Probably sample delivery problem. ' +
                     f'pv: {pv}, scan_start: {scan_start}, scan_end: {scan_end}, scan_steps: {scan_steps}')
             logger.warning("[*] Stopping Run and exiting???...")
@@ -222,7 +220,7 @@ class Scan:
         import os
         import logging
         from mfx.db import pp, daq
-        from mfx.autorun import quote, autorun
+        from mfx.autorun import quote
         from mfx.macros import get_exp
         from time import sleep
         logger = logging.getLogger(__name__)

@@ -180,12 +180,21 @@ class FakeDetector:
         print(f">>> Highest q: {highest_q_invA:.2f} A-1 | {self._pixel_q_invA_to_resol_A(highest_q_invA):.2f} A (detector corner)")
 
 
-
-def get_exp():
+def get_exp(hutch='mfx', station=0):
     import requests
     ws_url = "https://pswww.slac.stanford.edu/ws/lgbk"
     resp = requests.get(
         ws_url + "/lgbk/ws/activeexperiment_for_instrument_station",
-        {"instrument_name": 'mfx', "station": 0})
+        {"instrument_name": hutch, "station": station})
     exp = resp.json().get("value", {}).get("name")
     return exp
+
+
+def get_run(hutch='mfx', station=0):
+    import requests
+    import logging
+    ws_url = "https://pswww.slac.stanford.edu/ws/lgbk"
+    exp = get_exp(hutch, station)
+    rundoc = requests.get(ws_url + "/lgbk/" + exp  + "/ws/current_run").json()["value"]
+    run=int(rundoc['num'])
+    return run

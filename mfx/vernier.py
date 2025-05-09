@@ -70,8 +70,9 @@ class Vernier:
         if tag is None:
             tag = sample
 
-        logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-        run_number = daq.run_number() + 1
+        run_number = get_run(station=1) + 1
+        logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+
         RE(
             daq_scan(
                 [],
@@ -83,7 +84,13 @@ class Vernier:
                 record=record))
         pp.close()
         daq.disconnect()
-        post(sample, tag, run_number, record, inspire)
+        post(
+            sample=sample, 
+            tag=tag, 
+            run_number=run_number, 
+            post=record, 
+            inspire=inspire,
+            daq_num=daq_num)
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
         logging.warning(f"Scan completed. Would you like to analyze the output?")
@@ -155,7 +162,7 @@ class Vernier:
         if picker=='flip':
             pp.flipflop()
 
-        run_number = daq.run_number() + 1
+        run_number = get_run(station=1) + 1
 
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)
@@ -173,7 +180,8 @@ class Vernier:
                 runs=1,
                 inspire=inspire, 
                 picker=picker,
-                close=False)
+                close=False,
+                daq_num=daq_num)
             sleep(daq_delay)
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')

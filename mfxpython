@@ -8,6 +8,10 @@ if [ "$1" == "optimize" ]; then
     # Launch with only the optimize devices and functions (xopt, blop)
     shift
     "${HERE}/mfx/optimize/real_interactive.sh" "$@"
+elif [ "$1" == "daq1" ]; then
+    # Launch hutch-python with all devices and functions but with LCLS-I DAQ
+    EXP=$(/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/get_info --exp --hutch $HUTCH --station 1)
+    hutch-python --cfg "${HERE}/alt_conf.yml" --exp $EXP ${@:2}
 else
     # Launch hutch-python with all devices and functions
     hutch-python --cfg "${HERE}/conf.yml" "$@"

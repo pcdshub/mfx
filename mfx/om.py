@@ -1,7 +1,10 @@
 class OM:
-    def __init__(self):
-        from mfx.macros import get_exp
-        self.experiment = str(get_exp())
+    def __init__(self, experiment=None):
+        if experiment is None:
+            from mfx.macros import get_exp
+            self.experiment = str(get_exp())
+        else:
+            self.experiment = experiment
         self.cwd = f'/cds/home/opr/mfxopr/OM-GUI'
         self.pwd = f'{self.cwd}/{self.experiment}'
 
