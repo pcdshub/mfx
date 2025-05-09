@@ -77,7 +77,7 @@ class DCCMono():
             energy_scan_end_eV: float,
             energy_scan_steps: int,
             run_length: int = 30,
-            tag: str = None,
+            tag: str = 'dccm',
             picker: str = None,
             inspire: bool = False,
             daq_delay: int = 5,
@@ -100,7 +100,7 @@ class DCCMono():
                 number of seconds for run 30 is default
 
             tag: str, optional
-                Run group tag/sample name
+                Run group tag. Default is 'dccm'
 
             picker: str, optional
                 If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
