@@ -417,8 +417,8 @@ class yano:
             tag = sample
 
         for i in range(runs):
-            logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-            run_number = daq.run_number() + 1
+            logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
+            run_number = get_run(station=1) + 1
             status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
             if status is False:
                 pp.close()

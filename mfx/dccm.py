@@ -133,7 +133,7 @@ class DCCMono():
         if picker=='flip':
             pp.flipflop()
 
-        run_number = daq.run_number() + 1
+        run_number = get_run(station=1) + 1
 
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)

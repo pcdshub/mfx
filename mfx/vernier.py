@@ -70,8 +70,9 @@ class Vernier:
         if tag is None:
             tag = sample
 
-        logger.info(f"Run Number {daq.run_number() + 1} Running {sample}......{quote()['quote']}")
-        run_number = daq.run_number() + 1
+        run_number = get_run(station=1) + 1
+        logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+
         RE(
             daq_scan(
                 [],
@@ -161,7 +162,7 @@ class Vernier:
         if picker=='flip':
             pp.flipflop()
 
-        run_number = daq.run_number() + 1
+        run_number = get_run(station=1) + 1
 
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)

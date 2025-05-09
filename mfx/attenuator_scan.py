@@ -143,8 +143,8 @@ def attenuator_scan_single_run(
         pp.flipflop()
 
     for i in range(runs):
-        logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
         run_number = get_run(station=1) + 1
+        logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
         if use_daq:
             if daq_num == 2:
                 daq.control.setState("configured")

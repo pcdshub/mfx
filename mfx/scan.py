@@ -85,8 +85,6 @@ class Scan:
         except ImportError:
             print("could not import bp")
 
-        run_number = get_run(station=1) + 1
-
         if picker=='open':
             pp.open()
         if picker=='flip':
@@ -97,6 +95,7 @@ class Scan:
         
         try:
             for i in range(runs):
+                run_number = get_run(station=1) + 1
                 logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
 
                 daq.configure(motors=[lxt_fast], group_mask=0x1, events=events_per_step, record=True)
