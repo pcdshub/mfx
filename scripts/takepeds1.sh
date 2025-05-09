@@ -53,11 +53,11 @@ if [ $? -eq 0 ]; then
     source pcds_conda
     PYCMD=LogBookPost
 
-    RUN=`get_lastRun`
+    RUN=$(/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/get_info --run --hutch $HUTCH --station 1)
     echo $PYCMD -i "${HUTCH^^}" -u `whoami` -e "$EXP"  -t DARK  -r $RUN -m "$elogMessage"
     $PYCMD -i "${HUTCH^^}" -u `whoami` -p pcds -e "$EXP"  -t DARK  -r $RUN -m "$elogMessage"&
 
-    echo 'Please call: makepeds -q milano -r '`get_lastRun`' -u <userID>'
+    echo "Please call: makepeds -q milano -r $RUN -u <userID>"
 else
     echo 'takepeds failed, make sure the DAQ is setup appropriately!'
 fi
