@@ -248,8 +248,8 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
         tag = sample
 
     if daq_num == 1:
-        run_number = get_run(station=1) + 1
         for i in range(runs):
+            run_number = get_run(station=1) + 1
             logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
             status = begin(duration = run_length, record = record, wait = True, end_run = True)
             if cam is not None:
@@ -297,9 +297,9 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
             logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     elif daq_num == 2:
-        run_number = get_run(station=0) + 1
         try:
             for i in range(runs):
+                run_number = get_run(station=0) + 1
                 from psdaq.control.DaqControl import DaqControl  # NOQA
                 daq.control = DaqControl(
                     host=daq.control.host,
