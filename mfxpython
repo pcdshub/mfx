@@ -10,7 +10,7 @@ if [ "$1" == "optimize" ]; then
     "${HERE}/mfx/optimize/real_interactive.sh" "$@"
 elif [ "$1" == "daq1" ]; then
     # Launch hutch-python with all devices and functions but with LCLS-I DAQ
-    hutch-python --cfg "${HERE}/alt_conf.yml" "$@"
+    hutch-python --cfg "${HERE}/alt_conf.yml" ${@:2}
 else
     # Launch hutch-python with all devices and functions
     hutch-python --cfg "${HERE}/conf.yml" "$@"
