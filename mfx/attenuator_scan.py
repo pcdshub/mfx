@@ -66,8 +66,8 @@ def attenuator_scan_separate_runs(
 
 def attenuator_scan_single_run(
     sample: str ='?',
-    tag: str =None,
-    duration: int = None,
+    tag: str = 'attenuator',
+    duration: int = 10,
     record: bool = False,
     transmissions: list = [0.01, 0.02, 0.03],
     use_daq: bool = True,
@@ -85,7 +85,7 @@ def attenuator_scan_single_run(
         Sample Name
 
     tag: str, optional
-        Run group tag
+        Run group tag Default 'attenuator'
 
     duration: int, optional
         Number of seconds to record at each transmission.
@@ -147,6 +147,20 @@ def attenuator_scan_single_run(
         logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
         if use_daq:
             if daq_num == 2:
+                from psdaq.control.DaqControl import DaqControl  # NOQA
+                daq.control = DaqControl(
+                    host=daq.control.host,
+                    platform=daq.control.platform,
+                    timeout=10000,
+                )
+                instr = daq.control.getInstrument()
+                if instr is None:
+                    logger.error('Failed to connect to LCLS-II DAQ')
+                    break
+                start_state = daq.control.getState()
+                if start_state == 'error':
+                    logger.error('DAQ is in an error state.')
+                    break
                 daq.control.setState("configured")
                 while daq.control.getState() != "configured":
                     ...
@@ -159,34 +173,48 @@ def attenuator_scan_single_run(
                     ...
 
             if daq_num == 1:
-                daq1.configure(record=record)
+                daq.configure(record=record)
                 sleep(3)
+
         for i in transmissions:
             att(i, wait=True)
             if use_daq and daq_num == 1:
                     sleep(3)
-                    daq1.begin(duration=duration, record=record, wait=True, use_l3t=False)
+                    daq.begin(duration=duration, record=record, wait=True, use_l3t=False)
             else:
                 sleep(duration)
 
     if use_daq:
         if daq_num == 2:
+            from psdaq.control.DaqControl import DaqControl  # NOQA
+            daq.control = DaqControl(
+                host=daq.control.host,
+                platform=daq.control.platform,
+                timeout=10000,
+            )
+            instr = daq.control.getInstrument()
+            if instr is None:
+                logger.error('Failed to connect to LCLS-II DAQ')
+            start_state = daq.control.getState()
+            if start_state == 'error':
+                logger.error('DAQ is in an error state.')
             daq.control.setState("configured")
             while daq.control.getState() != "configured":
                 ...
             daq.control.setRecord(False)
             daq.control.setState("running")
         if daq_num == 1:
-            daq1.end_run()
-            daq1.disconnect()
+            daq.end_run()
+            daq.disconnect()
 
         if record:
-            sample_transmission=f"{sample} \n transmissions: {transmissions}"
+            sample_transmissions=f"{sample} \n transmissions: {transmissions}"
             post(
                 sample=sample, 
                 tag=tag, 
                 run_number=run_number, 
                 post=record, 
                 inspire=inspire,
-                daq_num=daq_num)
+                daq_num=daq_num,
+                add_note=sample_transmissions)
         pp.close()
