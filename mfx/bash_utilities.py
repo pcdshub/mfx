@@ -57,13 +57,19 @@ class bs:
         logger = logging.getLogger(__name__)
 
         logging.info("Making Pedestals")
+        if daq_num == 1:
+            station = 1
+        elif daq_num == 2:
+            station = 0
+        else:
+            logger.error('Please enter daq 1 or 2.')
 
         if run_number is None:
             try:
-                run_number = get_run(station=1)
+                run_number = get_run(station=station) + 1
             except NameError:
                 logging.error(
-                    f"get_run(station=1) not working please enter run manually as follows\n"
+                    f"get_run(station=station) not working please enter run manually as follows\n"
                     f"bs.makepeds('{username}', run_number=XXX)")
         username = str(username)
         run_number = str(int(run_number))

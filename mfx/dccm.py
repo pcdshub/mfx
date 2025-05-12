@@ -133,7 +133,14 @@ class DCCMono():
         if picker=='flip':
             pp.flipflop()
 
-        run_number = get_run(station=1) + 1
+        if daq_num == 1:
+            station = 1
+        elif daq_num == 2:
+            station = 0
+        else:
+            logger.error('Please enter daq 1 or 2.')
+
+        run_number = get_run(station=station) + 1
 
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)
@@ -227,9 +234,9 @@ class DCCMono():
             import mfx.cctbx
             logger = logging.getLogger(__name__)
 
-            if daq == 2:
+            if daq_num == 2:
                 station=0
-            elif daq == 1:
+            elif daq_num == 1:
                 station=1
             else:
                 logging.error('Please enter daq 1 or 2.')

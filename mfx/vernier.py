@@ -14,6 +14,7 @@ class Vernier:
             picker: str = None,
             inspire: bool = False,
             record: bool = False,
+            daq_num: int = 2,
             mcc_pv: str = 'MFX:USER:MCC:EPHOT:SET1'):
         """Perform Vernier scan.
 
@@ -45,6 +46,9 @@ class Vernier:
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
 
+            daq_num: int, optional
+                Switch between daq 1 and 2. Default 2
+
             mcc_pv (str): 
                 Vernier PV. Optional. Default: 'MFX:USER:MCC:EPHOT:SET1'.
         
@@ -70,7 +74,14 @@ class Vernier:
         if tag is None:
             tag = sample
 
-        run_number = get_run(station=1) + 1
+        if daq_num == 1:
+            station = 1
+        elif daq_num == 2:
+            station = 0
+        else:
+            logger.error('Please enter daq 1 or 2.')
+
+        run_number = get_run(station=station) + 1
         logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
 
         RE(
@@ -118,7 +129,8 @@ class Vernier:
             picker: str = None,
             inspire: bool = False,
             daq_delay: int = 5,
-            record: bool = False):
+            record: bool = False,
+            daq_num: int = 2):
         """Perform Vernier scan.
 
         Parameters:
@@ -148,6 +160,9 @@ class Vernier:
 
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
+
+            daq_num: int, optional
+                Switch between daq 1 and 2. Default 2
         """
         import os
         import logging
@@ -162,7 +177,14 @@ class Vernier:
         if picker=='flip':
             pp.flipflop()
 
-        run_number = get_run(station=1) + 1
+        if daq_num == 1:
+            station = 1
+        elif daq_num == 2:
+            station = 0
+        else:
+            logger.error('Please enter daq 1 or 2.')
+
+        run_number = get_run(station=station) + 1
 
         energies = list(range(energy_scan_start_eV, energy_scan_end_eV + energy_scan_steps, energy_scan_steps))
         logger.info(energies)
