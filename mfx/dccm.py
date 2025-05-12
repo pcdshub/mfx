@@ -124,7 +124,7 @@ class DCCMono():
         import logging
         from mfx.db import pp, daq
         from mfx.autorun import quote, autorun
-        from mfx.macros import get_exp, determine_dccm_bragg
+        from mfx.macros import get_run, determine_dccm_bragg
         from time import sleep
         logger = logging.getLogger(__name__)
 
