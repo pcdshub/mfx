@@ -12,7 +12,9 @@ from pydantic import ConfigDict, validate_call
 Diagnostics = Literal["xcs1", "dg1", "dg2", "ip"]
 Methods = Literal["xopt", "blop"]
 Devices = Literal["yag", "wave8"]
+Movers = Literal["mirr", "und"]
 Turbo = Literal["safety", "optimize"]
+
 
 
 def validate_w_lowercase_args(func):

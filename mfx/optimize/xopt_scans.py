@@ -4,9 +4,8 @@ To test with sim, ipython -i mfx/optimize/xopt_scans.py for an interactive test
 Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
-from typing import Optional
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,7 +23,6 @@ from .beamline_hw import (
     DG2_WAVE8_XPOS,
     DG2_YAG_XPOS,
     IP_YAG_XPOS,
-    MIRROR_NOMINAL,
     init_devices,
     sim_devices,
     YAG_CENTROID_X_MIN_MAX,
@@ -34,13 +32,16 @@ from .beamline_hw import (
 )
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot
-from .type_checking import validate_w_lowercase_args, Devices, Diagnostics, Turbo
-from .user_select import select_diagnostic, select_goal
+from .type_checking import validate_w_lowercase_args, Devices, Diagnostics, Turbo, Movers
+from .user_select import select_diagnostic, select_goal, select_var_range, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
 
 
+@validate_w_lowercase_args
 def get_vocs(
-    mirror_nominal: float = MIRROR_NOMINAL,
-    search_delta: float = 5,
+    mover: Movers,
+    search_range: Optional[Union[list[tuple[float, float]], tuple[float, float]]] = None,
+    search_delta: Optional[Union[float, tuple[float, float]]] = None,
+    search_center: Optional[Union[float, tuple[float, float]]] = None,
     wave8_max_value: Optional[float] = None,
     yag_size_min: Optional[float] = None,
     yag_size_max: Optional[float] = None,
@@ -52,7 +53,6 @@ def get_vocs(
     centroid_y_max: float = None,
 ) -> VOCS:
     constrants = {}
-
     if wave8_max_value is not None:
         constrants["abs_centroid_x"] = ["LESS_THAN", wave8_max_value]
     if yag_size_min is not None:
@@ -74,9 +74,12 @@ def get_vocs(
     if centroid_y_max is not None:
         constrants["centroid_y"] = ["LESS_THAN", centroid_y_max]
     return VOCS(
-        variables={
-            "mirror_pitch": [mirror_nominal - search_delta, mirror_nominal + search_delta]
-        },
+        variables=select_var_range(
+            mover=mover,
+            search_center=search_center,
+            search_delta=search_delta,
+            search_range=search_range,
+        ),
         objectives={
             "objective": "MINIMIZE",
         },
@@ -84,9 +87,31 @@ def get_vocs(
     )
 
 
+@validate_w_lowercase_args
+def evaluator_move(mover: Movers, input: dict):
+    """
+    Re-usable XOpt move primitive.
+
+    Takes XOpt's input and moves the applicable device.
+    """
+    if mover == "mirr":
+        print(f"Trying {input[MP_KEY]}")
+    elif mover == "und":
+        print(f"Trying ({input[UNDP_KEY_X]}, {input[UNDP_KEY_Y]})")
+    else:
+        raise NotImplementedError(f"Mover type {mover} not implemented in evaluator_move.")
+    devices = init_devices()
+    if mover == "mirr":
+        devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
+    elif mover == "und":
+        devices["undp"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
+
+
+@validate_w_lowercase_args
 def get_evaluator_wave8(
     wave8: str = "dg1",
     wave8_xpos: Optional[float] = None,
+    mover: Movers = "mirr",
 ) -> Evaluator:
     if wave8_xpos is None:
         if wave8 == "dg1":
@@ -97,9 +122,7 @@ def get_evaluator_wave8(
             raise ValueError(f"Invalid wave8 {wave8}, expected dg1 or dg2")
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
-        print(f"Trying {input['mirror_pitch']}")
-        devices = init_devices()
-        devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
+        evaluator_move(mover=mover, input=input)
         xpos_device = select_diagnostic("wave8", wave8).xpos
         xpos_device.trigger().wait(timeout=10)
         xpos = xpos_device.get()
@@ -113,9 +136,11 @@ def get_evaluator_wave8(
     return Evaluator(function=evaluate)
 
 
+@validate_w_lowercase_args
 def get_evaluator_yag(
     yag: str = "dg1",
     goal: Optional[float] = None,
+    mover: Movers = "mirr",
 ) -> Evaluator:
     yag = yag.lower()
     if yag not in ("xcs1", "dg1", "dg2", "ip"):
@@ -132,9 +157,7 @@ def get_evaluator_yag(
     fit = ImageProjectionFit()
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
-        print(f"Trying {input['mirror_pitch']}")
-        devices = init_devices()
-        devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
+        evaluator_move(mover=mover, input=input)
         image_device = select_diagnostic("yag", yag).image1.shaped_image
         image_device.trigger().wait(timeout=10)
         image = image_device.get()
@@ -158,20 +181,18 @@ def get_evaluator_yag(
 def get_evaluator_yag_2d(
     yag: Diagnostics,
     goal: tuple[float, float],
+    mover: Movers,
 ) -> Evaluator:
     """
     Alternate evaluator in 2d space.
     """
-    devices = init_devices()
     imager = select_diagnostic("yag", yag)
     image_device = imager.image1.shaped_image
-    mirror = devices["mr1l4_homs"]
 
     fit = ImageProjectionFit()
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
-        print(f"Trying {input['mirror_pitch']}")
-        mirror.pitch.set(input["mirror_pitch"]).wait(timeout=20)
+        evaluator_move(mover=mover, input=input)
         image_device.trigger().wait(timeout=10)
         image = image_device.get()
         print(f"image shape: {image.shape}")
@@ -194,8 +215,10 @@ def get_evaluator_yag_2d(
 def get_xopt_obj(
     device_type: Devices,
     location: Diagnostics,
-    mirror_nominal: float = MIRROR_NOMINAL,
-    search_delta: float = 2,
+    mover: Movers,
+    search_range: Optional[Union[list[tuple[float, float]], tuple[float, float]]] = None,
+    search_delta: Optional[Union[float, tuple[float, float]]] = None,
+    search_center: Optional[Union[float, tuple[float, float]]] = None,
     goal: Optional[float] = None,
     wave8_max_value: Optional[float] = None,
     yag_size_min: Optional[float]  = None,
@@ -228,10 +251,18 @@ def get_xopt_obj(
         One of "yag" or "wave8"
     location : Diagnostics
         One of "xcs1", "dg1", "dg2", "ip"
-    mirror_nominal : float
-        The starting mirror pitch position and midpoint of the optimization search.
-    search_delta : float
-        How far +/- we check away from the mirror nominal pitch position
+    mover : str
+        One of "mirr" or "und", the kind of movement we'll be doing.
+    search_range : tuple of floats or list of tuple of floats, optional
+        Explicit search ranges per dimension, in units of your motion device.
+        Either search_range or search_delta must be provided.
+    search_delta : float, optional
+        The +- around the center to search for, in units of your motion device.
+        Either search_range or search_delta must be provided.
+    search_center : float or tuple of floats, optional
+        If using search_delta, this is the reference point for
+        the delta range, in units of your motion device.
+        If not provided this will be the mover's current position.
     goal : float, optional
         Either the wave8 xpos to aim for, or the x coordinate to aim for on a yag.
     wave8_max_value : float, optional
@@ -297,8 +328,10 @@ def get_xopt_obj(
         centroid_y_max = centroid_y_max or WAVE8_CENTROID_Y_MIN_MAX[1]
 
     vocs = get_vocs(
-        mirror_nominal=mirror_nominal,
+        mover=mover,
+        search_center=search_center,
         search_delta=search_delta,
+        search_range=search_range,
         wave8_max_value=wave8_max_value,
         yag_size_min=yag_size_min,
         yag_size_max=yag_size_max,
@@ -315,16 +348,19 @@ def get_xopt_obj(
             evaluator = get_evaluator_yag_2d(
                 yag=location,
                 goal=goal_value,
+                mover=mover,
             )
         else:
             evaluator = get_evaluator_yag(
                 yag=location,
                 goal=goal_value,
+                mover=mover,
             )
     else:
         evaluator = get_evaluator_wave8(
             wave8=location,
             wave8_xpos=goal_value,
+            mover=mover,
         )
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
