@@ -9,7 +9,8 @@ class MFX_Timing:
             'pp_trig':197,
             'daq_readout':198,
             'laser_on':203,
-            'laser_off':204,
+            'laser_off1':204,
+            'laser_off2':205,
             'ray_readout':210,
             'ray1':211,
             'ray2':212,
@@ -23,8 +24,8 @@ class MFX_Timing:
     def _seq_step(self, evt_code_name=None, delta_beam=0):
         try:
             return [self.evt_code[evt_code_name], delta_beam, 0, 0]
-        except:
-            print('Error: event sequencer step not recognized.')
+        except KeyError:
+            print(f'Error: event sequencer step {evt_code_name} not in {self.evt_code.keys()}.')
 
 
     def _seq_init(self, sync_mark=30):
