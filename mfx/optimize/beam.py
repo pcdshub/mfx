@@ -73,7 +73,7 @@ class Beam:
 
         path_plot = None
         if with_method == "xopt":
-            from .xopt_scans import get_xopt_obj, evaluator_move
+            from .xopt_scans import get_xopt_obj, evaluator_move, get_variables
             # Allow the loading of an already instantiated xopt object, e.g. to take more steps
             if xopt_obj:
                 print("Using existing Xopt object.")
@@ -87,6 +87,7 @@ class Beam:
                     path_plot = UpdatingDeviceCentroidPathPlot(
                         imager=old_path_plot.imager,
                         goal=old_path_plot.goal,
+                        constraints=old_path_plot.constraints,
                     )
             else:
                 print("Loading Xopt object.")
@@ -114,7 +115,10 @@ class Beam:
                         constraints=constraint_data.yag.get(on_diagnostic),
                     )
                     xopt._cached_path_plot = path_plot
-                xopt.random_evaluate(xopt_rand_evaluate)
+                xopt.random_evaluate(
+                    n_samples=xopt_rand_evaluate,
+                    custom_bounds=get_variables(mover=mover, narrow=True),
+                )
             print(xopt.data)
             xopt_eval_plot = UpdatingXoptVisualizeModelPlot(xopt)
 
