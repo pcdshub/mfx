@@ -28,11 +28,6 @@ XCS_YAG_XPOS = 337
 DG1_YAG_XPOS = 300
 DG2_YAG_XPOS = 300
 IP_YAG_XPOS = 344
-# Default min/max values for centroid positions
-YAG_CENTROID_X_MIN_MAX = (180, 600)
-YAG_CENTROID_Y_MIN_MAX = (400, 600)
-WAVE8_CENTROID_X_MIN_MAX = (None, None)
-WAVE8_CENTROID_Y_MIN_MAX = (None, None)
 
 devices: dict[str, Device] = {}
 

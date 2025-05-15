@@ -5,7 +5,7 @@ Or python -m mfx.optimize.xopt_scans for a default sim run-through
 """
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +14,7 @@ from xopt import VOCS, Evaluator, Xopt
 from xopt.generators.bayesian import ExpectedImprovementGenerator
 
 from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
-from lcls_tools.common.image.fit import ImageProjectionFit
+from lcls_tools.common.image.fit import ImageProjectionFit, ImageProjectionFitResult
 
 from .beamline_hw import (
     XCS_YAG_XPOS,
@@ -25,65 +25,56 @@ from .beamline_hw import (
     IP_YAG_XPOS,
     init_devices,
     sim_devices,
-    YAG_CENTROID_X_MIN_MAX,
-    YAG_CENTROID_Y_MIN_MAX,
-    WAVE8_CENTROID_X_MIN_MAX,
-    WAVE8_CENTROID_Y_MIN_MAX,
 )
+from .constraints import constraint_data
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot
 from .type_checking import validate_w_lowercase_args, Devices, Diagnostics, Turbo, Movers
-from .user_select import select_diagnostic, select_goal, select_var_range, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
+from .user_select import select_diagnostic, select_goal, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
+
+
+@validate_w_lowercase_args
+def get_variables(mover: Movers):
+    """Apply info in constraints module for movers to xopt variables"""
+    variables = {}
+    if mover == "mirr":
+        center = constraint_data.mirr.range_center
+        delta = constraint_data.mirr.range_delta
+        variables[MP_KEY] = [center - delta, center + delta]
+    elif mover == "und":
+        undp = init_devices()["undp"]
+        pos = undp.position
+        delta = constraint_data.und.xy_delta
+        variables[UNDP_KEY_X] = [pos[0] - delta, pos[0] + delta]
+        variables[UNDP_KEY_Y] = [pos[1] - delta, pos[1] + delta]
+    return variables
+
+
+@validate_w_lowercase_args
+def get_constraints(diagnostic: Diagnostics, device: Devices) -> dict[str, list]:
+    """Apply info in constraints module for diagnostics to xopt constraints"""
+    if device == "yag":
+        try:
+            yag_constraint = constraint_data.yag[diagnostic]
+        except KeyError:
+            return {}
+        if yag_constraint.roi_center is not None and yag_constraint.roi_radius is not None:
+            return {"roi_radius": ["LESS_THAN", yag_constraint.roi_radius]}
+    return {}
 
 
 @validate_w_lowercase_args
 def get_vocs(
     mover: Movers,
-    search_range: Optional[Union[list[tuple[float, float]], tuple[float, float]]] = None,
-    search_delta: Optional[Union[float, tuple[float, float]]] = None,
-    search_center: Optional[Union[float, tuple[float, float]]] = None,
-    wave8_max_value: Optional[float] = None,
-    yag_size_min: Optional[float] = None,
-    yag_size_max: Optional[float] = None,
-    yag_intensity_min: Optional[float] = None,
-    yag_intensity_max: Optional[float] = None,
-    centroid_x_min: float = None,
-    centroid_x_max: float = None,
-    centroid_y_min: float = None,
-    centroid_y_max: float = None,
+    diagnostic: Diagnostics,
+    device: Devices,
 ) -> VOCS:
-    constrants = {}
-    if wave8_max_value is not None:
-        constrants["abs_centroid_x"] = ["LESS_THAN", wave8_max_value]
-    if yag_size_min is not None:
-        constrants["rms_size_x"] = ["GREATER_THAN", yag_size_min]
-        constrants["rms_size_y"] = ["GREATER_THAN", yag_size_min]
-    if yag_size_max is not None:
-        constrants["rms_size_x"] = ["LESS_THAN", yag_size_max]
-        constrants["rms_size_y"] = ["LESS_THAN", yag_size_max]
-    if yag_intensity_min is not None:
-        constrants["total_intensity"] = ["GREATER_THAN", yag_intensity_min]
-    if yag_intensity_max is not None:
-        constrants["total_intensity"] = ["LESS_THAN", yag_intensity_max]
-    if centroid_x_min is not None:
-        constrants["centroid_x"] = ["GREATER_THAN", centroid_x_min]
-    if centroid_x_max is not None:
-        constrants["centroid_x"] = ["LESS_THAN", centroid_x_max]
-    if centroid_y_min is not None:
-        constrants["centroid_y"] = ["GREATER_THAN", centroid_y_min]
-    if centroid_y_max is not None:
-        constrants["centroid_y"] = ["LESS_THAN", centroid_y_max]
     return VOCS(
-        variables=select_var_range(
-            mover=mover,
-            search_center=search_center,
-            search_delta=search_delta,
-            search_range=search_range,
-        ),
+        variables=get_variables(mover),
         objectives={
             "objective": "MINIMIZE",
         },
-        constraints=constrants,
+        constraints=get_constraints(diagnostic, device),
     )
 
 
@@ -136,6 +127,48 @@ def get_evaluator_wave8(
     return Evaluator(function=evaluate)
 
 
+def evaluate_yag_processing(
+    diagnostic: Diagnostics,
+    fit: ImageProjectionFit,
+) -> ImageProjectionFitResult:
+    """
+    Shared image collection and fitting for use in yag evaluators.
+    """
+    image_device = select_diagnostic("yag", diagnostic).image1.shaped_image
+    image_device.trigger().wait(timeout=10)
+    image = image_device.get()
+    print(f"image shape: {image.shape}")
+    # NOTE/TODO: consider adding an averaging step here before fitting
+    return fit.fit_image(image)
+
+
+def distance2d(pt1: tuple[float, float], pt2: tuple[float, float]) -> float:
+    return np.sqrt((pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2)
+
+
+def evaluate_yag_results(
+    diagnostic: Diagnostics,
+    fit_result: ImageProjectionFitResult,
+) -> dict[str, float]:
+    """
+    Shared unpacking of the fit result for use in yag evaluators.
+    """
+    results = {}
+    results["centroid_x"] = fit_result.centroid[0]
+    results["centroid_y"] = fit_result.centroid[1]
+    results["rms_size_x"] = fit_result.rms_size[0]
+    results["rms_size_y"] = fit_result.rms_size[1]
+    results["total_intensity"] = fit_result.total_intensity
+    try:
+        yag_constr = constraint_data.yag[diagnostic]
+    except KeyError:
+        ...
+    else:
+        if yag_constr.roi_center is not None:
+            results["roi_radius"] = distance2d(fit_result.centroid, yag_constr.roi_center)
+    return results
+
+
 @validate_w_lowercase_args
 def get_evaluator_yag(
     yag: str = "dg1",
@@ -158,18 +191,8 @@ def get_evaluator_yag(
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
         evaluator_move(mover=mover, input=input)
-        image_device = select_diagnostic("yag", yag).image1.shaped_image
-        image_device.trigger().wait(timeout=10)
-        image = image_device.get()
-        print(f"image shape: {image.shape}")
-        # NOTE/TODO: consider adding an averaging step here before fitting
-        fit_result = fit.fit_image(image)
-        results = {}
-        results["centroid_x"] = fit_result.centroid[0]
-        results["centroid_y"] = fit_result.centroid[1]
-        results["rms_size_x"] = fit_result.rms_size[0]
-        results["rms_size_y"] = fit_result.rms_size[1]
-        results["total_intensity"] = fit_result.total_intensity
+        fit_result = evaluate_yag_processing(yag, fit)
+        results = evaluate_yag_results(yag, fit_result)
         results["objective"] = abs(fit_result.centroid[0] - goal)
         print(f"Distance from goal is {results['objective']}")
         return results
@@ -186,25 +209,13 @@ def get_evaluator_yag_2d(
     """
     Alternate evaluator in 2d space.
     """
-    imager = select_diagnostic("yag", yag)
-    image_device = imager.image1.shaped_image
-
     fit = ImageProjectionFit()
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
         evaluator_move(mover=mover, input=input)
-        image_device.trigger().wait(timeout=10)
-        image = image_device.get()
-        print(f"image shape: {image.shape}")
-        # NOTE/TODO: consider adding an averaging step here before fitting
-        fit_result = fit.fit_image(image)
-        results = {}
-        results["centroid_x"] = fit_result.centroid[0]
-        results["centroid_y"] = fit_result.centroid[1]
-        results["rms_size_x"] = fit_result.rms_size[0]
-        results["rms_size_y"] = fit_result.rms_size[1]
-        results["total_intensity"] = fit_result.total_intensity
-        results["objective"] = np.sqrt((fit_result.centroid[0] - goal[0])**2 + (fit_result.centroid[1] - goal[1])**2)
+        fit_result = evaluate_yag_processing(yag, fit)
+        results = evaluate_yag_results(yag, fit_result)
+        results["objective"] = distance2d(fit_result.centroid, goal)
         print(f"Distance from goal is {results['objective']}")
         return results
 
@@ -216,19 +227,7 @@ def get_xopt_obj(
     device_type: Devices,
     location: Diagnostics,
     mover: Movers,
-    search_range: Optional[Union[list[tuple[float, float]], tuple[float, float]]] = None,
-    search_delta: Optional[Union[float, tuple[float, float]]] = None,
-    search_center: Optional[Union[float, tuple[float, float]]] = None,
     goal: Optional[float] = None,
-    wave8_max_value: Optional[float] = None,
-    yag_size_min: Optional[float]  = None,
-    yag_size_max: Optional[float]  = None,
-    yag_intensity_min: Optional[float]  = None,
-    yag_intensity_max: Optional[float]  = None,
-    centroid_x_min: Optional[float]  = None,
-    centroid_x_max: Optional[float]  = None,
-    centroid_y_min: Optional[float]  = None,
-    centroid_y_max: Optional[float]  = None,
     xopt_generator_turbo_controller: Optional[Turbo] = None,
     use_2d_markers: bool = False,
     goal_2d: Optional[tuple[float, float]] = None,
@@ -253,36 +252,8 @@ def get_xopt_obj(
         One of "xcs1", "dg1", "dg2", "ip"
     mover : str
         One of "mirr" or "und", the kind of movement we'll be doing.
-    search_range : tuple of floats or list of tuple of floats, optional
-        Explicit search ranges per dimension, in units of your motion device.
-        Either search_range or search_delta must be provided.
-    search_delta : float, optional
-        The +- around the center to search for, in units of your motion device.
-        Either search_range or search_delta must be provided.
-    search_center : float or tuple of floats, optional
-        If using search_delta, this is the reference point for
-        the delta range, in units of your motion device.
-        If not provided this will be the mover's current position.
     goal : float, optional
         Either the wave8 xpos to aim for, or the x coordinate to aim for on a yag.
-    wave8_max_value : float, optional
-        Constraint on maximum wave8 xpos for data to be valid
-    yag_size_min : float, optional
-        Constraint on minimum yag spot size (RMS) for data to be valid
-    yag_size_max : float, optional
-        Constraint on maximum yag spot size (RMS) for data to be valid
-    yag_intensity_min : float, optional
-        Constraint on minimum yag total intensity count for data to be valid
-    yag_intensity_max : float, optional
-        Constraint on maximum yag total intensity count for data to be valid
-    centroid_x_min : float, optional
-        Constraint on minimum centroid x value for data to be valid
-    centroid_x_max : float, optional
-        Constraint on maximum centroid x value for data to be valid
-    centroid_y_min : float, optional
-        Constraint on minimum centroid y value for data to be valid
-    centroid_y_max : float, optional
-        Constraint on maximum centroid y value for data to be valid
     xopt_generator_turbo_controller : str, optional
         Which turbo controller to use. Options: "safety, optimize"
     use_2d_markers: bool, optional
@@ -299,48 +270,10 @@ def get_xopt_obj(
         goal_2d=goal_2d,
         use_2d_markers=use_2d_markers,
     )
-
-    if device_type == "wave8":
-        if any(v is not None for v in (yag_size_min, yag_size_max, yag_intensity_min, yag_intensity_max)):
-            raise ValueError(
-                "Arguments yag_size_min, yag_size_max, yag_intensity_min, and yag_intensity_max "
-                "are only valid for yag devices. "
-                "Set to None to run with wave8 devices. Current values: "
-                f"yag_size_min={yag_size_min}, yag_size_max={yag_size_max}, "
-                f"yag_intensity_min={yag_intensity_min}, yag_intensity_max={yag_intensity_max}"
-            )
-    if device_type == "yag" and wave8_max_value is not None:
-        raise ValueError(
-            "Argument wave8_max_value is only valid for wave8 devices. "
-            "Set to None to run with yag devices."
-        )
-
-    # Set min/max values for centroid_x and centroid_y based on device
-    if device_type == "yag":
-        centroid_x_min = centroid_x_min or YAG_CENTROID_X_MIN_MAX[0]
-        centroid_x_max = centroid_x_max or YAG_CENTROID_X_MIN_MAX[1]
-        centroid_y_min = centroid_y_min or YAG_CENTROID_Y_MIN_MAX[0]
-        centroid_y_max = centroid_y_max or YAG_CENTROID_Y_MIN_MAX[1]
-    elif device_type == "wave8":
-        centroid_x_min = centroid_x_min or WAVE8_CENTROID_X_MIN_MAX[0]
-        centroid_x_max = centroid_x_max or WAVE8_CENTROID_X_MIN_MAX[1]
-        centroid_y_min = centroid_y_min or WAVE8_CENTROID_Y_MIN_MAX[0]
-        centroid_y_max = centroid_y_max or WAVE8_CENTROID_Y_MIN_MAX[1]
-
     vocs = get_vocs(
         mover=mover,
-        search_center=search_center,
-        search_delta=search_delta,
-        search_range=search_range,
-        wave8_max_value=wave8_max_value,
-        yag_size_min=yag_size_min,
-        yag_size_max=yag_size_max,
-        yag_intensity_min=yag_intensity_min,
-        yag_intensity_max=yag_intensity_max,
-        centroid_x_min=centroid_x_min,
-        centroid_x_max=centroid_x_max,
-        centroid_y_min=centroid_y_min,
-        centroid_y_max=centroid_y_max,
+        diagnostic=location,
+        device=device_type,
     )
     print(vocs)
     if device_type == "yag":
@@ -365,6 +298,16 @@ def get_xopt_obj(
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.gp_constructor.use_low_noise_prior = False
     generator.numerical_optimizer.max_iter = max_iter
+    if mover == "mirr":
+        constr = constraint_data.mirr
+        if constr.max_travel_distance is not None:
+            # 1d, one distance
+            generator.max_travel_distances = [constr.max_travel_distance]
+    elif mover == "und":
+        constr = constraint_data.und
+        if constr.max_travel_distance is not None:
+            # 2d, two distances
+            generator.max_travel_distances = [constr.max_travel_distance, constr.max_travel_distance]
     return Xopt(
         vocs=vocs,
         generator=generator,
