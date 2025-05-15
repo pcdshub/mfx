@@ -225,6 +225,7 @@ def get_xopt_obj(
     use_2d_markers: bool = False,
     goal_2d: Optional[tuple[float, float]] = None,
     max_iter: Optional[int] = None,
+    dump_file: Optional[str] = None,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -255,6 +256,8 @@ def get_xopt_obj(
         The 2D optimization goal if running a 2D YAG optimization
     max_iter: int, optional
         Max number of steps for maximizing the acquisition function
+    dump_file: str, optional
+        Filepath to write data too. See Xopt's dump_file docs.
     """
     goal_value = select_goal(
         device_type=device_type,
@@ -305,4 +308,5 @@ def get_xopt_obj(
         vocs=vocs,
         generator=generator,
         evaluator=evaluator,
+        dump_file=dump_file,
     )
