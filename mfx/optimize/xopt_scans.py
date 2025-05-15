@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from xopt import VOCS, Evaluator, Xopt
 from xopt.generators.bayesian import ExpectedImprovementGenerator
@@ -17,18 +16,12 @@ from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit, ImageProjectionFitResult
 
 from .beamline_hw import (
-    XCS_YAG_XPOS,
     DG1_WAVE8_XPOS,
-    DG1_YAG_XPOS,
     DG2_WAVE8_XPOS,
-    DG2_YAG_XPOS,
     IP_YAG_XPOS,
     init_devices,
-    sim_devices,
 )
 from .constraints import constraint_data
-from .errors import FeasibilityError
-from .plots import UpdatingDeviceCentroidPathPlot
 from .type_checking import validate_w_lowercase_args, Devices, Diagnostics, Turbo, Movers
 from .user_select import select_diagnostic, select_goal, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
 
@@ -180,11 +173,11 @@ def get_evaluator_yag(
         raise ValueError("Can only use xcs1, dg1, dg2, ip yags.")
     if goal is None:
         if yag == 'xcs1':
-            goal = XCS_YAG_XPOS
+            goal = constraint_data.yag["xcs1"].roi_center[0]
         elif yag == "dg1":
-            goal = DG1_YAG_XPOS
+            goal = constraint_data.yag["dg1"].roi_center[0]
         elif yag == "dg2":
-            goal = DG2_YAG_XPOS
+            goal = constraint_data.yag["dg2"].roi_center[0]
         else:
             goal = IP_YAG_XPOS
     fit = ImageProjectionFit()
@@ -313,157 +306,3 @@ def get_xopt_obj(
         generator=generator,
         evaluator=evaluator,
     )
-
-
-def setup_sim_test() -> None:
-    """
-    Prep offline test without using mfx hardware or mfx3 startup script
-    """
-    plt.ion()
-    print("Creating sim devices")
-    globals().update(**sim_devices())
-    print(f"devices: {list(init_devices().keys())}")
-    print("Xopt factory: get_xopt_obj")
-    print("Canned tests: run_sim_test_wave8, run_sim_test_yag")
-
-
-def run_sim_test_wave8() -> Xopt:
-    print("Create Xopt")
-    xopt = get_xopt_obj(
-        device_type="wave8",
-        location="dg1",
-        goal=DG1_WAVE8_XPOS,
-    )
-    print("Randomly evaluate 3 points")
-    xopt.random_evaluate(3)
-    print("Step xopt object 10 times")
-    for num in range(10):
-        print(f"Step {num + 1}")
-        xopt.step()
-    print("Get best point")
-    try:
-        _, val, params = xopt.vocs.select_best(xopt.data)
-    except IndexError:
-        # Make error more user-friendly/readable
-        raise FeasibilityError(
-            f"No feasible points within acceptable region. "
-            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
-            f"Current constraints: {xopt.vocs.constraints}"
-        )
-    print(f"Best objective value {val}")
-    print(f"Best point {params}")
-    print("Move to best point")
-    mirror_pitch = init_devices()["mr1l4_homs"].pitch
-    mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
-    print(f"pitch is at {mirror_pitch.position}")
-    print("Generating plots")
-    xopt.data.plot(y=xopt.vocs.objective_names)
-    return xopt
-
-
-def run_sim_test_yag() -> Xopt:
-    print("Create Xopt")
-    xopt = get_xopt_obj(
-        device_type="yag",
-        location="dg1",
-        goal=DG1_YAG_XPOS,
-    )
-    print("Randomly evaluate 3 points")
-    xopt.random_evaluate(3)
-    print("Step xopt object 10 times")
-    for num in range(10):
-        print(f"Step {num + 1}")
-        xopt.step()
-    print("Get best point")
-    try:
-        _, val, params = xopt.vocs.select_best(xopt.data)
-    except IndexError:
-        # Make error more user-friendly/readable
-        raise FeasibilityError(
-            f"No feasible points within acceptable region. "
-            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
-            f"Current constraints: {xopt.vocs.constraints}"
-        )
-    print(f"Best objective value {val}")
-    print(f"Best point {params}")
-    print("Move to best point")
-    mirror_pitch = init_devices()["mr1l4_homs"].pitch
-    mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
-    print(f"pitch is at {mirror_pitch.position}")
-    print("Generating plots")
-    xopt.data.plot(y=xopt.vocs.objective_names)
-    imager = select_diagnostic("yag", "dg1")
-    imager.image1.shaped_image.trigger()
-    fit = ImageProjectionFit()
-    fit_result = fit.fit_image(imager.image1.shaped_image.get())
-    plot_image_projection_fit(fit_result)
-    plt.show()
-    return xopt
-
-
-def run_sim_test_yag_2d() -> Xopt:
-    print("Create Xopt")
-    xopt = get_xopt_obj(
-        device_type="yag",
-        location="dg1",
-        use_2d_markers=True,
-    )
-    print("Randomly evaluate 3 points")
-    xopt.random_evaluate(3)
-    print("Step xopt object 10 times")
-    imager = select_diagnostic("yag", "dg1")
-    path_plot = UpdatingDeviceCentroidPathPlot(
-        imager=imager,
-        goal=select_goal(
-            device_type="yag",
-            location="dg1",
-            use_2d_markers=True,
-        ),
-    )
-    imager.image1.shaped_image.trigger()
-    path_plot.add_point(imager.image1.get_centroid())
-    for num in range(10):
-        print(f"Step {num + 1}")
-        xopt.step()
-        imager.image1.shaped_image.trigger()
-        path_plot.add_point(imager.image1.get_centroid())
-    print("Get best point")
-    try:
-        _, val, params = xopt.vocs.select_best(xopt.data)
-    except IndexError:
-        # Make error more user-friendly/readable
-        raise FeasibilityError(
-            f"No feasible points within acceptable region. "
-            f"Try adjusting constraints in 'xopt_scans.get_xopt_obj'.\n"
-            f"Current constraints: {xopt.vocs.constraints}"
-        )
-    print(f"Best objective value {val}")
-    print(f"Best point {params}")
-    print("Move to best point")
-    devices = init_devices()
-    mirror_pitch = devices["mr1l4_homs"].pitch
-    mirror_pitch.set(params["mirror_pitch"]).wait(timeout=20)
-    print(f"pitch is at {mirror_pitch.position}")
-    goal = devices["mfx_dg1_yag"].coords.standard_two_corners_target()
-    print(f"Goal was {goal}")
-    print("Generating plots")
-    xopt.data.plot(y=xopt.vocs.objective_names)
-
-    fit = ImageProjectionFit()
-    image = imager.image1.shaped_image.get()
-    fit_result = fit.fit_image(image)
-    plot_image_projection_fit(fit_result)
-    path_plot.refresh()
-    return xopt
-
-
-if __name__ == "__main__":
-    from IPython import get_ipython
-    ip = get_ipython()
-    if ip is not None:
-        ip.run_line_magic("matplotlib", "qt")
-    setup_sim_test()
-    if ip is None:
-        # If we're not using ipython, just run the canned sim test
-        # Otherwise we'll set up and then do nothing
-        run_sim_test_yag()

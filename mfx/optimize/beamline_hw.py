@@ -9,6 +9,7 @@ from ophyd.device import Device
 from ophyd.sim import SynAxis, SynSignal
 from pcdsdevices.ipm import Wave8
 
+from .constraints import constraint_data
 from .devices import FakeLCLSImagePlugin, FakeYagCamera, YagCamera
 from .undpoint import UndPointAbs2DMFX, UndPointAbs2DSim
 
@@ -20,13 +21,10 @@ HAPPI_NAMES = (
 )
 # Default constants so I can re-use them
 # Default starting point for searches
-MIRROR_NOMINAL = -544
+MIRROR_NOMINAL = constraint_data.mirr.range_center
 # Used for sim devices and as default goal positions
 DG1_WAVE8_XPOS = 8
 DG2_WAVE8_XPOS = 41
-XCS_YAG_XPOS = 337
-DG1_YAG_XPOS = 300
-DG2_YAG_XPOS = 300
 IP_YAG_XPOS = 344
 
 devices: dict[str, Device] = {}
@@ -85,9 +83,10 @@ def sim_devices() -> dict[str, Device]:
     devices["undp"] = UndPointAbs2DSim()
     dg1_wave8_offset = random.uniform(-1, 1)
     dg2_wave8_offset = random.uniform(-1, 1)
-    dg1_yag_offset = random.uniform(-30, 30)
-    dg2_yag_offset = random.uniform(-50, 50)
-    ip_yag_offset = random.uniform(-70, 70)
+    xcs_yag_offset = random.uniform(-5, 5)
+    dg1_yag_offset = random.uniform(-10, 10)
+    dg2_yag_offset = random.uniform(-20, 20)
+    ip_yag_offset = random.uniform(-30, 30)
     undp_x0 = devices["undp"].position[0]
     undp_y0 = devices["undp"].position[1]
 
@@ -125,11 +124,12 @@ def sim_devices() -> dict[str, Device]:
 
     def update_fake_dg1_yag(cam: FakeLCLSImagePlugin):
         mdpitch, undp_dx, undp_dy = get_offsets()
+        xpos, ypos = constraint_data.yag["dg1"].roi_center
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                mdpitch * 60 - undp_dx * 3 + DG1_YAG_XPOS + dg1_yag_offset + random.uniform(-6, 6),
-                256 + undp_dy * 3 + random.uniform(-3, 3)
+                xpos + mdpitch * 60 - undp_dx * 3 + dg1_yag_offset + random.uniform(-6, 6),
+                ypos + undp_dy * 3 + random.uniform(-3, 3)
             ),
             fwhm=100,
             peak=255,
@@ -137,11 +137,12 @@ def sim_devices() -> dict[str, Device]:
 
     def update_fake_dg2_yag(cam: FakeLCLSImagePlugin):
         mdpitch, undp_dx, undp_dy = get_offsets()
+        xpos, ypos = constraint_data.yag["dg2"].roi_center
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                mdpitch * 80 - undp_dx * 4 + DG2_YAG_XPOS + dg2_yag_offset + random.uniform(-8, 8),
-                256 + undp_dy * 4 + random.uniform(-5, 5)
+                xpos + mdpitch * 80 - undp_dx * 4 + dg2_yag_offset + random.uniform(-8, 8),
+                ypos + undp_dy * 4 + random.uniform(-5, 5)
             ),
             fwhm=150,
             peak=255,
@@ -149,11 +150,12 @@ def sim_devices() -> dict[str, Device]:
 
     def update_fake_xcs_yag1(cam: FakeLCLSImagePlugin):
         mdpitch, undp_dx, undp_dy = get_offsets()
+        xpos, ypos = constraint_data.yag["xcs1"].roi_center
         cam.sim_set_image(
             size=(728, 544),
             centroid=(
-                mdpitch * 40 - undp_dx * 2 + XCS_YAG_XPOS + ip_yag_offset + random.uniform(-4, 4),
-                274 + undp_dy * 2 + random.uniform(-7, 7)
+                xpos + mdpitch * 40 - undp_dx * 2 + xcs_yag_offset + random.uniform(-4, 4),
+                ypos + undp_dy * 2 + random.uniform(-7, 7)
             ),
             fwhm=200,
             peak=255,
@@ -177,15 +179,16 @@ def sim_devices() -> dict[str, Device]:
     devices["mfx_ip_yag"].image1.sim_install_updater(update_fake_ip1_yag)
 
     # MFX yags use opposite slit corners as the goal
-    for name in ("mfx_dg1_yag", "mfx_dg2_yag", "mfx_ip_yag"):
-        devices[name].coords.marker1.xpos.put(150)
-        devices[name].coords.marker1.ypos.put(150)
-        devices[name].coords.marker2.xpos.put(350)
-        devices[name].coords.marker2.ypos.put(350)
+    for name in ("mfx_dg1_yag", "mfx_dg2_yag"):
+        center = constraint_data.yag[name.split("_")[1]].roi_center
+        devices[name].coords.marker1.xpos.put(center[0] - 100)
+        devices[name].coords.marker1.ypos.put(center[0] - 100)
+        devices[name].coords.marker2.xpos.put(center[1] + 100)
+        devices[name].coords.marker2.ypos.put(center[1] + 100)
 
     # XCS yag uses the location of marker 2 as the goal
-    devices["xcs_yag1"].coords.marker2.xpos.put(360)
-    devices["xcs_yag1"].coords.marker2.ypos.put(274)
+    devices["xcs_yag1"].coords.marker2.xpos.put(constraint_data.yag["xcs1"].roi_center[0])
+    devices["xcs_yag1"].coords.marker2.ypos.put(constraint_data.yag["xcs1"].roi_center[1])
 
     devices["mfx_dg1_wave8"].kind = "hinted"
     devices["mfx_dg2_wave8"].kind = "hinted"
