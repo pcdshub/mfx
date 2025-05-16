@@ -128,7 +128,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                xpos + mdpitch * 60 - undp_dx * 3 + dg1_yag_offset + random.uniform(-6, 6),
+                xpos + mdpitch * 60 + undp_dx * 3 + dg1_yag_offset + random.uniform(-6, 6),
                 ypos + undp_dy * 3 + random.uniform(-3, 3)
             ),
             fwhm=100,
@@ -141,7 +141,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                xpos + mdpitch * 80 - undp_dx * 4 + dg2_yag_offset + random.uniform(-8, 8),
+                xpos + mdpitch * 80 + undp_dx * 4 + dg2_yag_offset + random.uniform(-8, 8),
                 ypos + undp_dy * 4 + random.uniform(-5, 5)
             ),
             fwhm=150,
@@ -154,7 +154,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(728, 544),
             centroid=(
-                xpos + mdpitch * 40 - undp_dx * 2 + xcs_yag_offset + random.uniform(-4, 4),
+                xpos + mdpitch * 40 + undp_dx * 2 + xcs_yag_offset + random.uniform(-4, 4),
                 ypos + undp_dy * 2 + random.uniform(-7, 7)
             ),
             fwhm=200,
@@ -166,7 +166,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(688, 538),
             centroid=(
-                mdpitch * 70 - undp_dx * 3.5 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7),
+                mdpitch * 70 + undp_dx * 3.5 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7),
                 269 + undp_dy * 3.5 + random.uniform(-7, 7)
             ),
             fwhm=80,
