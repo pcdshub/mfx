@@ -72,7 +72,8 @@ class MirrorConstraints:
     # Only consider points +- delta from center
     range_center: float
     range_delta: float
-    # Do not move more than this distance per step
+    # Do not move more than this distance
+    # in real units per step
     max_travel_distance: float | None = None
 
 mfx_mirror_constraints = MirrorConstraints(
@@ -86,7 +87,8 @@ mfx_mirror_constraints = MirrorConstraints(
 class UndulatorConstraints:
     # Do not try points more than this far away from the start pos
     xy_delta: float
-    # Do not move more than this distance per step
+    # Do not move more than this distance (x, y separately)
+    # in real units per step
     max_travel_distance: float | None = None
 
 

@@ -110,6 +110,7 @@ class UpdatingDeviceCentroidPathPlot:
         self.imager = imager
         self.goal = goal
         self.points = []
+        self.constraints = constraints
         if constraints is None:
             self.roi_center = None
             self.roi_radius = None

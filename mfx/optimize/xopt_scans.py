@@ -27,17 +27,34 @@ from .user_select import select_diagnostic, select_goal, MP_KEY, UNDP_KEY_X, UND
 
 
 @validate_w_lowercase_args
-def get_variables(mover: Movers):
-    """Apply info in constraints module for movers to xopt variables"""
+def get_variables(mover: Movers, narrow: bool = False):
+    """
+    Apply info in constraints module for movers to xopt variables
+
+    Parameters
+    ----------
+    mover : str
+        mirr or und
+    narrow : bool, optional
+        If False (default), we'll use the range/delta constraints.
+        If True, we'll use the max_travel_distance constraint to give
+        an even narrower range.
+    """
     variables = {}
     if mover == "mirr":
         center = constraint_data.mirr.range_center
-        delta = constraint_data.mirr.range_delta
+        if narrow and constraint_data.mirr.max_travel_distance is not None:
+            delta = constraint_data.mirr.max_travel_distance
+        else:
+            delta = constraint_data.mirr.range_delta
         variables[MP_KEY] = [center - delta, center + delta]
     elif mover == "und":
         undp = init_devices()["undp"]
         pos = undp.position
-        delta = constraint_data.und.xy_delta
+        if narrow and constraint_data.und.max_travel_distance is not None:
+            delta = constraint_data.und.max_travel_distance
+        else:
+            delta = constraint_data.und.xy_delta
         variables[UNDP_KEY_X] = [pos[0] - delta, pos[0] + delta]
         variables[UNDP_KEY_Y] = [pos[1] - delta, pos[1] + delta]
     return variables
@@ -298,12 +315,18 @@ def get_xopt_obj(
         constr = constraint_data.mirr
         if constr.max_travel_distance is not None:
             # 1d, one distance
-            generator.max_travel_distances = [constr.max_travel_distance]
+            vd = vocs.variables
+            var_dist = vd[MP_KEY][1] - vd[MP_KEY][0]
+            generator.max_travel_distances = [constr.max_travel_distance / var_dist]
     elif mover == "und":
         constr = constraint_data.und
         if constr.max_travel_distance is not None:
             # 2d, two distances
-            generator.max_travel_distances = [constr.max_travel_distance, constr.max_travel_distance]
+            vd = vocs.variables
+            var_dist_x = vd[UNDP_KEY_X][1] - vd[UNDP_KEY_X][0]
+            var_dist_y = vd[UNDP_KEY_Y][1] - vd[UNDP_KEY_Y][0]
+            generator.max_travel_distances = [constr.max_travel_distance / var_dist_x, constr.max_travel_distance / var_dist_y]
+    print(f"Max travel distances {generator.max_travel_distances}")
     return Xopt(
         vocs=vocs,
         generator=generator,
