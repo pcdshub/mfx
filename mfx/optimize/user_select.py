@@ -9,7 +9,12 @@ from pcdsdevices.ipm import Wave8
 
 from .beamline_hw import init_devices
 from .devices import YagCamera
-from .type_checking import Devices, Diagnostics, validate_w_lowercase_args
+from .type_checking import Devices, Diagnostics, Movers, validate_w_lowercase_args
+
+
+MP_KEY = "mirror_pitch"
+UNDP_KEY_X = "undp_x"
+UNDP_KEY_Y = "undp_y"
 
 
 @validate_w_lowercase_args
@@ -108,6 +113,10 @@ def select_goal(
     if use_2d_markers:
         if device_type == "yag":
             yag_camera = select_diagnostic(device_type=device_type, location=location)
+            if location == "xcs1":
+                # Shared YAG: uses marker2 at the goal
+                return yag_camera.coords.specific_marker_target(2)
+            # MFX YAG: uses marker1, marker2 at opposite slit corners
             return yag_camera.coords.standard_two_corners_target()
         else:
             raise ValueError(
