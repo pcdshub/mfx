@@ -91,6 +91,14 @@ class Beam:
                     )
             else:
                 print("Loading Xopt object.")
+                if save_run:
+                    now = datetime.datetime.now()
+                    formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
+                    filename  = f"xopt_run_{on_diagnostic}_{using_device}_{mover}_{formatted_string}.yaml"
+                    # The logs folder at the root of the repo should exist and be writeable
+                    logs_folder = Path(__file__).parent.parent.parent / "logs" / "xopt"
+                    logs_folder.mkdir(parents=True, exist_ok=True)
+                    dump_file = str(logs_folder / filename)
                 xopt = get_xopt_obj(
                     device_type=using_device,
                     location=on_diagnostic,
@@ -100,6 +108,7 @@ class Beam:
                     use_2d_markers=use_2d_markers,
                     goal_2d=with_goal_2d,
                     max_iter=xopt_max_iter,
+                    dump_file=dump_file,
                 )
                 if using_device == "yag":
                     print("Generating path plot")
@@ -177,14 +186,6 @@ class Beam:
                 mover=mover,
                 input=params,
             )
-            if save_run:
-                now = datetime.datetime.now()
-                formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")
-                filename  = f"xopt_run_{on_diagnostic}_{using_device}_{mover}_{formatted_string}.yaml"
-                # The logs folder at the root of the repo should exist and be writeable
-                logs_folder = Path(__file__).parent.parent.parent / "logs" / "xopt"
-                logs_folder.mkdir(parents=True, exist_ok=True)
-                xopt.dump(str(logs_folder / filename))
             ax = xopt.data.plot(y=xopt.vocs.objective_names)
             ax.set_xlabel("steps")
             ax.set_ylabel("objective (to minimize)")
