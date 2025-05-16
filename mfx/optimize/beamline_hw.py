@@ -61,7 +61,9 @@ def init_devices(force: bool = False) -> dict[str, Device]:
     devices["mfx_ip_yag"] = YagCamera("MFX:GIGE:LBL:01:", name="mfx_ip1_yag")
     devices["mfx_ip_yag"].kind = "hinted"
 
-    devices["undp"] = UndPointAbs2DMFX()
+    und_abs = UndPointAbs2DMFX()
+    devices["und_abs"] = und_abs
+    devices["und_del"] = und_abs.delta_xy
 
     return devices
 
