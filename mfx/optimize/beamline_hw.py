@@ -82,21 +82,23 @@ def sim_devices() -> dict[str, Device]:
     devices["mr1l4_homs"] = SimpleNamespace(pitch=SynAxis(name="mr1l4_homs_pitch", value=MIRROR_NOMINAL))
     devices["mfx_dg1_ipm"] = SimpleNamespace(inserted=True)
     devices["mfx_dg2_ipm"] = SimpleNamespace(inserted=False)
-    devices["undp"] = UndPointAbs2DSim()
+    und_abs = UndPointAbs2DSim()
+    devices["und_abs"] = und_abs
+    devices["und_del"] = und_abs.delta_xy
     dg1_wave8_offset = random.uniform(-1, 1)
     dg2_wave8_offset = random.uniform(-1, 1)
     xcs_yag_offset = random.uniform(-5, 5)
     dg1_yag_offset = random.uniform(-10, 10)
     dg2_yag_offset = random.uniform(-20, 20)
     ip_yag_offset = random.uniform(-30, 30)
-    undp_x0 = devices["undp"].position[0]
-    undp_y0 = devices["undp"].position[1]
+    undp_x0 = devices["und_abs"].position[0]
+    undp_y0 = devices["und_abs"].position[1]
 
     def get_offsets() -> tuple[float, float, float]:
         return (
             devices["mr1l4_homs"].pitch.position - MIRROR_NOMINAL,
-            devices["undp"].position[0] - undp_x0,
-            devices["undp"].position[1] - undp_y0
+            devices["und_abs"].position[0] - undp_x0,
+            devices["und_abs"].position[1] - undp_y0
         )
 
     def get_fake_dg1_wave8() -> float:
