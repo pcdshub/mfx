@@ -2,26 +2,16 @@ import traceback
 import datetime
 from typing import Optional
 from pathlib import Path
-import matplotlib.pyplot as plt
 from pydantic import validate_call
 from bluesky import RunEngine
 from xopt import Xopt
 from .errors import FeasibilityError
-from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot, refresh_mpl_plots
+from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot
 from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo, Movers
-from .user_select import select_diagnostic, select_goal, select_var_range, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
-
+from .user_select import select_diagnostic, select_goal
+from .constraints import constraint_data
 
 class Beam:
-    @validate_call
-    def __init__(
-        self,
-        mirror_pitch: list[float] = [-546.0, -542.0],
-        und_search_delta: float = 50.0,
-    ):
-        self.mirror_pitch: list[float] = mirror_pitch
-        self.und_search_delta: float = und_search_delta
-
     @validate_w_lowercase_args
     def align(
             self,
@@ -83,7 +73,7 @@ class Beam:
 
         path_plot = None
         if with_method == "xopt":
-            from .xopt_scans import get_xopt_obj, init_devices, evaluator_move
+            from .xopt_scans import get_xopt_obj, evaluator_move, get_variables
             # Allow the loading of an already instantiated xopt object, e.g. to take more steps
             if xopt_obj:
                 print("Using existing Xopt object.")
@@ -97,34 +87,20 @@ class Beam:
                     path_plot = UpdatingDeviceCentroidPathPlot(
                         imager=old_path_plot.imager,
                         goal=old_path_plot.goal,
+                        constraints=old_path_plot.constraints,
                     )
             else:
                 print("Loading Xopt object.")
-                xopt_kw = {
-                    "device_type": using_device,
-                    "location": on_diagnostic,
-                    "mover": mover,
-                    "goal": with_goal,
-                    "xopt_generator_turbo_controller": xopt_turbo_option,
-                    "use_2d_markers": use_2d_markers,
-                    "goal_2d": with_goal_2d,
-                    "max_iter": xopt_max_iter,
-                }
-                if mover == "mirr":
-                    xopt_kw["search_range"] = tuple(self.mirror_pitch)
-                    customized_boundaries = select_var_range(
-                        mover=mover,
-                        search_range=tuple(self.mirror_pitch),
-                    )
-                elif mover == "und":
-                    xopt_kw["search_delta"] = self.und_search_delta
-                    customized_boundaries = select_var_range(
-                        mover=mover,
-                        search_delta=self.und_search_delta,
-                    )
-                else:
-                    raise NotImplementedError(f"Mover {mover} not implemented for xopt in beam.align.")
-                xopt = get_xopt_obj(**xopt_kw)
+                xopt = get_xopt_obj(
+                    device_type=using_device,
+                    location=on_diagnostic,
+                    mover=mover,
+                    goal=with_goal,
+                    xopt_generator_turbo_controller=xopt_turbo_option,
+                    use_2d_markers=use_2d_markers,
+                    goal_2d=with_goal_2d,
+                    max_iter=xopt_max_iter,
+                )
                 if using_device == "yag":
                     print("Generating path plot")
                     path_plot = UpdatingDeviceCentroidPathPlot(
@@ -136,9 +112,13 @@ class Beam:
                             goal_2d=with_goal_2d,
                             use_2d_markers=use_2d_markers,
                         ),
+                        constraints=constraint_data.yag.get(on_diagnostic),
                     )
                     xopt._cached_path_plot = path_plot
-                xopt.random_evaluate(xopt_rand_evaluate, custom_bounds=customized_boundaries)
+                xopt.random_evaluate(
+                    n_samples=xopt_rand_evaluate,
+                    custom_bounds=get_variables(mover=mover, narrow=True),
+                )
             print(xopt.data)
             xopt_eval_plot = UpdatingXoptVisualizeModelPlot(xopt)
 

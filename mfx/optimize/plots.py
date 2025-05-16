@@ -11,6 +11,7 @@ import numpy as np
 
 from xopt import Xopt
 
+from .constraints import YagConstraints
 from .devices import YagCamera
 
 
@@ -32,6 +33,8 @@ def centroid_path_plot(
     goal: Union[float, tuple[float, float]],
     markers: list[tuple[float, float]],
     centroids: list[tuple[float, float]],
+    roi_center: Optional[tuple[int, int]] = None,
+    roi_radius: Optional[int] = None,
     figure: Optional[Figure] = None,
 ) -> Figure:
     """
@@ -62,12 +65,18 @@ def centroid_path_plot(
         The locations of the markers to plot
     centroids : list of tuples of floats
         The locations of the centroids to plot
+    roi_center : tuple[int, int], optional
+        The center of a radial ROI to plot as a red circle.
+    roi_radius : int, optional
+        The radius of a radial ROI to plot as a red circle.
     figure : Figure, optional
         A figure to re-use (instead of making a new figure).
     """
     fig = plt.figure(figure)
     plt.clf()
     plt.imshow(image, "cividis")
+    if roi_center is not None and roi_radius is not None:
+        plt.gca().add_patch(plt.Circle(roi_center, roi_radius, color="r", fill=False))
     for pt in centroids:
         plt.plot(*pt, marker=".", color="white")
     for mk in markers:
@@ -76,7 +85,6 @@ def centroid_path_plot(
         plt.axvline(goal, color="red")
     else:
         plt.plot(*goal, marker="x", color="red")
-
     return fig
 
 
@@ -93,13 +101,22 @@ class UpdatingDeviceCentroidPathPlot:
         The camera device instance.
     goal : tuple[float, float]
         The position we'd like the centroid to reach.
+    constraints : YagConstraints, optional
+        The constraints to include in the plot.
     """
 
-    def __init__(self, imager: YagCamera, goal: tuple[float, float]):
+    def __init__(self, imager: YagCamera, goal: tuple[float, float], constraints: Optional[YagConstraints] = None):
         self.fig = None
         self.imager = imager
         self.goal = goal
         self.points = []
+        self.constraints = constraints
+        if constraints is None:
+            self.roi_center = None
+            self.roi_radius = None
+        else:
+            self.roi_center = constraints.roi_center
+            self.roi_radius = constraints.roi_radius
 
     def get_markers(self) -> list[tuple[int, int]]:
         """Helper to get the relevant global marker positions from the imager."""
@@ -145,6 +162,8 @@ class UpdatingDeviceCentroidPathPlot:
             goal=self.goal,
             markers=self.get_markers(),
             centroids=self.points,
+            roi_center=self.roi_center,
+            roi_radius=self.roi_radius,
             figure=self.fig,
         )
         refresh_mpl_plots()
