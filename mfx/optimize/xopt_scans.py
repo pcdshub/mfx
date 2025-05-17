@@ -49,7 +49,7 @@ def get_variables(mover: Movers, narrow: bool = False):
             delta = constraint_data.mirr.range_delta
         variables[MP_KEY] = [center - delta, center + delta]
     elif mover == "und":
-        undp = init_devices()["undp"]
+        undp = init_devices()["und_abs"]
         pos = undp.position
         if narrow and constraint_data.und.max_travel_distance is not None:
             delta = constraint_data.und.max_travel_distance
@@ -105,7 +105,7 @@ def evaluator_move(mover: Movers, input: dict):
     if mover == "mirr":
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
     elif mover == "und":
-        devices["undp"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
+        devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
 
 
 @validate_w_lowercase_args
@@ -242,6 +242,7 @@ def get_xopt_obj(
     use_2d_markers: bool = False,
     goal_2d: Optional[tuple[float, float]] = None,
     max_iter: Optional[int] = None,
+    dump_file: Optional[str] = None,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -272,6 +273,8 @@ def get_xopt_obj(
         The 2D optimization goal if running a 2D YAG optimization
     max_iter: int, optional
         Max number of steps for maximizing the acquisition function
+    dump_file: str, optional
+        Filepath to write data too. See Xopt's dump_file docs.
     """
     goal_value = select_goal(
         device_type=device_type,
@@ -328,4 +331,5 @@ def get_xopt_obj(
         vocs=vocs,
         generator=generator,
         evaluator=evaluator,
+        dump_file=dump_file,
     )
