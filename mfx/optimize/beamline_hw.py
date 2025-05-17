@@ -61,7 +61,9 @@ def init_devices(force: bool = False) -> dict[str, Device]:
     devices["mfx_ip_yag"] = YagCamera("MFX:GIGE:LBL:01:", name="mfx_ip1_yag")
     devices["mfx_ip_yag"].kind = "hinted"
 
-    devices["undp"] = UndPointAbs2DMFX()
+    und_abs = UndPointAbs2DMFX()
+    devices["und_abs"] = und_abs
+    devices["und_del"] = und_abs.delta_xy
 
     return devices
 
@@ -80,21 +82,23 @@ def sim_devices() -> dict[str, Device]:
     devices["mr1l4_homs"] = SimpleNamespace(pitch=SynAxis(name="mr1l4_homs_pitch", value=MIRROR_NOMINAL))
     devices["mfx_dg1_ipm"] = SimpleNamespace(inserted=True)
     devices["mfx_dg2_ipm"] = SimpleNamespace(inserted=False)
-    devices["undp"] = UndPointAbs2DSim()
+    und_abs = UndPointAbs2DSim()
+    devices["und_abs"] = und_abs
+    devices["und_del"] = und_abs.delta_xy
     dg1_wave8_offset = random.uniform(-1, 1)
     dg2_wave8_offset = random.uniform(-1, 1)
     xcs_yag_offset = random.uniform(-5, 5)
     dg1_yag_offset = random.uniform(-10, 10)
     dg2_yag_offset = random.uniform(-20, 20)
     ip_yag_offset = random.uniform(-30, 30)
-    undp_x0 = devices["undp"].position[0]
-    undp_y0 = devices["undp"].position[1]
+    undp_x0 = devices["und_abs"].position[0]
+    undp_y0 = devices["und_abs"].position[1]
 
     def get_offsets() -> tuple[float, float, float]:
         return (
             devices["mr1l4_homs"].pitch.position - MIRROR_NOMINAL,
-            devices["undp"].position[0] - undp_x0,
-            devices["undp"].position[1] - undp_y0
+            devices["und_abs"].position[0] - undp_x0,
+            devices["und_abs"].position[1] - undp_y0
         )
 
     def get_fake_dg1_wave8() -> float:
@@ -128,7 +132,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                xpos + mdpitch * 60 - undp_dx * 3 + dg1_yag_offset + random.uniform(-6, 6),
+                xpos + mdpitch * 60 + undp_dx * 3 + dg1_yag_offset + random.uniform(-6, 6),
                 ypos + undp_dy * 3 + random.uniform(-3, 3)
             ),
             fwhm=100,
@@ -141,7 +145,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(512, 512),
             centroid=(
-                xpos + mdpitch * 80 - undp_dx * 4 + dg2_yag_offset + random.uniform(-8, 8),
+                xpos + mdpitch * 80 + undp_dx * 4 + dg2_yag_offset + random.uniform(-8, 8),
                 ypos + undp_dy * 4 + random.uniform(-5, 5)
             ),
             fwhm=150,
@@ -154,7 +158,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(728, 544),
             centroid=(
-                xpos + mdpitch * 40 - undp_dx * 2 + xcs_yag_offset + random.uniform(-4, 4),
+                xpos + mdpitch * 40 + undp_dx * 2 + xcs_yag_offset + random.uniform(-4, 4),
                 ypos + undp_dy * 2 + random.uniform(-7, 7)
             ),
             fwhm=200,
@@ -166,7 +170,7 @@ def sim_devices() -> dict[str, Device]:
         cam.sim_set_image(
             size=(688, 538),
             centroid=(
-                mdpitch * 70 - undp_dx * 3.5 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7),
+                mdpitch * 70 + undp_dx * 3.5 + IP_YAG_XPOS + ip_yag_offset + random.uniform(-7, 7),
                 269 + undp_dy * 3.5 + random.uniform(-7, 7)
             ),
             fwhm=80,

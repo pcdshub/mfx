@@ -126,7 +126,8 @@ with safe_load('Compact_Spectrometer'):
 
 with safe_load('Undulator_Pointing'):
     from mfx.optimize.undpoint import UndulatorPointingMFX
-    undp=UndulatorPointingMFX()
+    und_abs=UndulatorPointingMFX()
+    und_del=und_abs.dxy
 
 with safe_load('RE_Scans'):
     from mfx.scan import *
