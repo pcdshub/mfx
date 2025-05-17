@@ -202,9 +202,9 @@ with safe_load('add laser motor groups'):
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
-            lens_v = Newport('MFX:LAS:MMN:09', name='lens_v')
+            lens_v = Newport('MFX:LAS:MMN:05', name='lens_v')
             lens_f = Newport('MFX:LAS:MMN:10', name='lens_f')
-            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            lens_h = Newport('MFX:LAS:MMN:04', name='lens_h')
             lens_g = Newport('MFX:LAS:MMN:12', name='lens_g')
 
         with safe_load('Fast delay encoders'):
