@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from type_checking import Diagnostics
+from .type_checking import Diagnostics
 
 
 @dataclass
