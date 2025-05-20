@@ -10,6 +10,25 @@ import matplotlib.pyplot as plt
 # b.focus(0.0)
 
 import numpy as np
+desc = {'data_keys':
+    {'temperature':
+        {'dtype': 'number',
+         'source': '<descriptive string>',
+         'shape': [],
+         'units': 'K',
+         'precision': 3},
+     'x_setpoint':
+        {'dtype': 'number',
+         'source': '<descriptive string>',
+         'shape': [],
+         'units': 'mm',
+         'precision': 2},
+     'x_readback':
+        {'dtype': 'number',
+         'source': '<descriptive string>',
+         'shape': [],
+         'units': 'mm',
+         'precision': 2}}}
 
 event_data = {
     "data": {
@@ -17,7 +36,7 @@ event_data = {
         "motor": np.float64(1.0),
         "motor_setpoint": np.float64(1.0),
     },
-    "descriptor": "b2c9a782-533e-42f2-8ace-568244a6c7cc",
+    "descriptor": desc,
     "filled": {},
     "seq_num": 1,
     "time": 1745516544.202272,
@@ -26,7 +45,7 @@ event_data = {
         "motor": 1745516544.2000709,
         "motor_setpoint": 1745516544.199954,
     },
-    "uid": "0fbde9d6-f012-426f-926b-b96d2425289a",
+   "uid": "0fbde9d6-f012-426f-926b-b96d2425289a",
 }
 event_data = [event_data]
 
@@ -145,6 +164,7 @@ descriptor = {
 from event_model import compose_event_page
 
 descriptor_uid = descriptor["uid"]
+print({descriptor_uid:[1]})
 new_doc = compose_event_page(
     descriptor=descriptor,
     event_counters={descriptor_uid:[1]},
