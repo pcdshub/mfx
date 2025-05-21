@@ -66,7 +66,7 @@ class bs:
 
         if run_number is None:
             try:
-                run_number = get_run(station=station) + 1
+                run_number = get_run(station=station)
             except NameError:
                 logging.error(
                     f"get_run(station=station) not working please enter run manually as follows\n"
