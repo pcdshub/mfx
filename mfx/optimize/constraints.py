@@ -94,7 +94,7 @@ class UndulatorConstraints:
 
 hxr_und_constraints = UndulatorConstraints(
     xy_delta=100,
-    max_travel_distance=5,
+    max_travel_distance=25,
 )
 
 @dataclass
