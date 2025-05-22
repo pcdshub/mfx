@@ -186,7 +186,7 @@ class UpdatingXoptVisualizeModelPlot:
         Re-rendering this in place without aberrations has been surprisingly difficult.
         """
         newfig, newaxs = self.xopt.generator.visualize_model(
-            show_acquisition=False,
+            show_acquisition=True,
         )
         plt.figure(self.fig)
         plt.close()

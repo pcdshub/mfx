@@ -10,7 +10,7 @@ from typing import Optional
 import numpy as np
 
 from xopt import VOCS, Evaluator, Xopt
-from xopt.generators.bayesian import ExpectedImprovementGenerator
+from xopt.generators.bayesian import ExpectedImprovementGenerator, UpperConfidenceBoundGenerator
 
 from lcls_tools.common.frontend.plotting.image import plot_image_projection_fit
 from lcls_tools.common.image.fit import ImageProjectionFit, ImageProjectionFitResult
@@ -82,7 +82,8 @@ def get_vocs(
     return VOCS(
         variables=get_variables(mover),
         objectives={
-            "objective": "MINIMIZE",
+            "objective": "MINIMIZE", # RYAN R: SOMETHING TO CONSIDER TO SPEED THINGS UP. ONLY ONE GP
+            #"roi_radius": "MINIMIZE",
         },
         constraints=get_constraints(diagnostic, device),
     )
@@ -308,7 +309,9 @@ def get_xopt_obj(
             wave8_xpos=goal_value,
             mover=mover,
         )
-    generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
+
+    #generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
+    generator = UpperConfidenceBoundGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller, beta=0.1)
     generator.gp_constructor.use_low_noise_prior = False
     generator.numerical_optimizer.max_iter = max_iter
     if mover == "mirr":
