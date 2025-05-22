@@ -221,7 +221,7 @@ class MFXTransfocator(TransfocatorBase):
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
 
-            logger.info(f'Calculated Focal Length: {focal} um\n')
+            logger.info(f'Calculated Focal Length: {focal} m\n')
 
         else:
             logger.error("Unable to find a valid solution for target")
