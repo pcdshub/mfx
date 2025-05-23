@@ -82,6 +82,9 @@ with safe_load('OM'):
     from mfx.om import *
     om = OM()
 
+with safe_load('xas'):
+    import mfx.xas as xas
+
 with safe_load('beam'):
     from mfx.optimize.errors import *
     from mfx.optimize.plots import *
