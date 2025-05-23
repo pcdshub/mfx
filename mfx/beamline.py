@@ -121,9 +121,13 @@ with safe_load('XLJ_Fast'):
     xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
-with safe_load('DCCM'):
-    from mfx.dccm import *
-    dccm = DCCMono()
+# with safe_load('DCCM'):
+#     from mfx.dccm import *
+#     dccm = DCCMono()
+
+with safe_load('Notch_Scan'):
+    from mfx.notch_scan import *
+    notch = NotchScan()
 
 with safe_load('Compact_Spectrometer'):
     from mfx.vonhamos import DeterministicVonHamos6Crystal

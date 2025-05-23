@@ -1,6 +1,6 @@
 from pcdsdevices.epics_motor import BeckhoffAxis
 
-class DCCMono():
+class NotchScan():
     """
     Double Channel Cut Monochrometer controlled with a Beckhoff PLC.
     This includes five axes in total:
