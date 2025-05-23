@@ -77,9 +77,9 @@ class MirrorConstraints:
     max_travel_distance: float | None = None
 
 mfx_mirror_constraints = MirrorConstraints(
-    range_center=-544.0,
-    range_delta=2,
-    max_travel_distance=1,
+    range_center=-548.0,
+    range_delta=4,
+    max_travel_distance=2,
 )
 
 
