@@ -290,12 +290,15 @@ class OM:
                     cmd, shell=True, 
                     stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    def reset(self):
+
+    def reset(self, node=10):
         """
         Resets OM
 
         Parameters
         ----------
+        node: int, optional
+        default is 10
 
         Operations
         ----------
@@ -304,10 +307,12 @@ class OM:
         import logging
         import subprocess
 
+        node = "{:02d}".format(node)
+
         proc = [
             f'ssh -YAC mfx-monitor "source /reg/g/pcds/engineering_tools/mfx/scripts/pcds_conda; '
             f'conda deactivate; source /cds/sw/ds/ana/conda1/manage/bin/psconda.sh; '
-            f'python {self.pwd}/om_reset_plots.py daq-mfx-mon10"',
+            f'python {self.pwd}/om_reset_plots.py daq-mfx-mon{node}"',
             ]
 
         logging.info(proc)
