@@ -221,11 +221,11 @@ class bs:
             logging.error("Desired Camera not in List. Please double check camera name.")
 
         logging.info("Checking Focus Scan Plot")
-        os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -p")
+        os.system(f"/reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan {camera} -p")
         input("Press Enter to continue...")
 
         logging.info("Running Focus Scan")
-        os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -s")
+        os.system(f"/reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan {camera} -s")
 
         tfs_position = input(
             "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
