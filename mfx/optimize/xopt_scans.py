@@ -9,6 +9,8 @@ from typing import Optional
 
 import numpy as np
 
+import time
+
 from xopt import VOCS, Evaluator, Xopt
 from xopt.generators.bayesian import ExpectedImprovementGenerator, UpperConfidenceBoundGenerator
 
@@ -224,6 +226,7 @@ def get_evaluator_yag_2d(
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
         evaluator_move(mover=mover, input=input)
+        time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION 
         fit_result = evaluate_yag_processing(yag, fit)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = distance2d(fit_result.centroid, goal)
@@ -290,6 +293,7 @@ def get_xopt_obj(
         device=device_type,
     )
     print(vocs)
+    vocs.constraints = {}
     if device_type == "yag":
         if isinstance(goal_value, tuple):
             evaluator = get_evaluator_yag_2d(
@@ -310,8 +314,10 @@ def get_xopt_obj(
             mover=mover,
         )
 
-    #generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
-    generator = UpperConfidenceBoundGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller, beta=0.1)
+    generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
+    generator.turbo_controller.restrict_model_data = False
+    generator.turbo_controller.length_min = 0.05 # 5 percent of the input space
+    #generator = UpperConfidenceBoundGenerator(vocs=vocs, beta=0.01) #0.1)
     generator.gp_constructor.use_low_noise_prior = False
     generator.numerical_optimizer.max_iter = max_iter
     if mover == "mirr":
@@ -330,6 +336,7 @@ def get_xopt_obj(
             var_dist_y = vd[UNDP_KEY_Y][1] - vd[UNDP_KEY_Y][0]
             generator.max_travel_distances = [constr.max_travel_distance / var_dist_x, constr.max_travel_distance / var_dist_y]
     print(f"Max travel distances {generator.max_travel_distances}")
+    print(generator.vocs)
     return Xopt(
         vocs=vocs,
         generator=generator,
