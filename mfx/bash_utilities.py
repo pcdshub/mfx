@@ -235,3 +235,23 @@ class bs:
             os.system(f'caput MFX:TFS:MMS:21.VAL {tfs_position}')
         else:
             logging.error(f"{tfs_position} is not a valid position please use an interger between 1 and 299")
+
+
+    def startami(self, ami_num=1, daq_num=1):
+        import os
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logging.info("Starting AMI")
+        if daq_num == 1:
+            if ami_num == 1:
+                logging.error("daq1/ami1 not working currently")
+            elif ami_num == 2:
+                os.system(f"/reg/g/pcds/engineering_tools/mfx/scripts/startami2")
+            else:
+                logging.error("Please select ami_num 1 or 2")
+        elif daq_num == 2:
+            os.system(f"/reg/g/pcds/engineering_tools/mfx/scripts/startami")
+        else:
+            logging.error("Please select daq_num 1 or 2")
