@@ -162,7 +162,7 @@ class DCCMEnergyWithVernier(DCCMEnergy):
     def __init__(
         self,
         prefix: str,
-        hutch = 'XCS',
+        hutch = 'MFX',
         **kwargs
     ):
         self.hutch=hutch
