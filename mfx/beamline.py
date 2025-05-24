@@ -125,7 +125,8 @@ with safe_load('XLJ_Fast'):
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
 with safe_load('DCCM'):
-    from mfx.dccm import *
+    from mfx.dccm import DCCM
+    dccm = DCCM(name='DCCM')
 
 with safe_load('Notch_Scan'):
     from mfx.notch_scan import *
