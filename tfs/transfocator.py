@@ -127,7 +127,7 @@ class MFXTransfocator(TransfocatorBase):
     # Translation
     translation = FormattedComponent(IMS, "MFX:TFS:MMS:21")
 
-    def __init__(self, prefix, *, nominal_sample=399.88103, **kwargs):
+    def __init__(self, prefix, *, nominal_sample=400.37, **kwargs):
         self.nominal_sample = nominal_sample
         super().__init__(prefix, **kwargs)
 
@@ -195,7 +195,7 @@ class MFXTransfocator(TransfocatorBase):
         ----------
         target : float, optional
             The target image of the lens array. By default this is
-            `nominal_sample i.e. 399.88`
+            `nominal_sample i.e. 400.37`
 
         energy : int, optional 
             Select the energy in eV.
