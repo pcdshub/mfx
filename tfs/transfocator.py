@@ -187,7 +187,7 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_10.remove()
 
 
-    def find_best_combo(self, target=None, energy=None, show=True, **kwargs):
+    def find_best_combo(self, target=None, energy=None, n=4, z_obj=150.0, show=True, **kwargs):
         """
         Calculate the best lens array to hit the nominal sample point
 
@@ -201,6 +201,14 @@ class MFXTransfocator(TransfocatorBase):
             Select the energy in eV.
             Default uses the beam energy given by acr which is usually wrong
 
+        n : int, optional
+            The maximum number of lenses in a valid combination. This saves
+            time by avoiding calculating the focal plane of combinations with a
+            large number of lenses, default n=4
+
+        z_obj : float, optional
+            The source point of the beam, default halfway through range at 150.0
+
         show : bool, optional
             Print a table of the of the calculated lens combination
 
@@ -210,7 +218,7 @@ class MFXTransfocator(TransfocatorBase):
         energy = energy or self.beam_energy.get()
         target = target or self.nominal_sample
         calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
-        combo, diff = calc.find_solution(target, energy, **kwargs)
+        combo, diff = calc.find_solution(target, energy, n, z_obj, **kwargs)
         if combo:
             combo.show_info()
             logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
