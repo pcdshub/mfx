@@ -23,8 +23,8 @@ def mask(exp, run, facility, group):
     elif facility == "S3DF":
         exp=f'{exp}'  #fix this
         mfx_dir=f"/sdf/data/lcls/ds/mfx/{exp}/results"
-        out_path=f"{mfx_dir}/averages/{run}/{group}/out"
-        mask_path=f"{mfx_dir}/masks"
+        out_path=f"{mfx_dir}/common/averages/{run}/{group}/out"
+        mask_path=f"{mfx_dir}/common/masks"
     else:
         logging.warning(f"Facility not found: {facility}")
 
