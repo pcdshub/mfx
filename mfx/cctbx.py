@@ -155,11 +155,19 @@ class cctbx:
 
         facility = facility.upper()
 
-        proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
-            f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
-            ]
+
+        if facility == 'S3DF':
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
+                f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
+                ]
+        elif facility == 'NERSC':
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
+                f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
+                ]
 
         logging.info(proc)
 
