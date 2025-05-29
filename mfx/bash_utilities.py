@@ -200,7 +200,7 @@ class bs:
         camera_names = self.camera_list_out()
 
 
-    def focus_scan(self, camera):
+    def focus_scan(self, camera, record=False, daq_num=2):
         import os
         import sys
         import logging
@@ -221,11 +221,18 @@ class bs:
             logging.error("Desired Camera not in List. Please double check camera name.")
 
         logging.info("Checking Focus Scan Plot")
-        os.system(f"/reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan {camera} -p")
+        os.system(f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -p")
         input("Press Enter to continue...")
 
         logging.info("Running Focus Scan")
-        os.system(f"/reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan {camera} -s")
+        if record:
+            logging.info("Recording Focus Scan")
+            cmd = f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -s -r -d {daq_num}"
+        else:
+            cmd = f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -s"
+
+        logging.info(cmd)
+        os.system(cmd)
 
         tfs_position = input(
             "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
