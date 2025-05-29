@@ -41,11 +41,18 @@ class cctbx:
 
         facility = facility.upper()
 
-        proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
-            f"-e {experiment} -f {facility} -g {group} -l {level} "
-            ]
+        if facility == 'NERSC':
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
+                f"-e {experiment} -f {facility} -g {group} -l {level} "
+                ]
+        elif facility == 'S3DF':
+            proc = [
+                f"ssh -Yt {user}@s3dflogin "
+                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
+                f"-e {experiment} -f {facility} -g {group} -l {level} "
+                ]
 
         logging.info(proc)
 
