@@ -82,6 +82,9 @@ with safe_load('OM'):
     from mfx.om import *
     om = OM()
 
+with safe_load('xas'):
+    import mfx.xas as xas
+
 with safe_load('beam'):
     from mfx.optimize.errors import *
     from mfx.optimize.plots import *
@@ -122,7 +125,8 @@ with safe_load('XLJ_Fast'):
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
 with safe_load('DCCM'):
-    from mfx.dccm import *
+    from mfx.dccm import DCCM
+    dccm = DCCM(name='DCCM')
 
 with safe_load('Notch_Scan'):
     from mfx.notch_scan import *

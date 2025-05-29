@@ -200,7 +200,7 @@ class bs:
         camera_names = self.camera_list_out()
 
 
-    def focus_scan(self, camera):
+    def focus_scan(self, camera, record=False, daq_num=2):
         import os
         import sys
         import logging
@@ -221,11 +221,18 @@ class bs:
             logging.error("Desired Camera not in List. Please double check camera name.")
 
         logging.info("Checking Focus Scan Plot")
-        os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -p")
+        os.system(f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -p")
         input("Press Enter to continue...")
 
         logging.info("Running Focus Scan")
-        os.system(f"/cds/home/opr/mfxopr/bin/focus_scan {camera} -s")
+        if record:
+            logging.info("Recording Focus Scan")
+            cmd = f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -s -r -d {daq_num}"
+        else:
+            cmd = f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -s"
+
+        logging.info(cmd)
+        os.system(cmd)
 
         tfs_position = input(
             "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
@@ -235,3 +242,23 @@ class bs:
             os.system(f'caput MFX:TFS:MMS:21.VAL {tfs_position}')
         else:
             logging.error(f"{tfs_position} is not a valid position please use an interger between 1 and 299")
+
+
+    def startami(self, ami_num=1, daq_num=1):
+        import os
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logging.info("Starting AMI")
+        if daq_num == 1:
+            if ami_num == 1:
+                logging.error("daq1/ami1 not working currently")
+            elif ami_num == 2:
+                os.system(f"/reg/g/pcds/engineering_tools/mfx/scripts/startami2")
+            else:
+                logging.error("Please select ami_num 1 or 2")
+        elif daq_num == 2:
+            os.system(f"/reg/g/pcds/engineering_tools/mfx/scripts/startami")
+        else:
+            logging.error("Please select daq_num 1 or 2")

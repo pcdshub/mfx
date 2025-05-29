@@ -18,14 +18,15 @@ def mask(exp, run, facility, group):
 
     if facility == "NERSC":
         mfx_dir=f"/pscratch/sd/c/cctbx/{exp}"
+        out_path=f"{mfx_dir}/common/results/averages/{run}/{group}/out"
+        mask_path=f"{mfx_dir}/common/masks"
     elif facility == "S3DF":
-        exp=f'mfx{exp}23'  #fix this
+        exp=f'{exp}'  #fix this
         mfx_dir=f"/sdf/data/lcls/ds/mfx/{exp}/results"
+        out_path=f"{mfx_dir}/common/results/averages/{run}/{group}/out"
+        mask_path=f"{mfx_dir}/common/results/masks"
     else:
         logging.warning(f"Facility not found: {facility}")
-
-    out_path=f"{mfx_dir}/common/results/averages/{run}/{group}/out"
-    mask_path=f"{mfx_dir}/common/masks"
 
     img = dxtbx.load(f'{out_path}/std.cbf')
     logging.info(f'load: {out_path}/std.cbf')
