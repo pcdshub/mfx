@@ -4,7 +4,7 @@
 #
 # Script for finding optimal MFX Transfocator focus
 #
-# Copyright ©  2019 - 2023  SLAC National Accelerator Laboratory
+# Copyright  2019 - 2023  SLAC National Accelerator Laboratory
 #
 # Authors:
 #     2019 - 2023  Alex Batyuk <batyuk@stanford.edu>
@@ -267,11 +267,20 @@ print("done.", '\n')  # Print message after init
 
 # Main routine
 
-parser = argparse.ArgumentParser(prog='focus_scan', usage='%(prog)s [options] PV', add_help=False)
-parser.add_argument("PV", help="Camera PV. Example: MFX:GIGE:01")
-parser.add_argument("-p", "--plot", action="store_true", help="show projections plot")
-parser.add_argument("-i", "--image", action="store_true", help="show ROI image")
-parser.add_argument("-s", "--scan", action="store_true", help="scan focus automatically")
+parser = argparse.ArgumentParser(
+    prog='focus_scan', usage='%(prog)s [options] PV', add_help=False)
+parser.add_argument(
+    "PV", help="Camera PV. Example: MFX:GIGE:01")
+parser.add_argument(
+    "-p", "--plot", action="store_true", help="show projections plot")
+parser.add_argument(
+    "-i", "--image", action="store_true", help="show ROI image")
+parser.add_argument(
+    "-s", "--scan", action="store_true", help="scan focus automatically")
+parser.add_argument(
+    "-r", "--record", action="store_true", help="record with daq")
+parser.add_argument(
+    "-d", "--daq_num", dest="daq_num", default=2, help="choose daq number")
 
 if len(sys.argv) == 1:
     parser.print_help(sys.stderr)
@@ -418,6 +427,21 @@ while True:
             lens_z = get_lens_z()
             print(" [*] Transfocator is at Z =", lens_z, "mm")
             print(" [*] Starting scan...", '\n')
+            print(args.record)
+            print(args.daq_num)
+            if args.record:
+                print(recording)
+                import threading
+                from mfx.autorun import autorun
+                thread = threading.Thread(
+                    target=autorun(
+                        sample='Focus_scan',
+                        run_length=153, 
+                        record=True,
+                        runs=1,
+                        daq_num=args.daq_num))
+                thread.daemon = True  # Allow the main program to exit even if the thread is running
+                thread.start()
 
             try:
                 fwhm_data = np.zeros((142, 3))
