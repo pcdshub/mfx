@@ -59,6 +59,8 @@ def process_run(exp, run_num, detector_name, max_events):
         ds = psana.DataSource(exp={exp},run={run_num},detectors=[f'{detector_name}'],max_events={max_events})
     try:
         detector = psana.Detector(detector_name)
+    except:
+        detector = None
 
     data = None
     total_events = 0
