@@ -13,7 +13,8 @@ case $facility in
   S3DF)
     mfx_dir="/sdf/group/lcls/ds/tools/mfx"
     mfx3="/sdf/group/lcls/ds/tools/mfx"
-    source /sdf/group/lcls/ds/tools/cctbx/setup.sh
+    # source /sdf/group/lcls/ds/tools/cctbx/setup.sh #psana1
+    source /sdf/group/lcls/ds/tools/cctbx-psana2/build/conda_setpaths.sh
     ;;
 
   NERSC)
