@@ -60,6 +60,7 @@ def process_run(exp, run_num, detector_name, max_events):
     try:
         detector = psana.Detector(detector_name)
     except:
+        # psana2
         detector = None
 
     data = None
