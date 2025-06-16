@@ -71,6 +71,8 @@ def process_run(exp, run_num, detector_name, max_events):
         try:
             # psana2
             detector = run.Detector(detector_name)
+        except:
+            pass
         for nevt, evt in enumerate(run.events()):
             total_attempts += 1
             try:
