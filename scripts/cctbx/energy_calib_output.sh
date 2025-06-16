@@ -19,7 +19,8 @@ case $facility in
   NERSC)
     mfx_dir="/global/common/software/lcls/mfx"
     mfx3="/global/common/software/lcls/mfx"
-    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh #psana1
+    source /pscratch/sd/c/cctbx/psana2/alcc-recipes/cctbx/activate.sh
     ;;
 esac
 
