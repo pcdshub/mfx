@@ -390,12 +390,14 @@ class yano:
         For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
         import logging
-        logger = logging.getLogger(__name__)
+
         from time import sleep
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
 
+        logger = logging.getLogger(__name__)
+        
         # Configure the shutters
         if fiber == 0:
             self.fiber_0()
@@ -432,48 +434,149 @@ class yano:
         if tag is None:
             tag = sample
 
-        for i in range(runs):
-            logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
-            run_number = get_run(station=1) + 1
-            status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
-            if status is False:
-                pp.close()
+        if daq_num == 1:
+            for i in range(runs):
+                run_number = get_run(station=1) + 1
+                logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
+                status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
+                if status is False:
+                    pp.close()
+                    self.post(
+                        sample=sample, 
+                        tag=tag, 
+                        run_number=run_number, 
+                        post=record, 
+                        inspire=inspire,
+                        daq_num=daq_num,
+                        add_note='Run ended prematurely. Probably sample delivery problem')
+                    self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                    logger.warning("[*] Stopping Run and exiting???...")
+                    sleep(5)
+                    daq.stop()
+                    daq.disconnect()
+                    logger.warning('Run ended prematurely. Probably sample delivery problem')
+                    break
+
                 self.post(
                     sample=sample, 
                     tag=tag, 
                     run_number=run_number, 
                     post=record, 
-                    inspire=inspire, 
-                    add_note='Run ended prematurely. Probably sample delivery problem')
-                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
-                daq.stop()
-                daq.disconnect()
-                logger.warning('Run ended prematurely. Probably sample delivery problem')
-                break
-
-            self.post(
-                sample=sample, 
-                tag=tag, 
-                run_number=run_number, 
-                post=record, 
-                inspire=inspire)
-            try:
-                sleep(daq_delay)
-            except KeyboardInterrupt:
+                    inspire=inspire,
+                    daq_num=daq_num)
+                try:
+                    sleep(daq_delay)
+                except KeyboardInterrupt:
+                    pp.close()
+                    self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                    logger.warning("[*] Stopping Run and exiting???...")
+                    sleep(5)
+                    daq.disconnect()
+                    status = False
+                    if status is False:
+                        logger.warning('Run ended prematurely. Probably sample delivery problem')
+                        break
+            if status:
                 pp.close()
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
+                daq.end_run()
                 daq.disconnect()
-                status = False
-                if status is False:
-                    logger.warning('Run ended prematurely. Probably sample delivery problem')
-                    break
-        if status:
+                logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+        elif daq_num == 2:
+            try:
+                for i in range(runs):
+                    run_number = get_run(station=0) + 1
+                    from psdaq.control.DaqControl import DaqControl  # NOQA
+                    daq.control = DaqControl(
+                        host=daq.control.host,
+                        platform=daq.control.platform,
+                        timeout=10000,
+                    )
+                    instr = daq.control.getInstrument()
+                    if instr is None:
+                        logger.error('Failed to connect to LCLS-II DAQ')
+                        break
+                    start_state = daq.control.getState()
+                    if start_state == 'error':
+                        logger.error('DAQ is in an error state.')
+                        break
+
+                    logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+                    if cam is not None:
+                        ioc_cam_recorder(cam, run_length, tag)
+
+                    daq.control.setState("configured")
+                    while daq.control.getState() != "configured":
+                        ...
+                    if record:
+                        daq.control.setRecord(True)
+                    else:
+                        daq.control.setRecord(False)
+
+                    daq.control.setState("running")
+                    while daq.control.getState() != "running":
+                        ...
+                    start_time = time()
+                    end_time = start_time + run_length
+                    
+                    while time() < end_time:
+                        elapsed_time = time() - start_time
+                        progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+                        
+                        filled_length = int(60 * progress)
+                        bar = '=' * filled_length + '-' * (60 - filled_length)
+                        
+                        percentage = f"{progress:.0%}"
+                        
+                        print(f"\rProgress: [{bar}] {percentage}", end="")
+                        
+                        sleep(1)  # Update frequency
+                    
+                    print("\rProgress: [" + "="*60 + "] 100%") # Final, complete bar
+
+                    daq.control.setState("configured")
+                    while daq.control.getState() != "configured":
+                        ...
+
+                    if record:
+                        post(
+                            sample=sample, 
+                            tag=tag, 
+                            run_number=run_number, 
+                            post=record, 
+                            inspire=inspire,
+                            daq_num=daq_num)
+
+                    sleep(daq_delay)
+
+            except KeyboardInterrupt:
+                daq.control.setState("configured")
+                while daq.control.getState() != "configured":
+                    ...
+                daq.control.setRecord(False)
+                daq.control.setState("running")
+                pp.close()
+                if record:
+                    post(
+                        sample=sample, 
+                        tag=tag, 
+                        run_number=run_number, 
+                        post=record, 
+                        inspire=inspire,
+                        daq_num=daq_num, 
+                        add_note='Run ended prematurely. Probably sample delivery problem')
+                logger.warning("[*] Stopping Run and exiting???...")
+                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                logger.warning('Run ended prematurely. Probably sample delivery problem')
+
             pp.close()
             self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-            daq.end_run()
-            daq.disconnect()
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setRecord(False)
+            daq.control.setState("running")
             logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+        else:
+            logger.error('Please enter daq 1 or 2.')
