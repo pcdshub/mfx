@@ -206,11 +206,15 @@ class yano:
         inspire: bool, optional
             Set false by default because it makes Sandra sad. Set True to inspire
 
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
         add_note: string, optional
             adds additional note to elog message 
         """
-        from mfx.db import daq, elog
+        from mfx.db import elog
         from mfx.autorun import quote
+        from mfx.macros import get_exp
+
         post_template = """\
         Run Number {}: {}
 
@@ -222,6 +226,10 @@ class yano:
         EVO fiber 3 ->  {}
         OPO Shutter ->  {}
         """
+        if daq_num==1:
+        from elog import HutchELog
+        elog=HutchELog.from_conf(instrument='MFX',station=1)
+
         if add_note!='':
             add_note = '\n' + add_note
         if tag is None:
@@ -232,7 +240,7 @@ class yano:
             comment = f"Running {sample}{add_note}"
         delay = self.get_delay()
         if run_number is None:
-            run_number = daq.run_number()
+            run_number = get_run(station=0)
         info = [run_number, comment, self._delaystr(delay)]
         info.extend(self.shutter_status)
         post_msg = post_template.format(*info)
@@ -289,13 +297,16 @@ class yano:
             If ``True``, we'll end the run after the daq has stopped.
         """
         import logging
-        logger = logging.getLogger(__name__)
+        
         from time import sleep
         from mfx.db import daq
+        from ophyd.utils import StatusTimeoutError, WaitTimeoutError
+
+        logger = logging.getLogger(__name__)
 
         logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
-                      'use_l3t=%s, controls=%s, wait=%s)'),
-                     events, duration, record, use_l3t, controls, wait)
+                        'use_l3t=%s, controls=%s, wait=%s)'),
+                        events, duration, record, use_l3t, controls, wait)
         status = True
         try:
             if record is not None and record != daq.record:
@@ -365,6 +376,10 @@ class yano:
         
         laser_delay: float
             Requested laser delay in nanoseconds.
+
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
+
         Note
         ----
         0: (fiber1=False, fiber2=False, fiber3=False)
@@ -379,6 +394,7 @@ class yano:
         from time import sleep
         from mfx.db import daq, pp
         from mfx.autorun import quote
+        from mfx.macros import get_run, get_exp
 
         # Configure the shutters
         if fiber == 0:
