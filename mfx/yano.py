@@ -221,7 +221,7 @@ class yano:
         return delay
 
 
-    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, add_note=''):
+    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, add_note=''):
         """
         Posts a message to the elog
 
@@ -592,7 +592,7 @@ class yano:
                         ...
 
                     if record:
-                        post(
+                        self.post(
                             sample=sample, 
                             tag=tag, 
                             run_number=run_number, 
@@ -610,7 +610,7 @@ class yano:
                 daq.control.setState("running")
                 pp.close()
                 if record:
-                    post(
+                    self.post(
                         sample=sample, 
                         tag=tag, 
                         run_number=run_number, 
