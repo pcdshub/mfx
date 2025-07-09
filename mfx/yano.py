@@ -121,7 +121,7 @@ class yano:
         return adjusted_delay 
 
 
-    def set_delay(self, delay):
+    def set_delay(self, delay, rep=30):
         """
         Set the delay
 
@@ -129,32 +129,57 @@ class yano:
         ----------
         delay: float
             Requested laser delay in nanoseconds.
+
+        rep: int, optional
+            Set repitition rate only 60 and 30 Hz are currently available.
+            30 Hz is default
         """
         import logging
         import sys
+        from mfx.mfx_timing import set_seq
+        
         logger = logging.getLogger(__name__)
+
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
         self.delay = delay
         opo_delay = self.opo_time_zero - delay
         opo_ec = self.opo_ec_short
-        if delay > self.opo_time_zero + 3e9/120:
-            logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
-            sys.exit()
-        elif delay > self.opo_time_zero + 2e9/120:
-            opo_delay += 3e9/120
-            opo_ec = self.opo_ec_longest
-            logger.info('Laser is 3 buckets before the beam')
-        elif delay > self.opo_time_zero + 1e9/120:
-            opo_delay += 2e9/120
-            opo_ec = self.opo_ec_longer
-            logger.info('Laser is 2 buckets before the beam')
-        elif delay > self.opo_time_zero:
-            opo_delay += 1e9/120
-            opo_ec = self.opo_ec_long
-            logger.info('Laser is 1 bucket before the beam')
+
+        if rep == 30:
+            set_seq(rep=30)
+            if delay > self.opo_time_zero + 3e9/120:
+                logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
+                sys.exit()
+            elif delay > self.opo_time_zero + 2e9/120:
+                opo_delay += 3e9/120
+                opo_ec = self.opo_ec_longest
+                logger.info('Laser is 3 buckets before the beam')
+            elif delay > self.opo_time_zero + 1e9/120:
+                opo_delay += 2e9/120
+                opo_ec = self.opo_ec_longer
+                logger.info('Laser is 2 buckets before the beam')
+            elif delay > self.opo_time_zero:
+                opo_delay += 1e9/120
+                opo_ec = self.opo_ec_long
+                logger.info('Laser is 1 bucket before the beam')
+            else:
+                logger.info('Laser is in the same bucket as the beam')    
+
+        elif rep == 60:
+            set_seq(rep='60_yano')
+            if delay > self.opo_time_zero + 1e9/120:
+                logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
+                sys.exit()
+            elif delay > self.opo_time_zero:
+                opo_delay += 1e9/120
+                opo_ec = self.opo_ec_long
+                logger.info('Laser is 1 bucket before the beam')
+            else:
+                logger.info('Laser is in the same bucket as the beam')
+
         else:
-            logger.info('Laser is in the same bucket as the beam')      
+            logger.error('Please enter either 30 or 60 Hz.')
 
 
         self.opo.ns_delay.put(opo_delay)
@@ -227,8 +252,8 @@ class yano:
         OPO Shutter ->  {}
         """
         if daq_num==1:
-        from elog import HutchELog
-        elog=HutchELog.from_conf(instrument='MFX',station=1)
+            from elog import HutchELog
+            elog=HutchELog.from_conf(instrument='MFX',station=1)
 
         if add_note!='':
             add_note = '\n' + add_note
