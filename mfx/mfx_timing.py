@@ -83,6 +83,13 @@ class MFX_Timing:
         return steps
 
 
+    def _seq_60hz_yano(self):
+        steps = [['ray1', 1],
+                 ['ray2', 1],
+                 ['daq_readout', 0]]
+        return steps
+
+
     def _seq_30hz(self):
         steps = [['ray_readout', 1],
                  ['pp_trig', 0],
@@ -205,6 +212,15 @@ class MFX_Timing:
             elif rep == 10:
                 self._seq_init(sync_mark=120)
                 self._seq_put(self._seq_10hz())
+            elif rep == '120_truncated':
+                self._seq_init(sync_mark=120)
+                self._seq_put(self._seq_120hz_trucated())
+            elif rep == '60_truncated':
+                self._seq_init(sync_mark=60)
+                self._seq_put(self._seq_60hz_trucated())
+            elif rep == '60_yano':
+                self._seq_init(sync_mark=60)
+                self._seq_put(self._seq_60hz_yano())
 
         self.seq.start()
         return self.sequence
