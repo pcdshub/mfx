@@ -136,7 +136,7 @@ class yano:
         """
         import logging
         import sys
-        from mfx.mfx_timing import set_seq
+        from mfx.mfx_timing import MFX_Timing
         
         logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class yano:
         opo_ec = self.opo_ec_short
 
         if rep == 30:
-            set_seq(rep=30)
+            MFX_Timing.set_seq(rep=30)
             if delay > self.opo_time_zero + 3e9/120:
                 logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
                 sys.exit()
@@ -167,7 +167,7 @@ class yano:
                 logger.info('Laser is in the same bucket as the beam')    
 
         elif rep == 60:
-            set_seq(rep='60_yano')
+            MFX_Timing.set_seq(rep='60_yano')
             if delay > self.opo_time_zero + 1e9/120:
                 logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
                 sys.exit()
