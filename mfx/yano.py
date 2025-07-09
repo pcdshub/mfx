@@ -186,7 +186,8 @@ class yano:
                 logger.error('Laser delay requested is too long at 120 Hz. Switch to 30 Hz')
                 sys.exit()
             else:
-                logger.info('Laser is in the same bucket as the beam')
+                opo_ec = self.opo_ec_long
+                logger.info('Laser and drolet in the same bucket as the beam')
 
         else:
             logger.error('Please enter either 30 or 60 Hz.')
@@ -385,7 +386,8 @@ class yano:
         fiber=-1, 
         free_space=None, 
         laser_delay=None, 
-        rep=30):
+        rep=30,
+        daq_num=2):
         """
         Perform a single run of the experiment
 
@@ -443,7 +445,7 @@ class yano:
         """
         import logging
 
-        from time import sleep
+        from time import sleep, time
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
@@ -555,8 +557,6 @@ class yano:
                         break
 
                     logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
-                    if cam is not None:
-                        ioc_cam_recorder(cam, run_length, tag)
 
                     daq.control.setState("configured")
                     while daq.control.getState() != "configured":
