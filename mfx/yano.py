@@ -137,17 +137,19 @@ class yano:
         import logging
         import sys
         from mfx.mfx_timing import MFX_Timing
+        mfx_timing = MFX_Timing()
         
         logger = logging.getLogger(__name__)
 
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
+        logger.info(f"Setting reprate: {rep}")
         self.delay = delay
         opo_delay = self.opo_time_zero - delay
         opo_ec = self.opo_ec_short
 
         if rep == 30:
-            MFX_Timing.set_seq(rep=30)
+            mfx_timing.set_seq(rep=30)
             if delay > self.opo_time_zero + 3e9/120:
                 logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
                 sys.exit()
@@ -167,7 +169,7 @@ class yano:
                 logger.info('Laser is in the same bucket as the beam')    
 
         elif rep == 60:
-            MFX_Timing.set_seq(rep='60_yano')
+            mfx_timing.set_seq(rep='60_yano')
             if delay > self.opo_time_zero + 1e9/120:
                 logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
                 sys.exit()
@@ -175,6 +177,14 @@ class yano:
                 opo_delay += 1e9/120
                 opo_ec = self.opo_ec_long
                 logger.info('Laser is 1 bucket before the beam')
+            else:
+                logger.info('Laser is in the same bucket as the beam')
+
+        elif rep == 120:
+            mfx_timing.set_seq(rep='120_yano')
+            if delay > self.opo_time_zero + 1e9/120:
+                logger.error('Laser delay requested is too long at 120 Hz. Switch to 30 Hz')
+                sys.exit()
             else:
                 logger.info('Laser is in the same bucket as the beam')
 
@@ -362,7 +372,20 @@ class yano:
                 return status
 
 
-    def run(self, sample='?', tag=None, run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
+    def run(
+        self, 
+        sample='?', 
+        tag=None, 
+        run_length=300, 
+        record=True, 
+        runs=5, 
+        inspire=False, 
+        daq_delay=5, 
+        picker=None, 
+        fiber=-1, 
+        free_space=None, 
+        laser_delay=None, 
+        rep=30):
         """
         Perform a single run of the experiment
 
@@ -404,6 +427,10 @@ class yano:
 
         daq_num: int, optional
             Switch between daq 1 and 2. Default 2
+        
+        rep: int, optional
+            Set repitition rate only 60 and 30 Hz are currently available.
+            30 Hz is default
 
         Note
         ----
@@ -445,7 +472,7 @@ class yano:
                 self.opo_shutter('IN')
 
         if laser_delay is not None:
-            self.set_delay(laser_delay)
+            self.set_delay(laser_delay, rep=rep)
         delay = self.get_delay()
         logger.info(self._delaystr(delay))
 
