@@ -434,6 +434,12 @@ class Vernier:
             energy = int(os.popen("caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'").read().strip())
             return energy
 
+        def set2():
+            import os
+            os.system(f'caget MFX:USER:MCC:EPHOT:SET2')
+            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'").read().strip())
+            return energy
+
     class put:
         def __init__(self):
             pass
@@ -445,3 +451,7 @@ class Vernier:
         def set1(energy):
             import os
             os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
+
+        def set2(energy):
+            import os
+            os.system(f'caput MFX:USER:MCC:EPHOT:SET2 {energy}')
