@@ -60,7 +60,8 @@ class Vernier:
         try:
             from mfx.db import RE, pp, daq
             from mfx.autorun import quote, post
-            from mfx.macros import get_exp
+            from mfx.macros import get_exp, get_run
+            import bluesky.plans as bp
         except ImportError:
             from bluesky import RunEngine
             RE = RunEngine({})
@@ -84,15 +85,34 @@ class Vernier:
         run_number = get_run(station=station) + 1
         logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
 
-        RE(
-            daq_scan(
-                [],
+        if daq_num == 1:
+            RE(
+                daq_scan(
+                    [],
+                    EpicsSignal(mcc_pv, name='mcc'),
+                    energy_scan_start_eV,
+                    energy_scan_end_eV,
+                    energy_scan_steps,
+                    events=events_per_step,
+                    record=record))
+
+        elif daq_num == 2:
+            daq.configure(
+                EpicsSignal(mcc_pv, name='mcc'),
+                group_mask=0x1,
+                events=events_per_step,
+                record=record)
+
+            RE(bp.scan(
+                [daq],
                 EpicsSignal(mcc_pv, name='mcc'),
                 energy_scan_start_eV,
                 energy_scan_end_eV,
-                energy_scan_steps,
-                events=events_per_step,
-                record=record))
+                energy_scan_steps))
+
+        else:
+            logger.error('Please enter daq 1 or 2.')
+
         pp.close()
         daq.disconnect()
         post(
