@@ -221,7 +221,7 @@ class yano:
         return delay
 
 
-    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, add_note=''):
+    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, spread=None, add_note=''):
         """
         Posts a message to the elog
 
@@ -244,8 +244,12 @@ class yano:
 
         daq_num: int, optional
             Switch between daq 1 and 2. Default 2
+        
         add_note: string, optional
             adds additional note to elog message 
+
+        spread: str, optional
+            Special note for running SPREAD
         """
         from mfx.db import elog
         from mfx.autorun import quote
@@ -261,6 +265,7 @@ class yano:
         EVO fiber 2 ->  {}
         EVO fiber 3 ->  {}
         OPO Shutter ->  {}
+        {}
         """
         if daq_num==1:
             from elog import HutchELog
@@ -279,6 +284,8 @@ class yano:
             run_number = get_run(station=0)
         info = [run_number, comment, self._delaystr(delay)]
         info.extend(self.shutter_status)
+        if spread is not None:
+            info.extend([spread])
         post_msg = post_template.format(*info)
         print('\n' + post_msg + '\n')
         if post:
@@ -373,6 +380,48 @@ class yano:
                 return status
 
 
+    def generate_energy_seq(self, energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps, run_length, step_time):
+        """Perform Vernier scan.
+
+        Parameters:
+            energy_scan_start_eV (float): 
+                Photon energy (in eV) to start the scan at.
+
+            energy_scan_end_eV (float): 
+                Photon energy (in eV) to end the scan at.
+
+            energy_scan_steps (int): 
+                Step Size (in eV).
+
+            run_length: int, optional
+                number of seconds for run 300 is default
+        """
+        if energy_scan_steps <= 0:
+            raise ValueError("Step size must be positive")
+
+        up = list(range(
+            energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps))
+
+        down = list(range(
+            energy_scan_end_eV - energy_scan_steps,
+            energy_scan_start_eV - energy_scan_steps,
+            -energy_scan_steps))
+
+        up_down = len(up) + len(down)
+        run_total = round(run_length / step_time)
+        number_iterations = run_total // up_down
+        remainder = run_total % up_down
+
+        energy_seq = []
+        for seq in range(number_iterations):
+            energy_seq.extend(up)
+            energy_seq.extend(down)
+
+        energy_seq.extend(up[0:remainder-1])
+
+        return energy_seq
+
+
     def run(
         self, 
         sample='?', 
@@ -387,7 +436,10 @@ class yano:
         free_space=None, 
         laser_delay=None, 
         rep=30,
-        daq_num=2):
+        daq_num=2,
+        spread=[],
+        spread_type=None,
+        step_time=None):
         """
         Perform a single run of the experiment
 
@@ -427,12 +479,21 @@ class yano:
         laser_delay: float
             Requested laser delay in nanoseconds.
 
-        daq_num: int, optional
-            Switch between daq 1 and 2. Default 2
-        
         rep: int, optional
             Set repitition rate only 60 and 30 Hz are currently available.
             30 Hz is default
+
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
+
+        spread: list, optional
+            List SPREAD energies to dither over as [start, end, step]
+
+        spread_type: str, optional
+            SPREAD type either 'vernier' or 'k'
+
+        step_time: int, optional
+            step time for each energy of 'vernier' or 'k'
 
         Note
         ----
@@ -443,6 +504,8 @@ class yano:
 
         For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
+        import os
+        import sys
         import logging
 
         from time import sleep, time
@@ -572,20 +635,42 @@ class yano:
                     start_time = time()
                     end_time = start_time + run_length
                     
-                    while time() < end_time:
-                        elapsed_time = time() - start_time
-                        progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+                    if len(spread) == 3 and spread_type is not None:
+                        if spread_type.lower() == 'vernier':
+                            spread_pv = 'MFX:USER:MCC:EPHOT:SET1'
+                            spead_ref = 'MFX:USER:MCC:EPHOT:REF1'
+                            if step_time is None:
+                                step_time=1
+                        elif spread_type.lower() == 'k':
+                            spread_pv = 'MFX:USER:MCC:EPHOT:SET2'
+                            spead_ref = 'MFX:USER:MCC:EPHOT:REF2'
+                            if step_time is None:
+                                step_time=10
+                        else:
+                            logger.error('Please enter spread type of vernier or k only')
+                            sys.exit()
+                        spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s'
+                        energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time)
+                        for energy in energy_seq:
+                            os.system(f'caput {spread_pv} {energy}')
+                            sleep(step_time)
+
+                    else:
+                        spread_comment = None
+                        while time() < end_time:
+                            elapsed_time = time() - start_time
+                            progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+                            
+                            filled_length = int(60 * progress)
+                            bar = '=' * filled_length + '-' * (60 - filled_length)
+                            
+                            percentage = f"{progress:.0%}"
+                            
+                            print(f"\rProgress: [{bar}] {percentage}", end="")
+                            
+                            sleep(1)  # Update frequency
                         
-                        filled_length = int(60 * progress)
-                        bar = '=' * filled_length + '-' * (60 - filled_length)
-                        
-                        percentage = f"{progress:.0%}"
-                        
-                        print(f"\rProgress: [{bar}] {percentage}", end="")
-                        
-                        sleep(1)  # Update frequency
-                    
-                    print("\rProgress: [" + "="*60 + "] 100%") # Final, complete bar
+                        print("\rProgress: [" + "="*60 + "] 100%") # Final, complete bar
 
                     daq.control.setState("configured")
                     while daq.control.getState() != "configured":
@@ -598,7 +683,8 @@ class yano:
                             run_number=run_number, 
                             post=record, 
                             inspire=inspire,
-                            daq_num=daq_num)
+                            daq_num=daq_num,
+                            spread=spread_comment)
 
                     sleep(daq_delay)
 
@@ -632,3 +718,5 @@ class yano:
             logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
         else:
             logger.error('Please enter daq 1 or 2.')
+
+    
