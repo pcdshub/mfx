@@ -15,7 +15,7 @@ class Vernier:
             inspire: bool = False,
             record: bool = False,
             daq_num: int = 2,
-            mcc_pv: str = 'MFX:USER:MCC:EPHOT:SET1'):
+            mcc: str = None):
         """Perform Vernier scan.
 
         Parameters:
@@ -49,12 +49,13 @@ class Vernier:
             daq_num: int, optional
                 Switch between daq 1 and 2. Default 2
 
-            mcc_pv (str): 
-                Vernier PV. Optional. Default: 'MFX:USER:MCC:EPHOT:SET1'.
+            mcc (str): 
+                PV type either 'vernier' or 'k'
         
 
         """
         from ophyd import EpicsSignal
+        from pcdsdevices.pv_positioner import OnePVMotor
         import logging
         logger = logging.getLogger(__name__)
         try:
@@ -66,6 +67,14 @@ class Vernier:
             from bluesky import RunEngine
             RE = RunEngine({})
         from nabs.plans import daq_scan
+
+        if mcc.lower() == 'vernier':
+            mcc_pv = 'MFX:USER:MCC:EPHOT:SET1'
+        elif mcc.lower() == 'k':
+            mcc_pv = 'MFX:USER:MCC:EPHOT:SET2'
+        else:
+            logger.error('Please enter spread type of vernier or k only')
+            sys.exit()
 
         if picker=='open':
             pp.open()
@@ -86,10 +95,11 @@ class Vernier:
         logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
 
         if daq_num == 1:
+            mcc_pv_motor = EpicsSignal(mcc_pv, name='mcc')
             RE(
                 daq_scan(
                     [],
-                    EpicsSignal(mcc_pv, name='mcc'),
+                    mcc_pv_motor,
                     energy_scan_start_eV,
                     energy_scan_end_eV,
                     energy_scan_steps,
@@ -97,15 +107,16 @@ class Vernier:
                     record=record))
 
         elif daq_num == 2:
+            mcc_pv_motor = OnePVMotor(mcc_pv, name="mcc")
             daq.configure(
-                EpicsSignal(mcc_pv, name='mcc'),
+                motors=[mcc_pv_motor],
                 group_mask=0x1,
-                events=events_per_step,
+                events=120,
                 record=record)
 
             RE(bp.scan(
                 [daq],
-                EpicsSignal(mcc_pv, name='mcc'),
+                mcc_pv_motor,
                 energy_scan_start_eV,
                 energy_scan_end_eV,
                 energy_scan_steps))
@@ -422,10 +433,16 @@ class Vernier:
         def __init__(self):
             pass
 
-        def ref():
+        def ref1():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
             energy = int(os.popen("caget MFX:USER:MCC:EPHOT:REF1 | awk '{print $2}'").read().strip())
+            return energy
+
+        def ref2():
+            import os
+            os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
+            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:REF2 | awk '{print $2}'").read().strip())
             return energy
 
         def set1():
@@ -444,9 +461,13 @@ class Vernier:
         def __init__(self):
             pass
 
-        def ref(energy):
+        def ref1(energy):
             import os
             os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
+
+        def ref2(energy):
+            import os
+            os.system(f'caput MFX:USER:MCC:EPHOT:REF2 {energy}')
     
         def set1(energy):
             import os
