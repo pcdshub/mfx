@@ -105,13 +105,15 @@ class Vernier:
                     energy_scan_steps,
                     events=events_per_step,
                     record=record))
+            daq.disconnect()
 
         elif daq_num == 2:
             mcc_pv_motor = OnePVMotor(mcc_pv, name="mcc")
+            mcc_pv_motor.setpoint.kind = "hinted"
             daq.configure(
                 motors=[mcc_pv_motor],
                 group_mask=0x1,
-                events=120,
+                events=events_per_step,
                 record=record)
 
             RE(bp.scan(
@@ -125,14 +127,14 @@ class Vernier:
             logger.error('Please enter daq 1 or 2.')
 
         pp.close()
-        daq.disconnect()
         post(
             sample=sample, 
             tag=tag, 
             run_number=run_number, 
             post=record, 
             inspire=inspire,
-            daq_num=daq_num)
+            daq_num=daq_num,
+            add_note=f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, steps:{energy_scan_steps}eV @ {events_per_step} events per step')
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
         logging.warning(f"Scan completed. Would you like to analyze the output?")
