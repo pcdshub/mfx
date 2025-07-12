@@ -446,7 +446,7 @@ class yano:
         if brewster > 0:
             part_up = up[:len(up) // brewster]
 
-            part_down = down[len(down) // brewster:]
+            part_down = down[-len(down) // brewster:]
 
             up_down = len(part_up) + len(part_down) + up_down
 
@@ -694,15 +694,16 @@ class yano:
                         else:
                             logger.error('Please enter spread type of vernier or k only')
                             sys.exit()
-                        spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s'
+                        spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s, Brewster: {brewster}'
                         energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time, brewster)
 
-                        energy = int(os.popen(spead_ref).read().strip())
-                        try:
-                            ind = energy_seq.index(energy)
-                            energy_seq = energy_seq[ind:]
-                        except ValueError:
-                            logger.error(f"{energy} not found in the sequence. Starting with first energy")
+                        if brewster is None:
+                            energy = int(os.popen(spead_ref).read().strip())
+                            try:
+                                ind = energy_seq.index(energy)
+                                energy_seq = energy_seq[ind:]
+                            except ValueError:
+                                logger.error(f"{energy} not found in the sequence. Starting with first energy")
 
                         for eng in energy_seq:
                             os.system(f'caput {spread_pv} {eng}')
