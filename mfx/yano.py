@@ -267,6 +267,23 @@ class yano:
         OPO Shutter ->  {}
         {}
         """
+        post_template2 = """
+            <table border="1">
+            <thead><tr><th colspan="2"><center>Run Number {1}: {2}</center></th></tr></thead>
+            <tbody><tr>
+            <td><b><center>Fiber/Shutter</center></b></td>
+            <td><b><center>Spread</center></b></td></tr>
+            <tr><td><center>EVO fiber 1 -> {3}</center></td>
+            <td><center>Spread: {7}</center></td></tr>
+            <tr><td><center>EVO fiber 2 -> {4}</center></td>
+            <td><center></center></td></tr>
+            <tr><td><center>EVO fiber 3 -> {5}</center></td>
+            <td><center></center></td></tr>
+            <tr><td><center>OPO Shutter -> {6}</center></td>
+            <td><center></center></td></tr>
+            </tbody>
+            </table>
+        """
         if daq_num==1:
             from elog import HutchELog
             elog=HutchELog.from_conf(instrument='MFX',station=1)
@@ -286,6 +303,8 @@ class yano:
         info.extend(self.shutter_status)
         if spread is not None:
             info.extend([spread])
+        else:
+            info.extend(["Spread      -> NO"])
         post_msg = post_template.format(*info)
         print('\n' + post_msg + '\n')
         if post:
@@ -410,14 +429,14 @@ class yano:
         up_down = len(up) + len(down)
         run_total = round(run_length / step_time)
         number_iterations = run_total // up_down
-        remainder = run_total % up_down
+        # remainder = run_total % up_down
 
         energy_seq = []
         for seq in range(number_iterations):
             energy_seq.extend(up)
             energy_seq.extend(down)
 
-        energy_seq.extend(up[0:remainder-1])
+        # energy_seq.extend(up[0:remainder-1])
 
         return energy_seq
 
@@ -638,12 +657,12 @@ class yano:
                     if len(spread) == 3 and spread_type is not None:
                         if spread_type.lower() == 'vernier':
                             spread_pv = 'MFX:USER:MCC:EPHOT:SET1'
-                            spead_ref = 'MFX:USER:MCC:EPHOT:REF1'
+                            spead_ref = "caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'"
                             if step_time is None:
                                 step_time=1
                         elif spread_type.lower() == 'k':
                             spread_pv = 'MFX:USER:MCC:EPHOT:SET2'
-                            spead_ref = 'MFX:USER:MCC:EPHOT:REF2'
+                            spead_ref = "caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'"
                             if step_time is None:
                                 step_time=10
                         else:
@@ -651,8 +670,16 @@ class yano:
                             sys.exit()
                         spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s'
                         energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time)
-                        for energy in energy_seq:
-                            os.system(f'caput {spread_pv} {energy}')
+
+                        energy = int(os.popen(spead_ref).read().strip())
+                        try:
+                            ind = energy_seq.index(energy)
+                            energy_seq = energy_seq[ind:]
+                        except ValueError:
+                            logger.error(f"{energy} not found in the sequence. Starting with first energy")
+
+                        for eng in energy_seq:
+                            os.system(f'caput {spread_pv} {eng}')
                             sleep(step_time)
 
                     else:
@@ -702,7 +729,8 @@ class yano:
                         run_number=run_number, 
                         post=record, 
                         inspire=inspire,
-                        daq_num=daq_num, 
+                        daq_num=daq_num,
+                        spread=spread_comment, 
                         add_note='Run ended prematurely. Probably sample delivery problem')
                 logger.warning("[*] Stopping Run and exiting???...")
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
