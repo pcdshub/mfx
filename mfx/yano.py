@@ -399,7 +399,14 @@ class yano:
                 return status
 
 
-    def generate_energy_seq(self, energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps, run_length, step_time):
+    def generate_energy_seq(
+        self,
+        energy_scan_start_eV,
+        energy_scan_end_eV,
+        energy_scan_steps,
+        run_length,
+        step_time,
+        brewster=None):
         """Perform Vernier scan.
 
         Parameters:
@@ -414,9 +421,15 @@ class yano:
 
             run_length: int, optional
                 number of seconds for run 300 is default
+
+            brewster: int, optional
+                weights the bottom division of sequence twice.
+                ie 2 weights the bottom half.
         """
         if energy_scan_steps <= 0:
             raise ValueError("Step size must be positive")
+
+        run_total = round(run_length / step_time)
 
         up = list(range(
             energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps))
@@ -427,16 +440,24 @@ class yano:
             -energy_scan_steps))
 
         up_down = len(up) + len(down)
-        run_total = round(run_length / step_time)
+
+        part_up = []
+        part_down = []
+        if brewster > 0:
+            part_up = up[:len(up) // brewster]
+
+            part_down = down[len(down) // brewster:]
+
+            up_down = len(part_up) + len(part_down) + up_down
+
         number_iterations = run_total // up_down
-        # remainder = run_total % up_down
 
         energy_seq = []
         for seq in range(number_iterations):
+            energy_seq.extend(part_up)
+            energy_seq.extend(part_down)
             energy_seq.extend(up)
             energy_seq.extend(down)
-
-        # energy_seq.extend(up[0:remainder-1])
 
         return energy_seq
 
@@ -458,7 +479,8 @@ class yano:
         daq_num=2,
         spread=[],
         spread_type=None,
-        step_time=None):
+        step_time=None,
+        brewster=None):
         """
         Perform a single run of the experiment
 
@@ -513,6 +535,10 @@ class yano:
 
         step_time: int, optional
             step time for each energy of 'vernier' or 'k'
+
+        brewster: int, optional
+            weights the bottom division of SPREAD sequence twice.
+            ie 2 weights the bottom half.
 
         Note
         ----
@@ -669,7 +695,7 @@ class yano:
                             logger.error('Please enter spread type of vernier or k only')
                             sys.exit()
                         spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s'
-                        energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time)
+                        energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time, brewster)
 
                         energy = int(os.popen(spead_ref).read().strip())
                         try:
