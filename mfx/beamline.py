@@ -149,8 +149,12 @@ with safe_load('Find_PV'):
     from mfx.find import *
     find = Find()
 
-with safe_load('Find_PV'):
+with safe_load('Get_Info'):
     from scripts.get_info import *
+
+with safe_load('Wire_Scan'):
+    from mfx.wire import *
+    wire = Wire()
 
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
