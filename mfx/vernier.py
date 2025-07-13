@@ -443,7 +443,7 @@ class Vernier:
 
         def ref2():
             import os
-            os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
+            os.system(f'caget MFX:USER:MCC:EPHOT:REF2')
             energy = int(os.popen("caget MFX:USER:MCC:EPHOT:REF2 | awk '{print $2}'").read().strip())
             return energy
 
