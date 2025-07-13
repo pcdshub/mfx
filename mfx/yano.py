@@ -166,6 +166,7 @@ class yano:
                 opo_ec = self.opo_ec_long
                 logger.info('Laser is 1 bucket before the beam')
             else:
+                opo_ec = self.DAQ
                 logger.info('Laser is in the same bucket as the beam')    
 
         elif rep == 60:
@@ -178,15 +179,25 @@ class yano:
                 opo_ec = self.opo_ec_long
                 logger.info('Laser is 1 bucket before the beam')
             else:
+                opo_ec = self.DAQ
                 logger.info('Laser is in the same bucket as the beam')
+
+        elif rep == 90:
+            mfx_timing.set_seq(rep='90_yano')
+            if delay > self.opo_time_zero:
+                logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
+                sys.exit()
+            else:
+                opo_ec = self.DAQ
+                logger.info('Laser and drolet in the same bucket as the beam')
 
         elif rep == 120:
             mfx_timing.set_seq(rep='120_yano')
-            if delay > self.opo_time_zero + 1e9/120:
+            if delay > self.opo_time_zero:
                 logger.error('Laser delay requested is too long at 120 Hz. Switch to 30 Hz')
                 sys.exit()
             else:
-                opo_ec = self.opo_ec_long
+                opo_ec = self.DAQ
                 logger.info('Laser and drolet in the same bucket as the beam')
 
         else:
@@ -521,7 +532,8 @@ class yano:
             Requested laser delay in nanoseconds.
 
         rep: int, optional
-            Set repitition rate only 60 and 30 Hz are currently available.
+            Set repitition rate only 120, 60, 30 Hz are currently available.
+            90 Hz is available using 2 ADE
             30 Hz is default
 
         daq_num: int, optional
