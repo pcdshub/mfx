@@ -417,7 +417,7 @@ class yano:
         energy_scan_steps,
         run_length,
         step_time,
-        brewster=None):
+        brewster=0):
         """Perform Vernier scan.
 
         Parameters:
@@ -483,7 +483,7 @@ class yano:
         inspire=False, 
         daq_delay=5, 
         picker=None, 
-        fiber=-1, 
+        fiber=0, 
         free_space=None, 
         laser_delay=None, 
         rep=30,
@@ -491,7 +491,7 @@ class yano:
         spread=[],
         spread_type=None,
         step_time=None,
-        brewster=None):
+        brewster=0):
         """
         Perform a single run of the experiment
 
@@ -523,7 +523,7 @@ class yano:
 
         fiber: int, optional
             Number of laser fibers. Default is -1. See ``configure_shutters`` for more
-            information
+            information. Default 0
 
         free_space: bool, optional
             Sets the free_space laser shutter to Closed (False) or Open (True). Default is None.
@@ -709,7 +709,7 @@ class yano:
                         spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s, Brewster: {brewster}'
                         energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time, brewster)
 
-                        if brewster is None:
+                        if brewster > 0:
                             energy = int(os.popen(spead_ref).read().strip())
                             try:
                                 ind = energy_seq.index(energy)
