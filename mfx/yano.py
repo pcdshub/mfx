@@ -131,7 +131,7 @@ class yano:
             Requested laser delay in nanoseconds.
 
         rep: int, optional
-            Set repitition rate only 60 and 30 Hz are currently available.
+            Set repetition rate only 60 and 30 Hz are currently available.
             30 Hz is default
         """
         import logging
