@@ -187,7 +187,7 @@ def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-def _autorun(sample='?', tag=None, run_length=300, record=True,
+def _autorun(sample='?', tag=None, run_type="DATA", run_length=300, record=True,
             runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2):
     """
     Automate runs.... With optional quotes
@@ -244,11 +244,8 @@ def _autorun(sample='?', tag=None, run_length=300, record=True,
     if picker=='flip':
         pp.flipflop()
 
-    run_type="SAMPLE"
     if tag is None:
         tag = sample
-    else:
-        run_type = tag
 
     if daq_num == 1:
         for i in range(runs):
