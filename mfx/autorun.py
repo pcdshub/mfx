@@ -396,7 +396,7 @@ def autorun(**kwargs):
     _autorun(**kwargs)
 
 def geomrun(**kwargs):
-    kwargs['tag'] = "GEOM"
+    kwargs['run_type'] = "GEOM"
     _autorun(**kwargs)
 
 post_template = """\
