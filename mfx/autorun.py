@@ -396,6 +396,8 @@ def autorun(**kwargs):
     _autorun(**kwargs)
 
 def geomrun(**kwargs):
+    kwargs['tag'] = "geom"
+    kwargs['sample'] = "geometry-calibration"
     kwargs['run_type'] = "GEOM"
     _autorun(**kwargs)
 
