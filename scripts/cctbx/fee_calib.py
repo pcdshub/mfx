@@ -52,29 +52,50 @@ calibration {
 
 def process_run(exp, run_num, detector_name, max_events):
     """Process a single run and return accumulated spectrum"""
-    ds = psana.DataSource(f'exp={exp}:run={run_num}:smd')
-    detector = psana.Detector(detector_name)
+    try:
+        ds = psana.DataSource(f'exp={exp}:run={run_num}:smd')
+    except:
+        # psana2
+        ds = psana.DataSource(exp={exp},run={run_num},detectors=[f'{detector_name}'],max_events={max_events})
+    try:
+        detector = psana.Detector(detector_name)
+    except:
+        # psana2
+        detector = None
 
     data = None
     total_events = 0
     total_attempts = 0
 
     for run in ds.runs():
+        try:
+            # psana2
+            detector = run.Detector(detector_name)
+        except:
+            pass
         for nevt, evt in enumerate(run.events()):
             total_attempts += 1
-            spectrum = detector.get(evt)
+            try:
+                is_psana1=True
+                spectrum = detector.get(evt)
+                dta = spectrum.hproj().astype(float)
+            except:
+                # psana2
+                is_psana1 = False
+                spectrum = detector.raw.hproj(evt)
+                dta = spectrum.astype(float)
             if not spectrum:
                 continue
 
-            dta = spectrum.hproj().astype(float)
             if data is None:
                 data = dta
             else:
                 data += dta
             total_events += 1
 
-            if total_events >= max_events:
-                break
+            if is_psana1:
+                if total_events >= max_events:
+                    break
 
     print(f"  Processed {total_attempts} total events to get {total_events} good events")
     return data, total_events

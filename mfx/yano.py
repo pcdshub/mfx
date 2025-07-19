@@ -15,7 +15,7 @@ class yano:
         self.evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
         # Laser parameter
-        self.opo_time_zero = 671630
+        self.opo_time_zero = 671740
 
         # Event code switch logic for longer delay
         self.opo_ec_short = 212
@@ -121,7 +121,7 @@ class yano:
         return adjusted_delay 
 
 
-    def set_delay(self, delay):
+    def set_delay(self, delay, rep=30):
         """
         Set the delay
 
@@ -129,32 +129,79 @@ class yano:
         ----------
         delay: float
             Requested laser delay in nanoseconds.
+
+        rep: int, optional
+            Set repetition rate only 60 and 30 Hz are currently available.
+            30 Hz is default
         """
         import logging
         import sys
+        from mfx.mfx_timing import MFX_Timing
+        mfx_timing = MFX_Timing()
+        
         logger = logging.getLogger(__name__)
+
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
+        logger.info(f"Setting reprate: {rep}")
         self.delay = delay
         opo_delay = self.opo_time_zero - delay
         opo_ec = self.opo_ec_short
-        if delay > self.opo_time_zero + 3e9/120:
-            logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
-            sys.exit()
-        elif delay > self.opo_time_zero + 2e9/120:
-            opo_delay += 3e9/120
-            opo_ec = self.opo_ec_longest
-            logger.info('Laser is 3 buckets before the beam')
-        elif delay > self.opo_time_zero + 1e9/120:
-            opo_delay += 2e9/120
-            opo_ec = self.opo_ec_longer
-            logger.info('Laser is 2 buckets before the beam')
-        elif delay > self.opo_time_zero:
-            opo_delay += 1e9/120
-            opo_ec = self.opo_ec_long
-            logger.info('Laser is 1 bucket before the beam')
+
+        if rep == 30:
+            mfx_timing.set_seq(rep=30)
+            if delay > self.opo_time_zero + 3e9/120:
+                logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
+                sys.exit()
+            elif delay > self.opo_time_zero + 2e9/120:
+                opo_delay += 3e9/120
+                opo_ec = self.opo_ec_longest
+                logger.info('Laser is 3 buckets before the beam')
+            elif delay > self.opo_time_zero + 1e9/120:
+                opo_delay += 2e9/120
+                opo_ec = self.opo_ec_longer
+                logger.info('Laser is 2 buckets before the beam')
+            elif delay > self.opo_time_zero:
+                opo_delay += 1e9/120
+                opo_ec = self.opo_ec_long
+                logger.info('Laser is 1 bucket before the beam')
+            else:
+                opo_ec = self.DAQ
+                logger.info('Laser is in the same bucket as the beam')    
+
+        elif rep == 60:
+            mfx_timing.set_seq(rep='60_yano')
+            if delay > self.opo_time_zero + 1e9/120:
+                logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
+                sys.exit()
+            elif delay > self.opo_time_zero:
+                opo_delay += 1e9/120
+                opo_ec = self.opo_ec_long
+                logger.info('Laser is 1 bucket before the beam')
+            else:
+                opo_ec = self.DAQ
+                logger.info('Laser is in the same bucket as the beam')
+
+        elif rep == 90:
+            mfx_timing.set_seq(rep='90_yano')
+            if delay > self.opo_time_zero:
+                logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
+                sys.exit()
+            else:
+                opo_ec = self.DAQ
+                logger.info('Laser and drolet in the same bucket as the beam')
+
+        elif rep == 120:
+            mfx_timing.set_seq(rep='120_yano')
+            if delay > self.opo_time_zero:
+                logger.error('Laser delay requested is too long at 120 Hz. Switch to 30 Hz')
+                sys.exit()
+            else:
+                opo_ec = self.DAQ
+                logger.info('Laser and drolet in the same bucket as the beam')
+
         else:
-            logger.info('Laser is in the same bucket as the beam')      
+            logger.error('Please enter either 30 or 60 Hz.')
 
 
         self.opo.ns_delay.put(opo_delay)
@@ -185,7 +232,7 @@ class yano:
         return delay
 
 
-    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, add_note=''):
+    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, spread=None, add_note=''):
         """
         Posts a message to the elog
 
@@ -206,11 +253,19 @@ class yano:
         inspire: bool, optional
             Set false by default because it makes Sandra sad. Set True to inspire
 
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
+        
         add_note: string, optional
             adds additional note to elog message 
+
+        spread: str, optional
+            Special note for running SPREAD
         """
-        from mfx.db import daq, elog
+        from mfx.db import elog
         from mfx.autorun import quote
+        from mfx.macros import get_exp
+
         post_template = """\
         Run Number {}: {}
 
@@ -221,7 +276,29 @@ class yano:
         EVO fiber 2 ->  {}
         EVO fiber 3 ->  {}
         OPO Shutter ->  {}
+        {}
         """
+        post_template2 = """
+            <table border="1">
+            <thead><tr><th colspan="2"><center>Run Number {1}: {2}</center></th></tr></thead>
+            <tbody><tr>
+            <td><b><center>Fiber/Shutter</center></b></td>
+            <td><b><center>Spread</center></b></td></tr>
+            <tr><td><center>EVO fiber 1 -> {3}</center></td>
+            <td><center>Spread: {7}</center></td></tr>
+            <tr><td><center>EVO fiber 2 -> {4}</center></td>
+            <td><center></center></td></tr>
+            <tr><td><center>EVO fiber 3 -> {5}</center></td>
+            <td><center></center></td></tr>
+            <tr><td><center>OPO Shutter -> {6}</center></td>
+            <td><center></center></td></tr>
+            </tbody>
+            </table>
+        """
+        if daq_num==1:
+            from elog import HutchELog
+            elog=HutchELog.from_conf(instrument='MFX',station=1)
+
         if add_note!='':
             add_note = '\n' + add_note
         if tag is None:
@@ -232,9 +309,13 @@ class yano:
             comment = f"Running {sample}{add_note}"
         delay = self.get_delay()
         if run_number is None:
-            run_number = daq.run_number()
+            run_number = get_run(station=0)
         info = [run_number, comment, self._delaystr(delay)]
         info.extend(self.shutter_status)
+        if spread is not None:
+            info.extend([spread])
+        else:
+            info.extend(["Spread      -> NO"])
         post_msg = post_template.format(*info)
         print('\n' + post_msg + '\n')
         if post:
@@ -289,13 +370,16 @@ class yano:
             If ``True``, we'll end the run after the daq has stopped.
         """
         import logging
-        logger = logging.getLogger(__name__)
+        
         from time import sleep
         from mfx.db import daq
+        from ophyd.utils import StatusTimeoutError, WaitTimeoutError
+
+        logger = logging.getLogger(__name__)
 
         logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
-                      'use_l3t=%s, controls=%s, wait=%s)'),
-                     events, duration, record, use_l3t, controls, wait)
+                        'use_l3t=%s, controls=%s, wait=%s)'),
+                        events, duration, record, use_l3t, controls, wait)
         status = True
         try:
             if record is not None and record != daq.record:
@@ -326,7 +410,88 @@ class yano:
                 return status
 
 
-    def run(self, sample='?', tag=None, run_length=300, record=True, runs=5, inspire=False, daq_delay=5, picker=None, fiber=-1, free_space=None, laser_delay=None):
+    def generate_energy_seq(
+        self,
+        energy_scan_start_eV,
+        energy_scan_end_eV,
+        energy_scan_steps,
+        run_length,
+        step_time,
+        brewster=0):
+        """Perform Vernier scan.
+
+        Parameters:
+            energy_scan_start_eV (float): 
+                Photon energy (in eV) to start the scan at.
+
+            energy_scan_end_eV (float): 
+                Photon energy (in eV) to end the scan at.
+
+            energy_scan_steps (int): 
+                Step Size (in eV).
+
+            run_length: int, optional
+                number of seconds for run 300 is default
+
+            brewster: int, optional
+                weights the bottom division of sequence twice.
+                ie 2 weights the bottom half.
+        """
+        if energy_scan_steps <= 0:
+            raise ValueError("Step size must be positive")
+
+        run_total = round(run_length / step_time)
+
+        up = list(range(
+            energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps))
+
+        down = list(range(
+            energy_scan_end_eV - energy_scan_steps,
+            energy_scan_start_eV - energy_scan_steps,
+            -energy_scan_steps))
+
+        up_down = len(up) + len(down)
+
+        part_up = []
+        part_down = []
+        if brewster > 0:
+            part_up = up[:len(up) // brewster]
+
+            part_down = down[-len(down) // brewster:]
+
+            up_down = len(part_up) + len(part_down) + up_down
+
+        number_iterations = run_total // up_down
+
+        energy_seq = []
+        for seq in range(number_iterations):
+            energy_seq.extend(part_up)
+            energy_seq.extend(part_down)
+            energy_seq.extend(up)
+            energy_seq.extend(down)
+
+        return energy_seq
+
+
+    def run(
+        self, 
+        sample='?', 
+        tag=None, 
+        run_length=300, 
+        record=True, 
+        runs=5, 
+        inspire=False, 
+        daq_delay=5, 
+        picker=None, 
+        fiber=0, 
+        free_space=None, 
+        laser_delay=None, 
+        rep=30,
+        daq_num=2,
+        spread=[],
+        spread_type=None,
+        step_time=None,
+        brewster=0):
         """
         Perform a single run of the experiment
 
@@ -358,13 +523,35 @@ class yano:
 
         fiber: int, optional
             Number of laser fibers. Default is -1. See ``configure_shutters`` for more
-            information
+            information. Default 0
 
         free_space: bool, optional
             Sets the free_space laser shutter to Closed (False) or Open (True). Default is None.
         
         laser_delay: float
             Requested laser delay in nanoseconds.
+
+        rep: int, optional
+            Set repitition rate only 120, 60, 30 Hz are currently available.
+            90 Hz is available using 2 ADE
+            30 Hz is default
+
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
+
+        spread: list, optional
+            List SPREAD energies to dither over as [start, end, step]
+
+        spread_type: str, optional
+            SPREAD type either 'vernier' or 'k'
+
+        step_time: int, optional
+            step time for each energy of 'vernier' or 'k'
+
+        brewster: int, optional
+            weights the bottom division of SPREAD sequence twice.
+            ie 2 weights the bottom half.
+
         Note
         ----
         0: (fiber1=False, fiber2=False, fiber3=False)
@@ -374,12 +561,17 @@ class yano:
 
         For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
+        import os
+        import sys
         import logging
-        logger = logging.getLogger(__name__)
-        from time import sleep
+
+        from time import sleep, time
         from mfx.db import daq, pp
         from mfx.autorun import quote
+        from mfx.macros import get_run, get_exp
 
+        logger = logging.getLogger(__name__)
+        
         # Configure the shutters
         if fiber == 0:
             self.fiber_0()
@@ -402,7 +594,7 @@ class yano:
                 self.opo_shutter('IN')
 
         if laser_delay is not None:
-            self.set_delay(laser_delay)
+            self.set_delay(laser_delay, rep=rep)
         delay = self.get_delay()
         logger.info(self._delaystr(delay))
 
@@ -416,48 +608,182 @@ class yano:
         if tag is None:
             tag = sample
 
-        for i in range(runs):
-            logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
-            run_number = get_run(station=1) + 1
-            status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
-            if status is False:
-                pp.close()
+        if daq_num == 1:
+            for i in range(runs):
+                run_number = get_run(station=1) + 1
+                logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
+                status = self.begin(duration = run_length, record = record, wait = True, end_run = True)
+                if status is False:
+                    pp.close()
+                    self.post(
+                        sample=sample, 
+                        tag=tag, 
+                        run_number=run_number, 
+                        post=record, 
+                        inspire=inspire,
+                        daq_num=daq_num,
+                        add_note='Run ended prematurely. Probably sample delivery problem')
+                    self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                    logger.warning("[*] Stopping Run and exiting???...")
+                    sleep(5)
+                    daq.stop()
+                    daq.disconnect()
+                    logger.warning('Run ended prematurely. Probably sample delivery problem')
+                    break
+
                 self.post(
                     sample=sample, 
                     tag=tag, 
                     run_number=run_number, 
                     post=record, 
-                    inspire=inspire, 
-                    add_note='Run ended prematurely. Probably sample delivery problem')
-                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
-                daq.stop()
-                daq.disconnect()
-                logger.warning('Run ended prematurely. Probably sample delivery problem')
-                break
-
-            self.post(
-                sample=sample, 
-                tag=tag, 
-                run_number=run_number, 
-                post=record, 
-                inspire=inspire)
-            try:
-                sleep(daq_delay)
-            except KeyboardInterrupt:
+                    inspire=inspire,
+                    daq_num=daq_num)
+                try:
+                    sleep(daq_delay)
+                except KeyboardInterrupt:
+                    pp.close()
+                    self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                    logger.warning("[*] Stopping Run and exiting???...")
+                    sleep(5)
+                    daq.disconnect()
+                    status = False
+                    if status is False:
+                        logger.warning('Run ended prematurely. Probably sample delivery problem')
+                        break
+            if status:
                 pp.close()
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
+                daq.end_run()
                 daq.disconnect()
-                status = False
-                if status is False:
-                    logger.warning('Run ended prematurely. Probably sample delivery problem')
-                    break
-        if status:
+                logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+        elif daq_num == 2:
+            try:
+                for i in range(runs):
+                    run_number = get_run(station=0) + 1
+                    from psdaq.control.DaqControl import DaqControl  # NOQA
+                    daq.control = DaqControl(
+                        host=daq.control.host,
+                        platform=daq.control.platform,
+                        timeout=10000,
+                    )
+                    instr = daq.control.getInstrument()
+                    if instr is None:
+                        logger.error('Failed to connect to LCLS-II DAQ')
+                        break
+                    start_state = daq.control.getState()
+                    if start_state == 'error':
+                        logger.error('DAQ is in an error state.')
+                        break
+
+                    logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+
+                    daq.control.setState("configured")
+                    while daq.control.getState() != "configured":
+                        ...
+                    if record:
+                        daq.control.setRecord(True)
+                    else:
+                        daq.control.setRecord(False)
+
+                    daq.control.setState("running")
+                    while daq.control.getState() != "running":
+                        ...
+                    start_time = time()
+                    end_time = start_time + run_length
+                    
+                    if len(spread) == 3 and spread_type is not None:
+                        if spread_type.lower() == 'vernier':
+                            spread_pv = 'MFX:USER:MCC:EPHOT:SET1'
+                            spead_ref = "caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'"
+                            if step_time is None:
+                                step_time=1
+                        elif spread_type.lower() == 'k':
+                            spread_pv = 'MFX:USER:MCC:EPHOT:SET2'
+                            spead_ref = "caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'"
+                            if step_time is None:
+                                step_time=10
+                        else:
+                            logger.error('Please enter spread type of vernier or k only')
+                            sys.exit()
+                        spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s, Brewster: {brewster}'
+                        energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time, brewster)
+
+                        if brewster > 0:
+                            energy = int(os.popen(spead_ref).read().strip())
+                            try:
+                                ind = energy_seq.index(energy)
+                                energy_seq = energy_seq[ind:]
+                            except ValueError:
+                                logger.error(f"{energy} not found in the sequence. Starting with first energy")
+
+                        for eng in energy_seq:
+                            os.system(f'caput {spread_pv} {eng}')
+                            sleep(step_time)
+
+                    else:
+                        spread_comment = None
+                        while time() < end_time:
+                            elapsed_time = time() - start_time
+                            progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+                            
+                            filled_length = int(60 * progress)
+                            bar = '=' * filled_length + '-' * (60 - filled_length)
+                            
+                            percentage = f"{progress:.0%}"
+                            
+                            print(f"\rProgress: [{bar}] {percentage}", end="")
+                            
+                            sleep(1)  # Update frequency
+                        
+                        print("\rProgress: [" + "="*60 + "] 100%") # Final, complete bar
+
+                    daq.control.setState("configured")
+                    while daq.control.getState() != "configured":
+                        ...
+
+                    if record:
+                        self.post(
+                            sample=sample, 
+                            tag=tag, 
+                            run_number=run_number, 
+                            post=record, 
+                            inspire=inspire,
+                            daq_num=daq_num,
+                            spread=spread_comment)
+
+                    sleep(daq_delay)
+
+            except KeyboardInterrupt:
+                daq.control.setState("configured")
+                while daq.control.getState() != "configured":
+                    ...
+                daq.control.setRecord(False)
+                daq.control.setState("running")
+                pp.close()
+                if record:
+                    self.post(
+                        sample=sample, 
+                        tag=tag, 
+                        run_number=run_number, 
+                        post=record, 
+                        inspire=inspire,
+                        daq_num=daq_num,
+                        spread=spread_comment, 
+                        add_note='Run ended prematurely. Probably sample delivery problem')
+                logger.warning("[*] Stopping Run and exiting???...")
+                self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                logger.warning('Run ended prematurely. Probably sample delivery problem')
+
             pp.close()
             self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
-            daq.end_run()
-            daq.disconnect()
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setRecord(False)
+            daq.control.setState("running")
             logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+        else:
+            logger.error('Please enter daq 1 or 2.')
+
+    

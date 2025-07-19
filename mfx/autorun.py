@@ -187,7 +187,7 @@ def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
-def autorun(sample='?', tag=None, run_length=300, record=True,
+def _autorun(sample='?', tag=None, run_type="DATA", run_length=300, record=True,
             runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2):
     """
     Automate runs.... With optional quotes
@@ -326,8 +326,7 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
                     daq.control.setRecord(True)
                 else:
                     daq.control.setRecord(False)
-
-                daq.control.setState("running")
+                daq.control.setState("running", {"run_type": run_type})
                 while daq.control.getState() != "running":
                     ...
                 start_time = time()
@@ -393,6 +392,14 @@ def autorun(sample='?', tag=None, run_length=300, record=True,
     else:
         logger.error('Please enter daq 1 or 2.')
 
+def autorun(**kwargs):
+    _autorun(**kwargs)
+
+def geomrun(**kwargs):
+    kwargs['tag'] = "geom"
+    kwargs['sample'] = "geometry-calibration"
+    kwargs['run_type'] = "GEOM"
+    _autorun(**kwargs)
 
 post_template = """\
 Run Number {}: {}

@@ -8,14 +8,19 @@ class MFX_Timing:
             'wait':0,
             'pp_trig':197,
             'daq_readout':198,
+            'sample1':201,
+            'sample2':202,
             'laser_on':203,
-            'laser_off1':204,
-            'laser_off2':205,
-            'ray_readout':210,
+            'laser_off':204,
+            'sample5':205,
+            'sample6':206,
+            'sample7':207,
+            'sample8':208,
+            'sample9':209,
+            'ray0':210,
             'ray1':211,
             'ray2':212,
             'ray3':213,
-            'blank':209
         }
         self.sync_markers = {0.5:0, 1:1, 5:2, 10:3, 30:4, 60:5, 120:6, 360:7}
         self.sequence = []
@@ -46,7 +51,7 @@ class MFX_Timing:
 
 
     def _seq_120hz(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['daq_readout',0],
                  ['ray1',1],
                  ['daq_readout',0],
@@ -58,13 +63,31 @@ class MFX_Timing:
 
 
     def _seq_120hz_trucated(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['daq_readout',0]]
         return steps
 
 
+    def _seq_120hz_yano(self):
+        steps = [['ray1', 1],
+                 ['daq_readout',0]]
+        return steps
+
+
+    def _seq_90hz_yano(self):
+        steps = [['ray1', 1],
+                 ['pp_trig',0],
+                 ['sample1',1],
+                 ['daq_readout',0],
+                 ['ray1',1],
+                 ['daq_readout',0],
+                 ['wait',1],
+                 ['daq_readout', 0]]
+        return steps
+
+
     def _seq_60hz(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['pp_trig', 0],
                  ['ray1', 1],
                  ['daq_readout', 0],
@@ -76,15 +99,22 @@ class MFX_Timing:
 
 
     def _seq_60hz_trucated(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['ray1', 0],
                  ['ray2', 1],
                  ['daq_readout', 0]]
         return steps
 
 
+    def _seq_60hz_yano(self):
+        steps = [['ray1', 1],
+                 ['ray2', 1],
+                 ['daq_readout', 0]]
+        return steps
+
+
     def _seq_30hz(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['pp_trig', 0],
                  ['ray1', 1],
                  ['ray2', 1],
@@ -94,31 +124,31 @@ class MFX_Timing:
 
 
     def _seq_20hz(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['pp_trig', 0],
                  ['ray1', 1],
                  ['ray2', 1],
                  ['daq_readout', 0],
-                 ['blank', 1],
-                 ['blank', 1],
+                 ['wait', 1],
+                 ['wait', 1],
                  ['ray3', 1]]
         return steps
 
 
     def _seq_10hz(self):
-        steps = [['ray_readout', 1],
+        steps = [['ray0', 1],
                  ['pp_trig', 0],
                  ['ray1', 1],
                  ['ray2', 1],
                  ['daq_readout', 0],
-                 ['blank', 1],
-                 ['blank', 1],
-                 ['blank', 1],
-                 ['blank', 1],
-                 ['blank', 1],
-                 ['blank', 1],
-                 ['blank', 1],
-                 ['blank', 1],
+                 ['wait', 1],
+                 ['wait', 1],
+                 ['wait', 1],
+                 ['wait', 1],
+                 ['wait', 1],
+                 ['wait', 1],
+                 ['wait', 1],
+                 ['wait', 1],
                  ['ray3', 1]]
         return steps
 
@@ -205,6 +235,21 @@ class MFX_Timing:
             elif rep == 10:
                 self._seq_init(sync_mark=120)
                 self._seq_put(self._seq_10hz())
+            elif rep == '120_truncated':
+                self._seq_init(sync_mark=120)
+                self._seq_put(self._seq_120hz_trucated())
+            elif rep == '120_yano':
+                self._seq_init(sync_mark=120)
+                self._seq_put(self._seq_120hz_yano())
+            elif rep == '90_yano':
+                self._seq_init(sync_mark=60)
+                self._seq_put(self._seq_90hz_yano())
+            elif rep == '60_truncated':
+                self._seq_init(sync_mark=60)
+                self._seq_put(self._seq_60hz_trucated())
+            elif rep == '60_yano':
+                self._seq_init(sync_mark=120)
+                self._seq_put(self._seq_60hz_yano())
 
         self.seq.start()
         return self.sequence

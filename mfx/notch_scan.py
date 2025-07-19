@@ -179,10 +179,9 @@ class NotchScan():
         if answer.lower() == "y":
             facility = input("Enter facility (s3df or nersc) to continue: ")
             user = input("Enter username to continue: ")
-            self.output.series(
+            self.output(
                 user=user, 
                 facility=facility, 
-                run_type='series', 
                 exp=exp, 
                 run=run_number, 
                 energy=energy_scan_start_eV, 
@@ -191,76 +190,71 @@ class NotchScan():
                 daq_num=daq_num)
 
 
-    class output:
-        def __init__(self):
-            pass
+    def output(
+            self,
+            user: str,
+            facility: str = "NERSC",
+            exp: str = None,
+            run: str = None,
+            energy: float = None,
+            step: float = None,
+            num: int = None,
+            daq_num: int = 2):
+        """Perform Vernier scan results analysis.
 
+        Parameters:
+            user (str):
+                Requires username and password for S3DF.
+            facility (str):
+                Default: "S3DF". Options: "S3DF", "NERSC"
+            exp (str): 
+                experiment number. Current experiment by default
+            run (str): 
+                The first run you'd like to process
+            energy (float):
+                specify the starting energy in eV
+            step (float):
+                specify the energy step size in eV
+            num (int):
+                specify the total number of runs
+            daq_num: int, optional
+                Switch between daq 1 and 2. Default 2
 
-        def series(
-                user: str,
-                facility: str = "S3DF",
-                run_type: str = 'series',
-                exp: str = None,
-                run: str = None,
-                energy: float = None,
-                step: float = None,
-                num: int = None,
-                daq_num: int = 2):
-            """Perform Vernier scan results analysis.
+        """
+        import logging
+        import os
+        from mfx.db import daq
+        from mfx.macros import get_exp, get_run
+        import mfx.cctbx
+        logger = logging.getLogger(__name__)
 
-            Parameters:
-                facility (str):
-                    Default: "S3DF". Options: "S3DF, NERSC
-                type (str):
-                    specify whether it is a vernier 'scan' or 'series'
-                exp (str): 
-                    experiment number. Current experiment by default
-                run (str): 
-                    The run you'd like to process
-                energy (float):
-                    specify the starting energy in eV (only for 'series')
-                step (float):
-                    specify the energy step size in eV (only for 'series')
-                num (int):
-                    specify the total number of runs (only for 'series')
-                daq_num: int, optional
-                    Switch between daq 1 and 2. Default 2
+        if daq_num == 2:
+            station=0
+        elif daq_num == 1:
+            station=1
+        else:
+            logging.error('Please enter daq 1 or 2.')
 
-            """
-            import logging
-            import os
-            from mfx.db import daq
-            from mfx.macros import get_exp, get_run
-            import mfx.cctbx
-            logger = logging.getLogger(__name__)
+        logging.info("Plotting XRT-Spec Output")
+        if exp is None:
+            exp = str(get_exp(station=station))
 
-            if daq_num == 2:
-                station=0
-            elif daq_num == 1:
-                station=1
-            else:
-                logging.error('Please enter daq 1 or 2.')
+        if run is None:
+            run = int(get_run(station=station))
 
-            logging.info("Plotting XRT-Spec Output")
-            if exp is None:
-                exp = str(get_exp(station=station))
+        facility = facility.upper()
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
 
-            if run is None:
-                run = int(get_run(station=station))
+            if token.lower() == "n":
+                cctbx.sshproxy(user)
 
-            facility = facility.upper()
-            if facility == 'NERSC':
-                logging.warning(f"Have you renewed your token with sshproxy today?")
-                token = input("(y/n)? ")
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
+            f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}"
+            ]
 
-                if token.lower() == "n":
-                    cctbx.sshproxy(user)
-
-            proc = [
-                f"ssh -Yt {user}@s3dflogin "
-                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
-                f"-f {facility} -t {run_type} -e {exp} -r {run} -z {energy} -s {step} -n {num}"
-                ]
-
-            logging.info(proc)
-            os.system(proc[0])
+        logging.info(proc)
+        os.system(proc[0])
