@@ -160,6 +160,10 @@ with safe_load('EXAFS'):
     from mfx.exafs import *
     exafs = Exafs()
 
+with safe_load('EXAFS_Builder'):
+    from mfx.exafs_energy_range_builder import *
+    exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
+
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
 #     class LXE(LaserEnergyPositioner):

@@ -1,6 +1,3 @@
-import numpy as np
-import matplotlib.pyplot as plt
-
 class EXAFSEnergyRangeBuilder:
     """
     A class to build energy range and corresponding acquisition time arrays for X-ray spectroscopy experiments.
@@ -74,6 +71,7 @@ class EXAFSEnergyRangeBuilder:
         return K_value
 
     def build_energy_range(self):
+        import numpy as np
         """
         Build the entire energy range for the specified element. Basically with 3 user defined ranges:
         the pre-pre-edge, the pre-edge+edge, and the EXAFS. The user must define the min/max energy of the first two ranges
@@ -108,6 +106,7 @@ class EXAFSEnergyRangeBuilder:
         return #energy_range, time_range
 
     def map_time_to_K_weighting(self, min_time, max_time, K_values):
+        import numpy as np
         """
         Map acquisition times to a K-weighting with a specified power.
 
@@ -130,6 +129,8 @@ class EXAFSEnergyRangeBuilder:
         return normalized_time_range
     
     def plot_scan_profile(self):
+        import numpy as np
+        import matplotlib.pyplot as plt
         """
         Plot the energy range, acquisition time, cumulative acquisition time, and estimated resolution.
 
@@ -169,5 +170,6 @@ class EXAFSEnergyRangeBuilder:
         plt.tight_layout()
         
     def output_scan_profile(self,elist_name='elist',tlist_name='tlist'):
+        import numpy as np
         np.savetxt(tlist_name+'.txt',self.time_range)
         np.savetxt(elist_name+'.txt',self.energy_range/1000.0)
