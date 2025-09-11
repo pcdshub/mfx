@@ -156,6 +156,10 @@ with safe_load('Wire_Scan'):
     from mfx.wire import *
     wire = Wire()
 
+with safe_load('EXAFS'):
+    from mfx.exafs import *
+    exafs = Exafs()
+
 # with safe_load("laser wp power"):
 #     # Hack the LXE class to make it work with Newports
 #     class LXE(LaserEnergyPositioner):
