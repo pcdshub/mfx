@@ -13,6 +13,7 @@ import numpy as np
 import prettytable
 from ophyd import EpicsSignalRO, EpicsSignal, Component as Cpt, Device
 from pcdsdevices.inout import InOutPVStatePositioner
+from mfx.vonhamos import DeterministicBeckhoffAxis
 
 ##########
 # Module #
@@ -107,6 +108,10 @@ class MFXLens(InOutPVStatePositioner, LensCalcMixin):
     _default_configuration_attrs = ['_sig_radius', '_sig_z']
     # Signal for requested focus
     _req_focus = Cpt(EpicsSignal, ':REQ_FOCUS')
+    
+    # Deterministic continuous positioning axes
+    x = Cpt(DeterministicBeckhoffAxis, ':X', kind='normal')
+    y = Cpt(DeterministicBeckhoffAxis, ':Y', kind='normal')
 
     def __init__(self, prefix, **kwargs):
         super().__init__(prefix, **kwargs)
