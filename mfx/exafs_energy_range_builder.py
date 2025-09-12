@@ -21,21 +21,6 @@ class EXAFSEnergyRangeBuilder:
     """
     def __init__(self):
         self.element = 'Fe'
-        self.min_before_pre_edge = 7010.0
-        self.max_before_pre_edge = 7080.0
-        self.preedge_end=7118
-        self.preedge_eV_increment=0.5
-        self.max_before_edge = 7020.0
-        self.min_K_value = 2.0  # Minimum K value for the linear region
-        self.max_K_value = 12.0  # Maximum K value for the K-to-eV conversion
-        self.before_edge_eV_increment = 5.0  # Increment spacing in eV for the "before pre-edge" energy region
-        self.edge_eV_increment = 1.0  # Increment spacing in eV for the energy range up to the edge of the K-to-eV region
-        self.K_spacing = 0.1  # K spacing for the K-to-eV energy range
-        self.time_before_edge=0.5
-        self.time_in_edge = 1 
-        self.time_in_preedge=1.5
-        self.min_time_EXAFS = 0.5 
-        self.max_time_EXAFS = 10
         self.power=3
         self.foil_energies = {'Sc': 4492.8, 'Ti': 4966.4, 'V': 5465.1, 'Cr': 5989.2, 'Mn': 6539.0, 'Fe': 7111.2,
                  'Co': 7708.9, 'Ni': 8332.8, 'Cu': 8978.9, 'Zn': 9658.6}
@@ -55,7 +40,8 @@ class EXAFSEnergyRangeBuilder:
         threshold_energy = self.threshold_energies[self.element]
         energy_eV = K_value**2 / 0.2625 + threshold_energy
         return energy_eV
-    
+
+
     def eV_to_K(self, energy_eV):
         """
         Convert energy (eV) to wavenumber (K) for the specified element.
@@ -70,43 +56,77 @@ class EXAFSEnergyRangeBuilder:
         K_value = (0.2625 * (energy_eV - threshold_energy))**0.5
         return K_value
 
-    def build_energy_range(self):
-        import numpy as np
+
+    def build_energy_range(
+        self,
+        min_before_pre_edge = 7010.0,
+        max_before_pre_edge = 7080.0,
+        preedge_end = 7118,
+        preedge_eV_increment = 0.5,
+        max_before_edge = 7020.0,
+        min_K_value = 2.0,
+        max_K_value = 12.0,
+        before_edge_eV_increment = 5.0,
+        edge_eV_increment = 1.0,
+        K_spacing = 0.1,
+        time_before_edge=0.5,
+        time_in_edge = 1,
+        time_in_preedge=1.5,
+        min_time_EXAFS = 0.5, 
+        max_time_EXAFS = 10,
+        debug = False
+        ):
         """
         Build the entire energy range for the specified element. Basically with 3 user defined ranges:
         the pre-pre-edge, the pre-edge+edge, and the EXAFS. The user must define the min/max energy of the first two ranges
         and their acquisition time per point. Then the third region is defined by the maximum K-value to measure to; the point spacing (in K);
         the minumum and maximum acquistion time for the EXAFS region; and the power with which that acqusition time range is mapped onto the K points.
 
+        Attributes:
+        - min_before_pre_edge (float): Minimum energy value before the pre-edge region in eV.
+        - max_before_pre_edge (float): Maximum energy value before the pre-edge region in eV.
+        - min_K_value (float): Minimum wavenumber value in reciprocal angstroms (K) for the linear region.
+        - max_K_value (float): Maximum wavenumber value in reciprocal angstroms (K) for the K-to-eV conversion.
+        - before_edge_eV_increment (float): Increment spacing in eV for the "before pre-edge" energy region.
+        - edge_eV_increment (float): Increment spacing in eV for the energy range up to the edge of the K-to-eV region.
+        - K_spacing (float): K spacing for the K-to-eV energy range.
+        - time_before_edge (float): Acquisition time per point before the pre-edge.
+        - time_in_edge (float): Acquisition time per point in the edge region.
+        - min_time_EXAFS (float): Minimum acquisition time in seconds for the EXAFS region.
+        - max_time_EXAFS (float): Maximum acquisition time in seconds for the EXAFS region.
+
         Returns:
         - tuple: A tuple containing the energy range array and the corresponding acquisition time array.
         """
-        energy_before_pre_edge = np.arange(self.min_before_pre_edge, self.max_before_pre_edge +
-                                           self.before_edge_eV_increment, self.before_edge_eV_increment)
-        K_values = np.arange(self.min_K_value, self.max_K_value + self.K_spacing, self.K_spacing)
+        import numpy as np
+        energy_before_pre_edge = np.arange(min_before_pre_edge, max_before_pre_edge +
+                                           before_edge_eV_increment, before_edge_eV_increment)
+        K_values = np.arange(min_K_value, max_K_value + K_spacing, K_spacing)
         energy_K_range = [self.K_to_eV(K) for K in K_values if self.K_to_eV(K) is not None]
-        energy_in_preedge = np.arange(self.max_before_pre_edge+self.preedge_eV_increment, self.preedge_end, self.preedge_eV_increment)
-        energy_in_edge = np.arange(self.preedge_end+self.edge_eV_increment, np.min(energy_K_range), self.edge_eV_increment)
+        energy_in_preedge = np.arange(max_before_pre_edge+preedge_eV_increment, preedge_end, preedge_eV_increment)
+        energy_in_edge = np.arange(preedge_end+edge_eV_increment, np.min(energy_K_range), edge_eV_increment)
         energy_range = np.concatenate((energy_before_pre_edge, energy_in_preedge, energy_in_edge, energy_K_range))
 
         num_points_before_pre_edge = len(energy_before_pre_edge)
         num_points_in_edge = len(energy_in_edge)
         num_points_in_preedge = len(energy_in_preedge)
         
-        time_before_edge_arr = np.ones(num_points_before_pre_edge) * self.time_before_edge
-        time_in_preedge_arr = np.ones(num_points_in_preedge) * self.time_in_preedge
-        time_in_edge_arr = np.ones(num_points_in_edge) * self.time_in_edge
-        time_EXAFS = self.map_time_to_K_weighting(self.min_time_EXAFS, self.max_time_EXAFS, K_values)
+        time_before_edge_arr = np.ones(num_points_before_pre_edge) * time_before_edge
+        time_in_preedge_arr = np.ones(num_points_in_preedge) * time_in_preedge
+        time_in_edge_arr = np.ones(num_points_in_edge) * time_in_edge
+        time_EXAFS = self.map_time_to_K_weighting(min_time_EXAFS, max_time_EXAFS, K_values)
         
-        time_range = np.concatenate((time_before_edge_arr,time_in_preedge_arr , time_in_edge_arr, time_EXAFS))
-        self.time_range=time_range
+        time_range = np.concatenate((time_before_edge_arr,time_in_preedge_arr, time_in_edge_arr, time_EXAFS))
+        self.time_range = time_range
         self.energy_range = energy_range
-        self.energy_K_range= energy_K_range
-        self.K_values=K_values
-        return #energy_range, time_range
+        self.energy_K_range = energy_K_range
+        self.K_values = K_values
+        if debug:
+            self.current_scan_profile()
+        return energy_range, time_range, energy_K_range, K_values
+
 
     def map_time_to_K_weighting(self, min_time, max_time, K_values):
-        import numpy as np
         """
         Map acquisition times to a K-weighting with a specified power.
 
@@ -118,6 +138,7 @@ class EXAFSEnergyRangeBuilder:
         Returns:
         - numpy.ndarray: An array of normalized acquisition times based on the K-weighting.
         """
+        import numpy as np
         time_range = np.linspace(min_time, max_time, len(K_values))
         K_time = K_values ** self.power
         K_time_range = time_range * K_time
@@ -127,33 +148,49 @@ class EXAFSEnergyRangeBuilder:
                     max_weighted_time - min_weighted_time)
         self.normalized_time_range=normalized_time_range
         return normalized_time_range
-    
-    def plot_scan_profile(self):
-        import numpy as np
-        import matplotlib.pyplot as plt
+
+
+    def current_scan_profile(self):
+            self.plot_scan_profile(
+                self.energy_range,
+                self.time_range,
+                self.energy_K_range,
+                self.K_values
+                )
+
+
+    def plot_scan_profile(
+        self,
+        energy_range,
+        time_range,
+        energy_K_range,
+        K_values
+        ):
         """
         Plot the energy range, acquisition time, cumulative acquisition time, and estimated resolution.
 
         This method generates a multi-panel plot visualizing the scan profile. For informational purposes.
         """
+        import numpy as np
+        import matplotlib.pyplot as plt
         fig,axs=plt.subplots(3,2,dpi=300,figsize=(6,9))
-        axs[0,0].plot(self.energy_range,color='k')
+        axs[0,0].plot(energy_range,color='k')
         axs[0,0].set_xlabel('Data Point')
         axs[0,0].set_ylabel('Requested Energy (eV)')
         
-        axs[1,0].plot(self.time_range,color='k')
+        axs[1,0].plot(time_range,color='k')
         axs[1,0].set_xlabel('Data Point')
         axs[1,0].set_ylabel('Acq. Time Per Point (s)')
         
-        axs[2,0].plot(np.cumsum(self.time_range),color='k')
+        axs[2,0].plot(np.cumsum(time_range),color='k')
         axs[2,0].set_xlabel('Data Point')
         axs[2,0].set_ylabel('Total Acq. Time (s)')
         
-        K_2=np.argmin(np.abs(self.K_values-2.0))
-        expectedResolution=np.pi*0.5/(self.K_values[K_2:]-1.99)
+        K_2=np.argmin(np.abs(K_values-2.0))
+        expectedResolution=np.pi*0.5/(K_values[K_2:]-1.99)
         
         
-        axs[0,1].plot(self.K_values[K_2:],expectedResolution,color='k')
+        axs[0,1].plot(K_values[K_2:],expectedResolution,color='k')
         axs[0,1].set_xlabel('K-Value ($\AA^{-1}$)')
         axs[0,1].set_ylabel('Estimated Resolution ($\AA$)',rotation=270,labelpad=15)
         axs[0,1].yaxis.set_label_position("right")
@@ -161,15 +198,15 @@ class EXAFSEnergyRangeBuilder:
         axs[0,1].set_ylim(0.05,0.5)
         
         
-        axs[1,1].plot(self.energy_range,self.time_range,color='k')
+        axs[1,1].plot(energy_range,time_range,color='k')
         axs[1,1].set_xlabel('Energy (eV)')
     
         
-        axs[2,1].plot(self.energy_range,np.cumsum(self.time_range),color='k')
+        axs[2,1].plot(energy_range,np.cumsum(time_range),color='k')
         axs[2,1].set_xlabel('Energy (eV)')
         plt.tight_layout()
         
     def output_scan_profile(self,elist_name='elist',tlist_name='tlist'):
         import numpy as np
-        np.savetxt(tlist_name+'.txt',self.time_range)
-        np.savetxt(elist_name+'.txt',self.energy_range/1000.0)
+        np.savetxt(tlist_name+'.txt',time_range)
+        np.savetxt(elist_name+'.txt',energy_range/1000.0)
