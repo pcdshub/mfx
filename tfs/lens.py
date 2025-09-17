@@ -209,7 +209,7 @@ class LensConnect:
         """
         if not self.lenses:
             return 0.0
-        return 1/np.sum(np.reciprocal([float(l.radius) for l in self.lenses[1:]]))
+        return 1/np.sum(np.reciprocal([float(l.radius) for l in self.lenses if 'TFS' in getattr(l, 'prefix', '')]))
 
 
     def image(self, z_obj, energy):
