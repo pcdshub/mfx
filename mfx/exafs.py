@@ -185,8 +185,6 @@ class Exafs:
                 daq.control.setState("running")
                 while daq.control.getState() != "running":
                     ...
-                start_time = time()
-                end_time = start_time + run_length
 
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}")
