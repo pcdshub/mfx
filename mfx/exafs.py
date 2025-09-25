@@ -111,7 +111,7 @@ class Exafs:
 
             preedge_end = foil_energies[element] + 7
 
-            energies = build_energy_range(
+            energies, time_range, energy_K_range, K_values = build_energy_range(
                 min_before_pre_edge=start_eV,
                 max_before_pre_edge=start_eV + 70,
                 preedge_end=preedge_end,
