@@ -17,35 +17,6 @@ class Exafs:
         acr_status_suffix='AO805', pv_index=2
     )
 
-    # ############# LENS STACK  DEFINITION BEGIN #####################
-    # sys.path.append('/cds/group/pcds/pyps/apps/hutch-python/mfx/experiments')
-    # from lens_for_escan import CcmLens, lens_stack
-    #ccm_lens = CcmLens(ccm, lens_stack, name='ccm_lens') # combined ccm and lens motion
-    # lens_stack = lens_stack
-    # """
-    # Comments on the lens stack usage:
-    # - The lens stack can be calibrated using lens_stack.align()
-    # - The energy (keV) used for the calculation can be set with: lens_stack.energy = <float>
-    # - A beam-size (m) at the sample location can be set using lens_stack.beam_size.move(<float>)
-    #   This will move (x,y,z) of the lens stack, based on the calibration (align())
-    # - If an offset is need, one can play with the z_offset: lens_stack.z_offset
-    # - Calculated (x,y,z) postion for a given bemsize can be retrieved lens_stack.forward(beam_size=<float>)
-    #   This is a good way to check that the desired position is attainable.
-    # """
-
-    # def prepare_lens_stack(self, lens_set=3):
-    #     self.lens_stack.set_lens_set(lens_set)
-    #     self.lens_stack.energy = ccm.E.get().readback
-    #     return
-
-    # def lens_pos_for_energy(self, energy, beamsize):
-    #     initial_e = self.lens_stack.energy
-    #     self.lens_stack.energy = energy
-    #     lens_pos = self.lens_stack.forward(beam_size=beamsize)
-    #     self.lens_stack.energy = initial_e
-    #     return lens_pos
-    # ############# LENS STACK DEFINITION END #####################
-
 
     def long_escan(
             self,
@@ -63,7 +34,6 @@ class Exafs:
             runs: int = 1,
             k_stepsize: int = 120,
             wait_time: float = 0.2,
-            beam_size: bool = None,
             lens_stepsize: float = 0.01,
             reverse: bool = False,
             min_k_keV: float = 7.035,
@@ -107,9 +77,6 @@ class Exafs:
 
             wait_time: float, list
                 Time to wait at each energy step. If list must the same length as energies.
-
-            beam_size: None or float
-                If not None, will move the lens stack to the desired beamsize at each und K step.
 
             reverse: bool
                 To tell the script you will be running from high energies to low energies for K direction consideration.
@@ -179,15 +146,6 @@ class Exafs:
             logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
             return
 
-        if isinstance(beam_size, float):
-            beam_size = [beam_size] * len(energies)
-
-        if beam_size is not None:
-            if len(beam_size) != len(energies):
-                logger.error('Error: len(beam_size) is not equal to len(energies)')
-                logger.info('Please pass beam_size as a float or a list of the same length. Exit now.')
-                return
-
         try:
             for i in range(runs):
                 energy_0 = energies[0]  # energy at the beginning or after a und K step
@@ -198,7 +156,6 @@ class Exafs:
                     k_energy = energy_0 - k_stepsize + k_offset
                     logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
                     wait_time=wait_time[::-1]
-                    beam_size=beam_size[::-1]
 
                 logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
                 ccm.energy_with_vernier.move(energy_0)
@@ -238,16 +195,6 @@ class Exafs:
 
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}")
-
-                    # move lens every lens_stepsize (Amine)
-                    # if beam_size is not None:
-                    #     if np.abs(self.lens_stack.energy - energy) > lens_stepsize:
-                    #         logger.info(f"Move lens to beamsize={beam_size[ii]}")
-                    #         self.lens_stack.energy = energy + lens_stepsize/2
-                    #         lens_pos = self.lens_stack.forward(beam_size=beam_size[ii])
-                    #         logger.info(f"\nLens moving now to position: {lens_pos}")
-                    #         self.lens_stack.beam_size.move(beam_size[ii])
-                                                    #moved_cb=cb_open_beamstop)
 
                     ccm.energy_with_vernier.move(energy)
                     # if Vernier and ccm need different set point, customize this:
