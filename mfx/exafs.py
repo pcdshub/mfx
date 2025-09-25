@@ -95,7 +95,6 @@ class Exafs:
         from ophyd import Device, Component
 
         from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
-        from pcdsdevices.ccm import CCM as ccm
         from mfx.db import lxt_fast, pp, daq, RE, mr1l4_homs, elog
 
         import bluesky.plan_stubs as bps
@@ -103,6 +102,7 @@ class Exafs:
         from bluesky.plans import list_scan, count
 
         from mfx.autorun import post
+        from mfx.dccm import DCCM as dccm
 
         if len(custom_energies_list) == 0:
             from mfx.exafs_energy_range_builder import build_energy_range
@@ -111,7 +111,7 @@ class Exafs:
 
             preedge_end = foil_energies[element] + 7
 
-            calc_energy_range, time_range, energy_K_range, K_values = build_energy_range(
+            energies = build_energy_range(
                 min_before_pre_edge=start_eV,
                 max_before_pre_edge=start_eV + 70,
                 preedge_end=preedge_end,
@@ -130,12 +130,10 @@ class Exafs:
                 debug=debug
                 )
 
-            energies = calc_energy_range
-
         else:
             energies = custom_energies_list
 
-        energy_start = ccm.energy_with_vernier.energy()
+        energy_start = dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
         if isinstance(wait_time, float) or isinstance(wait_time, int):
@@ -158,7 +156,7 @@ class Exafs:
                     wait_time=wait_time[::-1]
 
                 logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
-                ccm.energy_with_vernier.move(energy_0)
+                dccm.energy_with_vernier(energy_0)
                 self.acr_energy_k.move(k_energy)
 
                 run_number = get_run(station=0) + 1
@@ -196,16 +194,14 @@ class Exafs:
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}")
 
-                    ccm.energy_with_vernier.move(energy)
-                    # if Vernier and ccm need different set point, customize this:
-                    #ccm.E.move(energy)
-                    #self.acr_energy_v.move(energy*1000)
+                    dccm.energy_with_vernier(energy)
                     e_step = np.abs(energy - energy_0)
 
                     # Move K every k_stepsize
                     if e_step > k_stepsize:
-                        # if record == True:
-                        #     daq.pause()
+                        daq.control.setState("pause")
+                        while daq.control.getState() != "pause":
+                            ...
                         k_energy = energy + k_offset
                         if reverse:
                             k_energy = energy - k_stepsize + k_offset
@@ -217,8 +213,9 @@ class Exafs:
                         self.acr_energy_k.move(k_energy)
                         energy_0 = energy
 
-                        # if record == True:
-                        #     daq.begin(record=True,use_l3t=use_l3t)
+                        daq.control.setState("running")
+                        while daq.control.getState() != "running":
+                            ...
                     time.sleep(point_time)
 
                     daq.control.setState("configured")
@@ -253,13 +250,13 @@ class Exafs:
                     add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
             logger.info('Returning to initial position')
-            ccm.energy_with_vernier.energy.move(energy_start)
+            dccm.energy_with_vernier(energy_start)
             self.acr_energy_k.move(k_energy_start)
             logger.warning('Run ended prematurely. Probably sample delivery problem')
 
         pp.close()
         logger.info('Returning to initial position')
-        ccm.energy_with_vernier.energy.move(energy_start)
+        dccm.energy_with_vernier(energy_start)
         self.acr_energy_k.move(k_energy_start)
         daq.control.setState("configured")
         while daq.control.getState() != "configured":
@@ -270,7 +267,7 @@ class Exafs:
         return
 
 
-    def continuous_ccmscan(
+    def continuous_dccmscan(
             self,
             energies,
             pointTime=1,
@@ -280,7 +277,7 @@ class Exafs:
             is_daq=False,
             initial_energy=None):
         """
-        Scan the CCM
+        Scan the DCCM
 
         Parameters
         ----------
@@ -289,53 +286,76 @@ class Exafs:
         pointTime: float, default=1
             Time in second to spend at each point
         move_vernier: bool, default=True
-            Does an energy request to ACR as the ccm is moved.
+            Does an energy request to ACR as the dccm is moved.
         wait_acr: bool, default=False
             Wait for ACR to return the done move status after an energy
             request change was made. Useful for slow motion (undulator)
         bidirectional: bool, default=False
         """
         import time
-        from pcdsdevices.ccm import CCM as ccm
-        from mfx.db import daq
+        from mfx.dccm import DCCM as dccm
+        from mfx.db import daq, pp
         import logging
         logger = logging.getLogger(__name__)
 
         if wait_acr:
-            ccm_e = ccm.energy_with_acr_status
+            dccm_e = dccm.energy_with_acr_status
         elif move_vernier:
-            ccm_e = ccm.energy_with_vernier
+            dccm_e = dccm.energy_with_vernier
         else:
-            ccm_e = ccm.energy
+            dccm_e = dccm.energy
 
         if initial_energy is None:
-            initial_energy = ccm_e.energy.position
+            initial_energy = dccm_e.energy.position
 
         try:
-            self.ccm_sweep(ccm_e, energies, pointTime)
+            self.dccm_sweep(dccm_e, energies, pointTime)
             if bidirectional:
                 energies = energies[::-1]
-                self.ccm_sweep(ccm_e, energies, pointTime)
+                self.dccm_sweep(dccm_e, energies, pointTime)
 
         except KeyboardInterrupt:
-            # Handle pausing or stopping the ccm scan.
+            # Handle pausing or stopping the dccm scan.
+            from psdaq.control.DaqControl import DaqControl  # NOQA
+                daq.control = DaqControl(
+                    host=daq.control.host,
+                    platform=daq.control.platform,
+                    timeout=10000,
+                )
+                instr = daq.control.getInstrument()
+                if instr is None:
+                    logger.error('Failed to connect to LCLS-II DAQ')
+                    break
+                start_state = daq.control.getState()
+                if start_state == 'error':
+                    logger.error('DAQ is in an error state.')
+                    break
             inp = 'q'
             if is_daq:
-                daq.pause()
-                current_energy = ccm_e.energy.position
+                daq.control.setState("pause")
+                while daq.control.getState() != "pause":
+                    ...
+                current_energy = dccm_e.energy.position
                 logger.error(f"\nKeyboardInterrupt received. Run is paused at energy {current_energy}.")
                 inp = input("Type \"q\" to finish the run or \"r\" to resume acquisition\n")
 
             if inp == 'q':
                 logger.info('\nScan end signal received.')
-                ccm_e.move(initial_energy)
+                daq.control.setState("configured")
+                while daq.control.getState() != "configured":
+                    ...
+                daq.control.setRecord(False)
+                daq.control.setState("running")
+                pp.close()
+                dccm_e.move(initial_energy)
             elif inp == 'r':
                 idx = np.where( np.isclose(energies, current_energy, atol=5e-3) )[0][0]
-                #idx = np.where(energies >= current_energy)[0]
                 energies = energies[idx:]
                 logger.info(f"Resuming scan with energies: {energies}")
-                daq.resume()
-                self.continuous_ccmscan(
+                daq.control.setState("running")
+                while daq.control.getState() != "running":
+                    ...
+                self.continuous_dccmscan(
                     energies,
                     pointTime=pointTime,
                     move_vernier=move_vernier,
@@ -346,16 +366,16 @@ class Exafs:
                 )
 
         finally:
-            logger.info(f'Returning ccm to energy before scan: {initial_energy}')
-            ccm_e.move(initial_energy)
+            logger.info(f'Returning dccm to energy before scan: {initial_energy}')
+            dccm_e.move(initial_energy)
             time.sleep(pointTime)
         return
 
 
     @staticmethod
-    def ccm_sweep(ccm_e, energies, pointTime):
+    def dccm_sweep(dccm_e, energies, pointTime):
         for E in energies:
-            ccm_e.move(E)
+            dccm_e.move(E)
             time.sleep(pointTime)
         return
 
