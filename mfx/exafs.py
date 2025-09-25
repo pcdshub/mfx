@@ -51,6 +51,8 @@ class Exafs:
             self,
             start_eV: float = 0.0,
             end_eV: float = 0.0,
+            min_k: float = 2.0,
+            max_k: float = 12.0,
             custom_energies_list=[],
             element: str = 'Fe',
             tag: str = None,
@@ -75,6 +77,12 @@ class Exafs:
 
             end_eV (float): 
                 Photon energy (in eV) to end the scan at.
+
+            min_k (float):
+                Minimum wavenumber value in reciprocal angstroms (K) for the linear region.
+        
+            max_k (float):
+                Maximum wavenumber value in reciprocal angstroms (K) for the K-to-eV conversion.
 
             custom_energies_list: list
                 Instead of calculating the energy list you can input a custom one.
@@ -142,8 +150,8 @@ class Exafs:
                 preedge_end=preedge_end,
                 preedge_eV_increment=0.5,
                 max_before_edge=start_eV + 10,
-                min_K_value=2.0,
-                max_K_value=12.0,
+                min_K_value=min_k,
+                max_K_value=max_k,
                 before_edge_eV_increment=5.0,
                 edge_eV_increment=1.0,
                 K_spacing=0.1,
