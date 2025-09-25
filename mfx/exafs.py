@@ -24,7 +24,8 @@ class Exafs:
             end_eV: float = 0.0,
             min_k: float = 2.0,
             max_k: float = 12.0,
-            custom_energies_list=[],
+            energies_list=[],
+            wait_time_list = [],
             element: str = 'Fe',
             tag: str = None,
             picker: str = None,
@@ -33,7 +34,6 @@ class Exafs:
             record: bool = False,
             runs: int = 1,
             k_stepsize: int = 120,
-            wait_time: float = 0.2,
             lens_stepsize: float = 0.01,
             reverse: bool = False,
             min_k_keV: float = 7.035,
@@ -54,8 +54,11 @@ class Exafs:
             max_k (float):
                 Maximum wavenumber value in reciprocal angstroms (K) for the K-to-eV conversion.
 
-            custom_energies_list: list
+            energies_list: list
                 Instead of calculating the energy list you can input a custom one.
+            
+            wait_time_list: float, list
+                Time to wait at each energy step. If list must the same length as energies.
 
             tag: str, optional
                 Run group tag/sample name
@@ -74,9 +77,6 @@ class Exafs:
 
             k_stepsize: float
                 Stepsize in eV for undulator K motion request.
-
-            wait_time: float, list
-                Time to wait at each energy step. If list must the same length as energies.
 
             reverse: bool
                 To tell the script you will be running from high energies to low energies for K direction consideration.
@@ -104,14 +104,14 @@ class Exafs:
         from mfx.autorun import post
         from mfx.dccm import DCCM as dccm
 
-        if len(custom_energies_list) == 0:
+        if len(energies_list) == 0 or len(wait_time_list) == 0:
             from mfx.exafs_energy_range_builder import build_energy_range
             foil_energies = {'Sc': 4492.8, 'Ti': 4966.4, 'V': 5465.1, 'Cr': 5989.2, 'Mn': 6539.0, 'Fe': 7111.2,
                     'Co': 7708.9, 'Ni': 8332.8, 'Cu': 8978.9, 'Zn': 9658.6}
 
             preedge_end = foil_energies[element] + 7
 
-            energies, time_range, energy_K_range, K_values = build_energy_range(
+            energies, wait_time, energy_K_range, K_values = build_energy_range(
                 min_before_pre_edge=start_eV,
                 max_before_pre_edge=start_eV + 70,
                 preedge_end=preedge_end,
@@ -129,15 +129,12 @@ class Exafs:
                 max_time_EXAFS = 10,
                 debug=debug
                 )
-
         else:
-            energies = custom_energies_list
+            energies = energies_list
+            wait_time = wait_time_list
 
         energy_start = dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
-
-        if isinstance(wait_time, float) or isinstance(wait_time, int):
-            wait_time = [wait_time] * len(energies)
 
         if len(wait_time) != len(energies):
             logger.error('Error: len(wait_time) is not equal to len(energies)')
