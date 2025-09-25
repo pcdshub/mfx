@@ -146,7 +146,7 @@ class Exafs:
                 max_K_value=12.0,
                 before_edge_eV_increment=5.0,
                 edge_eV_increment=1.0,
-                K_spacing=k_stepsize / 1000,
+                K_spacing=0.1,
                 time_before_edge=0.5,
                 time_in_edge = 1,
                 time_in_preedge=1.5,
@@ -181,21 +181,21 @@ class Exafs:
                 return
 
         try:
-            energy_0 = energies[0]  # energy at the beginning or after a und K step
-            k_energy = energy_0+k_offset
-            if reverse:
-                energies=energies[::-1]
-                energy_0=energies[0]
-                k_energy = energy_0 - k_stepsize+k_offset
-                logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
-                wait_time=wait_time[::-1]
-                beam_size=beam_size[::-1]
-
-            logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
-            ccm.energy_with_vernier.move(energy_0)
-            self.acr_energy_k.move(k_energy)
-
             for i in range(runs):
+                energy_0 = energies[0]  # energy at the beginning or after a und K step
+                k_energy = energy_0 + k_offset
+                if reverse:
+                    energies=energies[::-1]
+                    energy_0=energies[0]
+                    k_energy = energy_0 - k_stepsize + k_offset
+                    logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
+                    wait_time=wait_time[::-1]
+                    beam_size=beam_size[::-1]
+
+                logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+                ccm.energy_with_vernier.move(energy_0)
+                self.acr_energy_k.move(k_energy)
+
                 run_number = get_run(station=0) + 1
                 from psdaq.control.DaqControl import DaqControl  # NOQA
                 daq.control = DaqControl(
@@ -231,14 +231,14 @@ class Exafs:
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}")
 
-                    # move lens every lens_stepsize
-                    if beam_size is not None:
-                        if np.abs(self.lens_stack.energy - energy) > lens_stepsize:
-                            logger.info(f"Move lens to beamsize={beam_size[ii]}")
-                            self.lens_stack.energy = energy + lens_stepsize/2
-                            lens_pos = self.lens_stack.forward(beam_size=beam_size[ii])
-                            logger.info(f"\nLens moving now to position: {lens_pos}")
-                            self.lens_stack.beam_size.move(beam_size[ii])
+                    # move lens every lens_stepsize (Amine)
+                    # if beam_size is not None:
+                    #     if np.abs(self.lens_stack.energy - energy) > lens_stepsize:
+                    #         logger.info(f"Move lens to beamsize={beam_size[ii]}")
+                    #         self.lens_stack.energy = energy + lens_stepsize/2
+                    #         lens_pos = self.lens_stack.forward(beam_size=beam_size[ii])
+                    #         logger.info(f"\nLens moving now to position: {lens_pos}")
+                    #         self.lens_stack.beam_size.move(beam_size[ii])
                                                     #moved_cb=cb_open_beamstop)
 
                     ccm.energy_with_vernier.move(energy)
