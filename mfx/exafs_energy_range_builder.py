@@ -89,7 +89,7 @@ class EXAFSEnergyRangeBuilder:
         - max_K_value (float): Maximum wavenumber value in reciprocal angstroms (K) for the K-to-eV conversion.
         - before_edge_eV_increment (float): Increment spacing in eV for the "before pre-edge" energy region.
         - edge_eV_increment (float): Increment spacing in eV for the energy range up to the edge of the K-to-eV region.
-        - K_spacing (float): K spacing for the K-to-eV energy range.
+        - K_spacing (float): K spacing for the K-to-eV energy range. reciprocal angstroms (K)
         - time_before_edge (float): Acquisition time per point before the pre-edge.
         - time_in_edge (float): Acquisition time per point in the edge region.
         - min_time_EXAFS (float): Minimum acquisition time in seconds for the EXAFS region.
