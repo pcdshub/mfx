@@ -21,12 +21,13 @@ class Exafs:
     def long_escan(
             self,
             start_eV: float = 0.0,
-            end_eV: float = 0.0,
+            end_eV: float = None,
             min_k: float = 2.0,
             max_k: float = 12.0,
             energies_list=[],
             wait_time_list = [],
             element: str = 'Fe',
+            sample='?',
             tag: str = None,
             picker: str = None,
             inspire: bool = False,
@@ -37,7 +38,7 @@ class Exafs:
             lens_stepsize: float = 0.01,
             reverse: bool = False,
             min_k_keV: float = 7.035,
-            k_offset: int = -15,
+            k_offset: int = 0,
             debug: bool = False):
         """Perform EXAFS scan.
 
@@ -59,6 +60,9 @@ class Exafs:
             
             wait_time_list: float, list
                 Time to wait at each energy step. If list must the same length as energies.
+
+            sample: str, optional
+                Sample Name
 
             tag: str, optional
                 Run group tag/sample name
@@ -88,8 +92,9 @@ class Exafs:
         import logging
         logger = logging.getLogger(__name__)
 
-        import time
+        from time import sleep
         import os
+        import sys
 
         from ophyd import EpicsSignal, EpicsSignalRO
         from ophyd import Device, Component
@@ -101,17 +106,27 @@ class Exafs:
         from bluesky.plan_stubs import abs_set, trigger_and_read
         from bluesky.plans import list_scan, count
 
-        from mfx.autorun import post
-        from mfx.dccm import DCCM as dccm
+        from mfx.autorun import post, quote
+        from mfx.macros import get_run
+        from mfx.dccm import DCCM
+        dccm = DCCM(name='DCCM')
 
         if len(energies_list) == 0 or len(wait_time_list) == 0:
-            from mfx.exafs_energy_range_builder import build_energy_range
+            from mfx.exafs_energy_range_builder import EXAFSEnergyRangeBuilder
+            EXAFSEnergyRangeBuilder = EXAFSEnergyRangeBuilder()
             foil_energies = {'Sc': 4492.8, 'Ti': 4966.4, 'V': 5465.1, 'Cr': 5989.2, 'Mn': 6539.0, 'Fe': 7111.2,
                     'Co': 7708.9, 'Ni': 8332.8, 'Cu': 8978.9, 'Zn': 9658.6}
+            threshold_energies = {'Ti': 4985.00, 'Sc': 4510.00, 'V': 5485.00, 'Cr': 6010.00, 'Mn': 6560.00,
+                    'Fe': 7130.00, 'Co': 7730.00, 'Ni': 8350.00, 'Cu': 9000.00, 'Zn': 9680.00}
 
             preedge_end = foil_energies[element] + 7
+            if end_ev is not None:
+                if end_eV <= threshold_energies[element]
+                    min_k = max_k = 0.0
+                if end_eV > threshold_energies[element]
+                    max_k = (0.2625 * (end_eV - threshold_energy))**0.5
 
-            energies, wait_time, energy_K_range, K_values = build_energy_range(
+            energies, wait_time, energy_K_range, K_values = EXAFSEnergyRangeBuilder.build_energy_range(
                 min_before_pre_edge=start_eV,
                 max_before_pre_edge=start_eV + 70,
                 preedge_end=preedge_end,
@@ -129,6 +144,13 @@ class Exafs:
                 max_time_EXAFS = 10,
                 debug=debug
                 )
+            if debug:
+                logging.warning(f"Would you like to continue?")
+                answer = input("(y/n)? ")
+
+                if answer.lower() == "n":
+                    logging.error(f"Fine. Exiting...")
+                    sys.exit()
         else:
             energies = energies_list
             wait_time = wait_time_list
@@ -143,18 +165,19 @@ class Exafs:
 
         try:
             for i in range(runs):
-                energy_0 = energies[0]  # energy at the beginning or after a und K step
-                k_energy = energy_0 + k_offset
+                energy_0 = energies[0]/1000.0  # energy at the beginning or after a und K step
+                k_energy = energy_0 * 1000.0 + k_offset
                 if reverse:
                     energies=energies[::-1]
-                    energy_0=energies[0]
-                    k_energy = energy_0 - k_stepsize + k_offset
+                    energy_0=energies[0]/1000.0
+                    k_energy = energy_0 * 1000.0 - k_stepsize + k_offset
                     logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
                     wait_time=wait_time[::-1]
 
-                logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
                 dccm.energy_with_vernier(energy_0)
-                self.acr_energy_k.move(k_energy)
+                logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+                if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                    self.acr_energy_k.move(k_energy)
 
                 run_number = get_run(station=0) + 1
                 from psdaq.control.DaqControl import DaqControl  # NOQA
@@ -188,7 +211,7 @@ class Exafs:
 
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}")
-
+                    energy = energy / 1000.0
                     dccm.energy_with_vernier(energy)
                     e_step = np.abs(energy - energy_0)
 
@@ -197,35 +220,36 @@ class Exafs:
                         daq.control.setState("pause")
                         while daq.control.getState() != "pause":
                             ...
-                        k_energy = energy + k_offset
+                        k_energy = energy * 1000.0 + k_offset
                         if reverse:
-                            k_energy = energy - k_stepsize + k_offset
+                            k_energy = energy * 1000.0 - k_stepsize + k_offset
                             if k_energy/1000 < min_k_keV:
-                                k_energy = min_k_keV *1000 +1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
+                                k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
                         logger.info(f"Moving k to {k_energy:0.0f}")
                         time.sleep(0.5)
-                        self.acr_energy_k.move(k_energy)
+                        if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                            self.acr_energy_k.move(k_energy)
                         energy_0 = energy
 
                         daq.control.setState("running")
                         while daq.control.getState() != "running":
                             ...
-                    time.sleep(point_time)
+                    sleep(point_time)
 
                     daq.control.setState("configured")
                     while daq.control.getState() != "configured":
                         ...
 
-                    if record:
-                        post(
-                            sample=sample, 
-                            tag=tag, 
-                            run_number=run_number, 
-                            post=record, 
-                            inspire=inspire,
-                            daq_num=daq_num,)
-                    sleep(daq_delay)
+                if record:
+                    post(
+                        sample=sample, 
+                        tag=tag, 
+                        run_number=run_number, 
+                        post=record, 
+                        inspire=inspire,
+                        daq_num=2,)
+                sleep(daq_delay)
 
         except KeyboardInterrupt:
             daq.control.setState("configured")
@@ -241,18 +265,20 @@ class Exafs:
                     run_number=run_number, 
                     post=record, 
                     inspire=inspire,
-                    daq_num=daq_num,
+                    daq_num=2,
                     add_note='Run ended prematurely. Probably sample delivery problem')
             logger.warning("[*] Stopping Run and exiting???...")
             logger.info('Returning to initial position')
             dccm.energy_with_vernier(energy_start)
-            self.acr_energy_k.move(k_energy_start)
+            if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                self.acr_energy_k.move(k_energy_start)
             logger.warning('Run ended prematurely. Probably sample delivery problem')
 
         pp.close()
         logger.info('Returning to initial position')
         dccm.energy_with_vernier(energy_start)
-        self.acr_energy_k.move(k_energy_start)
+        if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
+            self.acr_energy_k.move(k_energy_start)
         daq.control.setState("configured")
         while daq.control.getState() != "configured":
             ...
