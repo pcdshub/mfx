@@ -30,7 +30,8 @@ class Beam:
             use_2d_markers: bool = False,
             with_goal_2d: Optional[tuple[float, float]] = None,
             xopt_obj: Optional[Xopt] = None,
-            save_run: bool = True
+            save_run: bool = True,
+            num_frames: int = 1
             ):
         """Perform Beam Alignment
 
@@ -66,6 +67,9 @@ class Beam:
             The 2D optimization goal if running a 2D YAG optimization. Default is False.
         save_run: bool, optional
             Save the Xopt run to YAML. Default is True.
+        num_frames: int, optional
+            Number of frames to average for YAG image collection. Default is 1 (no averaging).
+            Only applies when using_device is "yag".
         """
         # Validate goal with not doing 2d optimization using camera markers
         if (using_device=="wave8" or not use_2d_markers) and not with_goal:
@@ -109,6 +113,7 @@ class Beam:
                     goal_2d=with_goal_2d,
                     max_iter=xopt_max_iter,
                     dump_file=dump_file,
+                    num_frames=num_frames,
                 )
                 if using_device == "yag":
                     print("Generating path plot")

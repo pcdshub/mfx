@@ -143,15 +143,43 @@ def get_evaluator_wave8(
 def evaluate_yag_processing(
     diagnostic: Diagnostics,
     fit: ImageProjectionFit,
+    num_frames: int = 1,
 ) -> ImageProjectionFitResult:
     """
     Shared image collection and fitting for use in yag evaluators.
+    
+    Parameters
+    ----------
+    diagnostic : Diagnostics
+        The diagnostic location (e.g., "dg1", "dg2", "xcs1", "ip")
+    fit : ImageProjectionFit
+        The fit object to use for image analysis
+    num_frames : int, optional
+        Number of frames to average. Default is 1 (no averaging).
+        If > 1, will trigger the camera multiple times and average the results.
     """
     image_device = select_diagnostic("yag", diagnostic).image1.shaped_image
-    image_device.trigger().wait(timeout=10)
-    image = image_device.get()
-    print(f"image shape: {image.shape}")
-    # NOTE/TODO: consider adding an averaging step here before fitting
+    
+    if num_frames == 1:
+        # Single frame original behavior
+        image_device.trigger().wait(timeout=10)
+        image = image_device.get()
+        print(f"image shape: {image.shape}")
+    else:
+        # Multiple frames collect and average
+        print(f"Collecting {num_frames} frames for averaging...")
+        images = []
+        
+        for i in range(num_frames):
+            image_device.trigger().wait(timeout=10)
+            frame = image_device.get()
+            images.append(frame)
+            print(f"Frame {i+1}/{num_frames} collected, shape: {frame.shape}")
+        
+        # Average the frames
+        image = np.mean(images, axis=0)
+        print(f"Averaged image shape: {image.shape}")
+    
     return fit.fit_image(image)
 
 
@@ -187,6 +215,7 @@ def get_evaluator_yag(
     yag: str = "dg1",
     goal: Optional[float] = None,
     mover: Movers = "mirr",
+    num_frames: int = 1,
 ) -> Evaluator:
     yag = yag.lower()
     if yag not in ("xcs1", "dg1", "dg2", "ip"):
@@ -204,7 +233,7 @@ def get_evaluator_yag(
 
     def evaluate(input: dict[str, float]) -> dict[str, float]:
         evaluator_move(mover=mover, input=input)
-        fit_result = evaluate_yag_processing(yag, fit)
+        fit_result = evaluate_yag_processing(yag, fit, num_frames=num_frames)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = abs(fit_result.centroid[0] - goal)
         print(f"Distance from goal is {results['objective']}")
@@ -218,6 +247,7 @@ def get_evaluator_yag_2d(
     yag: Diagnostics,
     goal: tuple[float, float],
     mover: Movers,
+    num_frames: int = 1,
 ) -> Evaluator:
     """
     Alternate evaluator in 2d space.
@@ -227,7 +257,7 @@ def get_evaluator_yag_2d(
     def evaluate(input: dict[str, float]) -> dict[str, float]:
         evaluator_move(mover=mover, input=input)
         time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION 
-        fit_result = evaluate_yag_processing(yag, fit)
+        fit_result = evaluate_yag_processing(yag, fit, num_frames=num_frames)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = distance2d(fit_result.centroid, goal)
         print(f"Distance from goal is {results['objective']}")
@@ -247,6 +277,7 @@ def get_xopt_obj(
     goal_2d: Optional[tuple[float, float]] = None,
     max_iter: Optional[int] = None,
     dump_file: Optional[str] = None,
+    num_frames: int = 1,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -279,6 +310,9 @@ def get_xopt_obj(
         Max number of steps for maximizing the acquisition function
     dump_file: str, optional
         Filepath to write data too. See Xopt's dump_file docs.
+    num_frames: int, optional
+        Number of frames to average for YAG image collection. Default is 1 (no averaging).
+        Only applies when device_type is "yag".
     """
     goal_value = select_goal(
         device_type=device_type,
@@ -300,12 +334,14 @@ def get_xopt_obj(
                 yag=location,
                 goal=goal_value,
                 mover=mover,
+                num_frames=num_frames,
             )
         else:
             evaluator = get_evaluator_yag(
                 yag=location,
                 goal=goal_value,
                 mover=mover,
+                num_frames=num_frames,
             )
     else:
         evaluator = get_evaluator_wave8(
