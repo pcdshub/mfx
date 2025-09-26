@@ -293,7 +293,7 @@ def get_xopt_obj(
         device=device_type,
     )
     print(vocs)
-    vocs.constraints = {}
+    #vocs.constraints = {}
     if device_type == "yag":
         if isinstance(goal_value, tuple):
             evaluator = get_evaluator_yag_2d(
