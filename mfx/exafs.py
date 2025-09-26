@@ -1,5 +1,26 @@
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
+    from ophyd import EpicsSignalRO
+    from mfx.db import RE
+    from pcdsdevices.pv_positioner import OnePVMotor
+
+    # DG1 IPM SUM PV (read-only)
+    ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
+
+    best = {"i0": float("-inf"), "eV": None}
+
+    def on_event(name, doc):
+        if name != "event":
+            return
+        data = doc.get("data", {})
+        if "mcc" not in data:
+            return
+        eV = data["mcc"]  # vernier setpoint (eV) at this step
+        i0 = float(ipm_sum.get())  # <-- reads MFX:DG1:W8:01:SUM
+        if i0 > best["i0"]:
+            best["i0"] = i0
+            best["eV"] = eV
+
     # mirror={'pack3':109.620,'pack2':104.2}
     def set_mirror(pos):
         from mfx.db import mr1l4_homs
@@ -213,6 +234,27 @@ class Exafs:
                     logger.info(f"Energy: {energy:0.4f}")
                     energy = energy / 1000.0
                     dccm.energy_with_vernier(energy)
+                    # tchk-tchk
+                    sid = RE.subscribe(on_event)
+                    try:
+                        Vernier().scan(
+                            energy_scan_start_eV=energy - 5,
+                            energy_scan_end_eV=energy + 5,
+                            energy_scan_steps=11,  # 5 left, center, 5 right
+                            events_per_step=events_per_step,
+                            record=False,
+                            daq_num=2,
+                            mcc="vernier",
+                            sample=sample,
+                            tag=tag,
+                            picker=None,
+                        )
+                    finally:
+                        RE.unsubscribe(sid)
+                    if best["eV"] is not None:
+                        OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="mcc").move(best["eV"]).wait()
+                        best = {"i0": float("-inf"), "eV": None}
+                    #
                     e_step = np.abs(energy - energy_0)
 
                     # Move K every k_stepsize
