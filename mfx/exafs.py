@@ -312,19 +312,19 @@ class Exafs:
         except KeyboardInterrupt:
             # Handle pausing or stopping the dccm scan.
             from psdaq.control.DaqControl import DaqControl  # NOQA
-                daq.control = DaqControl(
-                    host=daq.control.host,
-                    platform=daq.control.platform,
-                    timeout=10000,
-                )
-                instr = daq.control.getInstrument()
-                if instr is None:
-                    logger.error('Failed to connect to LCLS-II DAQ')
-                    break
-                start_state = daq.control.getState()
-                if start_state == 'error':
-                    logger.error('DAQ is in an error state.')
-                    break
+            daq.control = DaqControl(
+                host=daq.control.host,
+                platform=daq.control.platform,
+                timeout=10000,
+            )
+            instr = daq.control.getInstrument()
+            if instr is None:
+                logger.error('Failed to connect to LCLS-II DAQ')
+
+            start_state = daq.control.getState()
+            if start_state == 'error':
+                logger.error('DAQ is in an error state.')
+
             inp = 'q'
             if is_daq:
                 daq.control.setState("pause")
