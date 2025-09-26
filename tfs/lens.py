@@ -6,6 +6,7 @@ Basic Lens object handling
 ############
 import logging
 import re
+import time
 
 ###############
 # Third Party #
@@ -23,6 +24,49 @@ import tfs.utils as ut
 
 logger = logging.getLogger(__name__)
 
+class OnePVMotorRetry(OnePVMotor):
+    """OnePVMotor with a simple retry-to-tolerance move helper.
+
+    Usage: motor.mv_retry(target, retries=3, tolerance=1e-3)
+    """
+
+    def mv_retry(self, position, *, retries=3, tolerance=1e-2, settle_time=0.2, timeout=None):
+        """Move to position with verify-and-retry until within tolerance.
+
+        Parameters
+        ----------
+        position : float
+            Desired setpoint in engineering units.
+        retries : int, optional
+            Number of additional attempts after the first move, by default 3.
+        tolerance : float, optional
+            Allowed absolute error |RBV - SP|, by default 1e-2.
+        settle_time : float, optional
+            Seconds to wait after move completion before checking RBV, by default 0.2.
+        timeout : float | None, optional
+            Move timeout passed through to the underlying move call.
+        """
+        attempts = retries + 1
+        last_readback = None
+        for attempt_index in range(attempts):
+            status = self.move(position, wait=True, timeout=timeout)
+            if settle_time and settle_time > 0:
+                time.sleep(settle_time)
+            try:
+                last_readback = self.position
+            except Exception:
+                last_readback = None
+            if last_readback is not None and abs(last_readback - position) <= tolerance:
+                return status
+            logger.warning(
+                "Motor %s missed target (attempt %d/%d): target=%s readback=%s tol=%s",
+                getattr(self, 'name', repr(self)),
+                attempt_index + 1,
+                attempts,
+                position,
+                last_readback,
+                tolerance,
+            )
 
 LENS_MOTOR_PVS = {
     2: {'x': 'MFX:TFS:MMS:03', 'y': 'MFX:TFS:MMS:04'},
@@ -135,8 +179,8 @@ class MFXLens(InOutPVStatePositioner, LensCalcMixin):
     _req_focus = Cpt(EpicsSignal, ':REQ_FOCUS')
     
     # X/Y motors resolved from PV map based on lens number in prefix
-    x = FCpt(OnePVMotor, '{x_pv}', kind='normal')
-    y = FCpt(OnePVMotor, '{y_pv}', kind='normal')
+    x = FCpt(OnePVMotorRetry, '{x_pv}', kind='normal')
+    y = FCpt(OnePVMotorRetry, '{y_pv}', kind='normal')
 
     def __init__(self, prefix, **kwargs):
         if 'TFS' not in prefix:
