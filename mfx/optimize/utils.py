@@ -6,6 +6,7 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import pandas as pd
 from lcls_tools.common.image.fit import ImageProjectionFit
 
 from .constraints import constraint_data
@@ -327,3 +328,22 @@ def plot_gp_landscape(
     
     plt.tight_layout()
     plt.show()
+
+
+def snake_order(df, x="undp_x", y="undp_y", start="asc"):
+    """
+    Reorders rows in a serpentine ('snake') path.
+      - start: 'asc' -> first row goes low→high in x, 'desc' -> high→low in x
+    """
+    # sort rows by y (outer) and x (inner) to get clean bands
+    base = df.sort_values([y, x], ascending=[False, True]).reset_index(drop=True)
+
+    # assign band index in the order of y levels (no resorting within groupby)
+    bands = []
+    for i, (_, g) in enumerate(base.groupby(y, sort=False)):
+        # decide direction for this band
+        go_asc = (i % 2 == 0) if start == "asc" else (i % 2 == 1)
+        g = g.sort_values(x, ascending=go_asc)
+        bands.append(g)
+
+    return pd.concat(bands, ignore_index=True)
