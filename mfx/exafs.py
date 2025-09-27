@@ -1,15 +1,13 @@
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
     from ophyd import EpicsSignalRO
-    from mfx.db import RE
-    from pcdsdevices.pv_positioner import OnePVMotor
 
     # DG1 IPM SUM PV (read-only)
     ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
 
     best = {"i0": float("-inf"), "eV": None}
 
-    def on_event(name, doc):
+    def on_event(self, name, doc):
         if name != "event":
             return
         data = doc.get("data", {})
@@ -60,6 +58,7 @@ class Exafs:
             reverse: bool = False,
             min_k_keV: float = 7.035,
             k_offset: int = 0,
+            tchk = False,
             debug: bool = False):
         """Perform EXAFS scan.
 
@@ -119,6 +118,7 @@ class Exafs:
 
         from ophyd import EpicsSignal, EpicsSignalRO
         from ophyd import Device, Component
+        from pcdsdevices.pv_positioner import OnePVMotor
 
         from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
         from mfx.db import lxt_fast, pp, daq, RE, mr1l4_homs, elog
@@ -130,7 +130,9 @@ class Exafs:
         from mfx.autorun import post, quote
         from mfx.macros import get_run
         from mfx.dccm import DCCM
+        from mfx.vernier import Vernier
         dccm = DCCM(name='DCCM')
+        vernier = Vernier()
 
         if len(energies_list) == 0 or len(wait_time_list) == 0:
             from mfx.exafs_energy_range_builder import EXAFSEnergyRangeBuilder
@@ -141,11 +143,11 @@ class Exafs:
                     'Fe': 7130.00, 'Co': 7730.00, 'Ni': 8350.00, 'Cu': 9000.00, 'Zn': 9680.00}
 
             preedge_end = foil_energies[element] + 7
-            if end_ev is not None:
-                if end_eV <= threshold_energies[element]
+            if end_eV is not None:
+                if end_eV <= threshold_energies[element]:
                     min_k = max_k = 0.0
-                if end_eV > threshold_energies[element]
-                    max_k = (0.2625 * (end_eV - threshold_energy))**0.5
+                if end_eV > threshold_energies[element]:
+                    max_k = (0.2625 * (end_eV - threshold_energies[element]))**0.5
 
             energies, wait_time, energy_K_range, K_values = EXAFSEnergyRangeBuilder.build_energy_range(
                 min_before_pre_edge=start_eV,
@@ -217,6 +219,12 @@ class Exafs:
                     break
 
                 logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+                if sample.lower()=='water' or sample.lower()=='h2o':
+                    inspire=True
+                if picker=='open':
+                    pp.open()
+                if picker=='flip':
+                    pp.flipflop()
 
                 daq.control.setState("configured")
                 while daq.control.getState() != "configured":
@@ -231,36 +239,32 @@ class Exafs:
                     ...
 
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
-                    logger.info(f"Energy: {energy:0.4f}")
+                    logger.info(f"Energy: {energy:0.4f}, Time: {point_time}")
                     energy = energy / 1000.0
                     dccm.energy_with_vernier(energy)
                     # tchk-tchk
-                    sid = RE.subscribe(on_event)
-                    try:
-                        Vernier().scan(
-                            energy_scan_start_eV=energy - 5,
-                            energy_scan_end_eV=energy + 5,
-                            energy_scan_steps=11,  # 5 left, center, 5 right
-                            events_per_step=events_per_step,
-                            record=False,
-                            daq_num=2,
-                            mcc="vernier",
-                            sample=sample,
-                            tag=tag,
-                            picker=None,
-                        )
-                    finally:
-                        RE.unsubscribe(sid)
-                    if best["eV"] is not None:
-                        OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="mcc").move(best["eV"]).wait()
-                        best = {"i0": float("-inf"), "eV": None}
-                    #
-                    e_step = np.abs(energy - energy_0)
+                    if tchk:
+                        sid = RE.subscribe(self.on_event)
+                        try:
+                            self.vernier_scan(
+                                energy_scan_start_eV=energy * 1000.0 - 5,
+                                energy_scan_end_eV=energy * 1000.0 + 5,
+                                energy_scan_steps=11,  # 5 left, center, 5 right
+                                events_per_step=12,
+                                record=False,
+                                mcc="vernier")
+                        finally:
+                            RE.unsubscribe(sid)
+                        if best["eV"] is not None:
+                            OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="mcc").move(best["eV"]).wait()
+                            best = {"i0": float("-inf"), "eV": None}
+
+                    e_step = np.abs(energy - energy_0) * 1000
 
                     # Move K every k_stepsize
                     if e_step > k_stepsize:
-                        daq.control.setState("pause")
-                        while daq.control.getState() != "pause":
+                        daq.control.setState("paused")
+                        while daq.control.getState() != "paused":
                             ...
                         k_energy = energy * 1000.0 + k_offset
                         if reverse:
@@ -269,7 +273,7 @@ class Exafs:
                                 k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
                         logger.info(f"Moving k to {k_energy:0.0f}")
-                        time.sleep(0.5)
+                        sleep(0.5)
                         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
                             self.acr_energy_k.move(k_energy)
                         energy_0 = energy
@@ -277,11 +281,9 @@ class Exafs:
                         daq.control.setState("running")
                         while daq.control.getState() != "running":
                             ...
+                    if np.isnan(point_time):
+                        point_time=0.1
                     sleep(point_time)
-
-                    daq.control.setState("configured")
-                    while daq.control.getState() != "configured":
-                        ...
 
                 if record:
                     post(
@@ -328,6 +330,85 @@ class Exafs:
         daq.control.setState("running")
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
         return
+
+
+    def vernier_scan(
+            self,
+            energy_scan_start_eV: float,
+            energy_scan_end_eV: float,
+            energy_scan_steps: int,
+            events_per_step: int = 120,
+            record: bool = False,
+            mcc: str = None):
+        """Perform Vernier scan.
+
+        Parameters:
+            energy_scan_start_eV (float): 
+                Photon energy (in eV) to start the scan at.
+
+            energy_scan_end_eV (float): 
+                Photon energy (in eV) to end the scan at.
+
+            energy_scan_steps (int): 
+                Number of steps in scan.
+
+            events_per_step (int): 
+                Number of events per step. Optional. Default: 120.
+
+            mcc (str): 
+                PV type either 'vernier' or 'k'
+        
+
+        """
+        from ophyd import EpicsSignal
+        from pcdsdevices.pv_positioner import OnePVMotor
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            from mfx.db import RE, pp, daq
+            from mfx.autorun import quote, post
+            from mfx.macros import get_exp, get_run
+            import bluesky.plans as bp
+        except ImportError:
+            from bluesky import RunEngine
+            RE = RunEngine({})
+        from nabs.plans import daq_scan
+
+        if mcc.lower() == 'vernier':
+            mcc_pv = 'MFX:USER:MCC:EPHOT:SET1'
+        elif mcc.lower() == 'k':
+            mcc_pv = 'MFX:USER:MCC:EPHOT:SET2'
+        else:
+            logger.error('Please enter spread type of vernier or k only')
+            sys.exit()
+
+        mcc_pv_motor = OnePVMotor(mcc_pv, name="mcc")
+        mcc_pv_motor.setpoint.kind = "hinted"
+        daq.configure(
+            motors=[mcc_pv_motor],
+            group_mask=0x1,
+            events=events_per_step,
+            record=record)
+
+        RE(bp.scan(
+            [daq],
+            mcc_pv_motor,
+            energy_scan_start_eV,
+            energy_scan_end_eV,
+            energy_scan_steps))
+
+        if record:
+            run_number = get_run(station=0) + 1
+            logger.info(f"Run Number {run_number} Running {tchk}......{quote()['quote']}")
+            post(
+                sample=tchk, 
+                tag=tchk, 
+                run_number=run_number, 
+                post=record, 
+                inspire=inspire,
+                daq_num=2,
+                add_note=f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, steps:{energy_scan_steps}eV @ {events_per_step} events per step')
+        logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
 
     def continuous_dccmscan(
