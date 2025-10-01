@@ -347,7 +347,7 @@ def get_xopt_obj(
     #vocs.constraints = {}
     if device_type == "yag":
         # Create per run images directory
-        images_root = Path("/cds/data/iocData/mfx_xopt")
+        images_root = Path("/cds/home/opr/mfxopr")
         images_root.mkdir(parents=True, exist_ok=True)
         run_dir_name = Path(dump_file).stem
         run_images_dir = images_root / run_dir_name
@@ -404,3 +404,22 @@ def get_xopt_obj(
         evaluator=evaluator,
         dump_file=dump_file,
     )
+
+
+def test_write_permissions():
+    """
+    Simple test function to check if we can write to /cds/home/opr/mfxopr
+    """
+
+    test_dir = Path("/cds/home/opr/mfxopr")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    test_file = test_dir / f"test_write.txt"
+
+    try:
+        with open(test_file, 'w') as f:
+            f.write("This is a test to verify write permissions.\n")
+        print(f"SUCCESS: Successfully wrote test file to {test_file}")
+        return True
+    except Exception as e:
+        print(f"ERROR: Failed to write test file: {e}")
+        return False
