@@ -41,22 +41,24 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
     Both q and ctrl+c will quit the tweak between moves.
     """
 
-    if orientation == str('horizontal').lower():
-        xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
-        xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
-
-    if orientation == str('vertical').lower():
-        xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
-        xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
-
+    xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
+    xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
     xlj = BeckhoffJet('MFX:LJH', name='xlj')
 
-    up = "\x1b[A"
-    down = "\x1b[B"
-    right = "\x1b[C"
-    left = "\x1b[D"
+    if orientation == str('horizontal').lower():
+        up = "\x1b[A"
+        down = "\x1b[B"
+        right = "\x1b[C"
+        left = "\x1b[D"
+
+    if orientation == str('vertical').lower():
+        right = "\x1b[A"
+        left = "\x1b[B"
+        down = "\x1b[C"
+        up = "\x1b[D"
+
     shift_up = "\x1b[1;2A"
     shift_down = "\x1b[1;2B"
     shift_right = "\x1b[1;2C"
@@ -149,6 +151,8 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
                     logger.error(f'xlj.jet.z = {xlj.jet.z()}, xlj_fast_z = {xlj_fast_z()}')
                     xlj_fast_z.umv(xlj.jet.z())
                 xlj_fast_z.umvr(scale, log=False, newline=False)
+
+
         except Exception as exc:
             logger.error('Error in tweak move: %s', exc)
             logger.debug('', exc_info=True)
