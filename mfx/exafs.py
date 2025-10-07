@@ -1,7 +1,9 @@
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
     from ophyd import EpicsSignalRO
+    from hutch_python import sim
 
+    sim = sim.get_hw()
     # DG1 IPM SUM PV (read-only)
     ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
 
@@ -39,6 +41,7 @@ class Exafs:
 
     def long_escan(
             self,
+            simulate: bool = False
             start_eV: float = 0.0,
             end_eV: float = None,
             min_k: float = 2.0,
@@ -241,11 +244,17 @@ class Exafs:
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}, Time: {point_time}")
                     energy = energy / 1000.0
-                    dccm.energy_with_vernier(energy)
+                    if simulate:
+                        sim.fast_motor1.mv(energy)
+                    elif ~ simulate:
+                        dccm.energy_with_vernier(energy)
                     # tchk-tchk
                     if tchk:
                         sid = RE.subscribe(self.on_event)
                         try:
+                            if simulate:
+                                sim.fast_motor1.mv(energy)
+                            elif:
                             self.vernier_scan(
                                 energy_scan_start_eV=energy * 1000.0 - 5,
                                 energy_scan_end_eV=energy * 1000.0 + 5,
