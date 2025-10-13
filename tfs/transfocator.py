@@ -187,7 +187,7 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_10.remove()
 
 
-    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, **kwargs):
+    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], **kwargs):
 
         """
         Calculate the best lens array to hit the nominal sample point
@@ -225,7 +225,7 @@ class MFXTransfocator(TransfocatorBase):
         except AssertionError:
             logging.warning(f"please double-check that {energy} is in eV, not keV.")
         target = target or self.nominal_sample
-        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
+        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses,exclusions=exclusions)
         combo, diff = calc.find_solution(target, energy, n, z_obj, **kwargs)
         if combo:
             combo.show_info()
