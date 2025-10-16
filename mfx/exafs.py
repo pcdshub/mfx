@@ -468,7 +468,7 @@ class Exafs:
             if not simulate:
                 self._handle_keyboard_interrupt_and_cleanup(sample, tag, run_number, record, inspire, energy_start, k_energy_start)
             else: 
-                return
+                break
         
         if not simulate:
             self._finalize_scan(energy_start, k_energy_start)
