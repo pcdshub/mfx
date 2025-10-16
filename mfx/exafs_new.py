@@ -89,10 +89,15 @@ class Exafs:
         else:
             energies = energies_list
             wait_time = wait_time_list
-            
+
+        if len(wait_time) != len(energies):
+            logger.error('Error: len(wait_time) is not equal to len(energies)')
+            logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
+            return False, False
+
         return energies, wait_time
 
-    def _initialize_energies(self, energies, wait_time, reverse, k_offset, k_stepsize):
+    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize):
         """Initialize energy values for the scan."""
         import logging
         logger = logging.getLogger(__name__)
@@ -105,7 +110,11 @@ class Exafs:
             k_energy = energy_0 * 1000.0 - k_stepsize + k_offset
             logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
             wait_time=wait_time[::-1]
-
+            
+        dccm.energy_with_vernier(energy_0)
+        logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+        if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
+            self.acr_energy_k.move(k_energy)
         return energies, energy_0, k_energy, wait_time
 
     def _setup_daq_and_start_recording(self, sample, picker, inspire, record):
@@ -385,24 +394,19 @@ class Exafs:
         energies, wait_time = self._build_energy_and_wait_time(
             energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug)
 
+        if not energies: 
+            return
+
         energy_start = dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
-
-        if len(wait_time) != len(energies):
-            logger.error('Error: len(wait_time) is not equal to len(energies)')
-            logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
-            return
 
         try:
             for i in range(runs):
                 # Initialize energies
-                energies, energy_0, k_energy, wait_time = self._initialize_energies(
+                #Move k before?
+                energies, energy_0, k_energy, wait_time = self._initialize_energies_and_move(
                     energies, wait_time, reverse, k_offset, k_stepsize)
 
-                dccm.energy_with_vernier(energy_0)
-                logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
-                if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
-                    self.acr_energy_k.move(k_energy)
 
                 # Setup DAQ and start recording
                 run_number, daq_success = self._setup_daq_and_start_recording(sample, picker, inspire, record)
