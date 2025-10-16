@@ -101,6 +101,8 @@ class Exafs:
         """Initialize energy values for the scan."""
         import logging
         logger = logging.getLogger(__name__)
+        from hutch_python import sim
+        from mfx.dccm import DCCM
         
         energy_0 = energies[0]/1000.0  # energy at the beginning or after a und K step
         k_energy = energy_0 * 1000.0 + k_offset
@@ -222,10 +224,13 @@ class Exafs:
         import numpy as np
         import logging
         from time import sleep
+        import copy
         logger = logging.getLogger(__name__)
         from mfx.db import daq
+        from hutch_python import sim
+        from mfx.dccm import DCCM
         
-        prev_k_energy = k_energy.copy()
+        prev_k_energy = copy.copy(k_energy)
         e_step = np.abs(energy - energy_0) * 1000
         sim = sim.get_hw()
         dccm = DCCM(name='DCCM')
@@ -390,29 +395,14 @@ class Exafs:
             k_offset: float
                 Offset in eV for undulator K motion request.
         """
-        import numpy as np
         import logging
         logger = logging.getLogger(__name__)
-
         from time import sleep
         import os
-        import sys
-
-        from ophyd import EpicsSignal, EpicsSignalRO
-        from ophyd import Device, Component
-        from pcdsdevices.pv_positioner import OnePVMotor
-
-        from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
-        from mfx.db import lxt_fast, pp, daq, RE, mr1l4_homs, elog
-
-        import bluesky.plan_stubs as bps
-        from bluesky.plan_stubs import abs_set, trigger_and_read
-        from bluesky.plans import list_scan, count
-
-        from mfx.autorun import post, quote
-        from mfx.macros import get_run
+        from mfx.autorun import post
         from mfx.dccm import DCCM
         from mfx.vernier import Vernier
+        
         dccm = DCCM(name='DCCM')
         vernier = Vernier()
 
@@ -504,6 +494,7 @@ class Exafs:
         """
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
+        import sys
         import logging
         logger = logging.getLogger(__name__)
         try:
@@ -579,6 +570,7 @@ class Exafs:
         bidirectional: bool, default=False
         """
         import time
+        import numpy as np
         from mfx.dccm import DCCM as dccm
         from mfx.db import daq, pp
         import logging
@@ -660,6 +652,7 @@ class Exafs:
 
     @staticmethod
     def dccm_sweep(dccm_e, energies, pointTime):
+        import time
         for E in energies:
             dccm_e.move(E)
             time.sleep(pointTime)
@@ -680,6 +673,9 @@ class Exafs:
 
 
     def lxt_fast_set_absolute_zero(self):
+        import logging
+        logger = logging.getLogger(__name__)
+        from mfx.db import lxt_fast, lxt_fast_enc
         currentpos = lxt_fast()
         currentenc = lxt_fast_enc.get()
         #elog.post('Set current stage position {}, encoder value {} to 0'.format(currentpos,currentenc.pos))
