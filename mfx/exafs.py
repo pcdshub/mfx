@@ -189,7 +189,7 @@ class Exafs:
         else:
             dccm.energy_with_vernier(energy)
 
-    def _perform_vernier_alignment(self, energy, tchk, simulate):
+    def _perform_vernier_alignment(self, energy, tchk, simulate, inspire):
         """Perform Vernier alignment with DCCM (tchk functionality)."""
         import logging
         logger = logging.getLogger(__name__)
@@ -210,6 +210,8 @@ class Exafs:
                         energy_scan_start_eV=energy * 1000.0 - 5,
                         energy_scan_end_eV=energy * 1000.0 + 5,
                         energy_scan_steps=11,  # 5 left, center, 5 right
+                        tchk = tchk,
+                        inspire = inspire,
                         events_per_step=12,
                         record=False,
                         mcc="vernier")
@@ -437,7 +439,7 @@ class Exafs:
                     self._move_energy_simulation_or_real(energy, simulate)
                     
                     # Perform Vernier alignment if needed
-                    self._perform_vernier_alignment(energy, tchk, simulate)
+                    self._perform_vernier_alignment(energy, tchk, simulate, inspire)
 
                     # Move K if necessary
                     energy_0, k_energy = self._move_k_if_necessary(energy, k_energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV, simulate)
@@ -469,6 +471,8 @@ class Exafs:
             energy_scan_start_eV: float,
             energy_scan_end_eV: float,
             energy_scan_steps: int,
+            tchk = False,
+            inspire: bool = False,
             events_per_step: int = 120,
             record: bool = False,
             mcc: str = None):
