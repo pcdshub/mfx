@@ -230,22 +230,20 @@ class Exafs:
         sim = sim.get_hw()
         dccm = DCCM(name='DCCM')
         # Move K every k_stepsize
-        if simulate:
-    
-            if e_step > k_stepsize:
+        if e_step > k_stepsize:
+            if simulate:
                 k_energy = energy * 1000.0 + k_offset
                 if reverse:
                     k_energy = energy * 1000.0 - k_stepsize + k_offset
                     if k_energy/1000 < min_k_keV:
                         k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
-                if round(k_energy, 1) != round(prev_k_energy.setpoint, 1):
+                if round(k_energy, 1) != round(prev_k_energy, 1):
                     sim.slow_motor1.mv(k_energy)
 
-            energy_0 = energy
+                energy_0 = energy
 
-        else:
-            if e_step > k_stepsize:
+            else:
                 daq.control.setState("paused")
                 while daq.control.getState() != "paused":
                     ...
