@@ -97,7 +97,7 @@ class Exafs:
 
         return energies, wait_time
 
-    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize):
+    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize, simulate):
         """Initialize energy values for the scan."""
         import logging
         logger = logging.getLogger(__name__)
@@ -110,11 +110,22 @@ class Exafs:
             k_energy = energy_0 * 1000.0 - k_stepsize + k_offset
             logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
             wait_time=wait_time[::-1]
-            
-        dccm.energy_with_vernier(energy_0)
-        logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
-        if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
-            self.acr_energy_k.move(k_energy)
+        
+        sim = sim.get_hw()
+        dccm = DCCM(name='DCCM')
+        
+        if simulate:
+            sim.fast_motor1.mv(energy_0)
+            sim.slow_motor1.mv(k_energy)
+        else:
+            dccm.energy_with_vernier(energy_0)
+            logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+            if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                self.acr_energy_k.move(k_energy)
+
+        
+        
+
         return energies, energy_0, k_energy, wait_time
 
     def _setup_daq_and_start_recording(self, sample, picker, inspire, record):
@@ -206,7 +217,7 @@ class Exafs:
                 OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="mcc").move(self.best["eV"]).wait()
                 self.best = {"i0": float("-inf"), "eV": None}
 
-    def _move_k_if_necessary(self, energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV):
+    def _move_k_if_necessary(self, energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV, simulate):
         """Move K if necessary and manage DAQ state."""
         import numpy as np
         import logging
@@ -215,27 +226,45 @@ class Exafs:
         from mfx.db import daq
         
         e_step = np.abs(energy - energy_0) * 1000
-
+        sim = sim.get_hw()
+        dccm = DCCM(name='DCCM')
         # Move K every k_stepsize
-        if e_step > k_stepsize:
-            daq.control.setState("paused")
-            while daq.control.getState() != "paused":
-                ...
-            k_energy = energy * 1000.0 + k_offset
-            if reverse:
-                k_energy = energy * 1000.0 - k_stepsize + k_offset
-                if k_energy/1000 < min_k_keV:
-                    k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
+        if simulate:
+    
+            if e_step > k_stepsize:
+            
+                k_energy = energy * 1000.0 + k_offset
+                if reverse:
+                    k_energy = energy * 1000.0 - k_stepsize + k_offset
+                    if k_energy/1000 < min_k_keV:
+                        k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
-            logger.info(f"Moving k to {k_energy:0.0f}")
-            sleep(0.5)
-            if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
-                self.acr_energy_k.move(k_energy)
+            
+                if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                    sim.slow_motor1.mv(k_energy)
+
             energy_0 = energy
 
-            daq.control.setState("running")
-            while daq.control.getState() != "running":
-                ...
+        else:
+            if e_step > k_stepsize:
+                daq.control.setState("paused")
+                while daq.control.getState() != "paused":
+                    ...
+                k_energy = energy * 1000.0 + k_offset
+                if reverse:
+                    k_energy = energy * 1000.0 - k_stepsize + k_offset
+                    if k_energy/1000 < min_k_keV:
+                        k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
+
+                logger.info(f"Moving k to {k_energy:0.0f}")
+                sleep(0.5)
+                if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                    self.acr_energy_k.move(k_energy)
+                energy_0 = energy
+
+                daq.control.setState("running")
+                while daq.control.getState() != "running":
+                    ...
                 
         return energy_0
 
@@ -405,7 +434,7 @@ class Exafs:
                 # Initialize energies
                 #Move k before?
                 energies, energy_0, k_energy, wait_time = self._initialize_energies_and_move(
-                    energies, wait_time, reverse, k_offset, k_stepsize)
+                    energies, wait_time, reverse, k_offset, k_stepsize, simulate)
 
 
                 # Setup DAQ and start recording
@@ -424,7 +453,7 @@ class Exafs:
                     self._perform_vernier_alignment(energy, tchk, simulate)
 
                     # Move K if necessary
-                    energy_0 = self._move_k_if_necessary(energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV)
+                    energy_0 = self._move_k_if_necessary(energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV, simulate)
                     
                     if np.isnan(point_time):
                         point_time=0.1
