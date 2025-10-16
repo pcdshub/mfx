@@ -93,9 +93,9 @@ class Exafs:
         if len(wait_time) != len(energies):
             logger.error('Error: len(wait_time) is not equal to len(energies)')
             logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
-            return False, False
+            return _, _, False
 
-        return energies, wait_time
+        return energies, wait_time, True
 
     def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize, simulate):
         """Initialize energy values for the scan."""
@@ -409,10 +409,10 @@ class Exafs:
         vernier = Vernier()
 
         # Build energy and wait time lists
-        energies, wait_time = self._build_energy_and_wait_time(
+        energies, wait_time, correct = self._build_energy_and_wait_time(
             energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug)
 
-        if not energies: 
+        if not correct: 
             return
 
         energy_start = dccm.energy_with_vernier.energy()
