@@ -397,6 +397,7 @@ class Exafs:
             k_offset: float
                 Offset in eV for undulator K motion request.
         """
+        import numpy as np
         import logging
         logger = logging.getLogger(__name__)
         from time import sleep
