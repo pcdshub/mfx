@@ -139,6 +139,7 @@ class Exafs:
         from mfx.autorun import quote
         from psdaq.control.DaqControl import DaqControl
         
+        
         run_number = get_run(station=0) + 1
         daq.control = DaqControl(
             host=daq.control.host,
@@ -412,6 +413,7 @@ class Exafs:
         # Build energy and wait time lists
         energies, wait_time, correct = self._build_energy_and_wait_time(
             energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug)
+        logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
 
         if not correct: 
             return
@@ -428,9 +430,12 @@ class Exafs:
 
 
                 # Setup DAQ and start recording
-                run_number, daq_success = self._setup_daq_and_start_recording(sample, picker, inspire, record)
-                if not daq_success:
-                    break
+                if not simulate:
+                    run_number, daq_success = self._setup_daq_and_start_recording(sample, picker, inspire, record)
+                    if not daq_success:
+                        break
+                else: 
+                    run_number = i + 1
 
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}, Time: {point_time}")
@@ -460,7 +465,10 @@ class Exafs:
                 sleep(daq_delay)
 
         except KeyboardInterrupt:
-            self._handle_keyboard_interrupt_and_cleanup(sample, tag, run_number, record, inspire, energy_start, k_energy_start)
+            if not simulate:
+                self._handle_keyboard_interrupt_and_cleanup(sample, tag, run_number, record, inspire, energy_start, k_energy_start)
+            else: 
+                return
         
         if not simulate:
             self._finalize_scan(energy_start, k_energy_start)
