@@ -470,6 +470,60 @@ class MFXTransfocator(TransfocatorBase):
 
         return schedule
 
+    def track_focus(self, energies, *, margin_mm=10.0, show=False):
+        """
+        Keep the focal length fixed over a provided list of energies by
+        compensating with the translation stage. Lenses are NOT actuated.
+
+        Workflow:
+        - Move stage to high limit minus a small margin.
+        - Compute initial lens combo and reference focal length.
+        - For each next energy, compute focal length for the current combo and
+          move the stage to compensate.
+        - If the move would exceed the stage low limit, return to the top
+          position and recompute the lens combo at that energy, then continue.
+        """
+        if not energies:
+            logger.error("No energies provided")
+            return None
+
+        # Translation stage and limits
+        stage = self.translation
+        z_high = stage.high_limit
+        z_low = stage.low_limit
+
+        # Start near the high limit
+        z_top_mm = z_high - margin_mm
+        stage.mv(z_top_mm)
+
+        # Initial combo and reference length
+        E_start = energies[0]
+        combo = self.find_best_combo(energy_eV=E_start, show=show)
+        # TODO: insert lenses
+        reference_length = focal_length(radius=combo.tfs_radius, energy=E_start)
+
+        for E in energies[1:]:
+            # Compute focal length for current combo at this energy
+            tentative_length = focal_length(radius=combo.tfs_radius, energy=E)
+            tentative_target = z_top_mm - (tentative_length - reference_length)
+
+            if tentative_target > (z_low + margin_mm):
+                # Safe to move stage
+                stage.mv(tentative_target)
+            else:
+                # Out of stage travel: return to top and recompute combo
+                stage.mv(z_top_mm)
+                combo = self.find_best_combo(energy_eV=E, show=show)
+                # TODO: insert lenses
+                # Compare new focal length to starting one and adjust z stage
+                new_length = focal_length(radius=combo.tfs_radius, energy=E)
+                new_target = z_top_mm - (new_length - reference_length)
+                if new_target < (z_low + margin_mm):
+                    logger.error("Stage is out of travel, cannot compensate for energy change")
+                    # TODO: what to do here?
+                    return None
+                stage.mv(new_target)
+
 class Transfocator(MFXTransfocator):
     pass
 
