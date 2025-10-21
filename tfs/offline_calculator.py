@@ -11,9 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 class TFS_Calculator(object):
-    def __init__(self, tfs_lenses, prefocus_lenses=None):
+    def __init__(self, tfs_lenses, prefocus_lenses=None,exclusions=None):
         self.tfs_lenses = tfs_lenses
         self.prefocus_lenses = prefocus_lenses
+        if exclusions:
+            logger.debug(f"Lens exclusions considered. The following lenses will be excluded from the calculation: {exclusions}")
+            self.tfs_lenses=np.delete(self.tfs_lenses,exclusions)
         self.combos = self.combinations()
         return
 

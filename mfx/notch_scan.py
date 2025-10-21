@@ -56,15 +56,17 @@ class NotchScan():
         self.th1.mv(bragg_angle)
         self.th2.umv(bragg_angle)
 
-        while round(self.th1(), 3) != round(bragg_angle, 3) or round(self.th1(), 3) != round(bragg_angle, 3):
+        while round(self.th1(), 2) != round(bragg_angle, 2) or round(self.th2(), 2) != round(bragg_angle, 2):
             sleep(0.1)
 
-            if time() - start_time > 180:
+            if time() - start_time > 30:
                 logging.error("Timeout occurred: DCCM could not move to correct position. Try again.")
+                logging.error(
+                    f"th1: {round(self.th1(), 2)} or th2: {round(self.th2(), 2)} vs {round(bragg_angle, 2)}")
                 status = False
                 break
 
-        if round(self.th1(), 3) == round(bragg_angle, 3) and round(self.th1(), 3) == round(bragg_angle, 3):
+        if round(self.th1(), 2) == round(bragg_angle, 2) and round(self.th2(), 2) == round(bragg_angle, 2):
             logging.warning(f"DCCM is now in the correct position: {round(bragg_angle, 3)}")
             status = True
 
@@ -149,10 +151,15 @@ class NotchScan():
         original_th2 = self.th2()
 
         for ev in energies: 
-            self.set_energy(ev)
+            status = self.set_energy(ev)
+
+            if status:
+                sample=f'Notch scan with energy currently set to {str(ev)} eV'
+            else:
+                sample=f'Notch scan with energy currently set to {str(ev)} eV with possible error'
 
             autorun(
-                sample=f'Notch scan with energy currently set to {str(ev)} eV', 
+                sample=sample, 
                 tag=tag, 
                 run_length=run_length, 
                 record=record,

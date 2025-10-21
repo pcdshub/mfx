@@ -10,6 +10,8 @@ from typing import Optional
 import numpy as np
 
 import time
+import datetime
+from pathlib import Path
 
 from xopt import VOCS, Evaluator, Xopt
 from xopt.generators.bayesian import ExpectedImprovementGenerator, UpperConfidenceBoundGenerator
@@ -143,16 +145,55 @@ def get_evaluator_wave8(
 def evaluate_yag_processing(
     diagnostic: Diagnostics,
     fit: ImageProjectionFit,
-) -> ImageProjectionFitResult:
+    num_frames: int = 1,
+    save_dir: Optional[str] = None,
+) -> tuple[ImageProjectionFitResult, str]:
     """
     Shared image collection and fitting for use in yag evaluators.
+    
+    Parameters
+    ----------
+    diagnostic : Diagnostics
+        The diagnostic location (e.g., "dg1", "dg2", "xcs1", "ip")
+    fit : ImageProjectionFit
+        The fit object to use for image analysis
+    num_frames : int, optional
+        Number of frames to average. Default is 1 (no averaging).
+        If > 1, will trigger the camera multiple times and average the results.
     """
     image_device = select_diagnostic("yag", diagnostic).image1.shaped_image
-    image_device.trigger().wait(timeout=10)
-    image = image_device.get()
-    print(f"image shape: {image.shape}")
-    # NOTE/TODO: consider adding an averaging step here before fitting
-    return fit.fit_image(image)
+    
+    if num_frames == 1:
+        # Single frame original behavior
+        image_device.trigger().wait(timeout=10)
+        image = image_device.get()
+        print(f"image shape: {image.shape}")
+    else:
+        # Multiple frames collect and average
+        print(f"Collecting {num_frames} frames for averaging...")
+        images = []
+        
+        for i in range(num_frames):
+            image_device.trigger().wait(timeout=10)
+            frame = image_device.get()
+            images.append(frame)
+            print(f"Frame {i+1}/{num_frames} collected, shape: {frame.shape}")
+        
+        # Average the frames
+        image = np.mean(images, axis=0)
+        print(f"Averaged image shape: {image.shape}")
+
+    images_root = Path(save_dir)
+    images_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%y-%m-%d-%H:%M:%S")
+    filename = f"yag_{str(diagnostic).lower()}_{timestamp}.npz"
+    file_path = images_root / filename
+    try:
+        np.savez_compressed(file_path, image=image)
+    except Exception as exc:
+        print(f"Warning: failed to save NPZ image to {file_path}: {exc}")
+    
+    return fit.fit_image(image), str(file_path)
 
 
 def distance2d(pt1: tuple[float, float], pt2: tuple[float, float]) -> float:
@@ -187,6 +228,8 @@ def get_evaluator_yag(
     yag: str = "dg1",
     goal: Optional[float] = None,
     mover: Movers = "mirr",
+    num_frames: int = 1,
+    images_dir: Optional[str] = None,
 ) -> Evaluator:
     yag = yag.lower()
     if yag not in ("xcs1", "dg1", "dg2", "ip"):
@@ -202,11 +245,12 @@ def get_evaluator_yag(
             goal = IP_YAG_XPOS
     fit = ImageProjectionFit()
 
-    def evaluate(input: dict[str, float]) -> dict[str, float]:
+    def evaluate(input: dict[str, float]) -> dict[str, float | str]:
         evaluator_move(mover=mover, input=input)
-        fit_result = evaluate_yag_processing(yag, fit)
+        fit_result, npz_path = evaluate_yag_processing(yag, fit, num_frames=num_frames, save_dir=images_dir)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = abs(fit_result.centroid[0] - goal)
+        results["image_npz_path"] = npz_path
         print(f"Distance from goal is {results['objective']}")
         return results
 
@@ -218,18 +262,21 @@ def get_evaluator_yag_2d(
     yag: Diagnostics,
     goal: tuple[float, float],
     mover: Movers,
+    num_frames: int = 1,
+    images_dir: Optional[str] = None,
 ) -> Evaluator:
     """
     Alternate evaluator in 2d space.
     """
     fit = ImageProjectionFit()
 
-    def evaluate(input: dict[str, float]) -> dict[str, float]:
+    def evaluate(input: dict[str, float]) -> dict[str, float | str]:
         evaluator_move(mover=mover, input=input)
-        time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION 
-        fit_result = evaluate_yag_processing(yag, fit)
+        time.sleep(10) # WAIT FOR MOTORS TO STOP MOTION 
+        fit_result, npz_path = evaluate_yag_processing(yag, fit, num_frames=num_frames, save_dir=images_dir)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = distance2d(fit_result.centroid, goal)
+        results["image_npz_path"] = npz_path
         print(f"Distance from goal is {results['objective']}")
         return results
 
@@ -247,6 +294,7 @@ def get_xopt_obj(
     goal_2d: Optional[tuple[float, float]] = None,
     max_iter: Optional[int] = None,
     dump_file: Optional[str] = None,
+    num_frames: int = 1,
 ) -> Xopt:
     """
     Create an appropriate xopt optimization object.
@@ -279,6 +327,9 @@ def get_xopt_obj(
         Max number of steps for maximizing the acquisition function
     dump_file: str, optional
         Filepath to write data too. See Xopt's dump_file docs.
+    num_frames: int, optional
+        Number of frames to average for YAG image collection. Default is 1 (no averaging).
+        Only applies when device_type is "yag".
     """
     goal_value = select_goal(
         device_type=device_type,
@@ -293,19 +344,29 @@ def get_xopt_obj(
         device=device_type,
     )
     print(vocs)
-    vocs.constraints = {}
+    #vocs.constraints = {}
     if device_type == "yag":
+        # Create per run images directory
+        images_root = Path("/cds/home/opr/mfxopr")
+        images_root.mkdir(parents=True, exist_ok=True)
+        run_dir_name = Path(dump_file).stem
+        run_images_dir = images_root / run_dir_name
+        run_images_dir.mkdir(parents=True, exist_ok=True)
         if isinstance(goal_value, tuple):
             evaluator = get_evaluator_yag_2d(
                 yag=location,
                 goal=goal_value,
                 mover=mover,
+                num_frames=num_frames,
+                images_dir=str(run_images_dir),
             )
         else:
             evaluator = get_evaluator_yag(
                 yag=location,
                 goal=goal_value,
                 mover=mover,
+                num_frames=num_frames,
+                images_dir=str(run_images_dir),
             )
     else:
         evaluator = get_evaluator_wave8(
@@ -343,3 +404,22 @@ def get_xopt_obj(
         evaluator=evaluator,
         dump_file=dump_file,
     )
+
+
+def test_write_permissions():
+    """
+    Simple test function to check if we can write to /cds/home/opr/mfxopr
+    """
+
+    test_dir = Path("/cds/home/opr/mfxopr")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    test_file = test_dir / f"test_write.txt"
+
+    try:
+        with open(test_file, 'w') as f:
+            f.write("This is a test to verify write permissions.\n")
+        print(f"SUCCESS: Successfully wrote test file to {test_file}")
+        return True
+    except Exception as e:
+        print(f"ERROR: Failed to write test file: {e}")
+        return False

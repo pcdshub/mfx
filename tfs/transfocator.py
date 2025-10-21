@@ -187,7 +187,7 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_10.remove()
 
 
-    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, **kwargs):
+    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], **kwargs):
 
         """
         Calculate the best lens array to hit the nominal sample point
@@ -225,7 +225,7 @@ class MFXTransfocator(TransfocatorBase):
         except AssertionError:
             logging.warning(f"please double-check that {energy} is in eV, not keV.")
         target = target or self.nominal_sample
-        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
+        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses,exclusions=exclusions)
         combo, diff = calc.find_solution(target, energy, n, z_obj, **kwargs)
         if combo:
             combo.show_info()
@@ -382,6 +382,93 @@ class MFXTransfocator(TransfocatorBase):
             status_wait(status, timeout=timeout)
         return status
 
+
+    def plan_energy_schedule(self, low_eV, high_eV, step_eV=10.0, *, target=None,
+                             n=4, z_obj=0.0, show=False):
+        """
+        Plan a schedule of lens insert/remove actions and stage offsets
+        over an energy interval without moving hardware.
+
+        Parameters
+        ----------
+        low_eV : float
+            Starting energy in eV.
+        high_eV : float
+            Ending energy in eV.
+        step_eV : float, optional
+            Energy increment in eV (default 10 eV).
+        target : float, optional
+            Desired focal plane (defaults to nominal sample).
+        n : int, optional
+            Max number of TFS lenses in combo (passed to solver).
+        z_obj : float, optional
+            Source point in solver.
+        show : bool, optional
+            If True, print combo info for each energy.
+
+        Returns
+        -------
+        list of dict
+            For each energy step, returns an entry with keys:
+              - 'energy_eV': energy value in eV
+              - 'lenses': list of lens prefixes in the planned combo
+              - 'actions': {'insert': [...], 'remove': [...]} compared to previous step
+              - 'image_target_delta': signed difference (image - target)
+              - 'stage_offset_mm': signed offset in mm to place focus at target
+        """
+        if step_eV is None or step_eV == 0:
+            raise ValueError("step_eV must be non-zero")
+
+        tgt = target or self.nominal_sample
+        # Energy sequence inclusive of high_eV
+        num_steps = int((high_eV - low_eV) // step_eV)
+        energies = [low_eV + i * step_eV for i in range(num_steps + 1)]
+        if energies[-1] < high_eV:
+            energies.append(high_eV)
+
+        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
+        schedule = []
+        prev_lenses = set()
+
+        for energy in energies:
+            combo, _diff_abs = calc.find_solution(tgt, energy, n=n, z_obj=z_obj)
+            if combo is None:
+                schedule.append({
+                    'energy_eV': energy,
+                    'lenses': [],
+                    'actions': {'insert': [], 'remove': []},
+                    'image_target_delta': None,
+                    'stage_offset_mm': None,
+                })
+                continue
+
+            if show:
+                combo.show_info()
+
+            # Determine planned lenses as prefixes for readability
+            lens_list = [lens.prefix for lens in combo.lenses]
+            lens_set = set(lens_list)
+
+            # Signed difference between image and target
+            image_pos = combo.image(z_obj, energy)
+            delta = image_pos - tgt
+            stage_offset_mm = delta * 1000.0 # convert from meters to mm
+
+            # Actions relative to previous step
+            to_insert = sorted(list(lens_set - prev_lenses))
+            to_remove = sorted(list(prev_lenses - lens_set))
+
+            schedule.append({
+                'energy_eV': energy,
+                'lenses': lens_list,
+                'actions': {'insert': to_insert, 'remove': to_remove},
+                'image_target_delta': delta,
+                'stage_offset_mm': stage_offset_mm,
+            })
+
+            prev_lenses = lens_set
+
+        return schedule
 
 class Transfocator(MFXTransfocator):
     pass

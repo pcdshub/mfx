@@ -5,14 +5,17 @@ Basic Lens object handling
 # Standard #
 ############
 import logging
+import re
+import time
 
 ###############
 # Third Party #
 ###############
 import numpy as np
 import prettytable
-from ophyd import EpicsSignalRO, EpicsSignal, Component as Cpt, Device
+from ophyd import EpicsSignalRO, EpicsSignal, Component as Cpt, Device, FormattedComponent as FCpt
 from pcdsdevices.inout import InOutPVStatePositioner
+from pcdsdevices.pv_positioner import OnePVMotor
 
 ##########
 # Module #
@@ -20,6 +23,73 @@ from pcdsdevices.inout import InOutPVStatePositioner
 import tfs.utils as ut
 
 logger = logging.getLogger(__name__)
+
+class OnePVMotorRetry(OnePVMotor):
+    """OnePVMotor with a simple retry-to-tolerance move helper.
+
+    Usage: motor.mv_retry(target, retries=3, tolerance=1e-3)
+    """
+
+    def mv_retry(self, position, *, retries=3, tolerance=1e-2, settle_time=0.2, timeout=None):
+        """Move to position with verify-and-retry until within tolerance.
+
+        Parameters
+        ----------
+        position : float
+            Desired setpoint in engineering units.
+        retries : int, optional
+            Number of additional attempts after the first move, by default 3.
+        tolerance : float, optional
+            Allowed absolute error |RBV - SP|, by default 1e-2.
+        settle_time : float, optional
+            Seconds to wait after move completion before checking RBV, by default 0.2.
+        timeout : float | None, optional
+            Move timeout passed through to the underlying move call.
+        """
+        attempts = retries + 1
+        last_readback = None
+        for attempt_index in range(attempts):
+            status = self.move(position, wait=True, timeout=timeout)
+            if settle_time and settle_time > 0:
+                time.sleep(settle_time)
+            try:
+                last_readback = self.position
+            except Exception:
+                last_readback = None
+            if last_readback is not None and abs(last_readback - position) <= tolerance:
+                return status
+            logger.warning(
+                "Motor %s missed target (attempt %d/%d): target=%s readback=%s tol=%s",
+                getattr(self, 'name', repr(self)),
+                attempt_index + 1,
+                attempts,
+                position,
+                last_readback,
+                tolerance,
+            )
+
+LENS_MOTOR_PVS = {
+    2: {'x': 'MFX:TFS:MMS:03', 'y': 'MFX:TFS:MMS:04'},
+    3: {'x': 'MFX:TFS:MMS:05', 'y': 'MFX:TFS:MMS:06'},
+    4: {'x': 'MFX:TFS:MMS:07', 'y': 'MFX:TFS:MMS:08'},
+    5: {'x': 'MFX:TFS:MMS:09', 'y': 'MFX:TFS:MMS:10'},
+    6: {'x': 'MFX:TFS:MMS:11', 'y': 'MFX:TFS:MMS:12'},
+    7: {'x': 'MFX:TFS:MMS:13', 'y': 'MFX:TFS:MMS:14'},
+    8: {'x': 'MFX:TFS:MMS:15', 'y': 'MFX:TFS:MMS:16'},
+    9: {'x': 'MFX:TFS:MMS:17', 'y': 'MFX:TFS:MMS:18'},
+    10: {'x': 'MFX:TFS:MMS:19', 'y': 'MFX:TFS:MMS:20'},
+}
+
+
+def _parse_lens_number(prefix):
+    """Parse the lens number from the device prefix.
+
+    Strategy: find the last integer substring in the prefix and use it.
+    """
+    numbers = re.findall(r'(\d+)', prefix)
+    if not numbers:
+        raise ValueError(f"Cannot parse lens number from prefix {prefix}")
+    return int(numbers[-1])
 
 
 class LensTripLimits(Device):
@@ -107,8 +177,23 @@ class MFXLens(InOutPVStatePositioner, LensCalcMixin):
     _default_configuration_attrs = ['_sig_radius', '_sig_z']
     # Signal for requested focus
     _req_focus = Cpt(EpicsSignal, ':REQ_FOCUS')
+    
+    # X/Y motors resolved from PV map based on lens number in prefix
+    x = FCpt(OnePVMotorRetry, '{x_pv}', kind='normal')
+    y = FCpt(OnePVMotorRetry, '{y_pv}', kind='normal')
 
     def __init__(self, prefix, **kwargs):
+        if 'TFS' not in prefix:
+            self.x_pv = None
+            self.y_pv = None
+        else:
+            lens_num = _parse_lens_number(prefix)
+            try:
+                mapping = LENS_MOTOR_PVS[lens_num]
+            except KeyError:
+                raise ValueError(f"Unknown lens number {lens_num} parsed from prefix {prefix}")
+            self.x_pv = mapping['x']
+            self.y_pv = mapping['y']
         super().__init__(prefix, **kwargs)
         
 
@@ -209,7 +294,7 @@ class LensConnect:
         """
         if not self.lenses:
             return 0.0
-        return 1/np.sum(np.reciprocal([float(l.radius) for l in self.lenses[1:]]))
+        return 1/np.sum(np.reciprocal([float(l.radius) for l in self.lenses if 'TFS' in getattr(l, 'prefix', '')]))
 
 
     def image(self, z_obj, energy):

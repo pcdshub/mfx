@@ -1,6 +1,7 @@
 import logging
 from ophyd.device import Component as Cpt
 from ophyd.signal import EpicsSignal
+from pcdsdevices.epics_motor import IMS
 from pcdsdevices.pv_positioner import PVPositionerDone
 from pcdsdevices import utils
 from pcdsdevices.jet import BeckhoffJet
@@ -13,7 +14,7 @@ class BypassPositionCheck(PVPositionerDone):
     actuate = Cpt(EpicsSignal, ":PLC:bMoveCmd")
 
 
-def xlj_fast_xyz(orientation='horizontal', scale=0.1):
+def xlj_6axis(orientation='horizontal', scale=0.1):
     """
     Parameters
     ----------
@@ -45,6 +46,10 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
     xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
+    xlj_fast_rx = IMS("MFX:HRA:MMS:02", name="xlj_fast_rx")
+    xlj_fast_ry = IMS("MFX:HRA:MMS:04", name="xlj_fast_ry")
+    xlj_fast_rz = IMS("MFX:HRA:MMS:03", name="xlj_fast_rz")
+
     xlj = BeckhoffJet('MFX:LJH', name='xlj')
 
     if orientation == str('horizontal').lower():
@@ -52,15 +57,25 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
         down = "\x1b[B"
         right = "\x1b[C"
         left = "\x1b[D"
+        ry_up = "w"
+        ry_down = "s"
+        rx_right = "d"
+        rx_left = "a"
 
     if orientation == str('vertical').lower():
         right = "\x1b[A"
         left = "\x1b[B"
         down = "\x1b[C"
         up = "\x1b[D"
+        rx_right = "w"
+        rx_left = "s"
+        ry_down = "d"
+        ry_up = "a"
 
     shift_up = "\x1b[1;2A"
     shift_down = "\x1b[1;2B"
+    rz_shift_up = "W"
+    rz_shift_down = "S"
     shift_right = "\x1b[1;2C"
     shift_left = "\x1b[1;2D"
     alt_up = "\x1b[1;3A"
@@ -79,9 +94,10 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
     abs_status = '{}: {:.4f}'
     exp_status = '{}: {:.4e}'
 
-    move_keys = (left, right, up, down, shift_up, shift_down)
+    move_keys = (
+        left, right, up, down, shift_up, shift_down, ry_up, ry_down, rx_right, rx_left, rz_shift_up, rz_shift_down)
     scale_keys = (plus, minus, equal, under, shift_right, shift_left)
-    motors = [xlj_fast_x, xlj_fast_y, xlj_fast_z]
+    motors = [xlj_fast_x, xlj_fast_y, xlj_fast_z, xlj_fast_rx, xlj_fast_ry, xlj_fast_rz]
 
 
     def show_status():
@@ -151,7 +167,18 @@ def xlj_fast_xyz(orientation='horizontal', scale=0.1):
                     logger.error(f'xlj.jet.z = {xlj.jet.z()}, xlj_fast_z = {xlj_fast_z()}')
                     xlj_fast_z.umv(xlj.jet.z())
                 xlj_fast_z.umvr(scale, log=False, newline=False)
-
+            elif direction == rx_left:
+                xlj_fast_rx.umvr(-scale, log=False, newline=False)
+            elif direction == rx_right:
+                xlj_fast_rx.umvr(scale, log=False, newline=False)
+            elif direction == ry_up:
+                xlj_fast_ry.umvr(scale, log=False, newline=False)
+            elif direction == ry_down:
+                xlj_fast_ry.umvr(-scale, log=False, newline=False)
+            elif direction == rz_shift_up:
+                xlj_fast_rz.umvr(-scale, log=False, newline=False)
+            elif direction == rz_shift_down:
+                xlj_fast_rz.umvr(scale, log=False, newline=False)
 
         except Exception as exc:
             logger.error('Error in tweak move: %s', exc)
