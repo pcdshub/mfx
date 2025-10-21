@@ -123,6 +123,9 @@ with safe_load('XLJ_Fast'):
     xlj_fast_rx = BypassPositionCheck("MFX:HRA:MMS:02", name="xlj_fast_rx")
     xlj_fast_ry = BypassPositionCheck("MFX:HRA:MMS:04", name="xlj_fast_ry")
     xlj_fast_rz = BypassPositionCheck("MFX:HRA:MMS:03", name="xlj_fast_rz")
+    xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
+    xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
+    xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")   
 
 with safe_load('XLJ_Fast_Rot'):
     from mfx.xlj_fast_rot import *
@@ -130,6 +133,9 @@ with safe_load('XLJ_Fast_Rot'):
     xlj_fast_rx = IMS("MFX:HRA:MMS:02", name="xlj_fast_rx")
     xlj_fast_ry = IMS("MFX:HRA:MMS:04", name="xlj_fast_ry")
     xlj_fast_rz = IMS("MFX:HRA:MMS:03", name="xlj_fast_rz")
+
+with safe_load('XLJ_6axis'):
+    from mfx.xlj_6axis import *
 
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
