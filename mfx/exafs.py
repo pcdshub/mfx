@@ -205,7 +205,7 @@ class Exafs:
             sid = RE.subscribe(self.on_event)
             try:
                 if simulate:
-                    sim.fast_motor1.mv(energy)
+                    sim.fast_motor1.mv(energy)  ###Maybe change to 2
                 else:
                     self.vernier_scan(
                         energy_scan_start_eV=energy * 1000.0 - 5,
