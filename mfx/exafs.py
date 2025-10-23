@@ -93,9 +93,9 @@ class Exafs:
         if len(wait_time) != len(energies):
             logger.error('Error: len(wait_time) is not equal to len(energies)')
             logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
-            return _, _, False
+            raise ValueError('len(wait_time) is not equal to len(energies)')
 
-        return energies, wait_time, True
+        return energies, wait_time
 
     def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize, simulate):
         """Initialize energy values for the scan."""
@@ -113,32 +113,40 @@ class Exafs:
             logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
             wait_time=wait_time[::-1]
         
-        sim = sim.get_hw()
+        sim_hw = sim.get_hw()
         dccm = DCCM(name='DCCM')
         
+        # Move energy motor
         if simulate:
-            sim.fast_motor1.mv(energy_0)
+            sim_hw.fast_motor1.mv(energy_0)
         else: 
             dccm.energy_with_vernier(energy_0)
             
+        # Move K motor
         logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             if simulate: 
-                sim.slow_motor1.mv(k_energy)
+                sim_hw.slow_motor1.mv(k_energy)
             else: 
                 self.acr_energy_k.move(k_energy)
             
         return energies, energy_0, k_energy, wait_time
 
-    def _setup_daq_and_start_recording(self, sample, picker, inspire, record):
+    def _setup_daq_and_start_recording(self, sample, picker, inspire, record, simulate, run_index):
         """Setup DAQ and start recording."""
         import logging
         logger = logging.getLogger(__name__)
+        
+        if simulate:
+            # In simulation mode, just return a run number
+            run_number = run_index + 1
+            return run_number, True
+        
+        # Real mode - setup DAQ
         from mfx.db import daq, pp
         from mfx.macros import get_run
         from mfx.autorun import quote
         from psdaq.control.DaqControl import DaqControl
-        
         
         run_number = get_run(station=0) + 1
         daq.control = DaqControl(
@@ -182,11 +190,11 @@ class Exafs:
         from hutch_python import sim
         from mfx.dccm import DCCM
         
-        sim = sim.get_hw()
+        sim_hw = sim.get_hw()
         dccm = DCCM(name='DCCM')
         
         if simulate:
-            sim.fast_motor1.mv(energy)
+            sim_hw.fast_motor1.mv(energy)
         else:
             dccm.energy_with_vernier(energy)
 
@@ -199,13 +207,13 @@ class Exafs:
         from pcdsdevices.pv_positioner import OnePVMotor
         from hutch_python import sim
         
-        sim = sim.get_hw()
+        sim_hw = sim.get_hw()
         
         if tchk:
             sid = RE.subscribe(self.on_event)
             try:
                 if simulate:
-                    sim.fast_motor2.mv(energy)  ###Maybe change to 2
+                    sim_hw.fast_motor2.mv(energy)  ## Changed to fast_motor2 to differentiate Vernier from DCCM
                 else:
                     self.vernier_scan(
                         energy_scan_start_eV=energy * 1000.0 - 5,
@@ -231,36 +239,29 @@ class Exafs:
         logger = logging.getLogger(__name__)
         from mfx.db import daq
         from hutch_python import sim
-        from mfx.dccm import DCCM
         
         prev_k_energy = copy.copy(k_energy)
         e_step = np.abs(energy - energy_0) * 1000
-        sim = sim.get_hw()
-        dccm = DCCM(name='DCCM')
+        sim_hw = sim.get_hw()
+        
         # Move K every k_stepsize
         if e_step > k_stepsize:
+            # Calculate new k_energy (same logic for both simulation and real)
+            k_energy = energy * 1000.0 + k_offset
+            if reverse:
+                k_energy = energy * 1000.0 - k_stepsize + k_offset
+                if k_energy/1000 < min_k_keV:
+                    k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
+
             if simulate:
-                k_energy = energy * 1000.0 + k_offset
-                if reverse:
-                    k_energy = energy * 1000.0 - k_stepsize + k_offset
-                    if k_energy/1000 < min_k_keV:
-                        k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
-
                 if round(k_energy, 1) != round(prev_k_energy, 1):
-                    sim.slow_motor1.mv(k_energy)
-
+                    sim_hw.slow_motor1.mv(k_energy)
                 energy_0 = energy
 
             else:
                 daq.control.setState("paused")
                 while daq.control.getState() != "paused":
                     ...
-                k_energy = energy * 1000.0 + k_offset
-                if reverse:
-                    k_energy = energy * 1000.0 - k_stepsize + k_offset
-                    if k_energy/1000 < min_k_keV:
-                        k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
-
                 logger.info(f"Moving k to {k_energy:0.0f}")
                 sleep(0.5)
                 if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
@@ -273,10 +274,18 @@ class Exafs:
                 
         return energy_0, k_energy
 
-    def _handle_keyboard_interrupt_and_cleanup(self, sample, tag, run_number, record, inspire, energy_start, k_energy_start):
+    def _handle_keyboard_interrupt_and_cleanup(self, sample, tag, run_number, record, inspire, energy_start, k_energy_start, simulate):
         """Handle KeyboardInterrupt and perform cleanup operations."""
         import logging
         logger = logging.getLogger(__name__)
+        
+        if simulate:
+            # In simulation mode, just log and return
+            logger.warning("[*] Stopping Run and exiting???...")
+            logger.warning('Run ended prematurely. Probably sample delivery problem')
+            return
+        
+        # Real mode - perform full cleanup
         from mfx.db import daq, pp
         from mfx.autorun import post
         from mfx.dccm import DCCM
@@ -408,15 +417,16 @@ class Exafs:
         from mfx.vernier import Vernier
         
         dccm = DCCM(name='DCCM')
-        vernier = Vernier()
+        vernier = Vernier()  ## Why is this here?
 
         # Build energy and wait time lists
-        energies, wait_time, correct = self._build_energy_and_wait_time(
-            energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug)
-        logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
-
-        if not correct: 
+        try:
+            energies, wait_time = self._build_energy_and_wait_time(
+                energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug)
+        except ValueError:
             return
+            
+        logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
 
         energy_start = dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
@@ -424,18 +434,14 @@ class Exafs:
         try:
             for i in range(runs):
                 # Initialize energies
-                #Move k before?
+            
                 energies, energy_0, k_energy, wait_time = self._initialize_energies_and_move(
                     energies, wait_time, reverse, k_offset, k_stepsize, simulate)
 
-
-                # Setup DAQ and start recording
-                if not simulate:
-                    run_number, daq_success = self._setup_daq_and_start_recording(sample, picker, inspire, record)
-                    if not daq_success:
-                        break
-                else: 
-                    run_number = i + 1
+                # Setup DAQ and start recording (or simulate run number)
+                run_number, daq_success = self._setup_daq_and_start_recording(sample, picker, inspire, record, simulate, i)
+                if not daq_success:
+                    break
 
                 for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
                     logger.info(f"Energy: {energy:0.4f}, Time: {point_time}")
@@ -465,8 +471,7 @@ class Exafs:
                 sleep(daq_delay)
 
         except KeyboardInterrupt:
-            if not simulate:
-                self._handle_keyboard_interrupt_and_cleanup(sample, tag, run_number, record, inspire, energy_start, k_energy_start)
+            self._handle_keyboard_interrupt_and_cleanup(sample, tag, run_number, record, inspire, energy_start, k_energy_start, simulate)
         
         if not simulate:
             self._finalize_scan(energy_start, k_energy_start)
