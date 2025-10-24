@@ -12,7 +12,7 @@ from xopt import Xopt
 from sklearn.linear_model import LinearRegression
 from .errors import FeasibilityError
 from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlot
-from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo, Movers
+from .type_checking import validate_w_lowercase_args, Diagnostics, Packages, Methods, Devices, Turbo, Movers
 from .user_select import select_diagnostic, select_goal, MP_KEY, UNDP_KEY_X, UNDP_KEY_Y
 from .constraints import constraint_data
 from .utils import snake_order
@@ -92,7 +92,8 @@ class Beam:
             fig.tight_layout()
             plot_path = str(out_dir / f"calib_scatter_{on_diagnostic}_{ts}.png")
             fig.savefig(plot_path, dpi=120)
-            plt.close(fig)
+            plt.show(block=False)
+            plt.pause(0.001)
             print(f"[calibrate] Wrote scatter plot: {plot_path}")
         except Exception as exc:
             print(f"[calibrate] Warning: failed to save plot: {exc}")
@@ -159,10 +160,6 @@ class Beam:
         Run grid scan over undp_x/undp_y, fit linear model, save coefficients.
         Returns the calibration dict.
         """
-        # Set safe bounds for undulator
-        xopt_obj.vocs.variables[UNDP_KEY_X] = [0, 200]
-        xopt_obj.vocs.variables[UNDP_KEY_Y] = [-450, -200]
-
         # Build grid in the VOCS variable space, then evaluate via connected evaluator
         df_grid = xopt_obj.vocs.grid_inputs(n=grid_bins)
         print(f"[calibrate] Grid inputs generated: shape={df_grid.shape}")
@@ -200,7 +197,11 @@ class Beam:
         grid_csv = None
         try:
             grid_csv = str(out_dir / f"calib_grid_{on_diagnostic}_{ts}.csv")
-            res[[UNDP_KEY_X, UNDP_KEY_Y, "centroid_x", "centroid_y"]].to_csv(grid_csv, index=False)
+            cols = [UNDP_KEY_X, UNDP_KEY_Y, "centroid_x", "centroid_y"]
+            for extra_col in ("wave8_x", "wave8_y", "wave8_sum"):
+                if extra_col in res.columns:
+                    cols.append(extra_col)
+            res[cols].to_csv(grid_csv, index=False)
             print(f"[calibrate] Wrote grid preview CSV: {grid_csv}")
         except Exception as exc:
             print(f"[calibrate] Warning: failed to write grid CSV: {exc}")
@@ -240,29 +241,41 @@ class Beam:
         """Calibrate, fit linear model, solve for undulator position"""
         if mover != "und":
             raise ValueError(f"Only 'und' mover is supported for calibration.")
-        if using_device != "yag":
-            raise ValueError(f"Only 'yag' device is supported for calibration.")
+        # if using_device != "yag":
+        #     raise ValueError(f"Only 'yag' device is supported for calibration.")
         if not isinstance(goal, tuple) or len(goal) != 2:
             raise ValueError(f"Goal must be a tuple of two floats.")
 
         from .xopt_scans import evaluator_move
         
         print(f"[_calib] Checking calibration freshness...")
-        fresh = self.check_calibration(on_diagnostic=on_diagnostic, xopt_obj=xopt, threshold_sigma=2.0)
-        if fresh: 
+        fresh = self.check_calibration(
+            on_diagnostic=on_diagnostic, xopt_obj=xopt, threshold_sigma=2.0
+        )
+        if fresh:
             calib = self._load_calibration(on_diagnostic)
-            print(f"[_calib] Calibration is fresh, using calibration from {calib.get('timestamp')}")
+            print(
+                f"[_calib] Calibration is fresh, using calibration from {calib.get('timestamp')}"
+            )
         else:
-            print(f"[_calib] Calibration is stale, running calibrate() with grid_bins={grid_bins}...")
-            calib = self.calibrate(xopt_obj=xopt, on_diagnostic=on_diagnostic, grid_bins=grid_bins)
+            print(
+                f"[_calib] Calibration is stale, running calibrate() with grid_bins={grid_bins}..."
+            )
+            calib = self.calibrate(
+                xopt_obj=xopt, on_diagnostic=on_diagnostic, grid_bins=grid_bins
+            )
 
         print(f"[_calib] Solving for undulator position to achieve goal {goal}...")
         undp_xy = self._undp_solve(goal, calib)
         print(f"[_calib] Moving to undulator position {undp_xy}...")
-        evaluator_move(mover=mover, input={UNDP_KEY_X: undp_xy[0], UNDP_KEY_Y: undp_xy[1]})
+        evaluator_move(
+            mover=mover, input={UNDP_KEY_X: undp_xy[0], UNDP_KEY_Y: undp_xy[1]}
+        )
         return xopt
 
-    def _turbo(self, xopt, path_plot, xopt_rand_evaluate, xopt_steps, mover, xopt_turbo_option):
+    def _turbo(
+        self, xopt, path_plot, xopt_rand_evaluate, xopt_steps, mover, xopt_turbo_option
+    ):
         """Execute turbo optimization method."""
         from .xopt_scans import evaluator_move, get_variables
         
@@ -338,27 +351,27 @@ class Beam:
 
     @validate_w_lowercase_args
     def align(
-            self,
-            with_goal: Optional[float] = None,
-            on_diagnostic: Diagnostics = "dg1",
-            with_package: Methods = "xopt",
-            with_method: str = "turbo",
-            using_device: Devices = "yag",
-            mover: Movers = "mirr",
-            xopt_turbo_option: Turbo = "safety",
-            xopt_rand_evaluate: int = 3,
-            xopt_steps: int = 10,
-            xopt_max_iter: int = 2000,
-            blop_qr_n: int = 16,
-            blop_qei_n: int = 16,
-            blop_qei_iterations: int = 5,
-            use_2d_markers: bool = False,
-            with_goal_2d: Optional[tuple[float, float]] = None,
-            xopt_obj: Optional[Xopt] = None,
-            save_run: bool = True,
-            num_frames: int = 1,
-            grid_bins: int = 5
-            ):
+        self,
+        with_goal: Optional[float] = None,
+        on_diagnostic: Diagnostics = "dg1",
+        with_package: Packages = "xopt",
+        with_method: Methods = "turbo",
+        using_device: Devices = "yag",
+        mover: Movers = "mirr",
+        xopt_turbo_option: Turbo = "optimize",  # changed from safety to optimize to allow for wave8 optimization (which currently doesn't have constraints)
+        xopt_rand_evaluate: int = 3,
+        xopt_steps: int = 10,
+        xopt_max_iter: int = 2000,
+        blop_qr_n: int = 16,
+        blop_qei_n: int = 16,
+        blop_qei_iterations: int = 5,
+        use_2d_markers: bool = False,
+        with_goal_2d: Optional[tuple[float, float]] = None,
+        xopt_obj: Optional[Xopt] = None,
+        save_run: bool = True,
+        num_frames: int = 1,
+        grid_bins: int = 5,
+    ):
         """Perform Beam Alignment
 
         Parameters
@@ -401,9 +414,20 @@ class Beam:
         grid_bins: int, optional
             Number of grid bins for calibration. Default is 5.
         """
-        # Validate goal with not doing 2d optimization using camera markers
-        if (using_device=="wave8" or not use_2d_markers) and not with_goal:
-            raise ValueError("Must provide parameter with_goal (float) for running YAG or wave8 optimization.")
+        # Validate goals
+        if using_device == "wave8" and (with_goal is None and with_goal_2d is None):
+            raise ValueError(
+                "Wave8 requires with_goal (float) or with_goal_2d (tuple[float,float])."
+            )
+        if (
+            using_device == "yag"
+            and (not use_2d_markers)
+            and (with_goal is None)
+            and (with_goal_2d is None)
+        ):
+            raise ValueError(
+                "YAG requires with_goal (float) or with_goal_2d, or use_2d_markers=True."
+            )
 
         path_plot = None
         if with_package == "xopt":
@@ -445,18 +469,18 @@ class Beam:
                     dump_file=dump_file,
                     num_frames=num_frames,
                 )
+                goal = select_goal(
+                    device_type=using_device,
+                    location=on_diagnostic,
+                    goal=with_goal,
+                    goal_2d=with_goal_2d,
+                    use_2d_markers=use_2d_markers,
+                )
                 if using_device == "yag":
                     print("Generating path plot")
-                    goal = select_goal(
-                            device_type=using_device,
-                            location=on_diagnostic,
-                            goal=with_goal,
-                            goal_2d=with_goal_2d,
-                            use_2d_markers=use_2d_markers,
-                        )
                     path_plot = UpdatingDeviceCentroidPathPlot(
                         imager=select_diagnostic("yag", on_diagnostic),
-                        goal= goal,
+                        goal=goal,
                         constraints=constraint_data.yag.get(on_diagnostic),
                     )
                     xopt._cached_path_plot = path_plot
