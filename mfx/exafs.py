@@ -198,8 +198,13 @@ class Exafs:
         else:
             dccm.energy_with_vernier(energy)
 
-    def _perform_vernier_alignment(self, energy, tchk, simulate, inspire):
-        """Perform Vernier alignment with DCCM (tchk functionality)."""
+    def _perform_vernier_alignment_OLD(self, energy, tchk, simulate, inspire):
+        """
+        OLD METHOD - PRESERVED FOR REFERENCE
+        Perform Vernier alignment with DCCM (tchk functionality).
+        This method is kept for reference but is no longer used.
+        Use the new VernierCalibration system instead.
+        """
         import logging
         logger = logging.getLogger(__name__)
         from mfx.db import RE
@@ -451,7 +456,24 @@ class Exafs:
                     self._move_energy_simulation_or_real(energy, simulate)
                     
                     # Perform Vernier alignment if needed
-                    self._perform_vernier_alignment(energy, tchk, simulate, inspire)
+                    # OLD METHOD - COMMENTED OUT FOR NEW CALIBRATION SYSTEM
+                    # self._perform_vernier_alignment(energy, tchk, simulate, inspire)
+                    
+                    # NEW METHOD - Using VernierCalibration system
+                    if tchk and not simulate:
+                        from vernier_calibration import VernierCalibration
+                        vernier_calib = VernierCalibration()
+                        # Use intensity-based alignment with calibration if available
+                        # Will NOT interrupt scan to perform calibration - only uses existing fresh calibration
+                        success = vernier_calib.align_to_dccm(
+                            target_energy_eV=energy * 1000.0,
+                            use_calibration=True,  # Only uses calibration if it exists and is fresh
+                            energy_range_eV=10.0,
+                            energy_steps=11,
+                            events_per_step=12
+                        )
+                        if not success:
+                            logger.warning(f"Vernier alignment failed at energy {energy:.4f} keV")
 
                     # Move K if necessary
                     energy_0, k_energy = self._move_k_if_necessary(energy, k_energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV, simulate)
@@ -467,7 +489,7 @@ class Exafs:
                         run_number=run_number, 
                         post=record, 
                         inspire=inspire,
-                        daq_num=2,)
+                        daq_num=2)
                 sleep(daq_delay)
 
         except KeyboardInterrupt:
@@ -558,6 +580,31 @@ class Exafs:
                 daq_num=2,
                 add_note=f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, steps:{energy_scan_steps}eV @ {events_per_step} events per step')
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+    def calibrate_vernier(self, energy_start_eV: float, energy_end_eV: float, 
+                         energy_steps: int = 10, events_per_step: int = 120):
+        """
+        Perform vernier calibration to determine energy-vernier offset relationship.
+        
+        Parameters
+        ----------
+        energy_start_eV : float
+            Starting energy for calibration scan
+        energy_end_eV : float
+            Ending energy for calibration scan
+        energy_steps : int
+            Number of energy steps in calibration scan
+        events_per_step : int
+            Number of events per step
+        """
+        from vernier_calibration import VernierCalibration
+        vernier_calib = VernierCalibration()
+        return vernier_calib.calibrate(
+            energy_start_eV=energy_start_eV,
+            energy_end_eV=energy_end_eV,
+            energy_steps=energy_steps,
+            events_per_step=events_per_step
+        )
 
 
     def continuous_dccmscan(
