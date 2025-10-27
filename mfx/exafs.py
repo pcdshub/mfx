@@ -3,6 +3,9 @@ class Exafs:
     from ophyd import EpicsSignalRO
     from hutch_python import sim
 
+    def __init__(self):
+        self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
+
     sim = sim.get_hw()
     # DG1 IPM SUM PV (read-only)
     ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
@@ -48,7 +51,7 @@ class Exafs:
         
         if len(energies_list) == 0 or len(wait_time_list) == 0:
             #from mfx.exafs_energy_range_builder import EXAFSEnergyRangeBuilder
-            EXAFSEnergyRangeBuilder = EXAFSEnergyRangeBuilder()
+            EXAFSEnergyRangeBuilder = self.exafs_energy_range_builder #EXAFSEnergyRangeBuilder()
             foil_energies = {'Sc': 4492.8, 'Ti': 4966.4, 'V': 5465.1, 'Cr': 5989.2, 'Mn': 6539.0, 'Fe': 7111.2,
                     'Co': 7708.9, 'Ni': 8332.8, 'Cu': 8978.9, 'Zn': 9658.6}
             threshold_energies = {'Ti': 4985.00, 'Sc': 4510.00, 'V': 5485.00, 'Cr': 6010.00, 'Mn': 6560.00,
