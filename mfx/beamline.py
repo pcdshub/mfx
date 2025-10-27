@@ -168,7 +168,7 @@ with safe_load('EXAFS'):
     exafs = Exafs()
 
 with safe_load('EXAFS_Builder'):
-    from mfx.exafs_energy_range_builder import *
+    from mfx.exafs import EXAFSEnergyRangeBuilder
     exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
 # with safe_load("laser wp power"):
