@@ -11,6 +11,8 @@ from sklearn.linear_model import LinearRegression
 from ophyd import EpicsSignalRO
 from pcdsdevices.pv_positioner import OnePVMotor
 import logging
+from __future__ import annotations
+
 
 logger = logging.getLogger(__name__)
 
