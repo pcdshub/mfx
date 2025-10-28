@@ -513,7 +513,7 @@ class MFXTransfocator(TransfocatorBase):
 
         for E in energies[1:]:
             f_len = focal_length(radius=combo.tfs_radius, energy=E)
-            target = z_top_mm - (f_len - reference_length)
+            target = z_top_mm - (f_len - reference_length)*1000
             print(f"Energy {E:.2f} eV: computed focal length = {f_len:.3f}, target z = {target:.3f}")
 
             if target > (z_low + margin_mm):
@@ -532,7 +532,7 @@ class MFXTransfocator(TransfocatorBase):
                 combo = self.find_best_combo(energy_eV=E, show=show)
 
                 new_f = focal_length(radius=combo.tfs_radius, energy=E)
-                new_target = z_top_mm - (new_f - reference_length)
+                new_target = z_top_mm - (new_f - reference_length)*1000
                 print(f"New combo: focal length = {new_f:.3f}, new target z = {new_target:.3f}")
 
                 if new_target < (z_low + margin_mm):
