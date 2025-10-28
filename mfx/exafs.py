@@ -1,12 +1,25 @@
+import copy
+import numpy as np
+import sys
+from time import sleep
+
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
     from ophyd import EpicsSignalRO
-    from hutch_python import sim
 
     def __init__(self):
-        self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
+        import logging
+        from mfx.dccm import DCCM
+        from mfx.vernier import Vernier
+        from hutch_python import sim
 
-    sim = sim.get_hw()
+        self.logger = logging.getLogger(__name__)
+        self.dccm = DCCM(name='DCCM')
+        self.vernier = Vernier()
+        self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
+        self.simulate = False
+        self.sim = sim.get_hw()
+
     # DG1 IPM SUM PV (read-only)
     ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
 
@@ -41,17 +54,10 @@ class Exafs:
         acr_status_suffix='AO805', pv_index=2
     )
 
-
     def _build_energy_and_wait_time(self, energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug):
         """Build energy and wait time lists for EXAFS scan."""
-        import numpy as np
-        import logging
-        logger = logging.getLogger(__name__)
-        import sys
         
         if len(energies_list) == 0 or len(wait_time_list) == 0:
-            #from mfx.exafs_energy_range_builder import EXAFSEnergyRangeBuilder
-            EXAFSEnergyRangeBuilder = self.exafs_energy_range_builder #EXAFSEnergyRangeBuilder()
             foil_energies = {'Sc': 4492.8, 'Ti': 4966.4, 'V': 5465.1, 'Cr': 5989.2, 'Mn': 6539.0, 'Fe': 7111.2,
                     'Co': 7708.9, 'Ni': 8332.8, 'Cu': 8978.9, 'Zn': 9658.6}
             threshold_energies = {'Ti': 4985.00, 'Sc': 4510.00, 'V': 5485.00, 'Cr': 6010.00, 'Mn': 6560.00,
@@ -64,7 +70,7 @@ class Exafs:
                 if end_eV > threshold_energies[element]:
                     max_k = (0.2625 * (end_eV - threshold_energies[element]))**0.5
 
-            energies, wait_time, energy_K_range, K_values = EXAFSEnergyRangeBuilder.build_energy_range(
+            energies, wait_time, energy_K_range, K_values = self.exafs_energy_range_builder.build_energy_range(
                 min_before_pre_edge=start_eV,
                 max_before_pre_edge=start_eV + 70,
                 preedge_end=preedge_end,
@@ -94,53 +100,40 @@ class Exafs:
             wait_time = wait_time_list
 
         if len(wait_time) != len(energies):
-            logger.error('Error: len(wait_time) is not equal to len(energies)')
-            logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
+            self.logger.error('Error: len(wait_time) is not equal to len(energies)')
+            self.logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
             raise ValueError('len(wait_time) is not equal to len(energies)')
+        else:
+            self.logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
 
         return energies, wait_time
 
-    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize, simulate):
+    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize):
         """Initialize energy values for the scan."""
-        import logging
-        logger = logging.getLogger(__name__)
-        from hutch_python import sim
-        from mfx.dccm import DCCM
         
-        energy_0 = energies[0]/1000.0  # energy at the beginning or after a und K step
-        k_energy = energy_0 * 1000.0 + k_offset
+        energy_0_keV = energies[0]/1000.0  # energy at the beginning or after a und K step
+        k_energy = energy_0_keV * 1000.0 + k_offset
         if reverse:
             energies=energies[::-1]
-            energy_0=energies[0]/1000.0
-            k_energy = energy_0 * 1000.0 - k_stepsize + k_offset
-            logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
+            energy_0_keV=energies[0]/1000.0
+            k_energy = energy_0_keV * 1000.0 - k_stepsize + k_offset
+            self.logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
             wait_time=wait_time[::-1]
         
-        sim_hw = sim.get_hw()
-        dccm = DCCM(name='DCCM')
-        
         # Move energy motor
-        if simulate:
-            sim_hw.fast_motor1.mv(energy_0)
-        else: 
-            dccm.energy_with_vernier(energy_0)
+        self._move_dccm_energy_with_vernier(energy_0_keV)
             
         # Move K motor
-        logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+        self.logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
-            if simulate: 
-                sim_hw.slow_motor1.mv(k_energy)
-            else: 
-                self.acr_energy_k.move(k_energy)
+            self._move_k_energy(k_energy)
             
-        return energies, energy_0, k_energy, wait_time
+        return energies, energy_0_keV, k_energy, wait_time
 
-    def _setup_daq_and_start_recording(self, sample, picker, inspire, record, simulate, run_index):
+    def _setup_daq_and_start_recording(self, sample, picker, inspire, record, run_index):
         """Setup DAQ and start recording."""
-        import logging
-        logger = logging.getLogger(__name__)
         
-        if simulate:
+        if self.simulate:
             # In simulation mode, just return a run number
             run_number = run_index + 1
             return run_number, True
@@ -159,14 +152,14 @@ class Exafs:
         )
         instr = daq.control.getInstrument()
         if instr is None:
-            logger.error('Failed to connect to LCLS-II DAQ')
+            self.logger.error('Failed to connect to LCLS-II DAQ')
             return None, False
         start_state = daq.control.getState()
         if start_state == 'error':
-            logger.error('DAQ is in an error state.')
+            self.logger.error('DAQ is in an error state.')
             return None, False
 
-        logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+        self.logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
         if sample.lower()=='water' or sample.lower()=='h2o':
             inspire=True
         if picker=='open':
@@ -188,160 +181,121 @@ class Exafs:
             
         return run_number, True
 
-    def _move_energy_simulation_or_real(self, energy, simulate):
-        """Move energy either in simulation or real mode."""
-        from hutch_python import sim
-        from mfx.dccm import DCCM
-        
-        sim_hw = sim.get_hw()
-        dccm = DCCM(name='DCCM')
-        
-        if simulate:
-            sim_hw.fast_motor1.mv(energy)
+    def _move_dccm_energy_with_vernier(self, energy_keV):
+        """Move energy with both DCCM and Vernier."""
+        if self.simulate:
+            self.sim.fast_motor1.mv(energy_keV)
         else:
-            dccm.energy_with_vernier(energy)
+            self.dccm.energy_with_vernier(energy_keV)
 
-    def _perform_vernier_alignment_OLD(self, energy, tchk, simulate, inspire):
-        """
-        OLD METHOD - PRESERVED FOR REFERENCE
-        Perform Vernier alignment with DCCM (tchk functionality).
-        This method is kept for reference but is no longer used.
-        Use the new VernierCalibration system instead.
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-        from mfx.db import RE
-        from ophyd import EpicsSignal
-        from pcdsdevices.pv_positioner import OnePVMotor
-        from hutch_python import sim
-        
-        sim_hw = sim.get_hw()
-        
-        if tchk:
-            sid = RE.subscribe(self.on_event)
-            try:
-                if simulate:
-                    sim_hw.fast_motor2.mv(energy)  ## Changed to fast_motor2 to differentiate Vernier from DCCM
-                else:
-                    self.vernier_scan(
-                        energy_scan_start_eV=energy * 1000.0 - 5,
-                        energy_scan_end_eV=energy * 1000.0 + 5,
-                        energy_scan_steps=11,  # 5 left, center, 5 right
-                        tchk = tchk,
-                        inspire = inspire,
-                        events_per_step=12,
-                        record=False,
-                        mcc="vernier")
-            finally:
-                RE.unsubscribe(sid)
-            if self.best["eV"] is not None:
-                OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="mcc").move(self.best["eV"]).wait()
-                self.best = {"i0": float("-inf"), "eV": None}
+    def _move_k_energy(self, k_energy):
+        """Move K energy."""
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_energy)
+        else:
+            self.acr_energy_k.move(k_energy)
 
-    def _move_k_if_necessary(self, energy, k_energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV, simulate):
+    def _align_vernier_to_dccm(self, energy, tchk):
+        # NEW METHOD - Using VernierCalibration system
+        if tchk and not self.simulate:
+            from vernier_calibration import VernierCalibration
+            vernier_calib = VernierCalibration()
+            # Use intensity-based alignment with calibration if available
+            # Will NOT interrupt scan to perform calibration - only uses existing fresh calibration
+            success = vernier_calib.align_to_dccm(
+                target_energy_eV=energy,
+                use_calibration=True,  # Only uses calibration if it exists and is fresh
+                energy_range_eV=10.0,
+                energy_steps=11,
+                events_per_step=12
+            )
+            if not success:
+                self.logger.warning(f"Vernier alignment failed at energy {energy/1000:.4f} keV")
+
+    def _move_k_if_necessary(self, energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
-        import numpy as np
-        import logging
-        from time import sleep
-        import copy
-        logger = logging.getLogger(__name__)
         from mfx.db import daq
-        from hutch_python import sim
-        
-        prev_k_energy = copy.copy(k_energy)
-        e_step = np.abs(energy - energy_0) * 1000
-        sim_hw = sim.get_hw()
+
+        if simulate:
+            prev_k_energy = copy.copy(k_energy)
+        else:
+            prev_k_energy = self.acr_energy_k.get().setpoint
+
+        e_step = np.abs(energy_keV - energy_0_keV) * 1000
         
         # Move K every k_stepsize
         if e_step > k_stepsize:
             # Calculate new k_energy (same logic for both simulation and real)
-            k_energy = energy * 1000.0 + k_offset
+            k_energy = energy_keV * 1000.0 + k_offset
             if reverse:
-                k_energy = energy * 1000.0 - k_stepsize + k_offset
+                k_energy = energy_keV * 1000.0 - k_stepsize + k_offset
                 if k_energy/1000 < min_k_keV:
                     k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
-            if simulate:
-                if round(k_energy, 1) != round(prev_k_energy, 1):
-                    sim_hw.slow_motor1.mv(k_energy)
-                energy_0 = energy
+            if round(k_energy, 1) != round(prev_k_energy, 1):
+                if not self.simulate:
+                    daq.control.setState("paused")
+                    while daq.control.getState() != "paused":
+                        ...
+                    self.logger.info(f"Moving k to {k_energy:0.0f}")
+                    sleep(0.5)
 
-            else:
-                daq.control.setState("paused")
-                while daq.control.getState() != "paused":
-                    ...
-                logger.info(f"Moving k to {k_energy:0.0f}")
-                sleep(0.5)
-                if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
-                    self.acr_energy_k.move(k_energy)
-                energy_0 = energy
+                self._move_k_energy(k_energy)
 
-                daq.control.setState("running")
-                while daq.control.getState() != "running":
-                    ...
+                if not self.simulate:
+                    daq.control.setState("running")
+                    while daq.control.getState() != "running":
+                        ...
+
+            energy_0_keV = energy_keV
                 
-        return energy_0, k_energy
+        return energy_0_keV, k_energy
 
-    def _handle_keyboard_interrupt_and_cleanup(self, sample, tag, run_number, record, inspire, energy_start, k_energy_start, simulate):
-        """Handle KeyboardInterrupt and perform cleanup operations."""
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        if simulate:
-            # In simulation mode, just log and return
-            logger.warning("[*] Stopping Run and exiting???...")
-            logger.warning('Run ended prematurely. Probably sample delivery problem')
-            return
-        
-        # Real mode - perform full cleanup
+    def _wait(self, wait_time):
+        if np.isnan(wait_time):
+            wait_time = 0.1
+        sleep(wait_time)
+
+    def _return_to_start(self, energy_start, k_energy_start):
+        """Finalize scan and return to initial positions."""
         from mfx.db import daq, pp
-        from mfx.autorun import post
-        from mfx.dccm import DCCM
-        
-        dccm = DCCM(name='DCCM')
-        
-        daq.control.setState("configured")
-        while daq.control.getState() != "configured":
-            ...
-        daq.control.setRecord(False)
-        daq.control.setState("running")
-        pp.close()
-        if record:
+
+        if self.simulate:
+            k_energy = k_energy_start
+        else:
+            k_energy = self.acr_energy_k.get().setpoint
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setRecord(False)
+            daq.control.setState("running")
+            pp.close()
+
+        self.logger.info('Returning to initial position')
+        self._move_dccm_energy_with_vernier(energy_start)
+        if round(k_energy_start, 1) != round(k_energy, 1):
+            self._move_k_energy(k_energy_start)
+
+    def _handle_keyboard_interrupt_and_cleanup(self, sample, tag, run_number, record, inspire, energy_start, k_energy_start):
+        """Handle KeyboardInterrupt and perform cleanup operations."""
+        if not self.simulate and record:
+            from mfx.autorun import post
             post(
-                sample=sample, 
-                tag=tag, 
-                run_number=run_number, 
-                post=record, 
+                sample=sample,
+                tag=tag,
+                run_number=run_number,
+                post=record,
                 inspire=inspire,
                 daq_num=2,
                 add_note='Run ended prematurely. Probably sample delivery problem')
-        logger.warning("[*] Stopping Run and exiting???...")
-        logger.info('Returning to initial position')
-        dccm.energy_with_vernier(energy_start)
-        if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
-            self.acr_energy_k.move(k_energy_start)
-        logger.warning('Run ended prematurely. Probably sample delivery problem')
+        self.logger.warning("[*] Stopping Run and exiting???...")
+        self._return_to_start(energy_start, k_energy_start)
+        self.logger.warning('Run ended prematurely. Probably sample delivery problem')
 
     def _finalize_scan(self, energy_start, k_energy_start):
         """Finalize scan and return to initial positions."""
-        import logging
-        logger = logging.getLogger(__name__)
-        from mfx.db import daq, pp
-        from mfx.dccm import DCCM
-        
-        dccm = DCCM(name='DCCM')
-        
-        pp.close()
-        logger.info('Returning to initial position')
-        dccm.energy_with_vernier(energy_start)
-        if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
-            self.acr_energy_k.move(k_energy_start)
-        daq.control.setState("configured")
-        while daq.control.getState() != "configured":
-            ...
-        daq.control.setRecord(False)
-        daq.control.setState("running")
-        logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+        self._return_to_start(energy_start, k_energy_start)
+        self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     def long_escan(
             self,
@@ -415,75 +369,55 @@ class Exafs:
             k_offset: float
                 Offset in eV for undulator K motion request.
         """
-        import numpy as np
-        import logging
-        logger = logging.getLogger(__name__)
-        from time import sleep
-        import os
         from mfx.autorun import post
-        from mfx.dccm import DCCM
-        from mfx.vernier import Vernier
-        
-        dccm = DCCM(name='DCCM')
-        vernier = Vernier()  ## Why is this here?
 
-        # Build energy and wait time lists
-        try:
-            energies, wait_time = self._build_energy_and_wait_time(
-                energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug)
-        except ValueError:
-            return
-            
-        logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
+        self.simulate = simulate
 
-        energy_start = dccm.energy_with_vernier.energy()
+        energies, wait_times = self._build_energy_and_wait_time(
+            energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug
+        )
+
+        energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
         try:
             for i in range(runs):
                 # Initialize energies
-            
-                energies, energy_0, k_energy, wait_time = self._initialize_energies_and_move(
-                    energies, wait_time, reverse, k_offset, k_stepsize, simulate)
+                energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
+                    energies, wait_times, reverse, k_offset, k_stepsize
+                )
 
                 # Setup DAQ and start recording (or simulate run number)
-                run_number, daq_success = self._setup_daq_and_start_recording(sample, picker, inspire, record, simulate, i)
+                run_number, daq_success = self._setup_daq_and_start_recording(
+                    sample, picker, inspire, record, i
+                )
                 if not daq_success:
                     break
 
-                for ii, (energy, point_time) in enumerate(zip(energies, wait_time)):
-                    logger.info(f"Energy: {energy:0.4f}, Time: {point_time}")
-                    energy = energy / 1000.0
+                # Start Energy scan
+                for ii, (energy, wait_time) in enumerate(zip(energies, wait_times)):
+                    self.logger.info(f"Energy: {energy:0.4f}, Time: {wait_time}")
+                    energy_keV = energy / 1000.0
+
+                    # Move TFS to energy
                     
-                    # Move energy (simulation or real)
-                    self._move_energy_simulation_or_real(energy, simulate)
+                    # Move DCCM and Vernier to energy
+                    self._move_dccm_energy_with_vernier(energy_keV)
                     
                     # Perform Vernier alignment if needed
-                    # OLD METHOD - COMMENTED OUT FOR NEW CALIBRATION SYSTEM
-                    # self._perform_vernier_alignment(energy, tchk, simulate, inspire)
-                    
-                    # NEW METHOD - Using VernierCalibration system
-                    if tchk and not simulate:
-                        from vernier_calibration import VernierCalibration
-                        vernier_calib = VernierCalibration()
-                        # Use intensity-based alignment with calibration if available
-                        # Will NOT interrupt scan to perform calibration - only uses existing fresh calibration
-                        success = vernier_calib.align_to_dccm(
-                            target_energy_eV=energy * 1000.0,
-                            use_calibration=True,  # Only uses calibration if it exists and is fresh
-                            energy_range_eV=10.0,
-                            energy_steps=11,
-                            events_per_step=12
-                        )
-                        if not success:
-                            logger.warning(f"Vernier alignment failed at energy {energy:.4f} keV")
+                    self._align_vernier_to_dccm(energy, tchk)
 
                     # Move K if necessary
-                    energy_0, k_energy = self._move_k_if_necessary(energy, k_energy, energy_0, k_stepsize, k_offset, reverse, min_k_keV, simulate)
-                    
-                    if np.isnan(point_time):
-                        point_time=0.1
-                    sleep(point_time)
+                    energy_0_keV, k_energy = self._move_k_if_necessary(
+                        energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV
+                    )
+
+                    # Move XRT spectrometer camera if necessary
+
+                    # Adjust undulator pointing on DCCM
+
+                    # Wait before moving on
+                    self._wait(wait_time)
 
                 if record:
                     post(
@@ -496,13 +430,15 @@ class Exafs:
                 sleep(daq_delay)
 
         except KeyboardInterrupt:
-            self._handle_keyboard_interrupt_and_cleanup(sample, tag, run_number, record, inspire, energy_start, k_energy_start, simulate)
-        
-        if not simulate:
-            self._finalize_scan(energy_start, k_energy_start)
+            self._handle_keyboard_interrupt_and_cleanup(
+                sample, tag, run_number, record, inspire, energy_start, k_energy_start
+            )
+
+        self._finalize_scan(energy_start, k_energy_start)
         return
 
 
+### START OF TRASH? ###
     def vernier_scan(
             self,
             energy_scan_start_eV: float,
@@ -533,11 +469,7 @@ class Exafs:
         
 
         """
-        from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
-        import sys
-        import logging
-        logger = logging.getLogger(__name__)
         try:
             from mfx.db import RE, pp, daq
             from mfx.autorun import quote, post
@@ -553,7 +485,7 @@ class Exafs:
         elif mcc.lower() == 'k':
             mcc_pv = 'MFX:USER:MCC:EPHOT:SET2'
         else:
-            logger.error('Please enter spread type of vernier or k only')
+            self.logger.error('Please enter spread type of vernier or k only')
             sys.exit()
 
         mcc_pv_motor = OnePVMotor(mcc_pv, name="mcc")
@@ -573,7 +505,7 @@ class Exafs:
 
         if record:
             run_number = get_run(station=0) + 1
-            logger.info(f"Run Number {run_number} Running {tchk}......{quote()['quote']}")
+            self.logger.info(f"Run Number {run_number} Running {tchk}......{quote()['quote']}")
             post(
                 sample=tchk, 
                 tag=tchk, 
@@ -582,7 +514,7 @@ class Exafs:
                 inspire=inspire,
                 daq_num=2,
                 add_note=f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, steps:{energy_scan_steps}eV @ {events_per_step} events per step')
-        logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+        self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     def calibrate_vernier(self, energy_start_eV: float, energy_end_eV: float, 
                          energy_steps: int = 10, events_per_step: int = 120):
@@ -608,7 +540,6 @@ class Exafs:
             energy_steps=energy_steps,
             events_per_step=events_per_step
         )
-
 
     def continuous_dccmscan(
             self,
@@ -749,7 +680,7 @@ class Exafs:
         lxt_fast.set_current_position(0)
         lxt_fast_enc.set_zero()
         return
-
+#### END OF TRASH? ###
 
 class EXAFSEnergyRangeBuilder:
     """
