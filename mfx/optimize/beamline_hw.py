@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from happi import Client
 from ophyd.device import Device
 from ophyd.sim import SynAxis, SynSignal
+from ophyd import EpicsSignalRO
+from pcdsdevices.pv_positioner import OnePVMotor
 from pcdsdevices.ipm import Wave8
 
 from .constraints import constraint_data
@@ -64,6 +66,11 @@ def init_devices(force: bool = False) -> dict[str, Device]:
     und_abs = UndPointAbs2DMFX()
     devices["und_abs"] = und_abs
     devices["und_del"] = und_abs.delta_xy
+
+    # Add vernier calibration devices
+    devices["vernier_dccm_energy"] = EpicsSignalRO("MFX:DCCM:ENERGY", name="vernier_dccm_energy")
+    devices["vernier_energy"] = OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="vernier_energy")
+    devices["vernier_intensity"] = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="vernier_intensity")
 
     return devices
 
@@ -200,6 +207,121 @@ def sim_devices() -> dict[str, Device]:
     devices["mfx_dg2_yag"].kind = "hinted"
     devices["xcs_yag1"].kind = "hinted"
     devices["mfx_ip_yag"].kind = "hinted"
+
+    # Add simulated vernier devices
+    # Create a mutable container to track current position
+    class PosTracker:
+        def __init__(self, value):
+            self.value = value
+    
+    pos_tracker = PosTracker(7000.0)
+    
+    class TrackingSynAxis(SynAxis):
+        """SynAxis that tracks its position for use in derived signals."""
+        def __init__(self, name, value, pos_tracker):
+            super().__init__(name=name, value=value)
+            self.pos_tracker = pos_tracker
+            # Store initial value
+            self._value = value
+            
+        def move(self, position, **kwargs):
+            self._value = float(position)
+            self.pos_tracker.value = float(position)
+            # SynAxis doesn't have move(), use set() instead
+            result = super().set(position, **kwargs)
+            return result
+            
+        def set(self, value, **kwargs):
+            self._value = float(value)
+            self.pos_tracker.value = float(value)
+            result = super().set(value, **kwargs)
+            return result
+            
+        def put(self, value, **kwargs):
+            """Override put to also update tracker when bluesky uses it."""
+            self._value = float(value)
+            self.pos_tracker.value = float(value)
+            return super().put(value, **kwargs)
+            
+        @property
+        def position(self):
+            """Make position property return current value."""
+            return self._value if hasattr(self, '_value') else self.pos_tracker.value
+        
+        def get(self):
+            """Override get to return current tracked position."""
+            return self.pos_tracker.value
+    
+    vernier_axis = TrackingSynAxis(name="vernier_energy", value=7000.0, pos_tracker=pos_tracker)
+    devices["vernier_energy"] = vernier_axis
+    
+    # Create signals that dynamically calculate DCCM and intensity based on current vernier position
+    # Use lambda to force fresh reading each time
+    def get_fake_dccm_energy():
+        """Calculate DCCM energy from vernier position with realistic offset."""
+        # Read fresh value from tracker each time (closure captures the mutable object)
+        vernier_pos = float(pos_tracker.value)
+        
+        # In REAL hardware, DCCM energy is a FIXED value set by the double crystal monochromator
+        # The offset = DCCM - Vernier is what changes as we move the vernier
+        # So: DCCM = vernier + offset
+        
+        # Simulate offset that varies with energy: offset = a0 + a1 * energy
+        # Use realistic calibration coefficients
+        a0 = -20.0  # eV baseline offset
+        a1 = 0.02   # eV per eV (2% variation)
+        offset = a0 + a1 * vernier_pos
+        
+        # DCCM energy = vernier + offset (this changes as vernier moves)
+        dccm_energy = float(vernier_pos) + offset
+        
+        # Add small random noise to simulate measurement uncertainty
+        noise = random.uniform(-0.5, 0.5)
+        
+        return dccm_energy + noise
+    
+    def get_fake_intensity():
+        """Calculate intensity that peaks when vernier and DCCM are well-aligned."""
+        # Read fresh value from tracker each time (closure captures the mutable object)
+        vernier_pos = float(pos_tracker.value)
+        
+        # Simulate a vernier scan where intensity peaks when offset is smallest
+        # The actual DCCM changes as we scan, so calculate what DCCM would be
+        a0, a1 = -20.0, 0.02
+        offset = a0 + a1 * vernier_pos
+        
+        # Intensity should be HIGHEST when offset is CLOSEST TO ZERO (vernier and DCCM aligned)
+        # Calculate the absolute offset magnitude
+        abs_offset = abs(offset)
+        
+        # When offset ≈ 0, intensity should be at peak (1000)
+        # When |offset| is large, intensity should be low (~100)
+        # Inverse relationship: intensity decreases with larger offset
+        intensity_base = 1000.0 / (1 + abs_offset / 5.0)
+        
+        # Clamp to reasonable range
+        intensity = max(100, min(1000, intensity_base))
+        
+        # Add small noise
+        noise = random.uniform(-10, 10)
+        
+        final_intensity = max(50, intensity + noise)
+        return final_intensity
+    
+    # Wrap in another function layer to ensure fresh eval
+    def wrapper_dccm():
+        return get_fake_dccm_energy()
+    
+    def wrapper_intensity():
+        return get_fake_intensity()
+    
+    # Create the signal devices
+    devices["vernier_dccm_energy"] = SynSignal(func=get_fake_dccm_energy, name="vernier_dccm_energy")
+    devices["vernier_intensity"] = SynSignal(func=get_fake_intensity, name="vernier_intensity")
+    
+    # Mark these as hinted so they're included in scans
+    devices["vernier_dccm_energy"].kind = "hinted"
+    devices["vernier_intensity"].kind = "hinted"
 
     print("Generated fake dg1 and dg2 signals and images")
     print("Expected: 1:1 linear relationship between x and pitch")
