@@ -45,7 +45,7 @@ def select_diagnostic(
         if location in ("dg1", "dg2"):
             return devices[f"mfx_{location}_wave8"]
         else:
-            raise ValueError(f"Invalid wave8 {location}, expected dg1 or dg2")
+            return devices["xcs_wave8"]
     else:
         raise RuntimeError(
             f"Invalid device_type {device_type} selected, pydantic broke?"
@@ -99,13 +99,13 @@ def select_goal(
     if goal is not None:
         return goal
     
-    # goal_2d is compatible only with yags
+    # goal_2d is compatible with yags and wave8
     if goal_2d is not None:
-        if device_type == "yag":
+        if device_type in ("yag", "wave8"):
             return goal_2d
         else:
             raise ValueError(
-                f"goal_2d is only compatible with yag, not with {device_type}! "
+                f"goal_2d is only compatible with yag or wave8, not with {device_type}! "
                 "Try providing goal (float) instead."
             )
 

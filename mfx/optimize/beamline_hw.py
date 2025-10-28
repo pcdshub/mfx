@@ -46,18 +46,24 @@ def init_devices(force: bool = False) -> dict[str, Device]:
         devices[name] = client.load_device(name=name)
 
     # Happi IPMs do not currently have wave8s, add manually
-    for stand in ("dg1", "dg2"):
-        name = f"mfx_{stand}_wave8"
-        devices[name] = Wave8(f"MFX:{stand.upper()}:BMMON", name=name)
-        devices[name].kind = "hinted"
+
+    devices["xcs_wave8"] = Wave8("HXX:DG1:BMMON:", name="mfx_xcs_wave8")
+    devices["xcs_wave8"].kind = "hinted"
+    devices["xcs_yag1"] = YagCamera("XCS:GIGE:YAG1:", name="mfx_xcs_yag1")
+    devices["xcs_yag1"].kind = "hinted"
+    
+    devices["mfx_dg1_wave8"] = Wave8(f"MFX:DG1:W8:01", name="mfx_dg1_wave8")
+    devices["mfx_dg1_wave8"].kind = "hinted"
+    devices["mfx_dg1_yag"] = YagCamera(f"MFX:GIGE:DG1:YAG:", name="mfx_dg1_yag")
+    devices["mfx_dg1_yag"].kind = "hinted"
+
+    devices["mfx_dg2_wave8"] = Wave8(f"MFX:DG2:BMMON", name="mfx_dg2_wave8")
+    devices["mfx_dg2_wave8"].kind = "hinted"
+    devices["mfx_dg2_yag"] = YagCamera(f"MFX:GIGE:DG2:YAG:", name="mfx_dg2_yag")
+    devices["mfx_dg2_yag"].kind = "hinted"
 
     # Happi PIMs don't work how I want them to, add manually
-    for stand in ("dg1", "dg2"):
-        name = f"mfx_{stand}_yag"
-        devices[name] = YagCamera(f"MFX:GIGE:{stand.upper()}:YAG:", name=name)
-        devices[name].kind = "hinted"
 
-    devices["xcs_yag1"] = YagCamera("XCS:GIGE:YAG1:", name="xcs_yag1")
     devices["mfx_ip_yag"] = YagCamera("MFX:GIGE:LBL:01:", name="mfx_ip1_yag")
     devices["mfx_ip_yag"].kind = "hinted"
 
@@ -85,8 +91,10 @@ def sim_devices() -> dict[str, Device]:
     und_abs = UndPointAbs2DSim()
     devices["und_abs"] = und_abs
     devices["und_del"] = und_abs.delta_xy
-    dg1_wave8_offset = random.uniform(-1, 1)
-    dg2_wave8_offset = random.uniform(-1, 1)
+    dg1_wave8_x_offset = random.uniform(-1, 1)
+    dg2_wave8_x_offset = random.uniform(-1, 1)
+    dg1_wave8_y_offset = random.uniform(-1, 1)
+    dg2_wave8_y_offset = random.uniform(-1, 1)
     xcs_yag_offset = random.uniform(-5, 5)
     dg1_yag_offset = random.uniform(-10, 10)
     dg2_yag_offset = random.uniform(-20, 20)
@@ -101,25 +109,49 @@ def sim_devices() -> dict[str, Device]:
             devices["und_abs"].position[1] - undp_y0
         )
 
-    def get_fake_dg1_wave8() -> float:
+    def get_fake_dg1_wave8_x() -> float:
         mdpitch, undp_dx, _ = get_offsets()
-        return mdpitch - undp_dx/200 + DG1_WAVE8_XPOS + dg1_wave8_offset + random.uniform(-0.1, 0.1)
+        return mdpitch - undp_dx/200 + DG1_WAVE8_XPOS + dg1_wave8_x_offset + random.uniform(-0.1, 0.1)
 
-    def get_fake_dg2_wave8() -> float:
+    def get_fake_dg2_wave8_x() -> float:
         mdpitch, undp_dx, _ = get_offsets()
-        return mdpitch - undp_dx/200 + DG2_WAVE8_XPOS + dg2_wave8_offset + random.uniform(-0.1, 0.1)
+        return mdpitch - undp_dx/200 + DG2_WAVE8_XPOS + dg2_wave8_x_offset + random.uniform(-0.1, 0.1)
+
+    def get_fake_dg1_wave8_y() -> float:
+        _, _, undp_dy = get_offsets()
+        return - undp_dy/200 + dg1_wave8_y_offset + random.uniform(-0.1, 0.1)
+
+    def get_fake_dg2_wave8_y() -> float:
+        _, _, undp_dy = get_offsets()
+        return - undp_dy/200 + dg2_wave8_y_offset + random.uniform(-0.1, 0.1)
 
     devices["mfx_dg1_wave8"] = SimpleNamespace(
         xpos=SynSignal(
-            func=get_fake_dg1_wave8,
+            func=get_fake_dg1_wave8_x,
             name="mfx_dg1_wave8_xpos"
-        )
+        ),
+        ypos=SynSignal(
+            func=get_fake_dg1_wave8_y,
+            name="mfx_dg1_wave8_ypos"
+        ),
+        sum=SynSignal(
+            func=lambda: random.uniform(0, 1000),
+            name="mfx_dg1_wave8_sum",
+        ),
     )
     devices["mfx_dg2_wave8"] = SimpleNamespace(
         xpos=SynSignal(
-            func=get_fake_dg2_wave8,
+            func=get_fake_dg2_wave8_x,
             name="mfx_dg2_wave8_xpos"
-        )
+        ),
+        ypos=SynSignal(
+            func=get_fake_dg2_wave8_y,
+            name="mfx_dg2_wave8_ypos"
+        ),
+        sum=SynSignal(
+            func=lambda: random.uniform(0, 1000),
+            name="mfx_dg2_wave8_sum",
+        ),
     )
     devices["mfx_dg1_yag"] = FakeYagCamera("", name="mfx_dg1_yag")
     devices["mfx_dg2_yag"] = FakeYagCamera("", name="mfx_dg2_yag")
