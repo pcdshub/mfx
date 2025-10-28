@@ -1,5 +1,7 @@
 import math
 import logging
+from pathlib import Path
+import json
 
 from pcdsdevices.device_types import IMS
 from ophyd import (Device, EpicsSignalRO, Component as Cpt,
@@ -493,13 +495,13 @@ class MFXTransfocator(TransfocatorBase):
 
         z_top_mm = z_high - margin_mm
         stage.mv(z_top_mm)
-        print(f"Stage limits: low={z_low:.3f} mm, high={z_high:.3f} mm, margin={margin_mm:.3f} mm")
-        print(f"Stage moved to starting position: z={z_top_mm:.3f} mm")
+        print(f"Stage limits: low={z_low:.3f}, high={z_high:.3f}, margin={margin_mm:.3f}")
+        print(f"Stage moved to starting position: z={z_top_mm:.3f}")
 
         E_start = energies[0]
         combo = self.find_best_combo(energy_eV=E_start, show=show)
         reference_length = focal_length(radius=combo.tfs_radius, energy=E_start)
-        print(f"Initial energy: {E_start:.2f} eV, reference focal length: {reference_length:.3f} mm")
+        print(f"Initial energy: {E_start:.2f} eV, reference focal length: {reference_length:.3f}")
 
         current_z = z_top_mm
         results = []
@@ -512,10 +514,10 @@ class MFXTransfocator(TransfocatorBase):
         for E in energies[1:]:
             f_len = focal_length(radius=combo.tfs_radius, energy=E)
             target = z_top_mm - (f_len - reference_length)
-            print(f"Energy {E:.2f} eV: computed focal length = {f_len:.3f} mm, target z = {target:.3f} mm")
+            print(f"Energy {E:.2f} eV: computed focal length = {f_len:.3f}, target z = {target:.3f}")
 
             if target > (z_low + margin_mm):
-                print(f"Moving stage to {target:.3f} mm (same lens combo).")
+                print(f"Moving stage to {target:.3f} (same lens combo).")
                 stage.mv(target)
                 current_z = target
                 results.append({
@@ -531,7 +533,7 @@ class MFXTransfocator(TransfocatorBase):
 
                 new_f = focal_length(radius=combo.tfs_radius, energy=E)
                 new_target = z_top_mm - (new_f - reference_length)
-                print(f"New combo: focal length = {new_f:.3f} mm, new target z = {new_target:.3f} mm")
+                print(f"New combo: focal length = {new_f:.3f}, new target z = {new_target:.3f}")
 
                 if new_target < (z_low + margin_mm):
                     print("Stage out of travel range. Cannot compensate further.")
@@ -542,7 +544,7 @@ class MFXTransfocator(TransfocatorBase):
                     })
                     return results
 
-                print(f"Moving stage to {new_target:.3f} mm (new combo).")
+                print(f"Moving stage to {new_target:.3f} (new combo).")
                 stage.mv(new_target)
                 current_z = new_target
                 results.append({
@@ -551,8 +553,13 @@ class MFXTransfocator(TransfocatorBase):
                     "z_position": current_z,
                 })
 
-        print(f"Tracking complete. Final energy: {results[-1]['energy']:.2f} eV, stage position: {results[-1]['z_position']:.3f} mm.")
+        print(f"Tracking complete. Final energy: {results[-1]['energy']:.2f} eV, stage position: {results[-1]['z_position']:.3f}.")
         print(f"Lenses currently inserted: {results[-1]['inserted_lenses']}")
+        
+        save_path = Path.home() / "track_focus_results.json"
+        with open(save_path, "w") as f:
+            json.dump(results, f, indent=4)
+        print(f"Tracking results saved to {save_path}")
         return results
 
 
