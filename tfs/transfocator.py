@@ -484,45 +484,89 @@ class MFXTransfocator(TransfocatorBase):
           position and recompute the lens combo at that energy, then continue.
         """
         if not energies:
-            logger.error("No energies provided")
+            print("No energies provided.")
             return None
 
-        # Translation stage and limits
         stage = self.translation
         z_high = stage.high_limit
         z_low = stage.low_limit
 
-        # Start near the high limit
         z_top_mm = z_high - margin_mm
         stage.mv(z_top_mm)
+        print(f"Stage limits: low={z_low:.3f} mm, high={z_high:.3f} mm, margin={margin_mm:.3f} mm")
+        print(f"Stage moved to starting position: z={z_top_mm:.3f} mm")
 
-        # Initial combo and reference length
         E_start = energies[0]
         combo = self.find_best_combo(energy_eV=E_start, show=show)
-        # TODO: insert lenses
         reference_length = focal_length(radius=combo.tfs_radius, energy=E_start)
+        print(f"Initial energy: {E_start:.2f} eV, reference focal length: {reference_length:.3f} mm")
+
+        def _inserted_lenses_from_combo(c):
+            lenses = getattr(c, "lenses", c)
+            inserted = []
+            for lens in lenses:
+                try:
+                    state = lens._inserted.get()
+                    if state == 1:
+                        inserted.append(lens.prefix)
+                except Exception:
+                    pass
+            return inserted
+
+        current_z = z_top_mm
+        results = []
+        results.append({
+            "energy": E_start,
+            "inserted_lenses": _inserted_lenses_from_combo(combo),
+            "z_position": current_z,
+        })
 
         for E in energies[1:]:
-            # Compute focal length for current combo at this energy
-            tentative_length = focal_length(radius=combo.tfs_radius, energy=E)
-            tentative_target = z_top_mm - (tentative_length - reference_length)
+            f_len = focal_length(radius=combo.tfs_radius, energy=E)
+            target = z_top_mm - (f_len - reference_length)
+            print(f"Energy {E:.2f} eV: computed focal length = {f_len:.3f} mm, target z = {target:.3f} mm")
 
-            if tentative_target > (z_low + margin_mm):
-                # Safe to move stage
-                stage.mv(tentative_target)
+            if target > (z_low + margin_mm):
+                print(f"Moving stage to {target:.3f} mm (same lens combo).")
+                stage.mv(target)
+                current_z = target
+                results.append({
+                    "energy": E,
+                    "inserted_lenses": _inserted_lenses_from_combo(combo),
+                    "z_position": current_z,
+                })
             else:
-                # Out of stage travel: return to top and recompute combo
+                print("Target below low limit margin. Returning to top and recomputing lens combo.")
                 stage.mv(z_top_mm)
+                current_z = z_top_mm
                 combo = self.find_best_combo(energy_eV=E, show=show)
-                # TODO: insert lenses
-                # Compare new focal length to starting one and adjust z stage
-                new_length = focal_length(radius=combo.tfs_radius, energy=E)
-                new_target = z_top_mm - (new_length - reference_length)
+
+                new_f = focal_length(radius=combo.tfs_radius, energy=E)
+                new_target = z_top_mm - (new_f - reference_length)
+                print(f"New combo: focal length = {new_f:.3f} mm, new target z = {new_target:.3f} mm")
+
                 if new_target < (z_low + margin_mm):
-                    logger.error("Stage is out of travel, cannot compensate for energy change")
-                    # TODO: what to do here?
-                    return None
+                    print("Stage out of travel range. Cannot compensate further.")
+                    results.append({
+                        "energy": E,
+                        "inserted_lenses": _inserted_lenses_from_combo(combo),
+                        "z_position": current_z,
+                    })
+                    return results
+
+                print(f"Moving stage to {new_target:.3f} mm (new combo).")
                 stage.mv(new_target)
+                current_z = new_target
+                results.append({
+                    "energy": E,
+                    "inserted_lenses": _inserted_lenses_from_combo(combo),
+                    "z_position": current_z,
+                })
+
+        print(f"Tracking complete. Final energy: {results[-1]['energy']:.2f} eV, stage position: {results[-1]['z_position']:.3f} mm.")
+        print(f"Lenses currently inserted: {results[-1]['inserted_lenses']}")
+        return results
+
 
 class Transfocator(MFXTransfocator):
     pass
