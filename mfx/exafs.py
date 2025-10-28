@@ -216,7 +216,7 @@ class Exafs:
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
 
-        if simulate:
+        if self.simulate:
             prev_k_energy = copy.copy(k_energy)
         else:
             prev_k_energy = self.acr_energy_k.get().setpoint
