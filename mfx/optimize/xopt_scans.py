@@ -383,7 +383,7 @@ def get_xopt_obj(
     #vocs.constraints = {}
     if device_type == "yag":
         # Create per run images directory
-        images_root = Path("/cds/home/opr/mfxopr")
+        images_root = Path.home() #Path("/cds/home/opr/mfxopr")
         images_root.mkdir(parents=True, exist_ok=True)
         run_dir_name = Path(dump_file).stem
         run_images_dir = images_root / run_dir_name
@@ -451,10 +451,10 @@ def get_xopt_obj(
 
 def test_write_permissions():
     """
-    Simple test function to check if we can write to /cds/home/opr/mfxopr
+    Simple test function to check if we can write to /cds/home/opr/mfxopr (or your home)
     """
 
-    test_dir = Path("/cds/home/opr/mfxopr")
+    test_dir = Path.home() #Path("/cds/home/opr/mfxopr")
     test_dir.mkdir(parents=True, exist_ok=True)
     test_file = test_dir / f"test_write.txt"
 
