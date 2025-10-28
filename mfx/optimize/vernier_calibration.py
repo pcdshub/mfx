@@ -73,29 +73,53 @@ class VernierCalibration:
         self.calib_dir = Path(__file__).parent.parent.parent / "logs" / "vernier_calibration"
         self.calib_dir.mkdir(parents=True, exist_ok=True)
     
-    def _predict_vernier_offset(self, vernier_energy_eV: float, calib: dict) -> float:
+    def _predict_vernier_offset(self, target_energy_eV: float, calib: dict) -> float:
         """
-        Predict vernier offset from vernier energy using calibration coefficients.
+        Predict vernier offset for a given target energy using calibration coefficients.
         
         Parameters
         ----------
-        vernier_energy_eV : float
-            Vernier energy in eV
+        target_energy_eV : float
+            Target energy (DCCM energy) in eV
         calib : dict
             Calibration dictionary containing coefficients
             
         Returns
         -------
         float
-            Predicted vernier offset in eV
+            Predicted vernier offset in eV (vernier - DCCM)
         """
         a0, a1 = calib["coeff_offset"]
-        pred_offset = a0 + a1 * vernier_energy_eV
+        # offset = vernier - DCCM, where vernier lands at target + (a0 + a1*target)
+        pred_offset = a0 + a1 * target_energy_eV
         return float(pred_offset)
     
     def _vernier_solve(self, target_energy_eV: float, calib: dict) -> float:
         """
         Solve for vernier energy that achieves target DCCM energy given calibration.
+        
+        The calibration learned: offset(target) = a0 + a1 * target_energy
+        Where offset = vernier - DCCM
+        
+        To achieve zero offset at target_energy:
+        offset = 0 = a0 + a1 * target_energy
+        This means: a0 + a1 * target_energy = 0
+        This can only be satisfied if vernier lands at a specific energy relative to target
+        
+        Actually, the correct approach:
+        When we move to target_energy, we predict offset will be: predicted_offset = a0 + a1 * target
+        So vernier will land at: target + predicted_offset
+        To get zero offset, we need vernier to land at: target - predicted_offset
+        Wait, that's still not right...
+        
+        Let me think: if offset = a0 + a1 * target, and vernier lands with that offset,
+        then vernier = target + offset.
+        
+        To achieve zero offset, we want to move vernier so that it equals the target.
+        So we move vernier to target energy (the DCCM energy).
+        
+        Actually wait, the offset is between what DCCM actually is and what vernier is.
+        If DCCM is at target, and vernier lands with offset, we need to adjust vernier.
         
         Parameters
         ----------
@@ -107,14 +131,26 @@ class VernierCalibration:
         Returns
         -------
         float
-            Required vernier energy in eV
+            Required vernier energy in eV to minimize offset
         """
         a0, a1 = calib["coeff_offset"]
-        # Solve: target_energy = vernier_energy + offset
-        # offset = a0 + a1 * vernier_energy
-        # target_energy = vernier_energy + a0 + a1 * vernier_energy
-        # target_energy = vernier_energy * (1 + a1) + a0
-        # vernier_energy = (target_energy - a0) / (1 + a1)
+        
+        # The calibration learned: when we move both to target_energy,
+        # the vernier lands with systematic offset: offset = a0 + a1 * target_energy
+        # Where offset = vernier - DCCM
+        
+        # During calibration: when we command both DCCM and vernier to target,
+        # DCCM lands at target (with small noise), vernier lands with offset
+        # actual_vernier = target + systematic_offset = target + (a0 + a1 * target)
+        
+        # To achieve zero offset:
+        #   We want: vernier = DCCM = target
+        #   But if we command vernier to E, it will land at E + (a0 + a1 * E)
+        #   We need: target = E + (a0 + a1 * E)
+        #   target = E + a0 + a1*E
+        #   target - a0 = E * (1 + a1)
+        #   E = (target - a0) / (1 + a1)
+        
         vernier_energy = (target_energy_eV - a0) / (1 + a1)
         return float(vernier_energy)
     
@@ -131,44 +167,37 @@ class VernierCalibration:
             intensity = res["intensity"]
             dccm_energy = res["dccm_energy"]
             
-            # Get average DCCM energy for vertical line
-            avg_dccm_energy = np.mean(dccm_energy)
-            
             # Plot 1: Vernier offset vs Vernier Energy (top left)
             axs[0,0].scatter(vernier_energy, vernier_offset, s=20, alpha=0.7)
             energy_range = np.linspace(vernier_energy.min(), vernier_energy.max(), 100)
             offset_pred = reg_offset.predict(energy_range.reshape(-1, 1))
-            axs[0,0].plot(energy_range, offset_pred, 'r--', linewidth=2)
-            # Add vertical line showing average DCCM energy
-            axs[0,0].axvline(x=avg_dccm_energy, color='green', linestyle=':', linewidth=2, label=f'Avg DCCM: {avg_dccm_energy:.1f} eV')
+            axs[0,0].plot(energy_range, offset_pred, 'r--', linewidth=2, label='Calibration fit')
             axs[0,0].set_xlabel("Vernier Energy [eV]")
             axs[0,0].set_ylabel("Vernier Offset [eV]")
-            axs[0,0].set_title("Offset vs Vernier Energy")
+            axs[0,0].set_title("Vernier Offset vs Vernier Energy")
             axs[0,0].legend()
             axs[0,0].grid(True, alpha=0.3)
             
             # Plot 2: Intensity vs Vernier Energy (top right)
             axs[0,1].scatter(vernier_energy, intensity, s=20, alpha=0.7, color='green')
-            axs[0,1].axvline(x=avg_dccm_energy, color='red', linestyle=':', linewidth=2, label=f'Avg DCCM: {avg_dccm_energy:.1f} eV')
             axs[0,1].set_xlabel("Vernier Energy [eV]")
             axs[0,1].set_ylabel("Intensity [arb. units]")
             axs[0,1].set_title("Intensity vs Vernier Energy")
-            axs[0,1].legend()
             axs[0,1].grid(True, alpha=0.3)
             
             # Plot 3: Vernier offset vs DCCM Energy (bottom left)  
             axs[1,0].scatter(dccm_energy, vernier_offset, s=20, alpha=0.7)
             axs[1,0].set_xlabel("DCCM Energy [eV]")
             axs[1,0].set_ylabel("Vernier Offset [eV]")
-            axs[1,0].set_title("Offset vs DCCM Energy")
+            axs[1,0].set_title("Vernier Offset vs DCCM Energy")
             axs[1,0].grid(True, alpha=0.3)
             
-            # Plot 4: Intensity vs Offset (bottom right)
+            # Plot 4: Intensity vs Vernier Offset (bottom right)
             axs[1,1].scatter(vernier_offset, intensity, s=20, alpha=0.7, color='orange')
             axs[1,1].axvline(x=0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Offset')
             axs[1,1].set_xlabel("Vernier Offset [eV]")
             axs[1,1].set_ylabel("Intensity [arb. units]")
-            axs[1,1].set_title("Intensity vs Offset")
+            axs[1,1].set_title("Intensity vs Vernier Offset")
             axs[1,1].legend()
             axs[1,1].grid(True, alpha=0.3)
             
@@ -219,17 +248,18 @@ class VernierCalibration:
             dccm_energy_pv = devices["vernier_dccm_energy"]
             vernier_energy_pv = devices["vernier_energy"]
             
-            # Get current DCCM energy
+            # Get current DCCM energy (this is what we're trying to reach)
             current_dccm_energy = float(dccm_energy_pv.get())
             
             # Get current vernier energy
             current_vernier_energy = float(vernier_energy_pv.position)
             
-            # Predict vernier offset for current vernier energy
-            pred_offset = self._predict_vernier_offset(current_vernier_energy, calib)
+            # Predict offset for the current DCCM energy
+            # (the energy we're trying to reach - the target energy)
+            pred_offset = self._predict_vernier_offset(current_dccm_energy, calib)
             
-            # Calculate actual offset
-            actual_offset = current_dccm_energy - current_vernier_energy
+            # Calculate actual offset (vernier - DCCM)
+            actual_offset = current_vernier_energy - current_dccm_energy
             
             # Calculate error
             error = abs(pred_offset - actual_offset)
@@ -376,7 +406,7 @@ class VernierCalibration:
                         print(f"[calibrate] Failed to read DCCM energy: {e}")
                         return
                 
-                offset = dccm_energy - vernier_energy
+                offset = vernier_energy - dccm_energy
                 
                 print(f"[calibrate] Collected: vernier={vernier_energy:.2f}, dccm={dccm_energy:.2f}, offset={offset:.2f}, intensity={intensity:.2f}")
                 
@@ -385,6 +415,14 @@ class VernierCalibration:
                 data["intensity"].append(intensity)
                 data["dccm_energy"].append(dccm_energy)
                 data["vernier_energy"].append(vernier_energy)
+            
+            # Set calibration mode flag
+            try:
+                from mfx.optimize.beamline_hw import get_calibration_scan_mode
+                calibration_scan_mode = get_calibration_scan_mode()
+                calibration_scan_mode[0] = True
+            except Exception as e:
+                print(f"[calibrate] Failed to set calibration mode: {e}")
             
             sid = RE.subscribe(on_event)
             
@@ -399,6 +437,13 @@ class VernierCalibration:
                 ))
             finally:
                 RE.unsubscribe(sid)
+                # Unset calibration mode flag after scan
+                try:
+                    from mfx.optimize.beamline_hw import get_calibration_scan_mode
+                    calibration_scan_mode = get_calibration_scan_mode()
+                    calibration_scan_mode[0] = False
+                except Exception:
+                    pass
                 
         except Exception as exc:
             print(f"[calibrate] Error during scan: {exc}")
@@ -408,11 +453,22 @@ class VernierCalibration:
         df = pd.DataFrame(data)
         print(f"[calibrate] Collected {len(df)} data points")
         
-        # Fit linear regression model for offset vs vernier energy
-        X = df["vernier_energy"].values.reshape(-1, 1)
+        # During calibration, we scan to target energies
+        # DCCM moves to the target energy (where we command)
+        # Vernier moves to target energy but lands with systematic offset
+        # The offset depends on the target energy: higher target → larger offset
+        
+        # Fit model: offset = a0 + a1 * target_energy
+        # Where target_energy is what we're trying to reach (the DCCM energy)
+        X = df["dccm_energy"].values.reshape(-1, 1)  # Use DCCM energy as the target
         y_offset = df["vernier_offset"].values
         
         reg_offset = LinearRegression().fit(X, y_offset)
+        
+        # Print what we learned
+        avg_dccm = np.mean(df["dccm_energy"].values)
+        print(f"[calibrate] Average DCCM energy during scan: {avg_dccm:.2f} eV")
+        print(f"[calibrate] Calibration models: offset = f(target_energy)")
         
         # Calculate coefficients
         coeff_offset = np.concatenate([[reg_offset.intercept_], reg_offset.coef_])
@@ -459,20 +515,19 @@ class VernierCalibration:
         
         return calib
     
-    def align_to_dccm(self, target_energy_eV: float, use_calibration: bool = True,
-                     energy_range_eV: float = 10.0, energy_steps: int = 11,
+    def align_to_dccm(self, energy_range_eV: float = 10.0, energy_steps: int = 11,
                      events_per_step: int = 12) -> bool:
         """
-        Align vernier to DCCM energy using intensity-based optimization.
+        Align vernier to current DCCM energy using intensity-based optimization.
+        
+        This function scans the vernier around the current DCCM energy and finds
+        the vernier position that maximizes intensity. This is a pure intensity-based
+        alignment without using calibration prediction.
         
         Parameters
         ----------
-        target_energy_eV : float
-            Target DCCM energy in eV
-        use_calibration : bool
-            Whether to use calibration for initial positioning (only if available and fresh)
         energy_range_eV : float
-            Range around target energy to scan (in eV)
+            Range around current DCCM energy to scan (in eV)
         energy_steps : int
             Number of steps in alignment scan
         events_per_step : int
@@ -483,35 +538,35 @@ class VernierCalibration:
         bool
             True if alignment was successful, False otherwise
         """
-        print(f"[align_to_dccm] Aligning vernier to DCCM energy: {target_energy_eV:.2f} eV")
-        
         # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
         devices = init_devices()
         dccm_energy_pv = devices["vernier_dccm_energy"]
         vernier_energy_pv = devices["vernier_energy"]
         intensity_pv = devices["vernier_intensity"]
         
-        # Check if calibration is available and fresh - ONLY use if it exists and is fresh
-        initial_vernier_energy = target_energy_eV  # Default to target energy
+        # Get current DCCM energy
+        print(f"[align_to_dccm] Reading current DCCM energy...")
+        current_dccm_energy = float(dccm_energy_pv.get())
+        print(f"[align_to_dccm] Current DCCM energy: {current_dccm_energy:.2f} eV")
         
-        if use_calibration:
-            calib = self._load_calibration()
-            if calib and self.check_calibration():
-                print(f"[align_to_dccm] Using existing fresh calibration for initial positioning")
-                # Use calibration to get initial vernier position
-                initial_vernier_energy = self._vernier_solve(target_energy_eV, calib)
-                print(f"[align_to_dccm] Calibration suggests vernier energy: {initial_vernier_energy:.2f} eV")
-            else:
-                print(f"[align_to_dccm] No fresh calibration available, using intensity-based alignment only")
-                print(f"[align_to_dccm] Starting from target energy: {target_energy_eV:.2f} eV")
-        else:
-            print(f"[align_to_dccm] Using intensity-based alignment only (calibration disabled)")
+        # Update DCCM tracker to current DCCM energy (important for simulation mode)
+        try:
+            from mfx.optimize.beamline_hw import get_dccm_tracker
+            dccm_tracker = get_dccm_tracker()
+            if dccm_tracker is not None:
+                dccm_tracker.value = current_dccm_energy
+                print(f"[align_to_dccm] Updated DCCM tracker to: {current_dccm_energy:.2f} eV")
+        except Exception as e:
+            print(f"[align_to_dccm] Could not update DCCM tracker: {e}")
         
-        # Define scan range around initial position
-        scan_start = initial_vernier_energy - energy_range_eV / 2
-        scan_end = initial_vernier_energy + energy_range_eV / 2
+        # Scan vernier around current DCCM energy
+        # In alignment mode, vernier lands exactly where commanded (no systematic offset)
+        # So vernier_actual = vernier_command
+        # Intensity peaks when vernier_actual = DCCM, i.e., when vernier_command = DCCM
+        scan_start = current_dccm_energy - energy_range_eV / 2
+        scan_end = current_dccm_energy + energy_range_eV / 2
         
-        print(f"[align_to_dccm] Scanning vernier from {scan_start:.2f} to {scan_end:.2f} eV")
+        print(f"[align_to_dccm] Scanning vernier from {scan_start:.2f} to {scan_end:.2f} eV (range: ±{energy_range_eV/2:.1f} eV around DCCM at {current_dccm_energy:.2f} eV)")
         
         # Perform intensity-based alignment scan
         try:
@@ -542,11 +597,18 @@ class VernierCalibration:
             best_intensity = float("-inf")
             best_vernier_energy = None
             
-            # For simulation mode, get tracker from vernier device
+            # For simulation mode, get tracker and functions from devices
             tracker = None
+            get_intensity_func = None
+            get_dccm_func = None
             try:
                 if hasattr(vernier_energy_pv, 'pos_tracker'):
                     tracker = vernier_energy_pv.pos_tracker
+                # Get the underlying functions for direct calls in simulation
+                if hasattr(intensity_pv, '_func'):
+                    get_intensity_func = intensity_pv._func
+                if hasattr(dccm_energy_pv, '_func'):
+                    get_dccm_func = dccm_energy_pv._func
             except AttributeError:
                 pass
             
@@ -555,29 +617,60 @@ class VernierCalibration:
                 if name != "event":
                     return
                 event_data = doc.get("data", {})
+                print(f"[align_to_dccm] Event data keys: {list(event_data.keys())}")
                 if "vernier_energy" not in event_data:
+                    print(f"[align_to_dccm] WARNING: vernier_energy not in event data!")
                     return
                 
                 vernier_energy = event_data["vernier_energy"]
                 
-                # Update tracker in simulation mode
-                if tracker is not None:
+                # In simulation mode, update tracker first
+                if tracker is not None and get_intensity_func is not None:
+                    # Update the tracker
                     tracker.value = float(vernier_energy)
-                
-                # Read intensity (use read() for simulation mode to force recalculation)
-                try:
-                    intensity_dict = intensity_pv.read()
-                    intensity = float(intensity_dict["vernier_intensity"]["value"])
-                except Exception as e:
-                    print(f"[align_to_dccm] Failed to read intensity: {e}")
-                    return
+                    
+                    # Also directly update the global tracker to ensure it's updated
+                    import mfx.optimize.beamline_hw as bl_hw
+                    if bl_hw._vernier_pos_tracker is not None:
+                        bl_hw._vernier_pos_tracker.value = float(vernier_energy)
+                    
+                    print(f"[align_to_dccm] Updated trackers to: {vernier_energy:.2f} eV")
+                    
+                    # Call the underlying intensity function directly to force fresh evaluation
+                    try:
+                        intensity = float(get_intensity_func())
+                        print(f"[align_to_dccm] Read intensity: {intensity:.2f}")
+                    except Exception as e:
+                        print(f"[align_to_dccm] Failed to get intensity: {e}")
+                        return
+                else:
+                    # Use read() for real hardware
+                    try:
+                        intensity_dict = intensity_pv.read()
+                        intensity = float(intensity_dict["vernier_intensity"]["value"])
+                        print(f"[align_to_dccm] Read intensity: {intensity:.2f}")
+                    except Exception as e:
+                        print(f"[align_to_dccm] Failed to read intensity: {e}")
+                        return
                 
                 if intensity > best_intensity:
                     best_intensity = intensity
                     best_vernier_energy = vernier_energy
                     print(f"[align_to_dccm] New best intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+                
+                # Print all points for debugging
+                print(f"[align_to_dccm] Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f}")
             
             sid = RE.subscribe(on_event)
+            
+            # Set alignment mode flag (no offset during scan)
+            try:
+                from mfx.optimize.beamline_hw import get_alignment_scan_mode
+                alignment_scan_mode = get_alignment_scan_mode()
+                alignment_scan_mode[0] = True
+                print(f"[align_to_dccm] Alignment mode enabled - vernier will land at exact commanded position (no systematic offset)")
+            except Exception as e:
+                print(f"[align_to_dccm] Failed to set alignment mode: {e}")
             
             try:
                 # Run the alignment scan
@@ -591,17 +684,29 @@ class VernierCalibration:
             finally:
                 RE.unsubscribe(sid)
             
-            # Move to best position
+            # Move to best position (still in alignment mode, vernier will land exactly at commanded position with no offset)
             if best_vernier_energy is not None:
                 print(f"[align_to_dccm] Moving to best vernier energy: {best_vernier_energy:.2f} eV")
                 vernier_energy_pv.move(best_vernier_energy).wait()
+            
+            # Unset alignment mode flag after scan AND final move
+            try:
+                from mfx.optimize.beamline_hw import get_alignment_scan_mode
+                alignment_scan_mode = get_alignment_scan_mode()
+                alignment_scan_mode[0] = False
+                print(f"[align_to_dccm] Alignment mode disabled")
+            except:
+                pass
                 
+            # Verify final positions
+            if best_vernier_energy is not None:
                 # Verify final DCCM energy
                 final_dccm_energy = float(dccm_energy_pv.get())
-                final_offset = final_dccm_energy - best_vernier_energy
+                final_vernier_actual = float(vernier_energy_pv.position)
+                final_offset = final_vernier_actual - final_dccm_energy
                 
                 print(f"[align_to_dccm] Final DCCM energy: {final_dccm_energy:.2f} eV")
-                print(f"[align_to_dccm] Final vernier energy: {best_vernier_energy:.2f} eV")
+                print(f"[align_to_dccm] Final vernier energy: {final_vernier_actual:.2f} eV")
                 print(f"[align_to_dccm] Final offset: {final_offset:.2f} eV")
                 print(f"[align_to_dccm] Alignment completed successfully")
                 
@@ -614,78 +719,65 @@ class VernierCalibration:
             print(f"[align_to_dccm] Error during alignment: {exc}")
             return False
     
-    def align_with_calibration(self, target_energy_eV: float, 
-                              force_recalibrate: bool = False) -> bool:
+    def move_to_energy_with_calibration(self) -> bool:
         """
-        Align vernier to DCCM using calibration method.
+        Move vernier to align with current DCCM energy using calibration to correct for offset.
         
-        Parameters
-        ----------
-        target_energy_eV : float
-            Target DCCM energy in eV
-        force_recalibrate : bool
-            Force recalibration even if existing calibration is fresh (NOT recommended during scans)
+        This function:
+        1. Reads the current DCCM energy
+        2. Calculates the required vernier energy using calibration to achieve zero offset
+        3. Moves vernier to that calculated energy
+        
+        The calibration learned that when moving to energy E, vernier has offset (a0 + a1*E).
+        To achieve vernier = DCCM, we command vernier to (DCCM - a0)/(1 + a1).
             
         Returns
         -------
         bool
-            True if alignment was successful, False otherwise
+            True if successful, False otherwise
         """
-        print(f"[align_with_calibration] Aligning vernier to DCCM energy: {target_energy_eV:.2f} eV")
+        print(f"[move_to_energy_with_calibration] Aligning vernier to current DCCM energy")
         
-        # Check calibration freshness - ONLY recalibrate if forced (not recommended during scans)
-        if force_recalibrate:
-            print(f"[align_with_calibration] WARNING: Force recalibration requested - this will interrupt scans!")
-            print(f"[align_with_calibration] Performing calibration scan...")
-            # Perform calibration scan
-            energy_range = 50.0  # eV range for calibration
-            calib = self.calibrate(
-                energy_start_eV=target_energy_eV - energy_range/2,
-                energy_end_eV=target_energy_eV + energy_range/2,
-                energy_steps=10,
-                events_per_step=120
-            )
-        else:
-            # Check if existing calibration is fresh
-            calib = self._load_calibration()
-            if not calib:
-                print(f"[align_with_calibration] No calibration found - cannot use calibration method")
-                print(f"[align_with_calibration] Consider using align_to_dccm() for intensity-based alignment")
-                return False
-            
-            if not self.check_calibration():
-                print(f"[align_with_calibration] Calibration is stale - cannot use calibration method")
-                print(f"[align_with_calibration] Consider using align_to_dccm() for intensity-based alignment")
-                return False
-            
-            print(f"[align_with_calibration] Using existing fresh calibration from {calib.get('timestamp')}")
+        # Load calibration
+        calib = self._load_calibration()
+        if not calib:
+            print(f"[move_to_energy_with_calibration] No calibration found")
+            return False
+        
+        print(f"[move_to_energy_with_calibration] Using calibration from {calib.get('timestamp')}")
         
         # Get devices from beamline_hw
         devices = init_devices()
         dccm_energy_pv = devices["vernier_dccm_energy"]
         vernier_energy_pv = devices["vernier_energy"]
         
-        # Solve for vernier energy
-        vernier_energy = self._vernier_solve(target_energy_eV, calib)
-        print(f"[align_with_calibration] Moving vernier to: {vernier_energy:.2f} eV")
+        # Get current DCCM energy
+        current_dccm_energy = float(dccm_energy_pv.get())
+        print(f"[move_to_energy_with_calibration] Current DCCM energy: {current_dccm_energy:.2f} eV")
         
-        # Move vernier
+        # Calculate what vernier command is needed to achieve vernier = DCCM
+        vernier_command = self._vernier_solve(current_dccm_energy, calib)
+        
+        # Move vernier to the calculated command
+        print(f"[move_to_energy_with_calibration] Moving vernier to: {vernier_command:.2f} eV")
+        
         try:
-            vernier_energy_pv.move(vernier_energy).wait()
+            vernier_energy_pv.move(vernier_command).wait()
             
-            # Verify final position
+            # Verify final positions
             final_dccm_energy = float(dccm_energy_pv.get())
-            final_offset = final_dccm_energy - vernier_energy
+            final_vernier_actual = float(vernier_energy_pv.position)
+            final_offset = final_vernier_actual - final_dccm_energy
             
-            print(f"[align_with_calibration] Final DCCM energy: {final_dccm_energy:.2f} eV")
-            print(f"[align_with_calibration] Final vernier energy: {vernier_energy:.2f} eV")
-            print(f"[align_with_calibration] Final offset: {final_offset:.2f} eV")
-            print(f"[align_with_calibration] Alignment completed successfully")
+            print(f"[move_to_energy_with_calibration] Final DCCM energy: {final_dccm_energy:.2f} eV")
+            print(f"[move_to_energy_with_calibration] Final vernier energy: {final_vernier_actual:.2f} eV")
+            print(f"[move_to_energy_with_calibration] Final offset: {final_offset:.2f} eV")
+            print(f"[move_to_energy_with_calibration] Completed successfully")
             
             return True
             
         except Exception as exc:
-            print(f"[align_with_calibration] Error during alignment: {exc}")
+            print(f"[move_to_energy_with_calibration] Error: {exc}")
             return False
 
 
