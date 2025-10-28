@@ -501,23 +501,11 @@ class MFXTransfocator(TransfocatorBase):
         reference_length = focal_length(radius=combo.tfs_radius, energy=E_start)
         print(f"Initial energy: {E_start:.2f} eV, reference focal length: {reference_length:.3f} mm")
 
-        def _inserted_lenses_from_combo(c):
-            lenses = getattr(c, "lenses", c)
-            inserted = []
-            for lens in lenses:
-                try:
-                    state = lens._inserted.get()
-                    if state == 1:
-                        inserted.append(lens.prefix)
-                except Exception:
-                    pass
-            return inserted
-
         current_z = z_top_mm
         results = []
         results.append({
             "energy": E_start,
-            "inserted_lenses": _inserted_lenses_from_combo(combo),
+            "inserted_lenses": [lens.prefix for lens in combo.lenses],
             "z_position": current_z,
         })
 
@@ -532,7 +520,7 @@ class MFXTransfocator(TransfocatorBase):
                 current_z = target
                 results.append({
                     "energy": E,
-                    "inserted_lenses": _inserted_lenses_from_combo(combo),
+                    "inserted_lenses": [lens.prefix for lens in combo.lenses],
                     "z_position": current_z,
                 })
             else:
@@ -549,7 +537,7 @@ class MFXTransfocator(TransfocatorBase):
                     print("Stage out of travel range. Cannot compensate further.")
                     results.append({
                         "energy": E,
-                        "inserted_lenses": _inserted_lenses_from_combo(combo),
+                        "inserted_lenses": [lens.prefix for lens in combo.lenses],
                         "z_position": current_z,
                     })
                     return results
@@ -559,7 +547,7 @@ class MFXTransfocator(TransfocatorBase):
                 current_z = new_target
                 results.append({
                     "energy": E,
-                    "inserted_lenses": _inserted_lenses_from_combo(combo),
+                    "inserted_lenses": [lens.prefix for lens in combo.lenses],
                     "z_position": current_z,
                 })
 
