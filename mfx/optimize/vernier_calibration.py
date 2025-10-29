@@ -95,30 +95,19 @@ class VernierCalibration:
     
     def _vernier_solve(self, target_energy_eV: float, calib: dict) -> float:
         """
-        Solve for vernier energy that achieves target DCCM energy given calibration.
+        Solve for vernier energy that achieves zero offset at target DCCM energy.
         
-        The calibration learned: offset(target) = a0 + a1 * target_energy
-        Where offset = vernier - DCCM
+        During calibration, we learned that when we command both DCCM and vernier 
+        to a target energy E:
+          - DCCM lands at E (with small noise)
+          - Vernier lands with systematic offset: offset = a0 + a1 * E
+          - Where offset = vernier_actual - DCCM_actual
         
-        To achieve zero offset at target_energy:
-        offset = 0 = a0 + a1 * target_energy
-        This means: a0 + a1 * target_energy = 0
-        This can only be satisfied if vernier lands at a specific energy relative to target
-        
-        Actually, the correct approach:
-        When we move to target_energy, we predict offset will be: predicted_offset = a0 + a1 * target
-        So vernier will land at: target + predicted_offset
-        To get zero offset, we need vernier to land at: target - predicted_offset
-        Wait, that's still not right...
-        
-        Let me think: if offset = a0 + a1 * target, and vernier lands with that offset,
-        then vernier = target + offset.
-        
-        To achieve zero offset, we want to move vernier so that it equals the target.
-        So we move vernier to target energy (the DCCM energy).
-        
-        Actually wait, the offset is between what DCCM actually is and what vernier is.
-        If DCCM is at target, and vernier lands with offset, we need to adjust vernier.
+        To achieve zero offset (vernier = DCCM = target):
+          We want to command vernier to energy E such that it lands at target.
+          If we command vernier to energy E, it will land at: E + (a0 + a1 * E)
+          We need: target = E + (a0 + a1 * E)
+          Solving: E = (target - a0) / (1 + a1)
         
         Parameters
         ----------
@@ -133,22 +122,6 @@ class VernierCalibration:
             Required vernier energy in eV to minimize offset
         """
         a0, a1 = calib["coeff_offset"]
-        
-        # The calibration learned: when we move both to target_energy,
-        # the vernier lands with systematic offset: offset = a0 + a1 * target_energy
-        # Where offset = vernier - DCCM
-        
-        # During calibration: when we command both DCCM and vernier to target,
-        # DCCM lands at target (with small noise), vernier lands with offset
-        # actual_vernier = target + systematic_offset = target + (a0 + a1 * target)
-        
-        # To achieve zero offset:
-        #   We want: vernier = DCCM = target
-        #   But if we command vernier to E, it will land at E + (a0 + a1 * E)
-        #   We need: target = E + (a0 + a1 * E)
-        #   target = E + a0 + a1*E
-        #   target - a0 = E * (1 + a1)
-        #   E = (target - a0) / (1 + a1)
         
         vernier_energy = (target_energy_eV - a0) / (1 + a1)
         return float(vernier_energy)
