@@ -546,8 +546,7 @@ class MFXTransfocator(TransfocatorBase):
                         if new_target_z_stage_mm > min_z_stage_mm:
                             self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
                             break
-                    else:
-                        shrinking_max_z_stage_mm -= margin_mm
+                    shrinking_max_z_stage_mm -= margin_mm
                 if not combo:
                     print("Stage out of travel. Cannot compensate further...")
 
