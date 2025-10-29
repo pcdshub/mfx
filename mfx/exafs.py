@@ -3,11 +3,6 @@ import numpy as np
 import sys
 from time import sleep
 
-import copy
-import numpy as np
-import sys
-from time import sleep
-
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
     from ophyd import EpicsSignalRO
@@ -198,7 +193,7 @@ class Exafs:
         if self.simulate:
             self.sim.slow_motor1.mv(k_energy)
         else:
-            self.self.acr_energy_k.move(k_energy_keV)
+            self.acr_energy_k.move(k_energy)
 
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
         """
