@@ -1,5 +1,7 @@
 import math
 import logging
+from pathlib import Path
+import json
 
 from pcdsdevices.device_types import IMS
 from ophyd import (Device, EpicsSignalRO, Component as Cpt,
@@ -469,6 +471,94 @@ class MFXTransfocator(TransfocatorBase):
             prev_lenses = lens_set
 
         return schedule
+
+    def get_stage_limits(self, margin_mm):
+        stage = self.translation
+        z_high_mm = stage.high_limit
+        z_low_mm = stage.low_limit
+        z_max_mm = z_high_mm - margin_mm
+        z_min_mm = z_low_mm + margin_mm
+        print(f"Stage limits: low={z_low_mm:.3f} mm, high={z_high_mm:.3f} mm, margin={margin_mm:.3f} mm")
+        return z_min_mm, z_max_mm
+
+    def mv_stage_to_pos(self, z_mm):
+        stage = self.translation
+        print(f"Moving stage to position: z={z_mm:.3f}mm")
+        stage.mv(z_mm)
+        print(f"Stage moved to position: z={z_mm:.3f}mm")
+        return z_mm
+
+    def set_reference_combo(self, energy_eV, show=False):
+        combo = self.find_best_combo(energy_eV=energy_eV, show=show)
+        ref_focal_length_um = focal_length(combo.tfs_radius, energy=energy_eV)
+        print(f"Reference energy: {energy_eV:.2f} eV, reference focal length: {ref_focal_length_um:.3f} um")
+        return combo, ref_focal_length_um
+
+    def get_z_stage_target(self, energy_eV, combo, ref_focal_length_um, ref_z_stage_mm):
+        focal_length_um = focal_length(combo.tfs_radius, energy=energy_eV)
+        z_stage_target_mm = ref_z_stage_mm - (focal_length_um - ref_focal_length_um) * 1000
+        print(f"Energy {energy_eV:.2f} eV: computed focal length = {focal_length_um:.3f} um, target z = {z_stage_target_mm:.3f} mm.")
+        return z_stage_target_mm
+
+    def mv_stage_to_target_pos(self, energy_eV, combo, target_z_mm, track_record):
+        stage = self.translation
+        print(f"Moving stage to {target_z_mm:.3f} mm.")
+        stage.mv(target_z_mm)
+        track_record.append({
+            "energy": energy_eV,
+            "inserted_lenses": [lens.prefix for lens in combo.lenses],
+            "z_position": target_z_mm
+        })
+
+    def track_focus(self, energies, *, margin_mm=10.0, show=False):
+        """
+        Keep the focal length fixed over a provided list of energies by
+        compensating with the translation stage. Lenses are NOT actuated.
+
+        Workflow:
+        - Move stage to high limit minus a small margin.
+        - Compute initial lens combo and reference focal length.
+        - For each next energy, compute focal length for the current combo and
+          move the stage to compensate.
+        - If the move would exceed the stage low limit, return to the top
+          position and recompute the lens combo at that energy, then continue.
+        """
+        if not energies:
+            print("No energies provided.")
+            return None
+
+        min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
+        ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
+        combo, ref_focal_length_um = self.set_reference_combo(energies[0], show=show)
+        track_record = []
+
+        for energy in energies:
+            target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
+            if target_z_stage_mm > min_z_stage_mm:
+                self.mv_stage_to_target_pos(energy, combo, target_z_stage_mm, track_record)
+            else:
+                shrinking_max_z_stage_mm = max_z_stage_mm
+                while shrinking_max_z_stage_mm > min_z_stage_mm:
+                    self.mv_stage_to_pos(shrinking_max_z_stage_mm)
+                    combo = self.find_best_combo(energy_eV=energy, show=show)
+                    if combo:
+                        new_target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
+                        if new_target_z_stage_mm > min_z_stage_mm:
+                            self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
+                            break
+                    shrinking_max_z_stage_mm -= margin_mm
+                if not combo:
+                    print("Stage out of travel. Cannot compensate further...")
+
+        print(f"Tracking complete. Final energy: {track_record[-1]['energy']:.2f} eV, stage position: {track_record[-1]['z_position']:.3f} mm.")
+        print(f"Lenses currently inserted: {track_record[-1]['inserted_lenses']}")
+        
+        save_path = Path.home() / "track_focus_results.json"
+        with open(save_path, "w") as f:
+            json.dump(track_record, f, indent=4)
+        print(f"Tracking results saved to {save_path}")
+        return track_record
+
 
 class Transfocator(MFXTransfocator):
     pass
