@@ -54,22 +54,24 @@ def init_devices(force: bool = False) -> dict[str, Device]:
         devices[name] = client.load_device(name=name)
 
     # Happi IPMs do not currently have wave8s, add manually
-    for stand in ("dg1", "dg2"):
-        name = f"mfx_{stand}_wave8"
-        devices[name] = Wave8(f"MFX:{stand.upper()}:BMMON", name=name)
-        devices[name].kind = "hinted"
 
-    # Happi PIMs don't work how I want them to, add manually
-    
     devices["xcs_wave8"] = Wave8("HXX:DG1:BMMON:", name="mfx_xcs_wave8")
     devices["xcs_wave8"].kind = "hinted"
-    
-    for stand in ("dg1", "dg2"):
-        name = f"mfx_{stand}_yag"
-        devices[name] = YagCamera(f"MFX:GIGE:{stand.upper()}:YAG:", name=name)
-        devices[name].kind = "hinted"
-
     devices["xcs_yag1"] = YagCamera("XCS:GIGE:YAG1:", name="mfx_xcs_yag1")
+    devices["xcs_yag1"].kind = "hinted"
+    
+    devices["mfx_dg1_wave8"] = Wave8(f"MFX:DG1:W8:01", name="mfx_dg1_wave8")
+    devices["mfx_dg1_wave8"].kind = "hinted"
+    devices["mfx_dg1_yag"] = YagCamera(f"MFX:GIGE:DG1:YAG:", name="mfx_dg1_yag")
+    devices["mfx_dg1_yag"].kind = "hinted"
+
+    devices["mfx_dg2_wave8"] = Wave8(f"MFX:DG2:BMMON", name="mfx_dg2_wave8")
+    devices["mfx_dg2_wave8"].kind = "hinted"
+    devices["mfx_dg2_yag"] = YagCamera(f"MFX:GIGE:DG2:YAG:", name="mfx_dg2_yag")
+    devices["mfx_dg2_yag"].kind = "hinted"
+
+    # Happi PIMs don't work how I want them to, add manually
+
     devices["mfx_ip_yag"] = YagCamera("MFX:GIGE:LBL:01:", name="mfx_ip1_yag")
     devices["mfx_ip_yag"].kind = "hinted"
 

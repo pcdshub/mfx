@@ -10,7 +10,8 @@ from typing import Literal
 from pydantic import ConfigDict, validate_call
 
 Diagnostics = Literal["xcs1", "dg1", "dg2", "ip"]
-Methods = Literal["xopt", "blop"]
+Packages = Literal["xopt", "blop"]
+Methods = Literal["turbo", "calib"]
 Devices = Literal["yag", "wave8"]
 Movers = Literal["mirr", "und"]
 Turbo = Literal["safety", "optimize"]
