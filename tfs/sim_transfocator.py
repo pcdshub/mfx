@@ -39,7 +39,7 @@ class SimTransfocator(FakeTransfocator):
     tfs_09 = Cpt(SimLens, ":TFS:09")
     tfs_10 = Cpt(SimLens, ":TFS:10")
 
-def make_tfs_sim(tfs, prefix="SIM:TFS", name="tfs_sim"):
+def make_tfs_sim(tfs, prefix="SIM:", name="tfs_sim"):
     stage = Stage(name="stage")
     stage.set(tfs.translation.position).wait()
     stage.high_limit = tfs.translation.high_limit
