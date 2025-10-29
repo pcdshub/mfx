@@ -22,7 +22,6 @@ from .beamline_hw import (
 )
 
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -308,6 +307,32 @@ class VernierCalibration:
         vernier_energy_pv = devices["vernier_energy"]
         intensity_pv = devices["vernier_intensity"]
         
+        # Check if we're in simulation mode
+        try:
+            from mfx.db import RE, daq
+            is_simulation = False
+        except ImportError:
+            is_simulation = True
+            print("[calibrate] Simulation mode detected")
+        
+        # For real hardware, import DCCM device to move both DCCM and vernier together
+        dccm_motor = None
+        energy_start_keV = None
+        energy_end_keV = None
+        if not is_simulation:
+            try:
+                from mfx.dccm import DCCM
+                dccm = DCCM(name='DCCM')
+                dccm_motor = dccm.energy_with_vernier.energy  # This moves BOTH DCCM and vernier
+                # Convert eV to keV for DCCM
+                energy_start_keV = energy_start_eV / 1000.0
+                energy_end_keV = energy_end_eV / 1000.0
+                print("[calibrate] Using DCCM energy_with_vernier to move both DCCM and vernier together")
+            except Exception as e:
+                print(f"[calibrate] WARNING: Could not import DCCM device: {e}")
+                print(f"[calibrate] Will use vernier-only scan")
+                dccm_motor = None
+        
         # Generate energy grid
         energies = np.linspace(energy_start_eV, energy_end_eV, energy_steps)
         
@@ -321,13 +346,11 @@ class VernierCalibration:
         }
         
         # Perform calibration scan
-        try:
-            from mfx.db import RE, daq
-        except ImportError:
+        # RE and daq already imported above when checking simulation mode
+        if is_simulation:
             from bluesky import RunEngine
             RE = RunEngine({})
             daq = FakeDaq()
-            print("[calibrate] Cannot import mfx.db - running in simulation mode")
         
         try:
             import bluesky.plans as bp
@@ -336,10 +359,23 @@ class VernierCalibration:
             raise
         
         try:
-            # Configure DAQ
-            vernier_energy_pv.setpoint.kind = "hinted"
+            # Configure DAQ - use DCCM motor in real hardware, vernier motor in simulation
+            if dccm_motor is not None:
+                # Real hardware: use DCCM motor to move both DCCM and vernier together
+                dccm_motor.kind = "hinted"
+                scan_motor = dccm_motor
+                vernier_energy_pv.kind = "hinted"  # Also track vernier position
+                motors = [scan_motor, vernier_energy_pv]
+                print("[calibrate] Using DCCM motor for scanning, will move both DCCM and vernier")
+            else:
+                # Simulation mode: use vernier motor only
+                vernier_energy_pv.setpoint.kind = "hinted"
+                scan_motor = vernier_energy_pv
+                motors = [scan_motor]
+                print("[calibrate] Using vernier motor only (simulation mode)")
+            
             daq.configure(
-                motors=[vernier_energy_pv],
+                motors=motors,
                 group_mask=0x1,
                 events=events_per_step,
                 record=False
@@ -368,10 +404,16 @@ class VernierCalibration:
                     return
                 event_data = doc.get("data", {})
                 print(f"[calibrate] Event data keys: {list(event_data.keys())}")
-                if "vernier_energy" not in event_data:
-                    return
                 
-                vernier_energy = event_data["vernier_energy"]
+                # Get vernier energy from event data
+                # In simulation: key is "vernier_energy" (from vernier motor)
+                # In real hardware: key is "vernier_energy" (from vernier_energy_pv in motors list)
+                if "vernier_energy" in event_data:
+                    vernier_energy = event_data["vernier_energy"]
+                else:
+                    print(f"[calibrate] WARNING: No vernier_energy found in event data")
+                    print(f"[calibrate] Available keys: {list(event_data.keys())}")
+                    return
                 
                 # In simulation mode, update tracker with current motor position
                 # and call functions directly to force re-evaluation
@@ -391,17 +433,15 @@ class VernierCalibration:
                         print(f"[calibrate] Failed to get DCCM energy: {e}")
                         return
                 else:
-                    # Real hardware mode - use read()
+                    # Real hardware mode - use get() for simple reading
                     try:
-                        intensity_dict = intensity_pv.read()
-                        intensity = float(intensity_dict["vernier_intensity"]["value"])
+                        intensity = float(intensity_pv.get())
                     except Exception as e:
                         print(f"[calibrate] Failed to read intensity: {e}")
                         return
                     
                     try:
-                        dccm_dict = dccm_energy_pv.read()
-                        dccm_energy = float(dccm_dict["vernier_dccm_energy"]["value"])
+                        dccm_energy = float(dccm_energy_pv.get())
                     except Exception as e:
                         print(f"[calibrate] Failed to read DCCM energy: {e}")
                         return
@@ -427,14 +467,25 @@ class VernierCalibration:
             sid = RE.subscribe(on_event)
             
             try:
-                # Run the scan
-                RE(bp.scan(
-                    [daq],
-                    vernier_energy_pv,
-                    energy_start_eV,
-                    energy_end_eV,
-                    energy_steps
-                ))
+                # Run the scan - use keV for DCCM motor, eV for vernier motor
+                if dccm_motor is not None:
+                    # Real hardware: scan with DCCM motor (uses keV)
+                    RE(bp.scan(
+                        [daq],
+                        scan_motor,
+                        energy_start_keV,
+                        energy_end_keV,
+                        energy_steps
+                    ))
+                else:
+                    # Simulation: scan with vernier motor (uses eV)
+                    RE(bp.scan(
+                        [daq],
+                        scan_motor,
+                        energy_start_eV,
+                        energy_end_eV,
+                        energy_steps
+                    ))
             finally:
                 RE.unsubscribe(sid)
                 # Unset calibration mode flag after scan
@@ -644,10 +695,9 @@ class VernierCalibration:
                         print(f"[align_to_dccm] Failed to get intensity: {e}")
                         return
                 else:
-                    # Use read() for real hardware
+                    # Use get() for real hardware
                     try:
-                        intensity_dict = intensity_pv.read()
-                        intensity = float(intensity_dict["vernier_intensity"]["value"])
+                        intensity = float(intensity_pv.get())
                         print(f"[align_to_dccm] Read intensity: {intensity:.2f}")
                     except Exception as e:
                         print(f"[align_to_dccm] Failed to read intensity: {e}")
