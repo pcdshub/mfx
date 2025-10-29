@@ -542,7 +542,10 @@ class MFXTransfocator(TransfocatorBase):
                     self.mv_stage_to_pos(shrinking_max_z_stage_mm)
                     combo = self.find_best_combo(energy_eV=energy, show=show)
                     if combo:
-                        break
+                        new_target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
+                        if new_target_z_stage_mm > min_z_stage_mm:
+                            self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
+                            break
                     else:
                         shrinking_max_z_stage_mm -= margin_mm
                 if not combo:
@@ -555,7 +558,7 @@ class MFXTransfocator(TransfocatorBase):
         with open(save_path, "w") as f:
             json.dump(track_record, f, indent=4)
         print(f"Tracking results saved to {save_path}")
-        return results
+        return track_record
 
 
 class Transfocator(MFXTransfocator):
