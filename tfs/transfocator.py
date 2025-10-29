@@ -501,6 +501,7 @@ class MFXTransfocator(TransfocatorBase):
         return z_stage_target_mm
 
     def mv_stage_to_target_pos(self, energy_eV, combo, target_z_mm, track_record):
+        stage = self.translation
         print(f"Moving stage to {target_z_mm:.3f} mm.")
         stage.mv(target_z_mm)
         track_record.append({
