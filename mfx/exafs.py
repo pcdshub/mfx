@@ -89,11 +89,11 @@ class Exafs:
                 debug=debug
                 )
             if debug:
-                logging.warning(f"Would you like to continue?")
+                self.logger.warning(f"Would you like to continue?")
                 answer = input("(y/n)? ")
 
                 if answer.lower() == "n":
-                    logging.error(f"Fine. Exiting...")
+                    self.logger.error(f"Fine. Exiting...")
                     sys.exit()
         else:
             energies = energies_list
@@ -195,22 +195,67 @@ class Exafs:
         else:
             self.acr_energy_k.move(k_energy)
 
-    def _align_vernier_to_dccm(self, energy, tchk):
-        # NEW METHOD - Using VernierCalibration system
+    def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
+        """
+        Perform Vernier alignment with DCCM (tchk functionality).
+        
+        This method uses the new VernierCalibration system with two approaches:
+        1. If calibration exists and use_vernier_calibration=True: Use calibration to predict offset
+        2. Otherwise: Use intensity-based alignment scan
+        
+        Parameters
+        ----------
+        energy : float
+            Target energy in eV
+        tchk : bool
+            Whether to perform vernier alignment
+        use_vernier_calibration : bool
+            Whether to use calibration if available
+        """
         if tchk and not self.simulate:
-            from vernier_calibration import VernierCalibration
+            from mfx.optimize.vernier_calibration import VernierCalibration
+            from mfx.dccm import DCCM
+            
             vernier_calib = VernierCalibration()
-            # Use intensity-based alignment with calibration if available
-            # Will NOT interrupt scan to perform calibration - only uses existing fresh calibration
-            success = vernier_calib.align_to_dccm(
-                target_energy_eV=energy,
-                use_calibration=True,  # Only uses calibration if it exists and is fresh
-                energy_range_eV=10.0,
-                energy_steps=11,
-                events_per_step=12
-            )
-            if not success:
-                self.logger.warning(f"Vernier alignment failed at energy {energy/1000:.4f} keV")
+            
+            # Check if calibration exists and should be used
+            calib = vernier_calib._load_calibration()
+            use_calibration = use_vernier_calibration and calib is not None
+            
+            if use_calibration:
+                self.logger.info(f"Using existing calibration from {calib.get('timestamp')}")
+                # Method 1: Use calibration
+                # First, move DCCM alone to target energy (not with vernier)
+                self.logger.info(f"Moving DCCM alone to {energy:.4f} keV")
+                dccm = DCCM(name='DCCM')
+                dccm.energy.mv(energy / 1000.0)  # DCCM uses keV
+                
+                # Then align vernier using calibration prediction
+                self.logger.info("Aligning vernier using calibration")
+                success = vernier_calib.move_to_energy_with_calibration()
+                if not success:
+                    self.logger.warning(f"Calibration-based alignment failed at energy {energy:.4f} keV")
+            else:
+                if use_vernier_calibration and calib is None:
+                    self.logger.info("No calibration found - using intensity-based alignment")
+                elif not use_vernier_calibration:
+                    self.logger.info("use_vernier_calibration=False - using intensity-based alignment")
+                
+                # Method 2: No calibration - use intensity scan
+                # First move DCCM with vernier to approximate position
+                self.logger.info(f"Moving DCCM with vernier to {energy:.4f} keV")
+                dccm = DCCM(name='DCCM')
+                dccm.energy_with_vernier.mv(energy / 1000.0)  # DCCM uses keV
+                
+                # Then align to DCCM using intensity scan
+                self.logger.info("Performing intensity-based vernier alignment")
+                success = vernier_calib.align_to_dccm(
+                    energy_range_eV=10.0,
+                    energy_steps=11,
+                    events_per_step=12
+                )
+                if not success:
+                    self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
 
     def _move_k_if_necessary(self, energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
@@ -320,6 +365,7 @@ class Exafs:
             min_k_keV: float = 7.035,
             k_offset: int = 0,
             tchk = False,
+            use_vernier_calibration: bool = True,
             debug: bool = False):
         """Perform EXAFS scan.
 
@@ -368,6 +414,13 @@ class Exafs:
 
             k_offset: float
                 Offset in eV for undulator K motion request.
+                
+            tchk: bool, optional
+                If True, perform vernier alignment at each energy step.
+                
+            use_vernier_calibration: bool, optional
+                If True (default), use vernier calibration if available, otherwise use 
+                intensity-based alignment. If False, always use intensity-based alignment.
         """
         from mfx.autorun import post
 
@@ -405,7 +458,7 @@ class Exafs:
                     self._move_dccm_energy_with_vernier(energy_keV)
                     
                     # Perform Vernier alignment if needed
-                    self._align_vernier_to_dccm(energy, tchk)
+                    self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
 
                     # Move K if necessary
                     energy_0_keV, k_energy = self._move_k_if_necessary(
@@ -532,7 +585,7 @@ class Exafs:
         events_per_step : int
             Number of events per step
         """
-        from vernier_calibration import VernierCalibration
+        from mfx.optimize.vernier_calibration import VernierCalibration
         vernier_calib = VernierCalibration()
         return vernier_calib.calibrate(
             energy_start_eV=energy_start_eV,
