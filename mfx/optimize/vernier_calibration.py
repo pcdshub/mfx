@@ -539,6 +539,137 @@ class VernierCalibration:
         
         return calib
     
+    def collect_offset_data_at_energy(self, events: int = 120) -> dict:
+        """
+        Collect vernier offset data at the current energy.
+        
+        This is a helper method for collecting data point-by-point when
+        energy is controlled externally (e.g., in a loop).
+        
+        Parameters
+        ----------
+        events : int
+            Number of events to average for intensity measurement
+            
+        Returns
+        -------
+        dict
+            Dictionary with keys: "dccm_energy", "vernier_energy", "vernier_offset", "intensity"
+        """
+        from .beamline_hw import init_devices
+        
+        devices = init_devices()
+        dccm_energy_pv = devices["vernier_dccm_energy"]
+        vernier_energy_pv = devices["vernier_energy"]
+        intensity_pv = devices["vernier_intensity"]
+        
+        # Read current positions
+        try:
+            dccm_energy = float(dccm_energy_pv.get())
+            vernier_energy = float(vernier_energy_pv.position)
+            # Average intensity over multiple readings
+            intensities = []
+            for _ in range(events):
+                try:
+                    intensities.append(float(intensity_pv.get()))
+                except Exception:
+                    pass
+            intensity = np.mean(intensities) if intensities else float(intensity_pv.get())
+        except Exception as e:
+            print(f"[collect_offset_data_at_energy] Failed to read data: {e}")
+            raise
+        
+        offset = vernier_energy - dccm_energy
+        
+        data = {
+            "dccm_energy": dccm_energy,
+            "vernier_energy": vernier_energy,
+            "vernier_offset": offset,
+            "intensity": intensity
+        }
+        
+        print(f"[collect_offset_data_at_energy] Collected: dccm={dccm_energy:.2f} eV, "
+              f"vernier={vernier_energy:.2f} eV, offset={offset:.2f} eV, intensity={intensity:.2f}")
+        
+        return data
+    
+    def fit_calibration_from_data(self, data_points: list[dict]) -> dict:
+        """
+        Fit vernier calibration model from collected data points.
+        
+        Parameters
+        ----------
+        data_points : list[dict]
+            List of data dictionaries, each with keys: "dccm_energy", "vernier_offset", etc.
+            
+        Returns
+        -------
+        dict
+            Calibration dictionary containing coefficients and metadata
+        """
+        if not data_points:
+            raise ValueError("No data points provided for calibration")
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(data_points)
+        print(f"[fit_calibration_from_data] Fitting model from {len(df)} data points")
+        
+        # Fit model: offset = a0 + a1 * target_energy
+        # Where target_energy is the DCCM energy (what we're trying to reach)
+        X = df["dccm_energy"].values.reshape(-1, 1)
+        y_offset = df["vernier_offset"].values
+        
+        reg_offset = LinearRegression().fit(X, y_offset)
+        
+        # Calculate coefficients
+        coeff_offset = np.concatenate([[reg_offset.intercept_], reg_offset.coef_])
+        
+        # Calculate prediction errors
+        pred_offset = reg_offset.predict(X)
+        err_offset = np.abs(pred_offset - y_offset)
+        sigma_offset = float(np.std(err_offset))
+        
+        print(f"[fit_calibration_from_data] Offset coefficients: a0={coeff_offset[0]:.3f}, a1={coeff_offset[1]:.6f}")
+        print(f"[fit_calibration_from_data] Offset sigma: {sigma_offset:.3f} eV")
+        
+        # Save calibration data
+        ts = datetime.datetime.now().strftime("%y-%m-%d-%H:%M:%S")
+        
+        # Save raw data
+        csv_path = str(self.calib_dir / f"vernier_calib_data_{ts}.csv")
+        df.to_csv(csv_path, index=False)
+        print(f"[fit_calibration_from_data] Saved calibration data: {csv_path}")
+        
+        # Save plots
+        plot_path = self._save_calibration_plots(df, reg_offset, self.calib_dir, ts)
+        
+        # Get energy range from data
+        energy_start_eV = float(df["dccm_energy"].min())
+        energy_end_eV = float(df["dccm_energy"].max())
+        
+        # Create calibration dictionary
+        calib = {
+            "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+            "coeff_offset": [float(v) for v in coeff_offset.tolist()],
+            "sigma_offset": sigma_offset,
+            "energy_range": [energy_start_eV, energy_end_eV],
+            "energy_steps": len(df),
+            "data_csv": csv_path,
+            "plot_path": plot_path,
+            "num_points": len(df)
+        }
+        
+        # Save calibration
+        calib_path = self.calib_dir / f"vernier_calib_{ts}.json"
+        try:
+            with open(calib_path, "w") as f:
+                json.dump(calib, f, indent=2)
+            print(f"[fit_calibration_from_data] Saved calibration: {calib_path}")
+        except Exception as exc:
+            print(f"[fit_calibration_from_data] Warning: failed to save calibration: {exc}")
+        
+        return calib
+    
     def align_to_dccm(self, energy_range_eV: float = 10.0, energy_steps: int = 11,
                      events_per_step: int = 12) -> bool:
         """

@@ -2,6 +2,9 @@ import copy
 import numpy as np
 import sys
 from time import sleep
+import os
+import json
+from pathlib import Path
 
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
@@ -257,6 +260,89 @@ class Exafs:
                 if not success:
                     self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
 
+    def _align_ondulator(self, on_diagnostic, using_device, with_method, grid_bins):
+        """
+        Perform ondulator (undulator) alignment using beam alignment system.
+        
+        This method uses the Beam.align() function to align the ondulator.
+        If with_method="calib", it will use calibration if available, otherwise run calibration.
+        If with_method="turbo", it will use turbo optimization.
+        
+        Parameters
+        ----------
+        on_diagnostic : str
+            Diagnostic location (e.g., "dg1", "dg2", "xcs1")
+        using_device : str
+            Device to use ("yag" or "wave8")
+        with_method : str
+            Alignment method ("calib" or "turbo")
+        grid_bins : int
+            Number of grid bins for calibration (if using "calib" method)
+        """
+        try:
+            from mfx.optimize.beam import Beam
+            from mfx.optimize.user_select import select_goal
+            
+            self.logger.info(f"Aligning ondulator on {on_diagnostic} using {using_device} with method {with_method}")
+            beam = Beam()
+            
+            # Get the goal for the diagnostic if needed
+            # For YAG with calib method, we might not need a specific goal, but let's get a default
+            goal = None
+            goal_2d = None
+            if using_device == "yag":
+                # Try to get a default goal for YAG
+                try:
+                    goal_info = select_goal(
+                        device_type=using_device,
+                        location=on_diagnostic,
+                        goal=None,
+                        goal_2d=None,
+                        use_2d_markers=False,
+                    )
+                    if isinstance(goal_info, tuple):
+                        goal_2d = goal_info
+                    else:
+                        goal = goal_info
+                except Exception:
+                    # If we can't get a goal, use use_2d_markers to bypass the requirement
+                    pass
+            
+            # Perform alignment
+            # The align() method handles calibration automatically if method is "calib"
+            align_kwargs = {
+                "on_diagnostic": on_diagnostic,
+                "using_device": using_device,
+                "mover": "und",
+                "with_method": with_method,
+                "grid_bins": grid_bins,
+                "save_run": False,  # Don't save runs during scan
+            }
+            
+            # Add goal parameters if we have them, or use use_2d_markers for YAG
+            if using_device == "yag" and goal is None and goal_2d is None:
+                align_kwargs["use_2d_markers"] = True
+            else:
+                if goal is not None:
+                    align_kwargs["with_goal"] = goal
+                if goal_2d is not None:
+                    align_kwargs["with_goal_2d"] = goal_2d
+            
+            result = beam.align(**align_kwargs)
+            
+            self.logger.info(f"Ondulator alignment completed on {on_diagnostic}")
+            
+        except Exception as e:
+            self.logger.warning(f"Ondulator alignment failed: {e}")
+            # Don't raise - allow scan to continue
+
+    def _move_tfs_to_energy(self, energy_eV, track_focus_data):
+        """
+        Placeholder for Transfocator move using track_focus results.
+        Currently does nothing; to be implemented.
+        """
+        return
+
     def _move_k_if_necessary(self, energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
@@ -342,6 +428,180 @@ class Exafs:
         self._return_to_start(energy_start, k_energy_start)
         self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+    def long_calib(
+            self,
+            simulate: bool = False,
+            start_eV: float = 7000.0,
+            end_eV: float = 7500.0,
+            energy_steps: int = 6,
+            vernier_events_per_step: int = 120,
+            ondulator_on_diagnostic: str = "dg1",
+            ondulator_grid_bins: int = 5,
+            ondulator_using_device: str = "yag",
+            debug: bool = False):
+        """Perform calibration scan over energy range for both vernier and ondulator.
+        
+        This function performs calibrations in a single energy loop:
+        1. At each energy: collects vernier offset data and runs ondulator calibration
+        2. After the loop: fits a single vernier calibration model from all collected offset data
+        
+        Parameters:
+        -----------
+        simulate : bool, optional
+            Whether to run in simulation mode. Default: False
+            
+        start_eV : float, optional
+            Starting energy for calibration range in eV. Default: 7000.0
+            
+        end_eV : float, optional
+            Ending energy for calibration range in eV. Default: 7500.0
+            
+        energy_steps : int, optional
+            Number of energy points to visit. Default: 6
+            
+        vernier_events_per_step : int, optional
+            Number of events to average for vernier offset measurement. Default: 120
+            
+        ondulator_on_diagnostic : str, optional
+            Diagnostic location for ondulator calibration. Options: "xcs1", "dg1", "dg2". Default: "dg1"
+            
+        ondulator_grid_bins : int, optional
+            Number of grid bins for ondulator calibration. Default: 5
+            
+        ondulator_using_device : str, optional
+            Device to use for ondulator calibration. Options: "yag", "wave8". Default: "yag"
+            
+        debug : bool, optional
+            Enable debug output. Default: False
+        """
+        from mfx.optimize.vernier_calibration import VernierCalibration
+        from mfx.optimize.beam import Beam
+        from mfx.optimize.xopt_scans import get_xopt_obj
+        from mfx.optimize.user_select import select_goal
+        
+        self.simulate = simulate
+        
+        # Store initial position
+        energy_start = self.dccm.energy_with_vernier.energy()
+        
+        # Initialize calibration objects
+        vernier_calib = VernierCalibration()
+        beam = Beam()
+        
+        # Generate energy list
+        energies = np.linspace(start_eV, end_eV, energy_steps)
+        
+        # Storage for vernier calibration data
+        vernier_data_points = []
+        
+        self.logger.info(f"Starting long calibration scan from {start_eV:.2f} to {end_eV:.2f} eV ({energy_steps} steps)")
+        
+        try:
+            # Single loop through energies
+            for i, target_energy in enumerate(energies):
+                self.logger.info(f"\n{'='*60}")
+                self.logger.info(f"Calibration step {i+1}/{energy_steps} at energy {target_energy:.2f} eV")
+                self.logger.info(f"{'='*60}")
+                
+                energy_keV = target_energy / 1000.0
+                
+                # Move DCCM and Vernier to target energy
+                self.logger.info(f"Moving DCCM and Vernier to {target_energy:.2f} eV ({energy_keV:.4f} keV)")
+                self._move_dccm_energy_with_vernier(energy_keV)
+                
+                # Collect vernier offset data at this energy
+                self.logger.info(f"\n--- Collecting vernier offset data at {target_energy:.2f} eV ---")
+                try:
+                    vernier_data = vernier_calib.collect_offset_data_at_energy(
+                        events=vernier_events_per_step
+                    )
+                    vernier_data_points.append(vernier_data)
+                    self.logger.info(f"Vernier data collected at {target_energy:.2f} eV")
+                except Exception as e:
+                    self.logger.error(f"Failed to collect vernier data at {target_energy:.2f} eV: {e}")
+                    if not debug:
+                        raise
+                    continue
+                
+                # Run ondulator calibration at this energy
+                self.logger.info(f"\n--- Running ondulator calibration at {target_energy:.2f} eV ---")
+                try:
+                    # Create xopt_obj for ondulator calibration
+                    # We need to get the goal for the diagnostic
+                    goal = select_goal(
+                        device_type=ondulator_using_device,
+                        location=ondulator_on_diagnostic,
+                        goal=None,
+                        goal_2d=None,
+                        use_2d_markers=False,
+                    )
+                    
+                    # Create xopt object for calibration
+                    xopt_obj = get_xopt_obj(
+                        device_type=ondulator_using_device,
+                        location=ondulator_on_diagnostic,
+                        mover="und",
+                        goal=goal if not isinstance(goal, tuple) else None,
+                        goal_2d=goal if isinstance(goal, tuple) else None,
+                        xopt_generator_turbo_controller="optimize",
+                        max_iter=2000,
+                        dump_file=None,
+                        num_frames=1,
+                    )
+                    
+                    # Run calibration at this energy
+                    # This will do a grid scan of undulator positions and fit
+                    # the relationship: centroid = f(undulator_x, undulator_y)
+                    ondulator_calib_result = beam.calibrate(
+                        xopt_obj=xopt_obj,
+                        on_diagnostic=ondulator_on_diagnostic,
+                        grid_bins=ondulator_grid_bins
+                    )
+                    self.logger.info(f"Ondulator calibration completed at {target_energy:.2f} eV")
+                except Exception as e:
+                    self.logger.error(f"Ondulator calibration failed at {target_energy:.2f} eV: {e}")
+                    if not debug:
+                        raise
+                    continue
+                
+                self.logger.info(f"Completed calibration step {i+1}/{energy_steps} at {target_energy:.2f} eV")
+            
+            # ============================================================
+            # Fit vernier calibration model from all collected data
+            # ============================================================
+            self.logger.info(f"\n{'='*60}")
+            self.logger.info(f"Fitting vernier calibration model from {len(vernier_data_points)} data points")
+            self.logger.info(f"{'='*60}")
+            
+            if vernier_data_points:
+                try:
+                    vernier_calib_result = vernier_calib.fit_calibration_from_data(vernier_data_points)
+                    self.logger.info(f"Vernier calibration model fitted successfully")
+                    self.logger.info(f"Calibration model: offset = {vernier_calib_result.get('coeff_offset', 'N/A')}")
+                except Exception as e:
+                    self.logger.error(f"Failed to fit vernier calibration model: {e}")
+                    if not debug:
+                        raise
+            else:
+                self.logger.warning("No vernier data points collected - skipping vernier calibration fit")
+        
+        except KeyboardInterrupt:
+            self.logger.warning("[*] Calibration interrupted by user")
+            # Try to fit vernier model with collected data so far
+            if vernier_data_points:
+                try:
+                    self.logger.info("Fitting vernier calibration from partial data...")
+                    vernier_calib.fit_calibration_from_data(vernier_data_points)
+                except Exception:
+                    pass
+        
+        # Return to initial position
+        self.logger.info(f"\nReturning to initial energy: {energy_start:.4f} keV")
+        self._move_dccm_energy_with_vernier(energy_start)
+        
+        self.logger.warning('Finished long calibration scan!\n')
+        return
+
     def long_escan(
             self,
             simulate: bool = False,
@@ -366,6 +626,11 @@ class Exafs:
             k_offset: int = 0,
             tchk = False,
             use_vernier_calibration: bool = True,
+            align_ondulator: bool = False,
+            ondulator_on_diagnostic: str = "dg1",
+            ondulator_using_device: str = "yag",
+            ondulator_with_method: str = "calib",
+            ondulator_grid_bins: int = 5,
             debug: bool = False):
         """Perform EXAFS scan.
 
@@ -421,10 +686,38 @@ class Exafs:
             use_vernier_calibration: bool, optional
                 If True (default), use vernier calibration if available, otherwise use 
                 intensity-based alignment. If False, always use intensity-based alignment.
+                
+            align_ondulator: bool, optional
+                If True, perform ondulator alignment at each energy step. Default: False
+                
+            ondulator_on_diagnostic: str, optional
+                Diagnostic location for ondulator alignment. Options: "xcs1", "dg1", "dg2". Default: "dg1"
+                
+            ondulator_using_device: str, optional
+                Device to use for ondulator alignment. Options: "yag", "wave8". Default: "yag"
+                
+            ondulator_with_method: str, optional
+                Method to use for ondulator alignment. Options: "turbo", "calib". Default: "calib"
+                
+            ondulator_grid_bins: int, optional
+                Number of grid bins for ondulator calibration (if using "calib" method). Default: 5
         """
         from mfx.autorun import post
 
         self.simulate = simulate
+
+        # Load track_focus results from current working directory, if available
+        track_focus_data = None
+        try:
+            track_focus_path = Path(os.getcwd()) / "track_focus_results.json"
+            if track_focus_path.exists():
+                with open(track_focus_path, "r") as tf:
+                    track_focus_data = json.load(tf)
+                self.logger.info(f"Loaded track_focus results from {track_focus_path}")
+            else:
+                self.logger.info("No track_focus_results.json found in current directory; proceeding without TFS guidance.")
+        except Exception as e:
+            self.logger.warning(f"Failed to load track_focus_results.json: {e}")
 
         energies, wait_times = self._build_energy_and_wait_time(
             energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug
@@ -453,6 +746,8 @@ class Exafs:
                     energy_keV = energy / 1000.0
 
                     # Move TFS to energy
+                    # Placeholder: will use track_focus_data to position TFS once implemented
+                    self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
                     
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
@@ -468,6 +763,13 @@ class Exafs:
                     # Move XRT spectrometer camera if necessary
 
                     # Adjust undulator pointing on DCCM
+                    if align_ondulator and not self.simulate:
+                        self._align_ondulator(
+                            on_diagnostic=ondulator_on_diagnostic,
+                            using_device=ondulator_using_device,
+                            with_method=ondulator_with_method,
+                            grid_bins=ondulator_grid_bins
+                        )
 
                     # Wait before moving on
                     self._wait(wait_time)
