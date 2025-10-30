@@ -1,6 +1,7 @@
 from lightpath import LightpathState
 from ophyd.device import Component as Cpt
 from ophyd.device import FormattedComponent as FCpt
+from epics import caput
 
 from pcdsdevices.analog_signals import FDQ
 from pcdsdevices.device import GroupDevice
@@ -69,7 +70,6 @@ class DCCMEnergy(FltMvInterface, PseudoPositioner):
     th2 = Cpt(BeckhoffAxis, ":MMS:TH2", doc="Bragg Upstream/TH2 Axis", kind="normal", name='th2')
 
     tab_component_names = True
-
 
     def forward(self, pseudo_pos: namedtuple) -> namedtuple:
         """
@@ -248,6 +248,10 @@ class DCCM(BaseInterface, GroupDevice):
         name to use in bluesky
     """
     
+    def insert(self):
+        caput('SP1L0:DCCM:MMS:STATE:SET','IN',wait=True)
+    def remove(self):
+        caput('SP1L0:DCCM:MMS:State:SET','OUT',wait=True)
     tab_component_names = True
 
     th1 = Cpt(BeckhoffAxis, ":MMS:TH1", doc="Bragg Upstream/TH1 Axis", kind="normal")

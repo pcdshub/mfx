@@ -116,4 +116,4 @@ class TFS_Calculator(object):
 
         # Step 3
         solution = combos[np.argmin(diff)]
-        return solution, np.min(diff)
+        return solution, np.min(diff), pre_focus_lens

@@ -1,10 +1,11 @@
 import copy
-import numpy as np
 import sys
 from time import sleep
-import os
-import json
 from pathlib import Path
+import json
+import numpy as np
+from tfs.sim_transfocator import make_tfs_sim
+from tfs.transfocator import Transfocator
 
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
@@ -22,6 +23,7 @@ class Exafs:
         self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
         self.simulate = False
         self.sim = sim.get_hw()
+        self.tfs = None
 
     # DG1 IPM SUM PV (read-only)
     ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
@@ -114,20 +116,20 @@ class Exafs:
     def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize):
         """Initialize energy values for the scan."""
         
-        energy_0_keV = energies[0]/1000.0  # energy at the beginning or after a und K step
-        k_energy = energy_0_keV * 1000.0 + k_offset
+        energy_0_keV = energies[0] / 1000.0  # energy at the beginning or after a und K step
+        k_energy = energy_0_keV * 1000.0 + (k_stepsize / 2) + k_offset
         if reverse:
-            energies=energies[::-1]
-            energy_0_keV=energies[0]/1000.0
-            k_energy = energy_0_keV * 1000.0 - k_stepsize + k_offset
+            energies = energies[::-1]
+            energy_0_keV = energies[0] / 1000.0
+            k_energy = energy_0_keV * 1000.0 - (k_stepsize / 2) + k_offset
             self.logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
-            wait_time=wait_time[::-1]
+            wait_time = wait_time[::-1]
         
         # Move energy motor
         self._move_dccm_energy_with_vernier(energy_0_keV)
             
         # Move K motor
-        self.logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+        self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
             
@@ -269,71 +271,73 @@ class Exafs:
             else:
                 dccm = DCCM(name='DCCM')
                 dccm.energy_with_vernier.mv(energy / 1000.0)  # DCCM uses keV
-            
-            # Then align to DCCM using intensity scan
-            self.logger.info("Performing intensity-based vernier alignment")
-            success = vernier_calib.align_to_dccm(
-                energy_range_eV=10.0,
-                energy_steps=11,
-                events_per_step=12
-            )
-            if not success:
-                self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
-
-    def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
-        """
-        Perform undulator (undulator) alignment using beam alignment system.
-        
-        This method uses the Beam.align() function to align the undulator.
-        If with_method="calib", it will use calibration if available, otherwise run calibration.
-        If with_method="turbo", it will use turbo optimization.
-        
-        Parameters
-        ----------
-        on_diagnostic : str
-            Diagnostic location (e.g., "dg1", "dg2", "xcs1")
-        using_device : str
-            Device to use ("yag" or "wave8")
-        with_method : str
-            Alignment method ("calib" or "turbo")
-        grid_bins : int
-            Number of grid bins for calibration (if using "calib" method)
-        """
-        # If simulating, force simulated devices to avoid any real hardware motion
-        if self.simulate:
-            try:
-                from mfx.optimize.beamline_hw import sim_devices
-                sim_devices()
-                print("[align_undulator] Simulation devices initialized")
-            except Exception:
-                print("[align_undulator] WARNING: Failed to set simulation devices. Returning.")
-                return
-        
+                
+                # Then align to DCCM using intensity scan
+                self.logger.info("Performing intensity-based vernier alignment")
+                success = vernier_calib.align_to_dccm(
+                    energy_range_eV=10.0,
+                    energy_steps=11,
+                    events_per_step=12
+                )
+                if not success:
+                    self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
+    
+    def _get_track_focus_data(self):
+        track_focus_data = None
         try:
-            from mfx.optimize.beam import Beam
-            beam = Beam()
-            beam.align(
-                on_diagnostic=on_diagnostic,
-                using_device=using_device,
-                with_method=with_method,
-                grid_bins=grid_bins,
-                use_2d_markers=True,
-                mover = "und"
-                with_method = "calib",
-                grid_bins = 5
-            )
+            track_focus_path = Path.home() / "track_focus_results.json"
+            if track_focus_path.exists():
+                with open(track_focus_path, "r") as tf:
+                    track_focus_data = json.load(tf)
+                self.logger.info(f"Loaded track_focus results from {track_focus_path}")
+            else:
+                self.logger.info("No track_focus_results.json found in home directory; returning None.")
         except Exception as e:
-            self.logger.warning(f"undulator alignment failed: {e}")
-            # Don't raise - allow scan to continue
+            self.logger.warning(f"Failed to load track_focus_results.json: {e}")
+        return track_focus_data
+
+    def _init_tfs(self, energies):
+        tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
+        if self.simulate:
+            self.tfs = make_tfs_sim(tfs)
+        else:
+            self.tfs = tfs
+
+        sim_tfs = make_tfs_sim(tfs)
+        track_focus_data = sim_tfs.track_focus(energies=energies, show=True)
+        return track_focus_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data):
-        """
-        Placeholder for Transfocator move using track_focus results.
-        Currently does nothing; to be implemented.
-        """
-        return
+        if track_focus_data is not None:
+            energy_eV = float(energy_eV)
+            for data in track_focus_data:
+                if data["energy"] == energy_eV:
+                    z_position = data["z_position"]
+                    inserted_lenses = data["inserted_lenses"]
+                    break
+            if z_position is not None:
+                self.logger.info(f"Moving TFS to {z_position:.3f} mm")
+                self.tfs.translation.mv(z_position)
+            for lens in self.tfs.lenses:
+                if lens.prefix in inserted_lenses:
+                    self.logger.info(f"Inserting lens {lens.prefix}")
+                    if lens.inserted:
+                        self.logger.info(f"Lens {lens.prefix} already inserted")
+                        continue
+                    lens.insert()
+                else:
+                    self.logger.info(f"Removing lens {lens.prefix}")
+                    if not lens.inserted:
+                        self.logger.info(f"Lens {lens.prefix} already removed")
+                        continue
+                    lens.remove()
+        else:
+            self.logger.warning("No track_focus_data found; how did you get here?.")
+            return
 
-    def _move_k_if_necessary(self, energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV):
+
+
+    def _move_k_if_necessary(self, energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
 
@@ -342,14 +346,15 @@ class Exafs:
         else:
             prev_k_energy = self.acr_energy_k.get().setpoint
 
-        e_step = np.abs(energy_keV - energy_0_keV) * 1000
+        e_step = round(np.abs(energy_keV - k_energy / 1000) * 1000, 1)
+        self.logger.info(f"Absolute difference vernier and k {e_step}")
         
         # Move K every k_stepsize
-        if e_step > k_stepsize:
+        if e_step > k_stepsize / 2:
             # Calculate new k_energy (same logic for both simulation and real)
-            k_energy = energy_keV * 1000.0 + k_offset
+            k_energy = k_energy + k_stepsize + k_offset
             if reverse:
-                k_energy = energy_keV * 1000.0 - k_stepsize + k_offset
+                k_energy = k_energy - k_stepsize + k_offset
                 if k_energy/1000 < min_k_keV:
                     k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
@@ -361,6 +366,7 @@ class Exafs:
                     self.logger.info(f"Moving k to {k_energy:0.0f}")
                     sleep(0.5)
 
+                self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
                 self._move_k_energy(k_energy)
 
                 if not self.simulate:
@@ -368,9 +374,8 @@ class Exafs:
                     while daq.control.getState() != "running":
                         ...
 
-            energy_0_keV = energy_keV
-                
-        return energy_0_keV, k_energy
+        return k_energy
+
 
     def _wait(self, wait_time):
         if np.isnan(wait_time):
@@ -641,6 +646,8 @@ class Exafs:
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
+        track_focus_data = self._init_tfs(energies)
+
         try:
             for i in range(runs):
                 # Initialize energies
@@ -667,20 +674,19 @@ class Exafs:
                     self.logger.info(f"Energy: {energy:0.4f}, Time: {wait_time}")
                     energy_keV = energy / 1000.0
 
+                    # Move K if necessary
+                    k_energy = self._move_k_if_necessary(
+                        energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV
+                    )
+
                     # Move TFS to energy
-                    # Placeholder: will use track_focus_data to position TFS once implemented
                     self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
-                    
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     
                     # Perform Vernier alignment if needed
                     self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
 
-                    # Move K if necessary
-                    energy_0_keV, k_energy = self._move_k_if_necessary(
-                        energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV
-                    )
 
                     # Move XRT spectrometer camera if necessary
 

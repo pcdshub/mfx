@@ -189,6 +189,40 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_10.remove()
 
 
+    def check_forbidden(self, pre_focus_lens, energy, radius): 
+        from transfocate.table.info import data as spreadsheet_data
+
+        if int(pre_focus_lens) == 750:
+            lens = "LENS1_750"
+        elif int(pre_focus_lens) == 428:
+            lens = "LENS2_428"
+        elif int(pre_focus_lens) == 333:
+            lens = "LENS3_333"
+        else:
+            lens = "NO_LENS"
+
+        lens_to_spreadsheet_df = {
+            0: spreadsheet_data["NO_LENS"],
+            1: spreadsheet_data["LENS1_750"],
+            2: spreadsheet_data["LENS2_428"],
+            3: spreadsheet_data["LENS3_333"],
+        }
+
+        df=spreadsheet_data[lens]
+        closest_energy = (df['energy'] - energy).abs().idxmin()
+        trip_min = df['trip_min'].loc[closest_energy]
+        trip_max = df['trip_max'].loc[closest_energy]
+
+        if radius >= trip_min and radius <= trip_max:
+            forbidden = True
+            logger.error("TFS Configuration is Forbidden")
+        else:
+            forbidden = True
+            logger.info("TFS Configuration is Allowed")
+
+        return forbidden
+
+
     def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], **kwargs):
 
         """
@@ -228,8 +262,9 @@ class MFXTransfocator(TransfocatorBase):
             logging.warning(f"please double-check that {energy} is in eV, not keV.")
         target = target or self.nominal_sample
         calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses,exclusions=exclusions)
-        combo, diff = calc.find_solution(target, energy, n, z_obj, **kwargs)
+        combo, diff, pre_focus_lens = calc.find_solution(target, energy, n, z_obj, **kwargs)
         if combo:
+            print(combo)
             combo.show_info()
             logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
             radius = combo.tfs_radius
@@ -238,6 +273,7 @@ class MFXTransfocator(TransfocatorBase):
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
+            self.check_forbidden(pre_focus_lens.radius, energy, radius)
 
             logger.info(f'Calculated Focal Length: {focal} m\n')
 
@@ -315,6 +351,7 @@ class MFXTransfocator(TransfocatorBase):
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
+            self.check_forbidden(pre_focus_lens.radius, energy, radius)
 
             logger.info(f'Calculated Focal Length: {focal} um\n')
 
@@ -433,7 +470,7 @@ class MFXTransfocator(TransfocatorBase):
         prev_lenses = set()
 
         for energy in energies:
-            combo, _diff_abs = calc.find_solution(tgt, energy, n=n, z_obj=z_obj)
+            combo, _diff_abs, pre_focus_lens = calc.find_solution(tgt, energy, n=n, z_obj=z_obj)
             if combo is None:
                 schedule.append({
                     'energy_eV': energy,
@@ -523,9 +560,12 @@ class MFXTransfocator(TransfocatorBase):
         - If the move would exceed the stage low limit, return to the top
           position and recompute the lens combo at that energy, then continue.
         """
-        if not energies:
+        if len(energies) == 0:
             print("No energies provided.")
             return None
+
+        # cast energies to float to avoid json serialization issues
+        energies = [float(energy) for energy in energies]
 
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
         ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
@@ -534,7 +574,7 @@ class MFXTransfocator(TransfocatorBase):
 
         for energy in energies:
             target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
-            if target_z_stage_mm > min_z_stage_mm:
+            if target_z_stage_mm > min_z_stage_mm and target_z_stage_mm <= max_z_stage_mm:
                 self.mv_stage_to_target_pos(energy, combo, target_z_stage_mm, track_record)
             else:
                 shrinking_max_z_stage_mm = max_z_stage_mm
@@ -543,7 +583,7 @@ class MFXTransfocator(TransfocatorBase):
                     combo = self.find_best_combo(energy_eV=energy, show=show)
                     if combo:
                         new_target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
-                        if new_target_z_stage_mm > min_z_stage_mm:
+                        if new_target_z_stage_mm > min_z_stage_mm and new_target_z_stage_mm <= max_z_stage_mm:
                             self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
                             break
                     shrinking_max_z_stage_mm -= margin_mm
