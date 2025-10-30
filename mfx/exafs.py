@@ -111,26 +111,19 @@ class Exafs:
     def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize):
         """Initialize energy values for the scan."""
         
-        energy_0_keV = energies[0]/1000.0  # energy at the beginning or after a und K step
-        k_energy = energy_0_keV * 1000.0 + k_offset
+        energy_0_keV = energies[0] / 1000.0  # energy at the beginning or after a und K step
+        k_energy = energy_0_keV * 1000.0 + (k_stepsize / 2) + k_offset
         if reverse:
-            energies=energies[::-1]
-            energy_0_keV=energies[0]/1000.0
-            k_energy = energy_0_keV * 1000.0 - k_stepsize + k_offset
+            energies = energies[::-1]
+            energy_0_keV = energies[0] / 1000.0
+            k_energy = energy_0_keV * 1000.0 - (k_stepsize / 2) + k_offset
             self.logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
-            wait_time=wait_time[::-1]
+            wait_time = wait_time[::-1]
         
         # Move energy motor
         self._move_dccm_energy_with_vernier(energy_0_keV)
             
         # Move K motor
-        if reverse:
-            if end_eV - (k_stepsize / 2) =! k_energy_start:
-                self._move_k_energy(end_eV - (k_stepsize / 2))
-        else:
-            if start_eV + (k_stepsize / 2) =! k_energy_start:
-                self._move_k_energy(start_eV + (k_stepsize / 2))
-                
         self.logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
