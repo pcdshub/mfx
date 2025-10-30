@@ -17,8 +17,14 @@ class SimLens(RealLens):
     def _do_move(self, state):
         if state.name == 'IN':
             self._insert.put(1)
+            self._inserted.put(1)
+            self._remove.put(0)
+            self._removed.put(0)
         elif state.name == 'OUT':
+            self._removed.put(1)
             self._remove.put(1)
+            self._insert.put(0)
+            self._inserted.put(0)
         else:
             raise ValueError("Invalid State {}".format(state))
 

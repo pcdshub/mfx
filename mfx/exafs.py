@@ -5,7 +5,7 @@ from time import sleep
 from pathlib import Path
 import json
 from tfs.sim_transfocator import make_tfs_sim
-from tfs.transfocator import Transfocator as tfs
+from tfs.transfocator import Transfocator
 
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
@@ -277,16 +277,14 @@ class Exafs:
         return track_focus_data
 
     def _init_tfs(self, energies):
+        tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         if self.simulate:
             self.tfs = make_tfs_sim(tfs)
         else:
             self.tfs = tfs
 
-        track_focus_data = self._get_track_focus_data()
-        if track_focus_data is None:
-            self.logger.warning("No track_focus_data found; generating new track_focus_data in simulation.")
-            sim_tfs = make_tfs_sim(tfs)
-            track_focus_data = sim_tfs.track_focus(energies=energies, show=True)
+        sim_tfs = make_tfs_sim(tfs)
+        track_focus_data = sim_tfs.track_focus(energies=energies, show=True)
         return track_focus_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data):

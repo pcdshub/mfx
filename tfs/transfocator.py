@@ -523,7 +523,7 @@ class MFXTransfocator(TransfocatorBase):
         - If the move would exceed the stage low limit, return to the top
           position and recompute the lens combo at that energy, then continue.
         """
-        if not energies:
+        if len(energies) == 0:
             print("No energies provided.")
             return None
 
