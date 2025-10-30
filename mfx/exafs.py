@@ -124,7 +124,7 @@ class Exafs:
         self._move_dccm_energy_with_vernier(energy_0_keV)
             
         # Move K motor
-        self.logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+        self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
             
@@ -285,6 +285,7 @@ class Exafs:
                     self.logger.info(f"Moving k to {k_energy:0.0f}")
                     sleep(0.5)
 
+                self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
                 self._move_k_energy(k_energy)
 
                 if not self.simulate:
