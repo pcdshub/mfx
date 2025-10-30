@@ -455,6 +455,7 @@ class Exafs:
             try:
                 from mfx.optimize.beamline_hw import sim_devices
                 sim_devices()
+                print("Simulated devices initialized")
             except Exception:
                 # Continue even if sim init fails; other simulation guards remain in place
                 ...
