@@ -375,7 +375,6 @@ class VernierCalibration:
             # This ensures SynSignals get the current motor position
             tracker = None
             get_intensity_func = None
-            get_dccm_func = None
             try:
                 # Try to get the tracker from the vernier device (simulation mode)
                 if hasattr(vernier_energy_pv, 'pos_tracker'):
@@ -416,7 +415,7 @@ class VernierCalibration:
                         return
                     
                     try:
-                        dccm_energy = float(get_dccm_func())
+                        dccm_energy = float(read_dccm_energy())
                     except Exception as e:
                         print(f"[calibrate] Failed to get DCCM energy: {e}")
                         return
@@ -788,7 +787,6 @@ class VernierCalibration:
             # For simulation mode, get tracker and functions from devices
             tracker = None
             get_intensity_func = None
-            get_dccm_func = None
             try:
                 if hasattr(vernier_energy_pv, 'pos_tracker'):
                     tracker = vernier_energy_pv.pos_tracker
