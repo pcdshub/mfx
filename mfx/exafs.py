@@ -217,38 +217,58 @@ class Exafs:
         use_vernier_calibration : bool
             Whether to use calibration if available
         """
-        if tchk and not self.simulate:
-            from mfx.optimize.vernier_calibration import VernierCalibration
-            from mfx.dccm import DCCM
-            
-            vernier_calib = VernierCalibration()
-            
-            # Check if calibration exists and should be used
-            calib = vernier_calib._load_calibration()
-            use_calibration = use_vernier_calibration and calib is not None
-            
-            if use_calibration:
-                self.logger.info(f"Using existing calibration from {calib.get('timestamp')}")
-                # Method 1: Use calibration
-                # First, move DCCM alone to target energy (not with vernier)
-                self.logger.info(f"Moving DCCM alone to {energy:.4f} keV")
+        if not tchk:
+            return
+        
+        # If simulating, force simulated devices to avoid any real hardware motion
+        if self.simulate:
+            try:
+                from mfx.optimize.beamline_hw import sim_devices
+                sim_devices()
+                print("[align_vernier_to_dccm] Simulation devices initialized")
+            except Exception:
+                # Continue even if sim init fails; other simulation guards remain in place
+                ...
+        
+        from mfx.optimize.vernier_calibration import VernierCalibration
+        from mfx.dccm import DCCM
+        
+        vernier_calib = VernierCalibration()
+        
+        # Check if calibration exists and should be used
+        calib = vernier_calib._load_calibration()
+        use_calibration = use_vernier_calibration and calib is not None
+        
+        if use_calibration:
+            self.logger.info(f"Using existing calibration from {calib.get('timestamp')}")
+            # Method 1: Use calibration
+            # First, move DCCM alone to target energy (not with vernier)
+            self.logger.info(f"Moving DCCM alone to {energy:.4f} keV")
+            if self.simulate:
+                # In simulation, use sim motor for DCCM energy
+                self.sim.fast_motor1.mv(energy / 1000.0)
+            else:
                 dccm = DCCM(name='DCCM')
                 dccm.energy.mv(energy / 1000.0)  # DCCM uses keV
-                
-                # Then align vernier using calibration prediction
-                self.logger.info("Aligning vernier using calibration")
-                success = vernier_calib.move_to_energy_with_calibration()
-                if not success:
-                    self.logger.warning(f"Calibration-based alignment failed at energy {energy:.4f} keV")
+            
+            # Then align vernier using calibration prediction
+            self.logger.info("Aligning vernier using calibration")
+            success = vernier_calib.move_to_energy_with_calibration()
+            if not success:
+                self.logger.warning(f"Calibration-based alignment failed at energy {energy:.4f} keV")
+        else:
+            if use_vernier_calibration and calib is None:
+                self.logger.info("No calibration found - using intensity-based alignment")
+            elif not use_vernier_calibration:
+                self.logger.info("use_vernier_calibration=False - using intensity-based alignment")
+            
+            # Method 2: No calibration - use intensity scan
+            # First move DCCM with vernier to approximate position
+            self.logger.info(f"Moving DCCM with vernier to {energy:.4f} keV")
+            if self.simulate:
+                # In simulation, use sim motor for DCCM+vernier energy
+                self.sim.fast_motor1.mv(energy / 1000.0)
             else:
-                if use_vernier_calibration and calib is None:
-                    self.logger.info("No calibration found - using intensity-based alignment")
-                elif not use_vernier_calibration:
-                    self.logger.info("use_vernier_calibration=False - using intensity-based alignment")
-                
-                # Method 2: No calibration - use intensity scan
-                # First move DCCM with vernier to approximate position
-                self.logger.info(f"Moving DCCM with vernier to {energy:.4f} keV")
                 dccm = DCCM(name='DCCM')
                 dccm.energy_with_vernier.mv(energy / 1000.0)  # DCCM uses keV
                 
@@ -403,6 +423,105 @@ class Exafs:
         self._return_to_start(energy_start, k_energy_start)
         self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+    def long_calib(
+            self,
+            simulate: bool = False,
+            start_eV: float = 7000.0,
+            end_eV: float = 7500.0,
+            energy_steps: int = 6,
+            vernier_events_per_step: int = 120,
+            debug: bool = False):
+        """Perform calibration scan over energy range for vernier.
+        
+        This function calls VernierCalibration.calibrate() to perform a calibration scan
+        over the specified energy range.
+        
+        Parameters:
+        -----------
+        simulate : bool, optional
+            Whether to run in simulation mode. Default: False
+            
+        start_eV : float, optional
+            Starting energy for calibration range in eV. Default: 7000.0
+            
+        end_eV : float, optional
+            Ending energy for calibration range in eV. Default: 7500.0
+            
+        energy_steps : int, optional
+            Number of energy points to visit. Default: 6
+            
+        vernier_events_per_step : int, optional
+            Number of events to average for vernier offset measurement. Default: 120
+            
+        debug : bool, optional
+            Enable debug output. Default: False
+        """
+        from mfx.optimize.vernier_calibration import VernierCalibration
+        
+        self.simulate = simulate
+        
+        # If simulating, force simulated devices to avoid any real hardware motion
+        if self.simulate:
+            try:
+                from mfx.optimize.beamline_hw import sim_devices
+                _dev = sim_devices()
+                print("Simulated devices initialized")
+            except Exception:
+                self.logger.warning("Failed to initialize simulated devices")
+                return
+        
+        # Store initial position (keV), handling simulation
+        try:
+            if self.simulate:
+                # Prefer simulated device reading via optimize.beamline_hw if available
+                try:
+                    # vernier_dccm_energy reported in eV
+                    energy_start = float(_dev["vernier_dccm_energy"].get()) / 1000.0
+                except Exception:
+                    # Fallback to hutch_python sim motors if present
+                    try:
+                        # sim.fast_motor1 is used in _move_dccm_energy_with_vernier
+                        energy_start = float(self.sim.fast_motor1())
+                    except Exception:
+                        # Sensible default
+                        energy_start = float(start_eV) / 1000.0
+            else:
+                energy_start = self.dccm.energy_with_vernier.energy()
+        except Exception:
+            # Last-resort fallback: use requested start energy
+            energy_start = float(start_eV) / 1000.0
+        
+        # Initialize calibration object
+        vernier_calib = VernierCalibration()
+        
+        self.logger.info(f"Starting long calibration scan from {start_eV:.2f} to {end_eV:.2f} eV ({energy_steps} steps)")
+        
+        try:
+            # Call the calibrate method which handles the entire scan and fitting
+            vernier_calib_result = vernier_calib.calibrate(
+                energy_start_eV=start_eV,
+                energy_end_eV=end_eV,
+                energy_steps=energy_steps,
+                events_per_step=vernier_events_per_step, 
+                simulate=simulate
+            )
+            self.logger.info(f"Vernier calibration completed successfully")
+            self.logger.info(f"Calibration model: offset = {vernier_calib_result.get('coeff_offset', 'N/A')}")
+        
+        except KeyboardInterrupt:
+            self.logger.warning("[*] Calibration interrupted by user")
+        except Exception as e:
+            self.logger.error(f"Failed to complete vernier calibration: {e}")
+            if not debug:
+                raise
+        
+        # Return to initial position
+        self.logger.info(f"\nReturning to initial energy: {energy_start:.4f} keV")
+        self._move_dccm_energy_with_vernier(energy_start)
+        
+        self.logger.warning('Finished long calibration scan!\n')
+        return
+
     def long_escan(
             self,
             simulate: bool = False,
@@ -427,6 +546,11 @@ class Exafs:
             k_offset: int = 0,
             tchk = False,
             use_vernier_calibration: bool = True,
+            undulator_point: bool = False,
+            undulator_on_diagnostic: str = "dg1",
+            undulator_using_device: str = "yag",
+            undulator_with_method: str = "calib",
+            undulator_grid_bins: int = 5,
             debug: bool = False):
         """Perform EXAFS scan.
 
@@ -482,10 +606,38 @@ class Exafs:
             use_vernier_calibration: bool, optional
                 If True (default), use vernier calibration if available, otherwise use 
                 intensity-based alignment. If False, always use intensity-based alignment.
+                
+            undulator_point: bool, optional
+                If True, perform undulator alignment at each energy step. Default: False
+                
+            undulator_on_diagnostic: str, optional
+                Diagnostic location for undulator alignment. Options: "xcs1", "dg1", "dg2". Default: "dg1"
+                
+            undulator_using_device: str, optional
+                Device to use for undulator alignment. Options: "yag", "wave8". Default: "yag"
+                
+            undulator_with_method: str, optional
+                Method to use for undulator alignment. Options: "turbo", "calib". Default: "calib"
+                
+            undulator_grid_bins: int, optional
+                Number of grid bins for undulator calibration (if using "calib" method). Default: 5
         """
         from mfx.autorun import post
 
         self.simulate = simulate
+
+        # Load track_focus results from current working directory, if available
+        track_focus_data = None
+        try:
+            track_focus_path = Path(os.getcwd()) / "track_focus_results.json"
+            if track_focus_path.exists():
+                with open(track_focus_path, "r") as tf:
+                    track_focus_data = json.load(tf)
+                self.logger.info(f"Loaded track_focus results from {track_focus_path}")
+            else:
+                self.logger.info("No track_focus_results.json found in current directory; proceeding without TFS guidance.")
+        except Exception as e:
+            self.logger.warning(f"Failed to load track_focus_results.json: {e}")
 
         energies, wait_times = self._build_energy_and_wait_time(
             energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug
@@ -509,6 +661,13 @@ class Exafs:
                 )
                 if not daq_success:
                     break
+                if undulator_point:
+                    self._align_undulator(
+                        on_diagnostic=undulator_on_diagnostic,
+                        using_device=undulator_using_device,
+                        with_method=undulator_with_method,
+                        grid_bins=undulator_grid_bins
+                    )
 
                 # Start Energy scan
                 for ii, (energy, wait_time) in enumerate(zip(energies, wait_times)):
