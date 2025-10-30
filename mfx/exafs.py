@@ -481,8 +481,37 @@ class Exafs:
         
         self.simulate = simulate
         
-        # Store initial position
-        energy_start = self.dccm.energy_with_vernier.energy()
+        # If simulating, force simulated devices to avoid any real hardware motion
+        if self.simulate:
+            try:
+                from mfx.optimize.beamline_hw import sim_devices as _sim_bl_hw
+                _sim_bl_hw()
+            except Exception:
+                # Continue even if sim init fails; other simulation guards remain in place
+                ...
+        
+        # Store initial position (keV), handling simulation
+        try:
+            if self.simulate:
+                # Prefer simulated device reading via optimize.beamline_hw if available
+                try:
+                    from mfx.optimize.beamline_hw import init_devices as _init_bl_hw
+                    _dev = _init_bl_hw()
+                    # vernier_dccm_energy reported in eV
+                    energy_start = float(_dev["vernier_dccm_energy"].get()) / 1000.0
+                except Exception:
+                    # Fallback to hutch_python sim motors if present
+                    try:
+                        # sim.fast_motor1 is used in _move_dccm_energy_with_vernier
+                        energy_start = float(self.sim.fast_motor1())
+                    except Exception:
+                        # Sensible default
+                        energy_start = float(start_eV) / 1000.0
+            else:
+                energy_start = self.dccm.energy_with_vernier.energy()
+        except Exception:
+            # Last-resort fallback: use requested start energy
+            energy_start = float(start_eV) / 1000.0
         
         # Initialize calibration objects
         vernier_calib = VernierCalibration()
