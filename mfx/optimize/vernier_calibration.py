@@ -539,7 +539,7 @@ class VernierCalibration:
         
         return calib
     
-    def collect_offset_data_at_energy(self, events: int = 120) -> dict:
+    def measure_offset_at_energy(self, events: int = 120) -> dict:
         """
         Collect vernier offset data at the current energy.
         
@@ -593,7 +593,7 @@ class VernierCalibration:
         
         return data
     
-    def fit_calibration_from_data(self, data_points: list[dict]) -> dict:
+    def fit(self, data_points: list[dict]) -> dict:
         """
         Fit vernier calibration model from collected data points.
         
