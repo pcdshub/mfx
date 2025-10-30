@@ -218,11 +218,10 @@ class VernierCalibration:
         try:
             # Get devices from beamline_hw
             devices = init_devices()
-            dccm_energy_pv = devices["vernier_dccm_energy"]
             vernier_energy_pv = devices["vernier_energy"]
             
             # Get current DCCM energy (this is what we're trying to reach)
-            current_dccm_energy = float(dccm_energy_pv.get())
+            current_dccm_energy = float(read_dccm_energy())
             
             # Get current vernier energy
             current_vernier_energy = float(vernier_energy_pv.position)
@@ -384,8 +383,6 @@ class VernierCalibration:
                     # Get the underlying functions for direct calls in simulation
                     if hasattr(intensity_pv, '_func'):
                         get_intensity_func = intensity_pv._func
-                    if hasattr(dccm_energy_pv, '_func'):
-                        get_dccm_func = dccm_energy_pv._func
             except AttributeError:
                 pass
             
@@ -581,7 +578,7 @@ class VernierCalibration:
         
         # Read current positions
         try:
-            dccm_energy = float(dccm_energy_pv.get())
+            dccm_energy = float(read_dccm_energy())
             vernier_energy = float(vernier_energy_pv.position)
             # Average intensity over multiple readings
             intensities = []
@@ -798,8 +795,6 @@ class VernierCalibration:
                 # Get the underlying functions for direct calls in simulation
                 if hasattr(intensity_pv, '_func'):
                     get_intensity_func = intensity_pv._func
-                if hasattr(dccm_energy_pv, '_func'):
-                    get_dccm_func = dccm_energy_pv._func
             except AttributeError:
                 pass
             
