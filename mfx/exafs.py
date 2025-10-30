@@ -124,6 +124,13 @@ class Exafs:
         self._move_dccm_energy_with_vernier(energy_0_keV)
             
         # Move K motor
+        if reverse:
+            if end_eV - (k_stepsize / 2) =! k_energy_start:
+                self._move_k_energy(end_eV - (k_stepsize / 2))
+        else:
+            if start_eV + (k_stepsize / 2) =! k_energy_start:
+                self._move_k_energy(start_eV + (k_stepsize / 2))
+                
         self.logger.info(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
@@ -269,9 +276,9 @@ class Exafs:
         e_step = np.abs(energy_keV - energy_0_keV) * 1000
         
         # Move K every k_stepsize
-        if e_step > k_stepsize:
+        if e_step > k_stepsize / 2:
             # Calculate new k_energy (same logic for both simulation and real)
-            k_energy = energy_keV * 1000.0 + k_offset
+            k_energy = energy_keV * 1000.0 + k_stepsize + k_offset
             if reverse:
                 k_energy = energy_keV * 1000.0 - k_stepsize + k_offset
                 if k_energy/1000 < min_k_keV:
