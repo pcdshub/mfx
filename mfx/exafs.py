@@ -5,6 +5,7 @@ from time import sleep
 from pathlib import Path
 import json
 from tfs.sim_transfocator import make_tfs_sim
+from tfs.transfocator import Transfocator as tfs
 
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
