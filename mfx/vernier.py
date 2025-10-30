@@ -438,25 +438,25 @@ class Vernier:
         def ref1():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
-            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:REF1 | awk '{print $2}'").read().strip())
+            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:REF1 | awk '{print $2}'").read().strip())
             return energy
 
         def ref2():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:REF2')
-            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:REF2 | awk '{print $2}'").read().strip())
+            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:REF2 | awk '{print $2}'").read().strip())
             return energy
 
         def set1():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
-            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'").read().strip())
+            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'").read().strip())
             return energy
 
         def set2():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:SET2')
-            energy = int(os.popen("caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'").read().strip())
+            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'").read().strip())
             return energy
 
     class put:
