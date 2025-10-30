@@ -257,7 +257,7 @@ class Exafs:
                 if not success:
                     self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
 
-    def _move_k_if_necessary(self, energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV):
+    def _move_k_if_necessary(self, energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
 
@@ -266,14 +266,15 @@ class Exafs:
         else:
             prev_k_energy = self.acr_energy_k.get().setpoint
 
-        e_step = np.abs(energy_keV - energy_0_keV) * 1000
+        e_step = round(np.abs(energy_keV - k_energy / 1000) * 1000, 1)
+        self.logger.info(f"Absolute difference vernier and k {e_step}")
         
         # Move K every k_stepsize
         if e_step > k_stepsize / 2:
             # Calculate new k_energy (same logic for both simulation and real)
-            k_energy = energy_keV * 1000.0 + k_stepsize + k_offset
+            k_energy = k_energy + k_stepsize + k_offset
             if reverse:
-                k_energy = energy_keV * 1000.0 - k_stepsize + k_offset
+                k_energy = k_energy - k_stepsize + k_offset
                 if k_energy/1000 < min_k_keV:
                     k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
 
@@ -293,9 +294,8 @@ class Exafs:
                     while daq.control.getState() != "running":
                         ...
 
-            energy_0_keV = energy_keV
-                
-        return energy_0_keV, k_energy
+        return k_energy
+
 
     def _wait(self, wait_time):
         if np.isnan(wait_time):
@@ -453,6 +453,11 @@ class Exafs:
                     self.logger.info(f"Energy: {energy:0.4f}, Time: {wait_time}")
                     energy_keV = energy / 1000.0
 
+                    # Move K if necessary
+                    k_energy = self._move_k_if_necessary(
+                        energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV
+                    )
+
                     # Move TFS to energy
                     
                     # Move DCCM and Vernier to energy
@@ -461,10 +466,6 @@ class Exafs:
                     # Perform Vernier alignment if needed
                     self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
 
-                    # Move K if necessary
-                    energy_0_keV, k_energy = self._move_k_if_necessary(
-                        energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV
-                    )
 
                     # Move XRT spectrometer camera if necessary
 
