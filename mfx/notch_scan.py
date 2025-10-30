@@ -27,14 +27,16 @@ class NotchScan():
 
     def insert(self):
         import logging
+        from epics import caput
         logging.info(f'Moving the DCCM IN')
-        self.tx.umv(-1.3)
+        caput('SP1L0:DCCM:MMS:STATE:SET','IN',wait=True)
 
 
     def remove(self):
         import logging
+        from epics import caput
         logging.info(f'Moving the DCCM OUT')
-        self.tx.umv(-10)
+        caput('SP1L0:DCCM:MMS:State:SET','OUT',wait=True)
 
 
     def set_energy(self, energy):
