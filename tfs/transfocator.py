@@ -543,7 +543,7 @@ class MFXTransfocator(TransfocatorBase):
                     combo = self.find_best_combo(energy_eV=energy, show=show)
                     if combo:
                         new_target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
-                        if new_target_z_stage_mm > min_z_stage_mm and target_z_stage_mm < max_z_stage_mm:
+                        if new_target_z_stage_mm > min_z_stage_mm and new_target_z_stage_mm < max_z_stage_mm:
                             self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
                             break
                     shrinking_max_z_stage_mm -= margin_mm
