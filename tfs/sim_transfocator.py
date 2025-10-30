@@ -7,6 +7,20 @@ class SimLens(RealLens):
     _sig_z      = Cpt(FakeEpicsSignal,  ":Z",      auto_monitor=True)
     _sig_radius = Cpt(FakeEpicsSignal,  ":RADIUS", auto_monitor=True)
     _sig_focus  = Cpt(FakeEpicsSignal,  ":FOCUS",  auto_monitor=True)
+    _inserted   = Cpt(FakeEpicsSignal,  ":STATE")
+    _removed    = Cpt(FakeEpicsSignal,  ":OUT")
+    _insert     = Cpt(FakeEpicsSignal,  ":INSERT")
+    _remove     = Cpt(FakeEpicsSignal,  ":REMOVE")
+    _state_logic = {'_inserted': {0: 'defer',  1: 'IN'},
+                    '_removed': {0: 'defer', 1: 'OUT'}}
+
+    def _do_move(self, state):
+        if state.name == 'IN':
+            self._insert.put(1)
+        elif state.name == 'OUT':
+            self._remove.put(1)
+        else:
+            raise ValueError("Invalid State {}".format(state))
 
 class Stage(SynAxis):
     def attach(self, tfs_dev):
