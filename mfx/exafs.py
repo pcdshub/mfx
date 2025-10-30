@@ -1,9 +1,9 @@
 import copy
-import numpy as np
 import sys
 from time import sleep
 from pathlib import Path
 import json
+import numpy as np
 from tfs.sim_transfocator import make_tfs_sim
 from tfs.transfocator import Transfocator
 
