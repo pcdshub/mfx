@@ -223,6 +223,7 @@ class Exafs:
             try:
                 from mfx.optimize.beamline_hw import sim_devices
                 sim_devices()
+                print("[align_vernier_to_dccm] Simulation devices initialized")
             except Exception:
                 # Continue even if sim init fails; other simulation guards remain in place
                 ...
@@ -303,9 +304,10 @@ class Exafs:
             try:
                 from mfx.optimize.beamline_hw import sim_devices
                 sim_devices()
+                print("[align_undulator] Simulation devices initialized")
             except Exception:
-                # Continue even if sim init fails; other simulation guards remain in place
-                ...
+                print("[align_undulator] WARNING: Failed to set simulation devices. Returning.")
+                return
         
         try:
             from mfx.optimize.beam import Beam
@@ -315,7 +317,10 @@ class Exafs:
                 using_device=using_device,
                 with_method=with_method,
                 grid_bins=grid_bins,
-                use_2d_markers=True
+                use_2d_markers=True,
+                mover = "und"
+                with_method = "calib",
+                grid_bins = 5
             )
         except Exception as e:
             self.logger.warning(f"undulator alignment failed: {e}")
