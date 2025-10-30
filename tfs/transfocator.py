@@ -189,14 +189,14 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_10.remove()
 
 
-    def check_forbidden(self, pre_focus_lens, energy, radius): 
+    def check_forbidden(self, pre_focus_lens_radius, energy, radius): 
         from transfocate.table.info import data as spreadsheet_data
 
-        if int(pre_focus_lens) == 750:
+        if int(pre_focus_lens_radius) == 750:
             lens = "LENS1_750"
-        elif int(pre_focus_lens) == 428:
+        elif int(pre_focus_lens_radius) == 428:
             lens = "LENS2_428"
-        elif int(pre_focus_lens) == 333:
+        elif int(pre_focus_lens_radius) == 333:
             lens = "LENS3_333"
         else:
             lens = "NO_LENS"
@@ -217,7 +217,7 @@ class MFXTransfocator(TransfocatorBase):
             forbidden = True
             logger.error("TFS Configuration is Forbidden")
         else:
-            forbidden = True
+            forbidden = False
             logger.info("TFS Configuration is Allowed")
 
         return forbidden
