@@ -523,9 +523,12 @@ class MFXTransfocator(TransfocatorBase):
         - If the move would exceed the stage low limit, return to the top
           position and recompute the lens combo at that energy, then continue.
         """
-        if not energies:
+        if len(energies) == 0:
             print("No energies provided.")
             return None
+
+        # cast energies to float to avoid json serialization issues
+        energies = [float(energy) for energy in energies]
 
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
         ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
