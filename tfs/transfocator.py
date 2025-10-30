@@ -527,6 +527,9 @@ class MFXTransfocator(TransfocatorBase):
             print("No energies provided.")
             return None
 
+        # cast energies to float to avoid json serialization issues
+        energies = [float(energy) for energy in energies]
+
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
         ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
         combo, ref_focal_length_um = self.set_reference_combo(energies[0], show=show)

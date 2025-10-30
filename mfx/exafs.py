@@ -2,6 +2,9 @@ import copy
 import numpy as np
 import sys
 from time import sleep
+from pathlib import Path
+import json
+from tfs.sim_transfocator import make_tfs_sim
 
 class Exafs:
     from pcdsdevices.beam_stats import BeamEnergyRequest, BeamEnergyRequestACRWait
@@ -19,6 +22,7 @@ class Exafs:
         self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
         self.simulate = False
         self.sim = sim.get_hw()
+        self.tfs = None
 
     # DG1 IPM SUM PV (read-only)
     ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
@@ -256,6 +260,63 @@ class Exafs:
                 )
                 if not success:
                     self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
+    
+    def _get_track_focus_data(self):
+        track_focus_data = None
+        try:
+            track_focus_path = Path.home() / "track_focus_results.json"
+            if track_focus_path.exists():
+                with open(track_focus_path, "r") as tf:
+                    track_focus_data = json.load(tf)
+                self.logger.info(f"Loaded track_focus results from {track_focus_path}")
+            else:
+                self.logger.info("No track_focus_results.json found in home directory; returning None.")
+        except Exception as e:
+            self.logger.warning(f"Failed to load track_focus_results.json: {e}")
+        return track_focus_data
+
+    def _init_tfs(self, energies):
+        if self.simulate:
+            self.tfs = make_tfs_sim(tfs)
+        else:
+            self.tfs = tfs
+
+        track_focus_data = self._get_track_focus_data()
+        if track_focus_data is None:
+            self.logger.warning("No track_focus_data found; generating new track_focus_data in simulation.")
+            sim_tfs = make_tfs_sim(tfs)
+            track_focus_data = sim_tfs.track_focus(energies=energies, show=True)
+        return track_focus_data
+
+    def _move_tfs_to_energy(self, energy_eV, track_focus_data):
+        if track_focus_data is not None:
+            energy_eV = float(energy_eV)
+            for data in track_focus_data:
+                if data["energy"] == energy_eV:
+                    z_position = data["z_position"]
+                    inserted_lenses = data["inserted_lenses"]
+                    break
+            if z_position is not None:
+                self.logger.info(f"Moving TFS to {z_position:.3f} mm")
+                self.tfs.translation.mv(z_position)
+            for lens in self.tfs.lenses:
+                if lens.prefix in inserted_lenses:
+                    self.logger.info(f"Inserting lens {lens.prefix}")
+                    if lens.inserted:
+                        self.logger.info(f"Lens {lens.prefix} already inserted")
+                        continue
+                    lens.insert()
+                else:
+                    self.logger.info(f"Removing lens {lens.prefix}")
+                    if not lens.inserted:
+                        self.logger.info(f"Lens {lens.prefix} already removed")
+                        continue
+                    lens.remove()
+        else:
+            self.logger.warning("No track_focus_data found; how did you get here?.")
+            return
+
+
 
     def _move_k_if_necessary(self, energy_keV, k_energy, energy_0_keV, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
@@ -433,6 +494,8 @@ class Exafs:
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
+        track_focus_data = self._init_tfs(energies)
+
         try:
             for i in range(runs):
                 # Initialize energies
@@ -453,7 +516,7 @@ class Exafs:
                     energy_keV = energy / 1000.0
 
                     # Move TFS to energy
-                    
+                    self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     
