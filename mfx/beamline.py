@@ -25,6 +25,7 @@ with safe_load('mfx_transfocator'):
     tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
     from tfs import utils as tfs_utils
     from tfs.transfocator_scan import *
+    from tfs import tfs_plots
 
 with safe_load('mfx_prefocus'):
     from .devices import XFLS
