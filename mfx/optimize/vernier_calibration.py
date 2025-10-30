@@ -19,6 +19,7 @@ from .beamline_hw import (
     DG2_WAVE8_XPOS,
     IP_YAG_XPOS,
     init_devices,
+    read_dccm_energy,
 )
 
 
@@ -250,7 +251,8 @@ class VernierCalibration:
             return False
     
     def calibrate(self, energy_start_eV: float, energy_end_eV: float, 
-                  energy_steps: int = 10, events_per_step: int = 120) -> dict:
+                  energy_steps: int = 10, events_per_step: int = 120, 
+                  simulate: Optional[bool] = None) -> dict:
         """
         Run calibration scan to determine energy-vernier offset relationship.
         
@@ -264,6 +266,9 @@ class VernierCalibration:
             Number of energy steps in calibration scan
         events_per_step : int
             Number of events per step
+        simulate : bool, optional
+            Whether to run in simulation mode. If None, defaults to False (real hardware).
+            If True, uses simulated devices. If False, attempts to use real hardware.
             
         Returns
         -------
@@ -274,24 +279,34 @@ class VernierCalibration:
         print(f"[calibrate] Energy range: {energy_start_eV:.2f} - {energy_end_eV:.2f} eV")
         print(f"[calibrate] Steps: {energy_steps}")
         
+        # If simulating, force simulated devices to avoid any real hardware motion
+        if simulate:
+            try:
+                from .beamline_hw import sim_devices
+                sim_devices()
+            except Exception:
+                print("[calibrate] WARNING: Failed to set simulation devices. Returning.")
+                return
+
         # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
         devices = init_devices()
-        dccm_energy_pv = devices["vernier_dccm_energy"]
         vernier_energy_pv = devices["vernier_energy"]
         intensity_pv = devices["vernier_intensity"]
         
-        # Check if we're in simulation mode
-        try:
-            from mfx.db import RE, daq
-            is_simulation = False
-        except ImportError:
-            is_simulation = True
-            print("[calibrate] Simulation mode detected")
+        # Determine simulation mode from argument
+        is_simulation = simulate if simulate is not None else False
+        if is_simulation:
+            print("[calibrate] Simulation mode enabled")
+        
+        # Try to import real hardware (will be used if not simulating)
+        if not is_simulation:
+            try:
+                from mfx.db import RE, daq
+            except ImportError:
+                pass  # Continue without RE/daq if import fails
         
         # For real hardware, import DCCM device to move both DCCM and vernier together
         dccm_motor = None
-        energy_start_keV = None
-        energy_end_keV = None
         if not is_simulation:
             try:
                 from mfx.dccm import DCCM
@@ -318,12 +333,15 @@ class VernierCalibration:
             "vernier_energy": []
         }
         
-        # Perform calibration scan
-        # RE and daq already imported above when checking simulation mode
+        # Import RE and daq based on simulation mode
         if is_simulation:
             from bluesky import RunEngine
             RE = RunEngine({})
             daq = FakeDaq()
+        else:
+            # RE and daq should be imported above if real hardware is available
+            # If not available, they won't exist and will cause an error later (which is fine)
+            pass
         
         try:
             import bluesky.plans as bp
@@ -414,7 +432,7 @@ class VernierCalibration:
                         return
                     
                     try:
-                        dccm_energy = float(dccm_energy_pv.get())
+                        dccm_energy = float(read_dccm_energy())
                     except Exception as e:
                         print(f"[calibrate] Failed to read DCCM energy: {e}")
                         return
@@ -556,10 +574,8 @@ class VernierCalibration:
         dict
             Dictionary with keys: "dccm_energy", "vernier_energy", "vernier_offset", "intensity"
         """
-        from .beamline_hw import init_devices
         
         devices = init_devices()
-        dccm_energy_pv = devices["vernier_dccm_energy"]
         vernier_energy_pv = devices["vernier_energy"]
         intensity_pv = devices["vernier_intensity"]
         
@@ -671,7 +687,7 @@ class VernierCalibration:
         return calib
     
     def align_to_dccm(self, energy_range_eV: float = 10.0, energy_steps: int = 11,
-                     events_per_step: int = 12) -> bool:
+                     events_per_step: int = 12, simulate: Optional[bool] = None) -> bool:
         """
         Align vernier to current DCCM energy using intensity-based optimization.
         
@@ -687,21 +703,33 @@ class VernierCalibration:
             Number of steps in alignment scan
         events_per_step : int
             Number of events per step
+        simulate : bool, optional
+            Whether to run in simulation mode. If None, defaults to False (real hardware).
+            If True, uses simulated devices. If False, attempts to use real hardware.
             
         Returns
         -------
         bool
             True if alignment was successful, False otherwise
         """
+
+        if simulate:
+            try:
+                from .beamline_hw import sim_devices
+                sim_devices()
+                print("[align_to_dccm] Simulation mode enabled")
+            except Exception:
+                print("[align_to_dccm] WARNING: Failed to set simulation devices. Returning.")
+                return 
+            
         # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
         devices = init_devices()
-        dccm_energy_pv = devices["vernier_dccm_energy"]
         vernier_energy_pv = devices["vernier_energy"]
         intensity_pv = devices["vernier_intensity"]
         
         # Get current DCCM energy
         print(f"[align_to_dccm] Reading current DCCM energy...")
-        current_dccm_energy = float(dccm_energy_pv.get())
+        current_dccm_energy = float(read_dccm_energy())
         print(f"[align_to_dccm] Current DCCM energy: {current_dccm_energy:.2f} eV")
         
         # Update DCCM tracker to current DCCM energy (important for simulation mode)
@@ -723,14 +751,22 @@ class VernierCalibration:
         
         print(f"[align_to_dccm] Scanning vernier from {scan_start:.2f} to {scan_end:.2f} eV (range: ±{energy_range_eV/2:.1f} eV around DCCM at {current_dccm_energy:.2f} eV)")
         
-        # Perform intensity-based alignment scan
-        try:
-            from mfx.db import RE, daq
-        except ImportError:
+        # Determine simulation mode from argument
+        is_simulation = simulate if simulate is not None else False
+        if is_simulation:
+            print("[align_to_dccm] Simulation mode enabled")
+        
+        # Import RE and daq based on simulation mode
+        if is_simulation:
             from bluesky import RunEngine
             RE = RunEngine({})
             daq = FakeDaq()
-            print("[align_to_dccm] Cannot import mfx.db - running in simulation mode")
+        else:
+            # Try to import real hardware
+            try:
+                from mfx.db import RE, daq
+            except ImportError:
+                pass  # Continue without RE/daq if import fails
         
         try:
             import bluesky.plans as bp
@@ -855,7 +891,7 @@ class VernierCalibration:
             # Verify final positions
             if best_vernier_energy is not None:
                 # Verify final DCCM energy
-                final_dccm_energy = float(dccm_energy_pv.get())
+                final_dccm_energy = float(read_dccm_energy())
                 final_vernier_actual = float(vernier_energy_pv.position)
                 final_offset = final_vernier_actual - final_dccm_energy
                 
@@ -873,7 +909,7 @@ class VernierCalibration:
             print(f"[align_to_dccm] Error during alignment: {exc}")
             return False
     
-    def move_to_energy_with_calibration(self) -> bool:
+    def move_to_energy_with_calibration(self, simulate: Optional[bool] = None) -> bool:
         """
         Move vernier to align with current DCCM energy using calibration to correct for offset.
         
@@ -892,7 +928,13 @@ class VernierCalibration:
         """
         print(f"[move_to_energy_with_calibration] Aligning vernier to current DCCM energy")
         
-        # Load calibration
+        if simulate:
+            try:
+                from .beamline_hw import sim_devices
+                sim_devices()
+            except Exception:
+                ...
+# Load calibration
         calib = self._load_calibration()
         if not calib:
             print(f"[move_to_energy_with_calibration] No calibration found")
@@ -902,11 +944,10 @@ class VernierCalibration:
         
         # Get devices from beamline_hw
         devices = init_devices()
-        dccm_energy_pv = devices["vernier_dccm_energy"]
         vernier_energy_pv = devices["vernier_energy"]
         
         # Get current DCCM energy
-        current_dccm_energy = float(dccm_energy_pv.get())
+        current_dccm_energy = float(read_dccm_energy())
         print(f"[move_to_energy_with_calibration] Current DCCM energy: {current_dccm_energy:.2f} eV")
         
         # Calculate what vernier command is needed to achieve vernier = DCCM
@@ -919,7 +960,7 @@ class VernierCalibration:
             vernier_energy_pv.move(vernier_command).wait()
             
             # Verify final positions
-            final_dccm_energy = float(dccm_energy_pv.get())
+            final_dccm_energy = float(read_dccm_energy())
             final_vernier_actual = float(vernier_energy_pv.position)
             final_offset = final_vernier_actual - final_dccm_energy
             

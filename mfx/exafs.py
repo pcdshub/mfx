@@ -454,19 +454,17 @@ class Exafs:
         if self.simulate:
             try:
                 from mfx.optimize.beamline_hw import sim_devices
-                sim_devices()
+                _dev = sim_devices()
                 print("Simulated devices initialized")
             except Exception:
-                # Continue even if sim init fails; other simulation guards remain in place
-                ...
+                self.logger.warning("Failed to initialize simulated devices")
+                return
         
         # Store initial position (keV), handling simulation
         try:
             if self.simulate:
                 # Prefer simulated device reading via optimize.beamline_hw if available
                 try:
-                    from mfx.optimize.beamline_hw import init_devices
-                    _dev = init_devices()
                     # vernier_dccm_energy reported in eV
                     energy_start = float(_dev["vernier_dccm_energy"].get()) / 1000.0
                 except Exception:
@@ -494,7 +492,8 @@ class Exafs:
                 energy_start_eV=start_eV,
                 energy_end_eV=end_eV,
                 energy_steps=energy_steps,
-                events_per_step=vernier_events_per_step
+                events_per_step=vernier_events_per_step, 
+                simulate=simulate
             )
             self.logger.info(f"Vernier calibration completed successfully")
             self.logger.info(f"Calibration model: offset = {vernier_calib_result.get('coeff_offset', 'N/A')}")

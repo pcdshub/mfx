@@ -80,7 +80,7 @@ def init_devices(force: bool = False) -> dict[str, Device]:
     devices["und_del"] = und_abs.delta_xy
 
     # Add vernier calibration devices
-    devices["vernier_dccm_energy"] = EpicsSignalRO("MFX:DCCM:ENERGY", name="vernier_dccm_energy")
+
     devices["vernier_energy"] = OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="vernier_energy")
     devices["vernier_intensity"] = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="vernier_intensity")
 
@@ -481,12 +481,9 @@ def sim_devices() -> dict[str, Device]:
     def wrapper_intensity():
         return get_fake_intensity()
     
-    # Create the signal devices - use wrapper to ensure fresh evaluation
-    devices["vernier_dccm_energy"] = SynSignal(func=wrapper_dccm, name="vernier_dccm_energy")
+    # For simulation, prefer using read_dccm_energy() helper rather than a fake PV.
+    # Keep intensity as a SynSignal for scans.
     devices["vernier_intensity"] = SynSignal(func=wrapper_intensity, name="vernier_intensity")
-    
-    # Mark these as hinted so they're included in scans
-    devices["vernier_dccm_energy"].kind = "hinted"
     devices["vernier_intensity"].kind = "hinted"
 
     print("Generated fake dg1 and dg2 signals and images")
@@ -514,3 +511,34 @@ def get_alignment_scan_mode():
 def get_calibration_scan_mode():
     """Get the calibration scan mode flag."""
     return _calibration_scan_mode
+
+
+# Helper API: preferred way to read DCCM energy in both real and simulation
+def read_dccm_energy() -> float:
+    """
+    Read the current DCCM energy in eV.
+
+    - In simulation (sim_devices() initialized): returns the simulated tracker value
+    - In real hardware: instantiates DCCM and reads the pseudo motor energy (keV),
+      then converts to eV.
+    """
+    # If simulation tracker exists, use it
+    global _dccm_tracker
+    try:
+        if _dccm_tracker is not None:
+            return float(_dccm_tracker.value)
+    except Exception:
+        ...
+
+    # Real hardware path: use DCCM device
+    try:
+        from mfx.dccm import DCCM
+        dccm = DCCM(name="DCCM")
+        # dccm.energy is in keV; convert to eV
+        keV = float(dccm.energy())
+        return keV * 1000.0
+    except Exception:
+        print(f"[read_dccm_energy] WARNING: Could not import DCCM device: {e}")
+        return 0.0
+    # If all else fails, return a reasonable default
+    return 0.0
