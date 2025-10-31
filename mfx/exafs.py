@@ -202,7 +202,6 @@ class Exafs:
 
     def _move_feespec_energy(self, energy_keV):
         """Move XRT spectrometer (aka feespec) crystal and camera to set energy."""
-        
 
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
         """
@@ -321,23 +320,12 @@ class Exafs:
             beam.align(
                 on_diagnostic=on_diagnostic,
                 using_device=using_device,
-<<<<<<< HEAD
                 use_2d_markers=True,
                 mover="und",
                 with_method = "calib",
                 grid_bins = 5
             )
         except Exception as e:
-=======
-                with_method=with_method,
-                grid_bins=grid_bins,
-                use_2d_markers=True,
-                mover="und"
-            with_method = "calib",
-            grid_bins = 5
-            )
-            except Exception as e:
->>>>>>> 2f4428cd6acca15641b5de692c6fa568001ff288
             self.logger.warning(f"undulator alignment failed: {e}")
             # Don't raise - allow scan to continue
 
@@ -394,8 +382,6 @@ class Exafs:
             self.logger.warning("No track_focus_data found; how did you get here?.")
             return
 
-
-
     def _move_k_if_necessary(self, energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV):
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
@@ -432,9 +418,7 @@ class Exafs:
                     daq.control.setState("running")
                     while daq.control.getState() != "running":
                         ...
-
         return k_energy
-
 
     def _wait(self, wait_time):
         if np.isnan(wait_time):
