@@ -375,7 +375,7 @@ class Exafs:
             self.logger.warning(f"Failed to load track_focus_results.json: {e}")
         return track_focus_data
 
-    def _init_tfs(self, energies):
+    def _init_tfs(self, energies, margin_mm, ref_focal_length_um, avoid_forbidden, enable_prefocus):
         tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         if self.simulate:
             self.tfs = make_tfs_sim(tfs)
@@ -383,7 +383,14 @@ class Exafs:
             self.tfs = tfs
 
         sim_tfs = make_tfs_sim(tfs)
-        track_focus_data = sim_tfs.track_focus(energies=energies, show=True)
+        track_focus_data = sim_tfs.track_focus(
+            energies=energies,
+            margin_mm=margin_mm,
+            show=True,
+            ref_focal_length_um=ref_focal_length_um,
+            avoid_forbidden=avoid_forbidden,
+            enable_prefocus=enable_prefocus
+        )
         return track_focus_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data):
@@ -625,6 +632,10 @@ class Exafs:
             use_vernier_calibration: bool = True,
             map_focus_track: bool = False,
             track_focus: bool = False,
+            tfs_margin_mm=5.0,
+            ref_focal_length_um=None,
+            avoid_forbidden_combo=True,
+            enable_prefocus=True,
             undulator_point: bool = False,
             undulator_on_diagnostic: str = "dg1",
             undulator_using_device: str = "yag",
@@ -739,7 +750,11 @@ class Exafs:
 
         # Map the focus track over the energy list and record to track_focus_results.json
         if map_focus_track:
-            self._init_tfs(energies)
+            self._init_tfs(energies,
+                           margin_mm=tfs_margin_mm,
+                           ref_focal_length_um=ref_focal_length_um,
+                           avoid_forbidden=avoid_forbidden_combo,
+                           enable_prefocus=enable_prefocus)
             return
 
         energy_start = self.dccm.energy_with_vernier.energy()
@@ -778,7 +793,8 @@ class Exafs:
 
                     # Move TFS to energy
                     if track_focus:
-                        self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
+                        self._move_tfs_to_energy(energy_eV=energy,
+                                                 track_focus_data=track_focus_data)
 
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
