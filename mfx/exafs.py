@@ -202,7 +202,38 @@ class Exafs:
             self.acr_energy_k.move(k_energy)
 
     def _move_feespec_energy(self, energy_keV):
-        """Move XRT spectrometer (aka feespec) crystal and camera to set energy."""
+        """Move FEE spectrometer energy."""
+        if self.simulate:
+            self.sim.slow_motor2.mv(energy_keV)
+        else:
+            # check Camera status and abort if running
+            os.system(f'caget CAMR:FEE1:441:Acquire')
+            status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
+            if status == 'Acquire':
+                self.logger.error('FEE Spectrometer Camera is acquiring. Aborting energy move.')
+                return
+            # Current
+            ref_crystal_angle_deg = hxrsss.th.get_current_values()
+            ref_camera_angle_deg = hxrsss.tth.get_current_values()
+            ref_camera_y_pos_mm = hxrsss.camy.get_current_values()
+            # Target
+            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            camera_angle_deg = -1.9 + 2 * crystal_angle_deg
+            camera_y_pos_mm = -4.92 - 0.111 * energy_keV
+            # Move
+            hxrss.th.mv(crystal_angle_deg)
+            hxrss.tth.mv(camera_angle_deg)
+            hxrss.camy.mv(camera_y_pos_mm)
+            # Check safety
+            os.system(f'caget XRT:HXS:TRNS.SEVR')
+            status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
+            if status != 'NO_ALARM':
+                self.logger.error('XRT Transmission is in alarm state after FEE spectrometer energy move. Returning to previous position.')
+                hxrsss.th.mv(ref_crystal_angle_deg)
+                hxrsss.tth.mv(ref_camera_angle_deg)
+                hxrsss.camy.mv(ref_camera_y_pos_mm)
+            return
+
 
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
         """
