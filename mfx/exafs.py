@@ -114,7 +114,7 @@ class Exafs:
 
         return energies, wait_time
 
-    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize):
+    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize, track_feespec):
         """Initialize energy values for the scan."""
         
         energy_0_keV = energies[0] / 1000.0  # energy at the beginning or after a und K step
@@ -131,6 +131,9 @@ class Exafs:
             
         # Move K motor
         self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+        # Move XRT spectrometer camera if necessary
+        if track_feespec:
+            self._move_feespec_energy(k_energy / 1000)
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
             
@@ -203,7 +206,9 @@ class Exafs:
 
     def _move_feespec_energy(self, energy_keV):
         """Move FEE spectrometer energy."""
-        from pcdsdevices.spectrometer import HXRSpectrometer as hxrsss
+        from pcdsdevices.spectrometer import HXRSpectrometer
+        hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
+        self.logger.warning(f'Calibrating XRT-Spec for New Energy: {energy_keV}')
         if self.simulate:
             self.sim.slow_motor2.mv(energy_keV)
         else:
@@ -211,28 +216,32 @@ class Exafs:
             os.system(f'caget CAMR:FEE1:441:Acquire')
             status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
             if status == 'Acquire':
-                self.logger.error('FEE Spectrometer Camera is acquiring. Aborting energy move.')
-                return
+                os.system(f'caput CAMR:FEE1:441:Acquire Done')
             # Current
-            ref_crystal_angle_deg = hxrsss.th.get_current_values()
-            ref_camera_angle_deg = hxrsss.tth.get_current_values()
-            ref_camera_y_pos_mm = hxrsss.camy.get_current_values()
+            ref_camera_angle_deg = hxrsss.tth.position
+            ref_camera_y_pos_mm = hxrsss.camy.position
+            ref_crystal_angle_deg = hxrsss.th.position
             # Target
             crystal_angle_deg = 82.8 - 5.9 * energy_keV
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             camera_y_pos_mm = -4.92 - 0.111 * energy_keV
             # Move
-            hxrsss.th.mv(crystal_angle_deg)
             hxrsss.tth.mv(camera_angle_deg)
             hxrsss.camy.mv(camera_y_pos_mm)
+            hxrsss.th.umv(crystal_angle_deg)
             # Check safety
             os.system(f'caget XRT:HXS:TRNS.SEVR')
             status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
             if status != 'NO_ALARM':
                 self.logger.error('XRT Transmission is in alarm state after FEE spectrometer energy move. Returning to previous position.')
-                hxrsss.th.mv(ref_crystal_angle_deg)
                 hxrsss.tth.mv(ref_camera_angle_deg)
                 hxrsss.camy.mv(ref_camera_y_pos_mm)
+                hxrsss.th.umv(ref_crystal_angle_deg)
+            # check Camera status and abort if running
+            os.system(f'caget CAMR:FEE1:441:Acquire')
+            status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
+            if status == 'Done':
+                os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
             return
 
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
@@ -414,7 +423,7 @@ class Exafs:
             self.logger.warning("No track_focus_data found; how did you get here?.")
             return
 
-    def _move_k_if_necessary(self, energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV):
+    def _move_k_if_necessary(self, energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV, track_feespec):
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
 
@@ -443,6 +452,9 @@ class Exafs:
                     self.logger.info(f"Moving k to {k_energy:0.0f}")
                     sleep(0.5)
 
+                # Move XRT spectrometer camera if necessary
+                if track_feespec:
+                    self._move_feespec_energy(k_energy / 1000)
                 self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
                 self._move_k_energy(k_energy)
 
@@ -491,6 +503,7 @@ class Exafs:
                 add_note='Run ended prematurely. Probably sample delivery problem')
         self.logger.warning("[*] Stopping Run and exiting???...")
         self._return_to_start(energy_start, k_energy_start)
+        self._move_feespec_energy(energy_start)
         self.logger.warning('Run ended prematurely. Probably sample delivery problem')
 
     def _finalize_scan(self, energy_start, k_energy_start):
@@ -625,6 +638,7 @@ class Exafs:
             use_vernier_calibration: bool = True,
             map_focus_track: bool = False,
             track_focus: bool = False,
+            track_feespec: bool = False,
             undulator_point: bool = False,
             undulator_on_diagnostic: str = "dg1",
             undulator_using_device: str = "yag",
@@ -691,19 +705,28 @@ class Exafs:
             use_vernier_calibration: bool, optional
                 If True (default), use vernier calibration if available, otherwise use 
                 intensity-based alignment. If False, always use intensity-based alignment.
-                
+
+            map_focus_track: bool = False
+                pre-makes focus tracking map before run
+
+            track_focus: bool = False
+                Uses the focus map to track the focus
+
+            track_feespec:
+                track the energy with the feespec
+
             undulator_point: bool, optional
                 If True, perform undulator alignment at each energy step. Default: False
-                
+
             undulator_on_diagnostic: str, optional
                 Diagnostic location for undulator alignment. Options: "xcs1", "dg1", "dg2". Default: "dg1"
-                
+
             undulator_using_device: str, optional
                 Device to use for undulator alignment. Options: "yag", "wave8". Default: "yag"
-                
+
             undulator_with_method: str, optional
                 Method to use for undulator alignment. Options: "turbo", "calib". Default: "calib"
-                
+
             undulator_grid_bins: int, optional
                 Number of grid bins for undulator calibration (if using "calib" method). Default: 5
         """
@@ -749,7 +772,7 @@ class Exafs:
             for i in range(runs):
                 # Initialize energies
                 energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
-                    energies, wait_times, reverse, k_offset, k_stepsize
+                    energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
                 )
 
                 # Setup DAQ and start recording (or simulate run number)
@@ -773,7 +796,7 @@ class Exafs:
 
                     # Move K if necessary
                     k_energy = self._move_k_if_necessary(
-                        energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV
+                        energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV, track_feespec
                     )
 
                     # Move TFS to energy
@@ -785,11 +808,6 @@ class Exafs:
                     
                     # Perform Vernier alignment if needed
                     self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
-
-
-                    # Move XRT spectrometer camera if necessary
-
-                    # Adjust undulator pointing on DCCM
 
                     # Wait before moving on
                     self._wait(wait_time)
