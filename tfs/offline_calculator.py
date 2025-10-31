@@ -63,7 +63,28 @@ class TFS_Calculator(object):
     def get_combo_image(combo, z_obj=0.0):
         return combo.image(z_obj)
 
-    def find_solution(self, target, energy, n=4, z_obj=0.0):
+    def check_forbidden(self, pre_focus_lens_radius, energy, radius):
+        from transfocate.table.info import data as spreadsheet_data
+
+        LENS_MAP = {
+            750: "LENS1_750",
+            428: "LENS2_428",
+            333: "LENS3_333"
+        }
+        lens = LENS_MAP.get(int(pre_focus_lens_radius), "NO_LENS")
+
+        lens_data = spreadsheet_data[lens]
+        closest_energy_idx = (lens_data['energy'] - energy).abs().idxmin()
+        closest_row = lens_data.loc[closest_energy_idx]
+
+        forbidden = closest_row['trip_min'] <= radius <= closest_row['trip_max']
+        log_level = logger.error if forbidden else logger.info
+        log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
+
+        return forbidden
+
+    def find_solution(self, target, energy, n=4, z_obj=0.0,
+                      avoid_forbidden=True, enable_prefocus=True):
         """
         Find a combination to reach a specific focus
 
@@ -94,26 +115,39 @@ class TFS_Calculator(object):
         3) Pick the combo with the smallest difference
         """
 
-        # Step 1
-        pre_focus_lens = self.get_pre_focus_lens(energy)
-        if pre_focus_lens is None:
-            combos = self.combos
-        else:
+        pre_focus_lens = None
+        if enable_prefocus:
             pre_focus_lens = self.get_pre_focus_lens(energy)
-            combos = []
-            for combo in self.combos:
+            pre_focus_lens_radius = pre_focus_lens.radius
+        if pre_focus_lens is None:
+            pre_focus_lens_radius = -1
+
+        combos = []
+        diff = []
+        for combo in self.combos:
+
+            # Step 1
+            if pre_focus_lens is None:
+                lens_combo = combo
+            else:
                 c = LensConnect(pre_focus_lens)
                 lens_combo = LensConnect.connect(c, combo)
-                combos.append(lens_combo)
 
-        # Step 2
-        diff = []
-        for ii, combo in enumerate(self.combos):
+            # Step 1bis
+            if avoid_forbidden:
+                if self.check_forbidden(pre_focus_lens_radius, energy, lens_combo.tfs_radius):
+                    continue
+            combos.append(lens_combo)
+
+            # Step 2
             if combo.nlens > n:
                 continue
             image = combo.image(z_obj, energy)
             diff.append(np.abs(image - target))
 
         # Step 3
-        solution = combos[np.argmin(diff)]
-        return solution, np.min(diff), pre_focus_lens
+        best_allowed_combo_idx = np.argmin(diff)
+        smallest_diff = diff[best_allowed_combo_idx]
+        best_combo_solution = combos[best_allowed_combo_idx]
+
+        return best_combo_solution, smallest_diff
