@@ -321,12 +321,23 @@ class Exafs:
             beam.align(
                 on_diagnostic=on_diagnostic,
                 using_device=using_device,
+<<<<<<< HEAD
                 use_2d_markers=True,
                 mover="und",
                 with_method = "calib",
                 grid_bins = 5
             )
         except Exception as e:
+=======
+                with_method=with_method,
+                grid_bins=grid_bins,
+                use_2d_markers=True,
+                mover="und"
+            with_method = "calib",
+            grid_bins = 5
+            )
+            except Exception as e:
+>>>>>>> 2f4428cd6acca15641b5de692c6fa568001ff288
             self.logger.warning(f"undulator alignment failed: {e}")
             # Don't raise - allow scan to continue
 
