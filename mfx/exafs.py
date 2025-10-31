@@ -689,8 +689,6 @@ class Exafs:
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
-        track_focus_data = self._init_tfs(energies)
-
         try:
             for i in range(runs):
                 # Initialize energies
@@ -723,7 +721,8 @@ class Exafs:
                     )
 
                     # Move TFS to energy
-                    #self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
+                    self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
+
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     
