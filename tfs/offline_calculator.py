@@ -118,6 +118,9 @@ class TFS_Calculator(object):
         pre_focus_lens = None
         if enable_prefocus:
             pre_focus_lens = self.get_pre_focus_lens(energy)
+            pre_focus_lens_radius = pre_focus_lens.radius
+        if pre_focus_lens is None:
+            pre_focus_lens_radius = -1
 
         combos = []
         diff = []
@@ -132,7 +135,7 @@ class TFS_Calculator(object):
 
             # Step 1bis
             if avoid_forbidden:
-                if self.check_forbidden(pre_focus_lens.radius, energy, lens_combo.tfs_radius):
+                if self.check_forbidden(pre_focus_lens_radius, energy, lens_combo.tfs_radius):
                     continue
             combos.append(lens_combo)
 
