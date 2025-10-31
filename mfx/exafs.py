@@ -589,6 +589,8 @@ class Exafs:
             k_offset: int = 0,
             tchk = False,
             use_vernier_calibration: bool = True,
+            map_focus_track: bool = False,
+            track_focus: bool = False,
             undulator_point: bool = False,
             undulator_on_diagnostic: str = "dg1",
             undulator_using_device: str = "yag",
@@ -686,6 +688,11 @@ class Exafs:
             energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug
         )
 
+        # Map the focus track over the energy list and record to track_focus_results.json
+        if map_focus_track:
+            self._init_tfs(energies)
+            return
+
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
@@ -721,7 +728,8 @@ class Exafs:
                     )
 
                     # Move TFS to energy
-                    self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
+                    if track_focus:
+                        self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
 
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
