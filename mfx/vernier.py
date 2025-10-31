@@ -437,19 +437,10 @@ class Vernier:
 
         def all():
             import os
-            import logging
             os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
-            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:REF1 | awk '{print $2}'").read().strip())
-            logging.info(f'Vernier Ref: {energy}')
             os.system(f'caget MFX:USER:MCC:EPHOT:REF2')
-            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:REF2 | awk '{print $2}'").read().strip())
-            logging.info(f'K Ref: {energy}')
             os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
-            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'").read().strip())
-            logging.info(f'Vernier Set: {energy}')
             os.system(f'caget MFX:USER:MCC:EPHOT:SET2')
-            energy = float(os.popen("caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'").read().strip())
-            logging.info(f'K Set: {energy}')
 
         def ref1():
             import os
@@ -481,15 +472,10 @@ class Vernier:
 
         def all(energy):
             import os
-            import logging
             os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
-            logging.info(f'Vernier Ref: {energy}')
             os.system(f'caput MFX:USER:MCC:EPHOT:REF2 {energy}')
-            logging.info(f'K Ref: {energy}')
             os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
-            logging.info(f'Vernier Set: {energy}')
             os.system(f'caput MFX:USER:MCC:EPHOT:SET2 {energy}')
-            logging.info(f'K Set: {energy}')
 
         def ref1(energy):
             import os
