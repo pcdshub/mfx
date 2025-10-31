@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class TFS_Calculator(object):
-    def __init__(self, tfs_lenses, prefocus_lenses=None,exclusions=None):
+    def __init__(self, tfs_lenses, prefocus_lenses=None, exclusions=None):
         self.tfs_lenses = tfs_lenses
         self.prefocus_lenses = prefocus_lenses
         if exclusions:
@@ -78,8 +78,8 @@ class TFS_Calculator(object):
         closest_row = lens_data.loc[closest_energy_idx]
 
         forbidden = closest_row['trip_min'] <= radius <= closest_row['trip_max']
-        log_level = logger.error if forbidden else logger.info
-        log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
+        # log_level = logger.error if forbidden else logger.info
+        # log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
 
         return forbidden
 
