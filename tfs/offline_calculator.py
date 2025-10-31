@@ -132,7 +132,7 @@ class TFS_Calculator(object):
 
             # Step 1bis
             if avoid_forbidden:
-                if check_forbidden(pre_focus_lens.radius, energy, lens_combo.tfs_radius):
+                if self.check_forbidden(pre_focus_lens.radius, energy, lens_combo.tfs_radius):
                     continue
             combos.append(lens_combo)
 
