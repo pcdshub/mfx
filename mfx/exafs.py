@@ -203,6 +203,7 @@ class Exafs:
 
     def _move_feespec_energy(self, energy_keV):
         """Move FEE spectrometer energy."""
+        from pcdsdevices.spectrometer import HXRSpectrometer as hxrsss
         if self.simulate:
             self.sim.slow_motor2.mv(energy_keV)
         else:
@@ -221,9 +222,9 @@ class Exafs:
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             camera_y_pos_mm = -4.92 - 0.111 * energy_keV
             # Move
-            hxrss.th.mv(crystal_angle_deg)
-            hxrss.tth.mv(camera_angle_deg)
-            hxrss.camy.mv(camera_y_pos_mm)
+            hxrsss.th.mv(crystal_angle_deg)
+            hxrsss.tth.mv(camera_angle_deg)
+            hxrsss.camy.mv(camera_y_pos_mm)
             # Check safety
             os.system(f'caget XRT:HXS:TRNS.SEVR')
             status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
@@ -233,7 +234,6 @@ class Exafs:
                 hxrsss.tth.mv(ref_camera_angle_deg)
                 hxrsss.camy.mv(ref_camera_y_pos_mm)
             return
-
 
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
         """
