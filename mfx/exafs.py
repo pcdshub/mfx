@@ -200,6 +200,10 @@ class Exafs:
         else:
             self.acr_energy_k.move(k_energy)
 
+    def _move_feespec_energy(self, energy_keV):
+        """Move XRT spectrometer (aka feespec) crystal and camera to set energy."""
+        
+
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
         """
         Perform Vernier alignment with DCCM (tchk functionality).
@@ -281,7 +285,51 @@ class Exafs:
                 )
                 if not success:
                     self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
-    
+
+    def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
+        """
+        Perform undulator (undulator) alignment using beam alignment system.
+
+        This method uses the Beam.align() function to align the undulator.
+        If with_method="calib", it will use calibration if available, otherwise run calibration.
+        If with_method="turbo", it will use turbo optimization.
+
+        Parameters
+        ----------
+        on_diagnostic : str
+            Diagnostic location (e.g., "dg1", "dg2", "xcs1")
+        using_device : str
+            Device to use ("yag" or "wave8")
+        with_method : str
+            Alignment method ("calib" or "turbo")
+        grid_bins : int
+            Number of grid bins for calibration (if using "calib" method)
+        """
+        # If simulating, force simulated devices to avoid any real hardware motion
+        if self.simulate:
+            try:
+                from mfx.optimize.beamline_hw import sim_devices
+                sim_devices()
+                print("[align_undulator] Simulation devices initialized")
+            except Exception:
+                print("[align_undulator] WARNING: Failed to set simulation devices. Returning.")
+                return
+
+        try:
+            from mfx.optimize.beam import Beam
+            beam = Beam()
+            beam.align(
+                on_diagnostic=on_diagnostic,
+                using_device=using_device,
+                use_2d_markers=True,
+                mover="und",
+                with_method = "calib",
+                grid_bins = 5
+            )
+        except Exception as e:
+            self.logger.warning(f"undulator alignment failed: {e}")
+            # Don't raise - allow scan to continue
+
     def _get_track_focus_data(self):
         track_focus_data = None
         try:
@@ -680,7 +728,7 @@ class Exafs:
                     )
 
                     # Move TFS to energy
-                    self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
+                    #self._move_tfs_to_energy(energy_eV=energy, track_focus_data=track_focus_data)
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     
