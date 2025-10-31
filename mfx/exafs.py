@@ -59,7 +59,8 @@ class Exafs:
         acr_status_suffix='AO805', pv_index=2
     )
 
-    def _build_energy_and_wait_time(self, energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug):
+    def _build_energy_and_wait_time(
+        self, energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, min_time_EXAFS, max_time_EXAFS, debug):
         """Build energy and wait time lists for EXAFS scan."""
         
         if len(energies_list) == 0 or len(wait_time_list) == 0:
@@ -89,8 +90,8 @@ class Exafs:
                 time_before_edge=0.5,
                 time_in_edge = 1,
                 time_in_preedge=1.5,
-                min_time_EXAFS = 0.5, 
-                max_time_EXAFS = 10,
+                min_time_EXAFS = min_time_EXAFS, 
+                max_time_EXAFS = max_time_EXAFS,
                 debug=debug
                 )
             if debug:
@@ -587,6 +588,8 @@ class Exafs:
             reverse: bool = False,
             min_k_keV: float = 7.035,
             k_offset: int = 0,
+            min_time_EXAFS: float = 0.5,
+            max_time_EXAFS: float = 10.0,
             tchk = False,
             use_vernier_calibration: bool = True,
             map_focus_track: bool = False,
@@ -644,6 +647,12 @@ class Exafs:
 
             k_offset: float
                 Offset in eV for undulator K motion request.
+
+            min_time_EXAFS (float): 
+                Minimum acquisition time in seconds for the EXAFS region.
+            
+            max_time_EXAFS (float): 
+                Maximum acquisition time in seconds for the EXAFS region.
                 
             tchk: bool, optional
                 If True, perform vernier alignment at each energy step.
@@ -685,7 +694,16 @@ class Exafs:
             self.logger.warning(f"Failed to load track_focus_results.json: {e}")
 
         energies, wait_times = self._build_energy_and_wait_time(
-            energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, debug
+            energies_list,
+            wait_time_list,
+            start_eV,
+            end_eV,
+            min_k,
+            max_k,
+            element,
+            min_time_EXAFS,
+            max_time_EXAFS,
+            debug
         )
 
         # Map the focus track over the energy list and record to track_focus_results.json
