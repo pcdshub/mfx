@@ -555,7 +555,8 @@ class MFXTransfocator(TransfocatorBase):
 
         # Move stage first if not using current position as reference
         if use_current_z_pos_as_ref:
-            combo, ref_focal_length_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+            _, ref_focal_length_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+            combo = LensConnect(*[lens for lens in self.lenses if lens.inserted])
             ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
         else:
             ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
