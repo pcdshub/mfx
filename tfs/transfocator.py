@@ -188,9 +188,7 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_09.remove()
         self.tfs_10.remove()
 
-
-    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], **kwargs):
-
+    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], avoid_forbidden=True, **kwargs):
         """
         Calculate the best lens array to hit the nominal sample point
 
@@ -215,6 +213,12 @@ class MFXTransfocator(TransfocatorBase):
         show : bool, optional
             Print a table of the of the calculated lens combination
 
+        exclusions : list, optional
+            Select your lenses to excluclde from tfs lenes #2-10 as list recommend [8,10]
+
+        avoid_forbidden : bool, optional
+            Avoids forbidden TFS configurations. True by default
+
         kwargs:
             Passed to :meth:`.Calculator.find_solution`
         """
@@ -227,9 +231,11 @@ class MFXTransfocator(TransfocatorBase):
         except AssertionError:
             logging.warning(f"please double-check that {energy} is in eV, not keV.")
         target = target or self.nominal_sample
-        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses,exclusions=exclusions)
-        combo, diff = calc.find_solution(target, energy, n, z_obj, **kwargs)
+        exclusions = [x - 1 for x in exclusions]
+        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses, exclusions=exclusions)
+        combo, diff = calc.find_solution(target, energy, n, z_obj, avoid_forbidden=avoid_forbidden, **kwargs)
         if combo:
+            print(combo)
             combo.show_info()
             logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
             radius = combo.tfs_radius
@@ -238,6 +244,10 @@ class MFXTransfocator(TransfocatorBase):
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
+            if avoid_forbidden:
+                logger.info("TFS combo is by default allowed")
+            else:
+                logger.error("TFS combo may be forbidden. Please check")
 
             logger.info(f'Calculated Focal Length: {focal} m\n')
 
@@ -246,7 +256,7 @@ class MFXTransfocator(TransfocatorBase):
         return combo
 
 
-    def try_combo(self, target=None, energy=None, show=True, prefocus = None, tfs = [], **kwargs):
+    def try_combo(self, target=400.37, energy=None, show=True, prefocus = None, tfs = [], **kwargs):
         """
         Calculates the focus based on the lens combo you select
 
@@ -284,7 +294,7 @@ class MFXTransfocator(TransfocatorBase):
                 f'{prefocus_rec} um prefocusing lens is reccommended for {energy} eV '
                 f'You are not using the recommended prefocusing lens.')
 
-        if prefocus == int(750):
+        if prefocus == 750:
             prefocus_idx = 2
         elif prefocus == 428:
             prefocus_idx = 1
@@ -315,6 +325,10 @@ class MFXTransfocator(TransfocatorBase):
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
+            calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
+            forbidden = calc.check_forbidden(prefocus_idx, energy, radius)
+            log_level = logger.error if forbidden else logger.info
+            log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
 
             logger.info(f'Calculated Focal Length: {focal} um\n')
 
@@ -433,7 +447,7 @@ class MFXTransfocator(TransfocatorBase):
         prev_lenses = set()
 
         for energy in energies:
-            combo, _diff_abs = calc.find_solution(tgt, energy, n=n, z_obj=z_obj)
+            combo, _diff_abs, pre_focus_lens = calc.find_solution(tgt, energy, n=n, z_obj=z_obj)
             if combo is None:
                 schedule.append({
                     'energy_eV': energy,
@@ -488,8 +502,12 @@ class MFXTransfocator(TransfocatorBase):
         print(f"Stage moved to position: z={z_mm:.3f}mm")
         return z_mm
 
-    def set_reference_combo(self, energy_eV, show=False):
-        combo = self.find_best_combo(energy_eV=energy_eV, show=show)
+    def set_reference_combo(self, energy_eV, show=False, **kwargs):
+        """
+        kwargs:
+            Passed to :meth:`.Calculator.find_solution`
+        """
+        combo = self.find_best_combo(energy_eV=energy_eV, show=show,  **kwargs)
         ref_focal_length_um = focal_length(combo.tfs_radius, energy=energy_eV)
         print(f"Reference energy: {energy_eV:.2f} eV, reference focal length: {ref_focal_length_um:.3f} um")
         return combo, ref_focal_length_um
@@ -510,7 +528,8 @@ class MFXTransfocator(TransfocatorBase):
             "z_position": target_z_mm
         })
 
-    def track_focus(self, energies, *, margin_mm=10.0, show=False):
+    def track_focus(self, energies, *, margin_mm=10.0, show=False,
+                    use_current_z_pos_as_ref=True, **kwargs):
         """
         Keep the focal length fixed over a provided list of energies by
         compensating with the translation stage. Lenses are NOT actuated.
@@ -522,28 +541,43 @@ class MFXTransfocator(TransfocatorBase):
           move the stage to compensate.
         - If the move would exceed the stage low limit, return to the top
           position and recompute the lens combo at that energy, then continue.
+
+        kwargs:
+            Passed to :meth:`.Calculator.find_solution`
         """
-        if not energies:
+        if len(energies) == 0:
             print("No energies provided.")
             return None
+        # cast energies to float to avoid json serialization issues
+        energies = [float(energy) for energy in energies]
 
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
-        ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
-        combo, ref_focal_length_um = self.set_reference_combo(energies[0], show=show)
+
+        # Move stage first if not using current position as reference
+        if use_current_z_pos_as_ref:
+            _, ref_focal_length_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+            combo = LensConnect(*[lens for lens in self.lenses if lens.inserted])
+            ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
+        else:
+            ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
+            combo, ref_focal_length_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+
         track_record = []
 
         for energy in energies:
-            target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
-            if target_z_stage_mm > min_z_stage_mm and target_z_stage_mm <= max_z_stage_mm:
+            target_z_stage_mm = self.get_z_stage_target(
+                energy, combo, ref_focal_length_um, ref_z_stage_mm
+            )
+            if min_z_stage_mm < target_z_stage_mm <= max_z_stage_mm:
                 self.mv_stage_to_target_pos(energy, combo, target_z_stage_mm, track_record)
             else:
                 shrinking_max_z_stage_mm = max_z_stage_mm
                 while shrinking_max_z_stage_mm > min_z_stage_mm:
                     self.mv_stage_to_pos(shrinking_max_z_stage_mm)
-                    combo = self.find_best_combo(energy_eV=energy, show=show)
+                    combo = self.find_best_combo(energy_eV=energy, show=show, **kwargs)
                     if combo:
                         new_target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
-                        if new_target_z_stage_mm > min_z_stage_mm and new_target_z_stage_mm <= max_z_stage_mm:
+                        if min_z_stage_mm < new_target_z_stage_mm <= max_z_stage_mm:
                             self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
                             break
                     shrinking_max_z_stage_mm -= margin_mm

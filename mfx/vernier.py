@@ -435,6 +435,13 @@ class Vernier:
         def __init__(self):
             pass
 
+        def all():
+            import os
+            os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
+            os.system(f'caget MFX:USER:MCC:EPHOT:REF2')
+            os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
+            os.system(f'caget MFX:USER:MCC:EPHOT:SET2')
+
         def ref1():
             import os
             os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
@@ -462,6 +469,13 @@ class Vernier:
     class put:
         def __init__(self):
             pass
+
+        def all(energy):
+            import os
+            os.system(f'caput MFX:USER:MCC:EPHOT:REF1 {energy}')
+            os.system(f'caput MFX:USER:MCC:EPHOT:REF2 {energy}')
+            os.system(f'caput MFX:USER:MCC:EPHOT:SET1 {energy}')
+            os.system(f'caput MFX:USER:MCC:EPHOT:SET2 {energy}')
 
         def ref1(energy):
             import os
