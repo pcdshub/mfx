@@ -529,7 +529,7 @@ class MFXTransfocator(TransfocatorBase):
         })
 
     def track_focus(self, energies, *, margin_mm=10.0, show=False,
-                    use_current_z_pos_as_ref=True, **kwargs):
+                    ref_focal_length_um=None, **kwargs):
         """
         Keep the focal length fixed over a provided list of energies by
         compensating with the translation stage. Lenses are NOT actuated.
@@ -553,14 +553,10 @@ class MFXTransfocator(TransfocatorBase):
 
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
 
-        # Move stage first if not using current position as reference
-        if use_current_z_pos_as_ref:
-            _, ref_focal_length_um = self.set_reference_combo(energies[0], show=show, **kwargs)
-            combo = LensConnect(*[lens for lens in self.lenses if lens.inserted])
-            ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
-        else:
-            ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
-            combo, ref_focal_length_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+        ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
+        combo, ref_fl_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+        if ref_focal_length_um is None:
+            ref_focal_length_um = ref_fl_um
 
         track_record = []
 
@@ -569,16 +565,22 @@ class MFXTransfocator(TransfocatorBase):
                 energy, combo, ref_focal_length_um, ref_z_stage_mm
             )
             if min_z_stage_mm < target_z_stage_mm <= max_z_stage_mm:
-                self.mv_stage_to_target_pos(energy, combo, target_z_stage_mm, track_record)
+                self.mv_stage_to_target_pos(
+                    energy, combo, target_z_stage_mm, track_record
+                )
             else:
                 shrinking_max_z_stage_mm = max_z_stage_mm
                 while shrinking_max_z_stage_mm > min_z_stage_mm:
                     self.mv_stage_to_pos(shrinking_max_z_stage_mm)
                     combo = self.find_best_combo(energy_eV=energy, show=show, **kwargs)
                     if combo:
-                        new_target_z_stage_mm = self.get_z_stage_target(energy, combo, ref_focal_length_um, ref_z_stage_mm)
+                        new_target_z_stage_mm = self.get_z_stage_target(
+                            energy, combo, ref_focal_length_um, ref_z_stage_mm
+                        )
                         if min_z_stage_mm < new_target_z_stage_mm <= max_z_stage_mm:
-                            self.mv_stage_to_target_pos(energy, combo, new_target_z_stage_mm, track_record)
+                            self.mv_stage_to_target_pos(
+                                energy, combo, new_target_z_stage_mm, track_record
+                            )
                             break
                     shrinking_max_z_stage_mm -= margin_mm
                 if not combo:
