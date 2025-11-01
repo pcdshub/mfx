@@ -940,6 +940,9 @@ class Exafs:
 
                     # Move TFS to energy
                     if track_focus:
+                        json_file_path = Path.home() / "track_focus_results.json"
+                        with open(json_file_path, 'r') as f:
+                            track_focus_data = json.load(f)
                         self._move_tfs_to_energy(energy_eV=energy,
                                                  track_focus_data=track_focus_data)
 
