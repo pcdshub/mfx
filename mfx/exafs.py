@@ -204,6 +204,32 @@ class Exafs:
         else:
             self.acr_energy_k.move(k_energy)
 
+    def _track_feespec_camera(self, energy_keV):
+        """Move FEE spectrometer energy."""
+        from pcdsdevices.spectrometer import HXRSpectrometer
+        hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
+        if self.simulate:
+            self.sim.slow_motor2.mv(energy_keV)
+        else:
+            # check Camera status and abort if running
+            os.system(f'caget CAMR:FEE1:441:Acquire')
+            status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
+            if status == 'Done':
+                os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
+            # Current
+            ref_camera_angle_deg = hxrsss.tth.position
+            # Target
+            camera_angle_deg = -1.9 + 2 * crystal_angle_deg
+            # Move
+            hxrsss.tth.mv(camera_angle_deg)
+            # Check safety
+            os.system(f'caget XRT:HXS:TRNS.SEVR')
+            status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
+            if status != 'NO_ALARM':
+                self.logger.error('XRT Transmission is in alarm state after FEE spectrometer energy move. Returning to previous position.')
+                hxrsss.tth.mv(ref_camera_angle_deg)
+            return
+
     def _move_feespec_energy(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
@@ -654,6 +680,7 @@ class Exafs:
             avoid_forbidden_combo=True,
             enable_prefocus=True,
             track_feespec: bool = False,
+            track_feespec_cam: bool = False,
             undulator_point: bool = False,
             undulator_on_diagnostic: str = "dg1",
             undulator_using_device: str = "yag",
@@ -663,6 +690,8 @@ class Exafs:
         """Perform EXAFS scan.
 
         Parameters:
+            simulate: bool = False
+
             start_eV (float): 
                 Photon energy (in eV) to start the scan at.
 
@@ -699,8 +728,12 @@ class Exafs:
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
 
+            runs: int = 1
+
             k_stepsize: float
                 Stepsize in eV for undulator K motion request.
+
+            lens_stepsize: float = 0.01
 
             reverse: bool
                 To tell the script you will be running from high energies to low energies for K direction consideration.
@@ -727,8 +760,21 @@ class Exafs:
             track_focus: bool = False
                 Uses the focus map to track the focus
 
-            track_feespec:
+            tfs_margin_mm=5.0
+
+            ref_focal_length_um=None
+
+            ref_z_stage_mm=None
+
+            avoid_forbidden_combo=True
+
+            enable_prefocus=True
+
+            track_feespec: bool = False
                 track the energy with the feespec
+
+            track_feespec_cam: bool = False
+                tracks the xrt-spec camera to compensate for vignetting
 
             undulator_point: bool, optional
                 If True, perform undulator alignment at each energy step. Default: False
@@ -744,6 +790,8 @@ class Exafs:
 
             undulator_grid_bins: int, optional
                 Number of grid bins for undulator calibration (if using "calib" method). Default: 5
+
+            debug: bool = False
         """
         from mfx.autorun import post
 
@@ -826,6 +874,8 @@ class Exafs:
 
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
+                    if track_feespec_cam:
+                        self._track_feespec_camera(energy_keV)
                     
                     # Perform Vernier alignment if needed
                     self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
