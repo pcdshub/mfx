@@ -863,8 +863,6 @@ class Exafs:
             debug
         )
 
-        log_level = self.logger.error if False else self.logger.warning
-
         var_names = [
             'simulate', 'inspire', 'record', 'reverse', 'tchk',
             'use_vernier_calibration', 'map_focus_track', 'track_focus',
@@ -875,6 +873,7 @@ class Exafs:
         for var_name in var_names:
             var_value = locals()[var_name]
             display_name = 'enable prefocus' if var_name == 'enable_prefocus' else var_name
+            log_level = self.logger.error if var_value else self.logger.warning
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         # Map the focus track over the energy list and record to track_focus_results.json
