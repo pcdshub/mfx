@@ -69,7 +69,7 @@ class Exafs:
             threshold_energies = {'Ti': 4985.00, 'Sc': 4510.00, 'V': 5485.00, 'Cr': 6010.00, 'Mn': 6560.00,
                     'Fe': 7130.00, 'Co': 7730.00, 'Ni': 8350.00, 'Cu': 9000.00, 'Zn': 9680.00}
 
-            preedge_end = foil_energies[element] + 7
+            preedge_end = foil_energies[element] + 5
             if end_eV is not None:
                 if end_eV <= threshold_energies[element]:
                     min_k = max_k = 0.0
@@ -78,10 +78,9 @@ class Exafs:
 
             energies, wait_time, energy_K_range, K_values = self.exafs_energy_range_builder.build_energy_range(
                 min_before_pre_edge=start_eV,
-                max_before_pre_edge=start_eV + 70,
+                max_before_pre_edge=preedge_end - 6,
                 preedge_end=preedge_end,
                 preedge_eV_increment=0.5,
-                max_before_edge=start_eV + 10,
                 min_K_value=min_k,
                 max_K_value=max_k,
                 before_edge_eV_increment=5.0,
@@ -136,7 +135,9 @@ class Exafs:
             self._move_feespec_energy(k_energy / 1000)
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
-            
+        if track_feespec:
+            self._check_feespec_crystal_angle(k_energy / 1000)
+
         return energies, energy_0_keV, k_energy, wait_time
 
     def _setup_daq_and_start_recording(self, sample, picker, inspire, record, run_index):
@@ -219,16 +220,50 @@ class Exafs:
             # Current
             ref_camera_angle_deg = hxrsss.tth.position
             # Target
+            crystal_angle_deg = 82.8 - 5.9 * energy_keV
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             # Move
             hxrsss.tth.mv(camera_angle_deg)
             # Check safety
-            os.system(f'caget XRT:HXS:TRNS.SEVR')
-            status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
-            if status != 'NO_ALARM':
+            if str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()) != 'NO_ALARM':
                 self.logger.error('XRT Transmission is in alarm state after FEE spectrometer energy move. Returning to previous position.')
                 hxrsss.tth.mv(ref_camera_angle_deg)
             return
+
+    def _check_feespec_crystal_angle(self, energy_keV):
+        """Move FEE spectrometer energy."""
+        from pcdsdevices.spectrometer import HXRSpectrometer
+        hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
+        self.logger.warning(f'Calibrating XRT-Spec for New Energy: {energy_keV}')
+        if self.simulate:
+            self.sim.slow_motor2.mv(energy_keV)
+        else:
+            # Current
+            ref_crystal_angle_deg = hxrsss.th.position
+            # Target
+            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            # Move
+            if round(crystal_angle_deg, 2) != round(ref_crystal_angle_deg, 2):
+                # check Camera status and abort if running
+                os.system(f'caget CAMR:FEE1:441:Acquire')
+                status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
+                if status == 'Acquire':
+                    os.system(f'caput CAMR:FEE1:441:Acquire Done')
+                hxrsss.th.umv(crystal_angle_deg)
+                # Check safety
+                os.system(f'caget XRT:HXS:TRNS.SEVR')
+                status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
+                if status != 'NO_ALARM':
+                    self.logger.error('XRT Transmission is in alarm state after FEE spectrometer energy move. Returning to previous position.')
+                    hxrsss.tth.mv(ref_camera_angle_deg)
+                    hxrsss.camy.mv(ref_camera_y_pos_mm)
+                    hxrsss.th.mv(ref_crystal_angle_deg)
+                # check Camera status and abort if running
+                os.system(f'caget CAMR:FEE1:441:Acquire')
+                status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
+                if status == 'Done':
+                    os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
+                return
 
     def _move_feespec_energy(self, energy_keV):
         """Move FEE spectrometer energy."""
@@ -254,7 +289,7 @@ class Exafs:
             # Move
             hxrsss.tth.mv(camera_angle_deg)
             hxrsss.camy.mv(camera_y_pos_mm)
-            hxrsss.th.umv(crystal_angle_deg)
+            hxrsss.th.mv(crystal_angle_deg)
             # Check safety
             os.system(f'caget XRT:HXS:TRNS.SEVR')
             status = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
@@ -262,12 +297,12 @@ class Exafs:
                 self.logger.error('XRT Transmission is in alarm state after FEE spectrometer energy move. Returning to previous position.')
                 hxrsss.tth.mv(ref_camera_angle_deg)
                 hxrsss.camy.mv(ref_camera_y_pos_mm)
-                hxrsss.th.umv(ref_crystal_angle_deg)
+                hxrsss.th.mv(ref_crystal_angle_deg)
             # check Camera status and abort if running
-            os.system(f'caget CAMR:FEE1:441:Acquire')
-            status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
-            if status == 'Done':
-                os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
+            # os.system(f'caget CAMR:FEE1:441:Acquire')
+            # status = str(os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip())
+            # if status == 'Done':
+            #     os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
             return
 
     def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
@@ -493,6 +528,8 @@ class Exafs:
                     self._move_feespec_energy(k_energy / 1000)
                 self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
                 self._move_k_energy(k_energy)
+                if track_feespec:
+                    self._check_feespec_crystal_angle(k_energy / 1000)
 
                 if not self.simulate:
                     daq.control.setState("running")
@@ -540,11 +577,14 @@ class Exafs:
         self.logger.warning("[*] Stopping Run and exiting???...")
         self._return_to_start(energy_start, k_energy_start)
         self._move_feespec_energy(energy_start)
+        self._check_feespec_crystal_angle(energy_start)
         self.logger.warning('Run ended prematurely. Probably sample delivery problem')
 
     def _finalize_scan(self, energy_start, k_energy_start):
         """Finalize scan and return to initial positions."""
         self._return_to_start(energy_start, k_energy_start)
+        self._move_feespec_energy(energy_start)
+        self._check_feespec_crystal_angle(energy_start)
         self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     def long_calib(
@@ -848,12 +888,12 @@ class Exafs:
         log_level(f" map_focus_track {'ON' if map_focus_track else 'OFF'}")
         log_level(f" track_focus {'ON' if track_focus else 'OFF'}")
         log_level(f" avoid_forbidden_combo {'ON' if avoid_forbidden_combo else 'OFF'}")
-        log_level(f" enable_prefocus, {'ON' if enable_prefocus, else 'OFF'}")
+        log_level(f" enable prefocus {'ON' if enable_prefocus else 'OFF'}")
         log_level(f" track_feespec {'ON' if track_feespec else 'OFF'}")
         log_level(f" track_feespec_cam {'ON' if track_feespec_cam else 'OFF'}")
         log_level(f" undulator_point {'ON' if undulator_point else 'OFF'}")
         log_level(f" debug {'ON' if debug else 'OFF'}")
-        
+
         # Map the focus track over the energy list and record to track_focus_results.json
         if map_focus_track:
             self._init_tfs(energies,
@@ -1237,11 +1277,10 @@ class EXAFSEnergyRangeBuilder:
 
     def build_energy_range(
             self,
-            min_before_pre_edge=7010.0,
-            max_before_pre_edge=7080.0,
-            preedge_end=7118,
+            min_before_pre_edge=7055.0,
+            max_before_pre_edge=7110.0,
+            preedge_end=7116,
             preedge_eV_increment=0.5,
-            max_before_edge=7020.0,
             min_K_value=2.0,
             max_K_value=12.0,
             before_edge_eV_increment=5.0,
