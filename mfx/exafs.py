@@ -796,26 +796,6 @@ class Exafs:
         from mfx.autorun import post
 
         self.simulate = simulate
-        args = [
-            simulate,
-            inspire,
-            record,
-            reverse,
-            tchk,
-            use_vernier_calibration,
-            map_focus_track,
-            track_focus,
-            avoid_forbidden_combo,
-            enable_prefocus,
-            track_feespec,
-            track_feespec_cam,
-            undulator_point,
-            debug]
-
-        log_level = logger.error if False else logger.info
-        for arg in args:
-            log_level(f"{arg} {'OFF' if False else 'ON'}")
-
         # Load track_focus results from current working directory, if available
         track_focus_data = None
         try:
@@ -842,6 +822,38 @@ class Exafs:
             debug
         )
 
+        args = [
+            simulate,
+            inspire,
+            record,
+            reverse,
+            tchk,
+            use_vernier_calibration,
+            map_focus_track,
+            track_focus,
+            avoid_forbidden_combo,
+            enable_prefocus,
+            track_feespec,
+            track_feespec_cam,
+            undulator_point,
+            debug]
+
+        log_level = self.logger.error if False else self.logger.warning
+        log_level(f" simulate {'ON' if simulate else 'OFF'}")
+        log_level(f" inspire {'ON' if inspire else 'OFF'}")
+        log_level(f" record {'ON' if record else 'OFF'}")
+        log_level(f" reverse {'ON' if reverse else 'OFF'}")
+        log_level(f" tchk {'ON' if tchk else 'OFF'}")
+        log_level(f" use_vernier_calibration {'ON' if use_vernier_calibration else 'OFF'}")
+        log_level(f" map_focus_track {'ON' if map_focus_track else 'OFF'}")
+        log_level(f" track_focus {'ON' if track_focus else 'OFF'}")
+        log_level(f" avoid_forbidden_combo {'ON' if avoid_forbidden_combo else 'OFF'}")
+        log_level(f" enable_prefocus, {'ON' if enable_prefocus, else 'OFF'}")
+        log_level(f" track_feespec {'ON' if track_feespec else 'OFF'}")
+        log_level(f" track_feespec_cam {'ON' if track_feespec_cam else 'OFF'}")
+        log_level(f" undulator_point {'ON' if undulator_point else 'OFF'}")
+        log_level(f" debug {'ON' if debug else 'OFF'}")
+        
         # Map the focus track over the energy list and record to track_focus_results.json
         if map_focus_track:
             self._init_tfs(energies,
