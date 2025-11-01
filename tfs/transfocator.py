@@ -2,6 +2,7 @@ import math
 import logging
 from pathlib import Path
 import json
+from matplotlib import pyplot as plt
 
 from pcdsdevices.device_types import IMS
 from ophyd import (Device, EpicsSignalRO, Component as Cpt,
@@ -485,6 +486,46 @@ class MFXTransfocator(TransfocatorBase):
             prev_lenses = lens_set
 
         return schedule
+    
+    def plot_focus_track(json_file_path):
+        # Load the data from the JSON file
+        with open(json_file_path, 'r') as f:
+            data = json.load(f)
+        
+        # Extract energy, z_position, and inserted_lenses values
+        energies = [entry['energy'] for entry in data]
+        z_positions = [entry['z_position'] for entry in data]
+        inserted_lenses = [entry['inserted_lenses'] for entry in data]
+        
+        # Create the plot
+        plt.figure(figsize=(12, 8))
+        plt.plot(energies, z_positions, marker='o', linestyle='-', color='b')
+        
+        # Add labels and title
+        plt.title('Z Position vs Energy')
+        plt.xlabel('Energy (eV)')
+        plt.ylabel('Z Position (units)')
+        
+        # Variable to keep track of the last inserted lenses shown
+        last_displayed_lenses = None
+
+        # Annotate only the first occurrence of each unique set of inserted_lenses
+        for energy, z_position, lenses in zip(energies, z_positions, inserted_lenses):
+            # Convert list of lenses to a tuple for easier comparison
+            lenses_tuple = tuple(lenses)
+            
+            if lenses_tuple != last_displayed_lenses:
+                plt.annotate(', '.join(lenses), 
+                            (energy, z_position), 
+                            textcoords="offset points", 
+                            xytext=(0, 10), 
+                            ha='center', 
+                            fontsize=8, 
+                            color='red',
+                            arrowprops=dict(arrowstyle='->', color='red', lw=0.5))
+                last_displayed_lenses = lenses_tuple  # Update the last_displayed_lenses
+        plt.grid(True)
+        plt.show()
 
     def get_stage_limits(self, margin_mm):
         stage = self.translation
@@ -529,7 +570,8 @@ class MFXTransfocator(TransfocatorBase):
         })
 
     def track_focus(self, energies, *, margin_mm=10.0, show=False,
-                    ref_focal_length_um=None, ref_z_stage_mm=None, **kwargs):
+                    ref_focal_length_um=None, ref_z_stage_mm=None, 
+                    display=True, **kwargs):
         """
         Keep the focal length fixed over a provided list of energies by
         compensating with the translation stage. Lenses are NOT actuated.
@@ -595,6 +637,8 @@ class MFXTransfocator(TransfocatorBase):
         with open(save_path, "w") as f:
             json.dump(track_record, f, indent=4)
         print(f"Tracking results saved to {save_path}")
+        if display:
+            self.plot_focus_track(save_path)
         return track_record
 
 
