@@ -796,6 +796,25 @@ class Exafs:
         from mfx.autorun import post
 
         self.simulate = simulate
+        args = [
+            simulate,
+            inspire,
+            record,
+            reverse,
+            tchk,
+            use_vernier_calibration,
+            map_focus_track,
+            track_focus,
+            avoid_forbidden_combo,
+            enable_prefocus,
+            track_feespec,
+            track_feespec_cam,
+            undulator_point,
+            debug]
+
+        log_level = logger.error if False else logger.info
+        for arg in args:
+            log_level(f"{arg} {'OFF' if False else 'ON'}")
 
         # Load track_focus results from current working directory, if available
         track_focus_data = None
