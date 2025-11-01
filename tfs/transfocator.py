@@ -487,7 +487,7 @@ class MFXTransfocator(TransfocatorBase):
 
         return schedule
     
-    def plot_focus_track(json_file_path):
+    def plot_focus_track(self, json_file_path):
         # Load the data from the JSON file
         with open(json_file_path, 'r') as f:
             data = json.load(f)
