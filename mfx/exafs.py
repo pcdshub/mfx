@@ -637,7 +637,7 @@ class Exafs:
             track_focus: bool = False,
             tfs_margin_mm=5.0,
             ref_focal_length_um=None,
-            ref
+            ref_z_stage_mm=None,
             avoid_forbidden_combo=True,
             enable_prefocus=True,
             undulator_point: bool = False,
