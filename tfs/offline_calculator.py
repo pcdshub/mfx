@@ -137,13 +137,13 @@ class TFS_Calculator(object):
             if avoid_forbidden:
                 if self.check_forbidden(pre_focus_lens_radius, energy, lens_combo.tfs_radius):
                     continue
-            combos.append(lens_combo)
 
             # Step 2
-            if combo.nlens > n:
+            if lens_combo.nlens > n:
                 continue
-            image = combo.image(z_obj, energy)
+            image = lens_combo.image(z_obj, energy)
             diff.append(np.abs(image - target))
+            combos.append(lens_combo)
 
         # Step 3
         best_allowed_combo_idx = np.argmin(diff)
