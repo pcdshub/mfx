@@ -1286,9 +1286,9 @@ class EXAFSEnergyRangeBuilder:
             before_edge_eV_increment=5.0,
             edge_eV_increment=1.0,
             K_spacing=0.1,
-            time_before_edge=0.5,
+            time_before_edge=2,
             time_in_edge=1,
-            time_in_preedge=1.5,
+            time_in_preedge=2,
             min_time_EXAFS=0.5,
             max_time_EXAFS=10,
             debug=False

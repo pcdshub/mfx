@@ -255,7 +255,7 @@ with safe_load('add laser motor groups'):
 def mfx_reload(module_name):
     import importlib
     import sys
-    importlib.reload(sys.modules([module_name]))
+    importlib.reload(sys.modules[module_name])
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
