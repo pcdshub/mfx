@@ -448,49 +448,57 @@ class Exafs:
 
     def _init_tfs(self, energies, margin_mm, 
                   ref_focal_length_um, ref_z_stage_mm,
-                  avoid_forbidden, enable_prefocus):
+                  avoid_forbidden, enable_prefocus, map_focus_track):
         tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         if self.simulate:
             self.tfs = make_tfs_sim(tfs)
         else:
             self.tfs = tfs
 
-        sim_tfs = make_tfs_sim(tfs)
-        track_focus_data = sim_tfs.track_focus(
-            energies=energies,
-            margin_mm=margin_mm,
-            show=True,
-            ref_focal_length_um=ref_focal_length_um,
-            ref_z_stage_mm=ref_z_stage_mm,
-            avoid_forbidden=avoid_forbidden,
-            enable_prefocus=enable_prefocus
-        )
-        return track_focus_data
+        if map_focus_track:
+            sim_tfs = make_tfs_sim(tfs)
+            track_focus_data = sim_tfs.track_focus(
+                energies=energies,
+                margin_mm=margin_mm,
+                show=True,
+                ref_focal_length_um=ref_focal_length_um,
+                ref_z_stage_mm=ref_z_stage_mm,
+                avoid_forbidden=avoid_forbidden,
+                enable_prefocus=enable_prefocus
+            )
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data):
         if track_focus_data is not None:
             energy_eV = float(energy_eV)
+            do_move = False
             for data in track_focus_data:
                 if data["energy"] == energy_eV:
                     z_position = data["z_position"]
-                    inserted_lenses = data["inserted_lenses"]
+                    inserted_lenses = [lens.replace('SIM::TFS:', 'MFX:LENS:TFS:') for lens in data["inserted_lenses"]]
+                    do_move = True
                     break
-            if z_position is not None:
-                self.logger.info(f"Moving TFS to {z_position:.3f} mm")
-                self.tfs.translation.mv(z_position)
-            for lens in self.tfs.lenses:
-                if lens.prefix in inserted_lenses:
-                    self.logger.info(f"Inserting lens {lens.prefix}")
-                    if lens.inserted:
-                        self.logger.info(f"Lens {lens.prefix} already inserted")
-                        continue
-                    lens.insert()
-                else:
-                    self.logger.info(f"Removing lens {lens.prefix}")
-                    if not lens.inserted:
-                        self.logger.info(f"Lens {lens.prefix} already removed")
-                        continue
-                    lens.remove()
+            if do_move:
+                if z_position is not None:
+                    self.logger.info(f"Moving TFS to {z_position:.3f} mm")
+                    self.tfs.translation.mv(z_position)
+                    while self.tfs.translation.moving:
+                        self.logger.warning(f"... TFS moving [current/target (mm)]: {self.tfs.translation.position:.3f}/{z_position:.3f}")
+                        sleep(0.1)
+                for lens in self.tfs.lenses:
+                    if lens.prefix in inserted_lenses:
+                        self.logger.info(f"Inserting lens {lens.prefix}")
+                        if lens.inserted:
+                            self.logger.info(f"Lens {lens.prefix} already inserted")
+                            continue
+                        lens.insert()
+                    else:
+                        self.logger.info(f"Removing lens {lens.prefix}")
+                        if not lens.inserted:
+                            self.logger.info(f"Lens {lens.prefix} already removed")
+                            continue
+                        lens.remove()
+            else:
+                self.logger.warning(f"Energy {energy_eV=} eV not found. Skipping.")
         else:
             self.logger.warning("No track_focus_data found; how did you get here?.")
             return
@@ -877,14 +885,13 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         # Map the focus track over the energy list and record to track_focus_results.json
-        if map_focus_track:
-            self._init_tfs(energies,
-                           margin_mm=tfs_margin_mm,
-                           ref_focal_length_um=ref_focal_length_um,
-                           ref_z_stage_mm=ref_z_stage_mm,
-                           avoid_forbidden=avoid_forbidden_combo,
-                           enable_prefocus=enable_prefocus)
-            return
+        self._init_tfs(energies,
+                       margin_mm=tfs_margin_mm,
+                       ref_focal_length_um=ref_focal_length_um,
+                       ref_z_stage_mm=ref_z_stage_mm,
+                       avoid_forbidden=avoid_forbidden_combo,
+                       enable_prefocus=enable_prefocus, 
+                       map_focus_track=map_focus_track)
 
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
