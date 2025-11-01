@@ -86,9 +86,9 @@ class Exafs:
                 before_edge_eV_increment=5.0,
                 edge_eV_increment=1.0,
                 K_spacing=0.1,
-                time_before_edge=0.5,
+                time_before_edge=2,
                 time_in_edge = 1,
-                time_in_preedge=1.5,
+                time_in_preedge=2,
                 min_time_EXAFS = min_time_EXAFS, 
                 max_time_EXAFS = max_time_EXAFS,
                 debug=debug
@@ -109,7 +109,8 @@ class Exafs:
             self.logger.info('Please pass wait_time as a float or a list of the same length. Exit now.')
             raise ValueError('len(wait_time) is not equal to len(energies)')
         else:
-            self.logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
+            if debug:
+                self.logger.info(f"Energy list: {energies}; Wait time list: {wait_time}")
 
         return energies, wait_time
 
@@ -1281,8 +1282,8 @@ class EXAFSEnergyRangeBuilder:
     def build_energy_range(
             self,
             min_before_pre_edge=7055.0,
-            max_before_pre_edge=7110.0,
-            preedge_end=7116,
+            max_before_pre_edge=7110.2,
+            preedge_end=7116.2,
             preedge_eV_increment=0.5,
             min_K_value=2.0,
             max_K_value=12.0,
