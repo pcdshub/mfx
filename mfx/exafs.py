@@ -892,6 +892,8 @@ class Exafs:
                        avoid_forbidden=avoid_forbidden_combo,
                        enable_prefocus=enable_prefocus, 
                        map_focus_track=map_focus_track)
+        if map_focus_track:
+            return
 
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
