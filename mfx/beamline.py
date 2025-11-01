@@ -178,22 +178,20 @@ with safe_load('EXAFS_Builder'):
     from mfx.exafs import EXAFSEnergyRangeBuilder
     exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
-# with safe_load("laser wp power"):
-#     # Hack the LXE class to make it work with Newports
-#     class LXE(LaserEnergyPositioner):
-#         from pcdsdevices.lxe import LaserEnergyPositioner
-#         from hutch_python.utils import get_current_experiment
-#         from pcdsdevices.device import Component as Cpt
-#         from pcdsdevices.epics_motor import Newport
-#         motor = Cpt(Newport, "")
-#         lxe_calib_file = (
-#             f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib"
-#         )
-#         try:
-#             lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
-#         except OSError:
-#             print(f"Could not load file: {lxe_calib_file}")
-#             raise FileNotFoundError
+with safe_load("laser wp power"):
+    # Hack the LXE class to make it work with Newports
+    class LXE(LaserEnergyPositioner):
+        from pcdsdevices.lxe import LaserEnergyPositioner
+        from hutch_python.utils import get_current_experiment
+        from pcdsdevices.device import Component as Cpt
+        from pcdsdevices.epics_motor import Newport
+        motor = Cpt(Newport, "")
+        lxe_calib_file = (f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib")
+    try:
+        lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
+    except OSError:
+        print(f"Could not load file: {lxe_calib_file}")
+        raise FileNotFoundError
 
 with safe_load('FS45 lxt & lxt_ttc'):
     import logging
@@ -254,6 +252,9 @@ with safe_load('add laser motor groups'):
         txt = txt
         lxt_ttc = lxt_ttc
         lxt_fast1 = mfx_lxt_fast1
+def mfx_reload(module_name):
+    import importlib
+    importlib.reload(module_name)
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
