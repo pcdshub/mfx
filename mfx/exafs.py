@@ -375,7 +375,9 @@ class Exafs:
             self.logger.warning(f"Failed to load track_focus_results.json: {e}")
         return track_focus_data
 
-    def _init_tfs(self, energies, margin_mm, ref_focal_length_um, avoid_forbidden, enable_prefocus):
+    def _init_tfs(self, energies, margin_mm, 
+                  ref_focal_length_um, ref_z_stage_mm,
+                  avoid_forbidden, enable_prefocus):
         tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         if self.simulate:
             self.tfs = make_tfs_sim(tfs)
@@ -388,6 +390,7 @@ class Exafs:
             margin_mm=margin_mm,
             show=True,
             ref_focal_length_um=ref_focal_length_um,
+            ref_z_stage_mm=ref_z_stage_mm,
             avoid_forbidden=avoid_forbidden,
             enable_prefocus=enable_prefocus
         )
@@ -634,6 +637,7 @@ class Exafs:
             track_focus: bool = False,
             tfs_margin_mm=5.0,
             ref_focal_length_um=None,
+            ref
             avoid_forbidden_combo=True,
             enable_prefocus=True,
             undulator_point: bool = False,
@@ -753,6 +757,7 @@ class Exafs:
             self._init_tfs(energies,
                            margin_mm=tfs_margin_mm,
                            ref_focal_length_um=ref_focal_length_um,
+                           ref_z_stage_mm=ref_z_stage_mm,
                            avoid_forbidden=avoid_forbidden_combo,
                            enable_prefocus=enable_prefocus)
             return

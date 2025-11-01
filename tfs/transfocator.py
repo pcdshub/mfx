@@ -529,7 +529,7 @@ class MFXTransfocator(TransfocatorBase):
         })
 
     def track_focus(self, energies, *, margin_mm=10.0, show=False,
-                    ref_focal_length_um=None, **kwargs):
+                    ref_focal_length_um=None, ref_z_stage_mm=None, **kwargs):
         """
         Keep the focal length fixed over a provided list of energies by
         compensating with the translation stage. Lenses are NOT actuated.
@@ -553,10 +553,12 @@ class MFXTransfocator(TransfocatorBase):
 
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
 
-        ref_z_stage_mm = self.mv_stage_to_pos(max_z_stage_mm)
+        ref_zs_mm = self.mv_stage_to_pos(max_z_stage_mm)
         combo, ref_fl_um = self.set_reference_combo(energies[0], show=show, **kwargs)
         if ref_focal_length_um is None:
             ref_focal_length_um = ref_fl_um
+        if ref_z_stage_mm is None:
+            ref_z_stage_mm = ref_zs_mm
 
         track_record = []
 
