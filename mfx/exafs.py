@@ -1301,8 +1301,7 @@ class EXAFSEnergyRangeBuilder:
         - tuple: A tuple containing the energy range array and the corresponding acquisition time array.
         """
         import numpy as np
-        energy_before_pre_edge = np.arange(min_before_pre_edge, max_before_pre_edge +
-                                           before_edge_eV_increment, before_edge_eV_increment)
+        energy_before_pre_edge = np.arange(min_before_pre_edge, max_before_pre_edge, before_edge_eV_increment)
         K_values = np.arange(min_K_value, max_K_value + K_spacing, K_spacing)
         energy_K_range = [self.K_to_eV(K) for K in K_values if self.K_to_eV(K) is not None]
         energy_in_preedge = np.arange(max_before_pre_edge + preedge_eV_increment, preedge_end, preedge_eV_increment)
