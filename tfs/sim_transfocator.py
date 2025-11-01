@@ -37,7 +37,7 @@ class Stage(SynAxis):
         ]
 
     def mv(self, value):
-        delta = value - self.position
+        delta = (value - self.position) / 1000 # lenses z are in m.
         st = self.set(value); st.wait()
         for l in getattr(self, "_lenses", []):
             l._sig_z.set(l._sig_z.get() + delta).wait()
