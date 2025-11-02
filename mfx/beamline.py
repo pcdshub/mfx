@@ -252,10 +252,16 @@ with safe_load('add laser motor groups'):
         txt = txt
         lxt_ttc = lxt_ttc
         lxt_fast1 = mfx_lxt_fast1
+
 def mfx_reload(module_name):
     import importlib
     import sys
     importlib.reload(sys.modules[module_name])
+
+    if module_name == 'mfx.exafs':
+        from mfx.exafs import Exafs, EXAFSEnergyRangeBuilder
+        exafs = Exafs()
+        exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
