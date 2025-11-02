@@ -206,7 +206,7 @@ class Exafs:
         else:
             self.acr_energy_k.move(k_energy)
 
-    def _track_feespec_camera(self, energy_keV):
+    def track_feespec_camera(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
         hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
@@ -221,7 +221,7 @@ class Exafs:
             # Current
             ref_camera_angle_deg = hxrsss.tth.position
             # Target
-            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV) #82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV)
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             # Move
             hxrsss.tth.mv(camera_angle_deg)
@@ -242,7 +242,7 @@ class Exafs:
             # Current
             ref_crystal_angle_deg = hxrsss.th.position
             # Target
-            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV) #82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV)
             # Move
             if round(crystal_angle_deg, 2) != round(ref_crystal_angle_deg, 2):
                 # check Camera status and abort if running
@@ -284,7 +284,7 @@ class Exafs:
             ref_camera_y_pos_mm = hxrsss.camy.position
             ref_crystal_angle_deg = hxrsss.th.position
             # Target
-            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV)
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             camera_y_pos_mm = -4.92 - 0.111 * energy_keV
             # Move
