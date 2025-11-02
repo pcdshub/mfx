@@ -843,34 +843,6 @@ class Exafs:
             debug: bool = False
         """
         from mfx.autorun import post
-
-        self.simulate = simulate
-        # Load track_focus results from current working directory, if available
-        track_focus_data = None
-        try:
-            track_focus_path = Path(os.getcwd()) / "track_focus_results.json"
-            if track_focus_path.exists():
-                with open(track_focus_path, "r") as tf:
-                    track_focus_data = json.load(tf)
-                self.logger.info(f"Loaded track_focus results from {track_focus_path}")
-            else:
-                self.logger.info("No track_focus_results.json found in current directory; proceeding without TFS guidance.")
-        except Exception as e:
-            self.logger.warning(f"Failed to load track_focus_results.json: {e}")
-
-        energies, wait_times = self._build_energy_and_wait_time(
-            energies_list,
-            wait_time_list,
-            start_eV,
-            end_eV,
-            min_k,
-            max_k,
-            element,
-            min_time_EXAFS,
-            max_time_EXAFS,
-            debug
-        )
-
         var_names = [
             'simulate', 'inspire', 'record', 'reverse', 'tchk',
             'use_vernier_calibration', 'map_focus_track', 'track_focus',
@@ -884,16 +856,28 @@ class Exafs:
             log_level = self.logger.error if var_value else self.logger.warning
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
+        self.simulate = simulate
+        # Load track_focus results from current working directory, if available
+        track_focus_data = self._get_track_focus_data()
         # Map the focus track over the energy list and record to track_focus_results.json
         self._init_tfs(energies,
                        margin_mm=tfs_margin_mm,
                        ref_focal_length_um=ref_focal_length_um,
                        ref_z_stage_mm=ref_z_stage_mm,
                        avoid_forbidden=avoid_forbidden_combo,
-                       enable_prefocus=enable_prefocus, 
+                       enable_prefocus=enable_prefocus,
                        map_focus_track=map_focus_track)
         if map_focus_track:
             return
+
+        energies, wait_times = self._build_energy_and_wait_time(
+            energies_list, wait_time_list, start_eV, end_eV,
+            min_k, max_k,
+            element,
+            min_time_EXAFS,
+            max_time_EXAFS,
+            debug
+        )
 
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
@@ -931,9 +915,6 @@ class Exafs:
 
                     # Move TFS to energy
                     if track_focus:
-                        json_file_path = Path.home() / "track_focus_results.json"
-                        with open(json_file_path, 'r') as f:
-                            track_focus_data = json.load(f)
                         self._move_tfs_to_energy(energy_eV=energy,
                                                  track_focus_data=track_focus_data)
 

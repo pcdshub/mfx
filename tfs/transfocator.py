@@ -157,7 +157,7 @@ class MFXTransfocator(TransfocatorBase):
         return [lens for lens in self.lenses if 'TFS' in lens.prefix]
 
     @property
-    def current_focus(self):
+    def current_focus(self, energy_eV=None):
         """
         The distance from the focus of the Transfocator to nominal_sample
 
@@ -165,6 +165,8 @@ class MFXTransfocator(TransfocatorBase):
         ----
         If no lenses are inserted this will retun NaN
         """
+        energy = energy_eV or self.beam_energy.get()
+        logger.warning(f"TFS {energy=} eV")
         # Find inserted lenses
         inserted = [lens for lens in self.lenses if lens.inserted]
         # Check that we have any inserted lenses at all
@@ -172,8 +174,7 @@ class MFXTransfocator(TransfocatorBase):
             logger.warning("No lenses are currently inserted")
             return math.nan
         # Calculate the image from this set of lenses
-        return LensConnect(*inserted).image(0.0) - self.nominal_sample
-
+        return LensConnect(*inserted).image(0.0, energy) - self.nominal_sample
 
     def remove_all(self):
         """
