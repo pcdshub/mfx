@@ -806,7 +806,7 @@ class VernierCalibration:
             logger.info(f"Final offset: {final_offset:.2f} eV")
             logger.info(f"Alignment completed successfully")
             
-            return True
+            return final_offset
         else:
             logger.error(f"No valid intensity measurements found")
             return False

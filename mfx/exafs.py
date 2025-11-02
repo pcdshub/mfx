@@ -380,15 +380,18 @@ class Exafs:
                 
                 # Then align to DCCM using intensity scan
                 self.logger.info("Performing intensity-based vernier alignment")
-                success = vernier_calib.align_to_dccm(
+                final_offset = vernier_calib.align_to_dccm(
                     energy_range_eV=10.0,
                     energy_steps=11,
                     events_per_step=120,
                     simulate=self.simulate
                 )
-                if not success:
-                    self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
+                if not final_offset:
+                    self.logger.error(f"Intensity-based alignment failed at energy {energy:.4f} keV")
+                else:
+                    return final_offset
 
+                
     def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
         """
         Perform undulator (undulator) alignment using beam alignment system.
@@ -932,7 +935,8 @@ class Exafs:
                         self._track_feespec_camera(energy_keV)
                     
                     # Perform Vernier alignment if needed
-                    self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
+                    #output final_offset = final_vernier_actual - final_dccm_energy
+                    final_offset = self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
 
                     # Wait before moving on
                     self._wait(wait_time)
