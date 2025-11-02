@@ -686,7 +686,7 @@ class VernierCalibration:
         return calib
 
     def align_to_dccm(self, energy_range_eV: float = 10.0, energy_steps: int = 11,
-                     events_per_step: int = 120, simulate: Optional[bool] = None) -> bool:
+                     events_per_step: int = 100, simulate: Optional[bool] = None) -> bool:
         """
         Align vernier to current DCCM energy using intensity-based optimization.
         
@@ -768,6 +768,8 @@ class VernierCalibration:
                     intensities.append(float(intensity_pv.get()))
                 except Exception:
                     pass
+                # Sleep for 10ms
+                time.sleep(0.01)
             intensity = np.mean(intensities) if intensities else float(intensity_pv.get())
             
             logger.info(f"Measured intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")

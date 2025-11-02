@@ -383,7 +383,7 @@ class Exafs:
                 final_offset = vernier_calib.align_to_dccm(
                     energy_range_eV=10.0,
                     energy_steps=11,
-                    events_per_step=120,
+                    events_per_step=100,
                     simulate=self.simulate
                 )
                 if not final_offset:
