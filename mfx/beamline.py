@@ -93,7 +93,7 @@ with safe_load('optimize'):
     from mfx.optimize.user_select import *
     from mfx.optimize.constraints import *
     from mfx.optimize.beam import *
-    from mfx.optimize.vernier_calibration import VernierCalibration
+    from mfx.optimize.vernier_calibration import *
     beam = Beam()
     vernier_calib = VernierCalibration()
 
