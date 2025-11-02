@@ -873,7 +873,7 @@ class Exafs:
                 max_time_EXAFS,
                 debug
                 )
- 
+
         # Load track_focus results from current working directory, if available
         track_focus_data = self._get_track_focus_data()
         # Map the focus track over the energy list and record to track_focus_results.json

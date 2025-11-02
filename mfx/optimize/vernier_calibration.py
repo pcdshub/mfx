@@ -812,11 +812,7 @@ class VernierCalibration:
         else:
             logger.error(f"No valid intensity measurements found")
             return False
-                
-        except Exception as exc:
-            logger.error(f"Error during alignment: {exc}")
-            return False
-    
+
     def move_to_energy_with_calibration(self, simulate: Optional[bool] = None) -> bool:
         """
         Move vernier to align with current DCCM energy using calibration to correct for offset.
