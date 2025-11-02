@@ -221,7 +221,7 @@ class Exafs:
             # Current
             ref_camera_angle_deg = hxrsss.tth.position
             # Target
-            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV) #82.8 - 5.9 * energy_keV
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             # Move
             hxrsss.tth.mv(camera_angle_deg)
@@ -242,7 +242,7 @@ class Exafs:
             # Current
             ref_crystal_angle_deg = hxrsss.th.position
             # Target
-            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV) #82.8 - 5.9 * energy_keV
             # Move
             if round(crystal_angle_deg, 2) != round(ref_crystal_angle_deg, 2):
                 # check Camera status and abort if running
