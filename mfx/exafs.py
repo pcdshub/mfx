@@ -383,7 +383,8 @@ class Exafs:
                 success = vernier_calib.align_to_dccm(
                     energy_range_eV=10.0,
                     energy_steps=11,
-                    events_per_step=12
+                    events_per_step=12,
+                    simulate=self.simulate
                 )
                 if not success:
                     self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
@@ -860,6 +861,16 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         self.simulate = simulate
+        
+        energies, wait_times = self._build_energy_and_wait_time(
+                energies_list, wait_time_list, 
+                start_eV, end_eV,min_k, max_k,
+                element,
+                min_time_EXAFS,
+                max_time_EXAFS,
+                debug
+                )
+ 
         # Load track_focus results from current working directory, if available
         track_focus_data = self._get_track_focus_data()
         # Map the focus track over the energy list and record to track_focus_results.json
@@ -874,20 +885,13 @@ class Exafs:
         if map_focus_track:
             return
 
-        energies, wait_times = self._build_energy_and_wait_time(
-            energies_list, wait_time_list, start_eV, end_eV,
-            min_k, max_k,
-            element,
-            min_time_EXAFS,
-            max_time_EXAFS,
-            debug
-        )
-
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
 
+
         try:
             for i in range(runs):
+
                 # Initialize energies
                 energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
                     energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
