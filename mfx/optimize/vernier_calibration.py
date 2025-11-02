@@ -393,12 +393,15 @@ class VernierCalibration:
                 print(f"[calibrate] Event data keys: {list(event_data.keys())}")
                 
                 # Get vernier energy from event data
-                # In simulation: key is "vernier_energy" (from vernier motor)
-                # In real hardware: key is "vernier_energy" (from vernier_energy_pv in motors list)
-                if "vernier_energy" in event_data:
-                    vernier_energy = event_data["vernier_energy"]
+                # Try vernier_energy_readback first, then fall back to vernier_energy_setpoint
+                if "vernier_energy_readback" in event_data:
+                    vernier_energy = event_data["vernier_energy_readback"]
+                    print(f"[calibrate] Using vernier_energy_readback: {vernier_energy:.2f} eV")
+                elif "vernier_energy_setpoint" in event_data:
+                    vernier_energy = event_data["vernier_energy_setpoint"]
+                    print(f"[calibrate] vernier_energy_readback not found, using vernier_energy_setpoint: {vernier_energy:.2f} eV")
                 else:
-                    print(f"[calibrate] WARNING: No vernier_energy found in event data")
+                    print(f"[calibrate] WARNING: Neither vernier_energy_readback nor vernier_energy_setpoint found in event data")
                     print(f"[calibrate] Available keys: {list(event_data.keys())}")
                     return
                 
@@ -802,11 +805,19 @@ class VernierCalibration:
                     return
                 event_data = doc.get("data", {})
                 print(f"[align_to_dccm] Event data keys: {list(event_data.keys())}")
-                if "vernier_energy" not in event_data:
-                    print(f"[align_to_dccm] WARNING: vernier_energy not in event data!")
-                    return
                 
-                vernier_energy = event_data["vernier_energy"]
+                # Get vernier energy from event data
+                # Try vernier_energy_readback first, then fall back to vernier_energy_setpoint
+                if "vernier_energy_readback" in event_data:
+                    vernier_energy = event_data["vernier_energy_readback"]
+                    print(f"[align_to_dccm] Using vernier_energy_readback: {vernier_energy:.2f} eV")
+                elif "vernier_energy_setpoint" in event_data:
+                    vernier_energy = event_data["vernier_energy_setpoint"]
+                    print(f"[align_to_dccm] vernier_energy_readback not found, using vernier_energy_setpoint: {vernier_energy:.2f} eV")
+                else:
+                    print(f"[align_to_dccm] WARNING: Neither vernier_energy_readback nor vernier_energy_setpoint found in event data!")
+                    print(f"[align_to_dccm] Available keys: {list(event_data.keys())}")
+                    return
                 
                 # In simulation mode, update tracker first
                 if tracker is not None and get_intensity_func is not None:
