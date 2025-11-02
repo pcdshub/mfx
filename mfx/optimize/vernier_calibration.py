@@ -14,7 +14,7 @@ from ophyd.device import Device
 from pcdsdevices.pv_positioner import OnePVMotor
 import logging
 
-from .beamline_hw import (
+from mfx.optimize.beamline_hw import (
     DG1_WAVE8_XPOS,
     DG2_WAVE8_XPOS,
     IP_YAG_XPOS,
@@ -684,9 +684,9 @@ class VernierCalibration:
             logger.error(f"Warning: failed to save calibration: {exc}")
         
         return calib
-    
+
     def align_to_dccm(self, energy_range_eV: float = 10.0, energy_steps: int = 11,
-                     events_per_step: int = 12, simulate: Optional[bool] = None) -> bool:
+                     events_per_step: int = 120, simulate: Optional[bool] = None) -> bool:
         """
         Align vernier to current DCCM energy using intensity-based optimization.
         
@@ -749,165 +749,67 @@ class VernierCalibration:
         scan_end = current_dccm_energy + energy_range_eV / 2
         
         logger.info(f"Scanning vernier from {scan_start:.2f} to {scan_end:.2f} eV (range: ±{energy_range_eV/2:.1f} eV around DCCM at {current_dccm_energy:.2f} eV)")
-        
-        # Determine simulation mode from argument
-        is_simulation = simulate if simulate is not None else False
-        if is_simulation:
-            logger.info("Simulation mode enabled")
-        
-        # Import RE and daq based on simulation mode
-        if is_simulation:
-            from bluesky import RunEngine
-            RE = RunEngine({})
-            daq = FakeDaq()
-        else:
-            # Try to import real hardware
+
+        for step in range(energy_steps):
+            vernier_energy = scan_start + step * (scan_end - scan_start) / (energy_steps - 1)
+            logger.info(f"Moving vernier to: {vernier_energy:.2f} eV")
             try:
-                from mfx.db import RE, daq
-            except ImportError:
-                pass  # Continue without RE/daq if import fails
-        
-        try:
-            import bluesky.plans as bp
-        except ImportError:
-            logger.error("Could not import bluesky.plans")
-            raise
-        
-        try:
-            # Configure DAQ
-            vernier_energy_pv.setpoint.kind = "hinted"
-            daq.configure(
-                motors=[vernier_energy_pv],
-                group_mask=0x1,
-                events=events_per_step,
-                record=False
-            )
-            
-            # Track best intensity
-            best_intensity = float("-inf")
-            best_vernier_energy = None
-            
-            # For simulation mode, get tracker and functions from devices
-            tracker = None
-            get_intensity_func = None
-            try:
-                if hasattr(vernier_energy_pv, 'pos_tracker'):
-                    tracker = vernier_energy_pv.pos_tracker
-                # Get the underlying functions for direct calls in simulation
-                if hasattr(intensity_pv, '_func'):
-                    get_intensity_func = intensity_pv._func
-            except AttributeError:
-                pass
-            
-            def on_event(name, doc):
-                nonlocal best_intensity, best_vernier_energy
-                if name != "event":
-                    return
-                event_data = doc.get("data", {})
-                logger.info(f"Event data keys: {list(event_data.keys())}")
-                
-                # Get vernier energy from event data
-                # Try vernier_energy_readback first, then fall back to vernier_energy_setpoint
-                if "vernier_energy_readback" in event_data:
-                    vernier_energy = event_data["vernier_energy_readback"]
-                    logger.info(f"Using vernier_energy_readback: {vernier_energy:.2f} eV")
-                elif "vernier_energy_setpoint" in event_data:
-                    vernier_energy = event_data["vernier_energy_setpoint"]
-                    logger.info(f"vernier_energy_readback not found, using vernier_energy_setpoint: {vernier_energy:.2f} eV")
-                else:
-                    logger.error(f"WARNING: Neither vernier_energy_readback nor vernier_energy_setpoint found in event data!")
-                    logger.error(f"Available keys: {list(event_data.keys())}")
-                    return
-                
-                # In simulation mode, update tracker first
-                if tracker is not None and get_intensity_func is not None:
-                    # Update the tracker
-                    tracker.value = float(vernier_energy)
-                    
-                    # Also directly update the global tracker to ensure it's updated
-                    import mfx.optimize.beamline_hw as bl_hw
-                    if bl_hw._vernier_pos_tracker is not None:
-                        bl_hw._vernier_pos_tracker.value = float(vernier_energy)
-                    
-                    logger.info(f"Updated trackers to: {vernier_energy:.2f} eV")
-                    
-                    # Call the underlying intensity function directly to force fresh evaluation
-                    try:
-                        intensity = float(get_intensity_func())
-                        logger.info(f"Read intensity: {intensity:.2f}")
-                    except Exception as e:
-                        logger.error(f"Failed to get intensity: {e}")
-                        return
-                else:
-                    # Use get() for real hardware
-                    try:
-                        intensity = float(intensity_pv.get())
-                        logger.info(f"Read intensity: {intensity:.2f}")
-                    except Exception as e:
-                        logger.error(f"Failed to read intensity: {e}")
-                        return
-                
-                if intensity > best_intensity:
-                    best_intensity = intensity
-                    best_vernier_energy = vernier_energy
-                    logger.info(f"New best intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
-                
-                # Print all points for debugging
-                logger.info(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f}")
-            
-            sid = RE.subscribe(on_event)
-            
-            # Set alignment mode flag (no offset during scan)
-            try:
-                from mfx.optimize.beamline_hw import get_alignment_scan_mode
-                alignment_scan_mode = get_alignment_scan_mode()
-                alignment_scan_mode[0] = True
-                logger.info(f"Alignment mode enabled - vernier will land at exact commanded position (no systematic offset)")
+                vernier_energy_pv.move(vernier_energy).wait()
             except Exception as e:
-                logger.error(f"Failed to set alignment mode: {e}")
-            
-            try:
-                # Run the alignment scan
-                RE(bp.scan(
-                    [daq],
-                    vernier_energy_pv,
-                    scan_start,
-                    scan_end,
-                    energy_steps
-                ))
-            finally:
-                RE.unsubscribe(sid)
-            
-            # Move to best position (still in alignment mode, vernier will land exactly at commanded position with no offset)
-            if best_vernier_energy is not None:
-                logger.info(f"Moving to best vernier energy: {best_vernier_energy:.2f} eV")
-                vernier_energy_pv.move(best_vernier_energy).wait()
-            
-            # Unset alignment mode flag after scan AND final move
-            try:
-                from mfx.optimize.beamline_hw import get_alignment_scan_mode
-                alignment_scan_mode = get_alignment_scan_mode()
-                alignment_scan_mode[0] = False
-                logger.info(f"Alignment mode disabled")
-            except:
-                pass
-                
-            # Verify final positions
-            if best_vernier_energy is not None:
-                # Verify final DCCM energy
-                final_dccm_energy = float(read_dccm_energy())
-                final_vernier_actual = float(vernier_energy_pv.position)
-                final_offset = final_vernier_actual - final_dccm_energy
-                
-                logger.info(f"Final DCCM energy: {final_dccm_energy:.2f} eV")
-                logger.info(f"Final vernier energy: {final_vernier_actual:.2f} eV")
-                logger.info(f"Final offset: {final_offset:.2f} eV")
-                logger.info(f"Alignment completed successfully")
-                
-                return True
-            else:
-                logger.error(f"No valid intensity measurements found")
+                logger.error(f"Failed to move vernier: {e}")
                 return False
+            
+            energy_list = []
+            intensity_list = []
+            # Average intensity over multiple readings
+            intensities = []
+            for _ in range(events_per_step):
+                try:
+                    intensities.append(float(intensity_pv.get()))
+                except Exception:
+                    pass
+            intensity = np.mean(intensities) if intensities else float(intensity_pv.get())
+            
+            logger.info(f"Measured intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+
+            # Store best position
+            if step == 0 or intensity > best_intensity:
+                best_intensity = intensity
+                best_vernier_energy = vernier_energy
+                logger.warning(f"New best intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+
+            energy_list.append(vernier_energy)
+            intensity_list.append(intensity)
+
+        # Print all points for debugging
+        logger.info(f"Alignment scan results:")
+        for vernier_energy, intensity in zip(energy_list, intensity_list):
+            if best_vernier_energy is not None and vernier_energy == best_vernier_energy:
+                logger.warning(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f} <-- BEST")
+            else:
+                logger.info(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f}")
+        
+        # Move to best position (still in alignment mode, vernier will land exactly at commanded position with no offset)
+        if best_vernier_energy is not None:
+            logger.info(f"Moving to best vernier energy: {best_vernier_energy:.2f} eV")
+            vernier_energy_pv.move(best_vernier_energy).wait()
+
+        # Verify final positions
+        if best_vernier_energy is not None:
+            # Verify final DCCM energy
+            final_dccm_energy = float(read_dccm_energy())
+            final_vernier_actual = float(vernier_energy_pv.position)
+            final_offset = final_vernier_actual - final_dccm_energy
+            
+            logger.info(f"Final DCCM energy: {final_dccm_energy:.2f} eV")
+            logger.info(f"Final vernier energy: {final_vernier_actual:.2f} eV")
+            logger.info(f"Final offset: {final_offset:.2f} eV")
+            logger.info(f"Alignment completed successfully")
+            
+            return True
+        else:
+            logger.error(f"No valid intensity measurements found")
+            return False
                 
         except Exception as exc:
             logger.error(f"Error during alignment: {exc}")
@@ -938,7 +840,7 @@ class VernierCalibration:
                 sim_devices()
             except Exception:
                 ...
-# Load calibration
+        # Load calibration
         calib = self._load_calibration()
         if not calib:
             logger.info(f"No calibration found")
@@ -978,7 +880,6 @@ class VernierCalibration:
         except Exception as exc:
             logger.error(f"Error: {exc}")
             return False
-
 
 # Convenience function for easy integration
 def create_vernier_calibration() -> VernierCalibration:

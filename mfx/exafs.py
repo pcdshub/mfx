@@ -383,7 +383,7 @@ class Exafs:
                 success = vernier_calib.align_to_dccm(
                     energy_range_eV=10.0,
                     energy_steps=11,
-                    events_per_step=12,
+                    events_per_step=120,
                     simulate=self.simulate
                 )
                 if not success:
