@@ -572,7 +572,7 @@ class MFXTransfocator(TransfocatorBase):
 
     def track_focus(self, energies, *, margin_mm=10.0, show=False,
                     ref_focal_length_um=None, ref_z_stage_mm=None, 
-                    display=True, **kwargs):
+                    display=True, shrinking_rate=4, **kwargs):
         """
         Keep the focal length fixed over a provided list of energies by
         compensating with the translation stage. Lenses are NOT actuated.
@@ -594,6 +594,8 @@ class MFXTransfocator(TransfocatorBase):
         # cast energies to float to avoid json serialization issues
         energies = [float(energy) for energy in energies]
 
+        enable_prefocus_save = enable_prefocus
+
         min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
 
         ref_zs_mm = self.mv_stage_to_pos(max_z_stage_mm)
@@ -606,6 +608,7 @@ class MFXTransfocator(TransfocatorBase):
         track_record = []
 
         for energy in energies:
+            enable_prefocus = enable_prefocus_save
             target_z_stage_mm = self.get_z_stage_target(
                 energy, combo, ref_focal_length_um, ref_z_stage_mm
             )
@@ -614,22 +617,31 @@ class MFXTransfocator(TransfocatorBase):
                     energy, combo, target_z_stage_mm, track_record
                 )
             else:
-                shrinking_max_z_stage_mm = max_z_stage_mm
-                while shrinking_max_z_stage_mm > min_z_stage_mm:
-                    self.mv_stage_to_pos(shrinking_max_z_stage_mm)
-                    combo = self.find_best_combo(energy_eV=energy, show=show, **kwargs)
-                    if combo:
-                        new_target_z_stage_mm = self.get_z_stage_target(
-                            energy, combo, ref_focal_length_um, ref_z_stage_mm
-                        )
-                        if min_z_stage_mm < new_target_z_stage_mm <= max_z_stage_mm:
-                            self.mv_stage_to_target_pos(
-                                energy, combo, new_target_z_stage_mm, track_record
+                prefocus_fallback = True
+                while prefocus_fallback:
+                    shrinking_max_z_stage_mm = max_z_stage_mm
+                    while shrinking_max_z_stage_mm > min_z_stage_mm:
+                        self.mv_stage_to_pos(shrinking_max_z_stage_mm)
+                        combo = self.find_best_combo(energy_eV=energy, show=show, **kwargs)
+                        if combo:
+                            new_target_z_stage_mm = self.get_z_stage_target(
+                                energy, combo, ref_focal_length_um, ref_z_stage_mm
                             )
-                            break
-                    shrinking_max_z_stage_mm -= margin_mm
-                if not combo:
-                    print("Stage out of travel. Cannot compensate further...")
+                            if min_z_stage_mm < new_target_z_stage_mm <= max_z_stage_mm:
+                                self.mv_stage_to_target_pos(
+                                    energy, combo, new_target_z_stage_mm, track_record
+                                )
+                                break
+                        shrinking_max_z_stage_mm -= shrinking_rate*margin_mm
+                    if combo:
+                        break
+                    else:
+                        print("Stage out of travel. Cannot compensate further...")
+                        if enable_prefocus:
+                            print("Disabling prefocus for this energy.")
+                            enable_prefocus = False
+                        else:
+                            prefocus_fallback = False
 
         print(f"Tracking complete. Final energy: {track_record[-1]['energy']:.2f} eV, stage position: {track_record[-1]['z_position']:.3f} mm.")
         print(f"Lenses currently inserted: {track_record[-1]['inserted_lenses']}")
