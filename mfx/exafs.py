@@ -133,11 +133,11 @@ class Exafs:
         self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         # Move XRT spectrometer camera if necessary
         if track_feespec:
-            self._move_feespec_energy(k_energy / 1000)
+            self.move_feespec_energy(k_energy / 1000)
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
         if track_feespec:
-            self._check_feespec_crystal_angle(k_energy / 1000)
+            self.check_feespec_crystal_angle(k_energy / 1000)
 
         return energies, energy_0_keV, k_energy, wait_time
 
@@ -231,7 +231,7 @@ class Exafs:
                 hxrsss.tth.mv(ref_camera_angle_deg)
             return
 
-    def _check_feespec_crystal_angle(self, energy_keV):
+    def check_feespec_crystal_angle(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
         hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
@@ -266,7 +266,7 @@ class Exafs:
                     os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
                 return
 
-    def _move_feespec_energy(self, energy_keV):
+    def move_feespec_energy(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
         hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
@@ -537,11 +537,11 @@ class Exafs:
 
                 # Move XRT spectrometer camera if necessary
                 if track_feespec:
-                    self._move_feespec_energy(k_energy / 1000)
+                    self.move_feespec_energy(k_energy / 1000)
                 self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
                 self._move_k_energy(k_energy)
                 if track_feespec:
-                    self._check_feespec_crystal_angle(k_energy / 1000)
+                    self.check_feespec_crystal_angle(k_energy / 1000)
 
                 if not self.simulate:
                     daq.control.setState("running")
@@ -588,15 +588,15 @@ class Exafs:
                 add_note='Run ended prematurely. Probably sample delivery problem')
         self.logger.warning("[*] Stopping Run and exiting???...")
         self._return_to_start(energy_start, k_energy_start)
-        self._move_feespec_energy(energy_start)
-        self._check_feespec_crystal_angle(energy_start)
+        self.move_feespec_energy(energy_start)
+        self.check_feespec_crystal_angle(energy_start)
         self.logger.warning('Run ended prematurely. Probably sample delivery problem')
 
     def _finalize_scan(self, energy_start, k_energy_start):
         """Finalize scan and return to initial positions."""
         self._return_to_start(energy_start, k_energy_start)
-        self._move_feespec_energy(energy_start)
-        self._check_feespec_crystal_angle(energy_start)
+        self.move_feespec_energy(energy_start)
+        self.check_feespec_crystal_angle(energy_start)
         self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     def long_calib(
