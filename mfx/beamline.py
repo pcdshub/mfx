@@ -101,6 +101,10 @@ with safe_load('vernier'):
     from mfx.vernier import *
     vernier = Vernier()
 
+with safe_load('beam_status'):
+    from mfx.optimize.beam_status import *
+    beam_status = BeamCheck()
+
 with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = yano()
@@ -268,6 +272,10 @@ def mfx_reload(module_name):
     if module_name == 'mfx.optimize.verner_calibration':
         from mfx.optimize.vernier_calibration import VernierCalibration
         vernier_calib = VernierCalibration()
+
+    if module_name == 'mfx.optimize.beam_status':
+        from mfx.optimize.beam_status import BeamCheck
+        beam_status = BeamCheck()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
