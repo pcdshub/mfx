@@ -103,8 +103,6 @@ class Exafs:
         post_template = """\
         Run Number {}: {}
 
-        {}
-
         simulate -> {}
         start_eV -> {}
         end_eV -> {}
@@ -1206,6 +1204,14 @@ class Exafs:
 
         try:
             for i in range(runs):
+                if record:
+                    self._post(
+                        sample=sample,
+                        tag=tag,
+                        run_number=run_number,
+                        post=record,
+                        inspire=inspire,
+                        add_note=f'Starting run {i+1} of {runs}')
                 # Initialize energies
                 energies, wait_times = self._initialize_energies_and_move(
                     energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
@@ -1275,7 +1281,8 @@ class Exafs:
                         tag=tag,
                         run_number=run_number,
                         post=record,
-                        inspire=inspire)
+                        inspire=inspire,
+                        add_note=f'Completed run {i+1} of {runs}')
                 sleep(daq_delay)
 
         except KeyboardInterrupt:
