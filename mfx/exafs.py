@@ -114,15 +114,21 @@ class Exafs:
 
         return energies, wait_time
 
-    def _initialize_energies_and_move(self, energies, wait_time, reverse, k_offset, k_stepsize, track_feespec):
+    def _initialize_energies_and_move(self, 
+                                      energies, 
+                                      wait_time, 
+                                      reverse, 
+                                      k_offset, 
+                                      k_stepsize, 
+                                      track_feespec):
         """Initialize energy values for the scan."""
         
         energy_0_keV = energies[0] / 1000.0  # energy at the beginning or after a und K step
-        k_energy = energy_0_keV * 1000.0 + (k_stepsize / 2) + k_offset
+        self.k_energy = energy_0_keV * 1000.0 + (k_stepsize / 2) + k_offset
         if reverse:
             energies = energies[::-1]
             energy_0_keV = energies[0] / 1000.0
-            k_energy = energy_0_keV * 1000.0 - (k_stepsize / 2) + k_offset
+            self.k_energy = energy_0_keV * 1000.0 - (k_stepsize / 2) + k_offset
             self.logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
             wait_time = wait_time[::-1]
         
@@ -133,13 +139,13 @@ class Exafs:
         self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         # Move XRT spectrometer camera if necessary
         if track_feespec:
-            self.move_feespec_energy(k_energy / 1000)
-        if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
-            self._move_k_energy(k_energy)
+            self.move_feespec_energy(self.k_energy / 1000)
+        if round(self.k_energy, 1) != round(self._current_k_energy(), 1):
+            self._move_k_energy(self.k_energy)
         if track_feespec:
-            self.check_feespec_crystal_angle(k_energy / 1000)
+            self.check_feespec_crystal_angle(self.k_energy / 1000)
 
-        return energies, energy_0_keV, k_energy, wait_time
+        return energies, wait_time
 
     def _setup_daq_and_start_recording(self, sample, picker, inspire, record, run_index):
         """Setup DAQ and start recording."""
@@ -201,10 +207,16 @@ class Exafs:
 
     def _move_k_energy(self, k_energy):
         """Move K energy."""
+        self.logger.warning(f"Moving K to new energy {k_energy:0.0f}")
         if self.simulate:
             self.sim.slow_motor1.mv(k_energy)
+            self.k_energy = k_energy
         else:
             self.acr_energy_k.move(k_energy)
+
+    def _move_vernier_energy(self, vernier_energy):
+        self.logger.info(f"Moving Vernier energy to {vernier_energy:.2f} eV.")
+        self.vernier_device.move(vernier_energy).wait()
 
     def track_feespec_camera(self, energy_keV):
         """Move FEE spectrometer energy."""
@@ -306,7 +318,53 @@ class Exafs:
             #     os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
             return
 
-    def _align_vernier_to_dccm(self, energy, tchk, use_vernier_calibration):
+    def _retrieve_vernier_offset(self, energy, track_tchk_data):
+        if track_tchk_data is not None:
+            for data in track_tchk_data:
+                if data["energy"] == energy:
+                    self.vernier_offset = data["vernier_offset"]
+                    break
+
+    def _request_vernier_offset_measurement(self, energy, track_tchk_data, map_tchk_track):
+        measure_offset = False
+        if self._delta_eV_to_k_energy(energy, abs=True) < 0.1:
+            if map_tchk_track:
+                measure_offset = True
+        if not measure_offset:
+            self._retrieve_vernier_offset(energy, track_tchk_data)
+        if self.vernier_offset is None:
+            measure_offset = True
+        return measure_offset
+
+    def _measure_vernier_offset(self, energy, track_tchk_data):
+        # align
+        from mfx.optimize.vernier_calibration import VernierCalibration
+        vernier_calib = VernierCalibration()
+        self.logger.info("Performing intensity-based vernier alignment")
+        offset = vernier_calib.align_to_dccm(
+            energy_range_eV=10.0,
+            energy_steps=11,
+            events_per_step=100,
+            simulate=False
+        )
+        # save
+        track_tchk_data.append({
+            "energy": energy,
+            "vernier_offset": offset
+        })
+
+    def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
+        """Perform Vernier alignment with DCCM (tchk functionality)."""
+        if self.simulate:
+            return
+
+        if self._request_vernier_offset_measurement(energy, track_tchk_data, map_tchk_track):
+            self._measure_vernier_offset(energy, track_tchk_data)
+
+        if self.vernier_offset:
+            self._move_energy_with_vernier(energy + self.vernier_offset)
+
+    def _align_vernier_to_dccm_v0(self, energy, tchk, use_vernier_calibration):
         """
         Perform Vernier alignment with DCCM (tchk functionality).
         
@@ -436,20 +494,26 @@ class Exafs:
             self.logger.warning(f"undulator alignment failed: {e}")
             # Don't raise - allow scan to continue
 
-    def _get_track_focus_data(self):
-        track_focus_data = None
+    def _get_track_data(self, json_file_name=None):
+        track_data = None
         try:
-            track_focus_path = Path.home() / "track_focus_results.json"
-            if track_focus_path.exists():
-                with open(track_focus_path, "r") as tf:
-                    track_focus_data = json.load(tf)
-                self.logger.info(f"Loaded track_focus results from {track_focus_path}")
+            track_path = Path.home() / json_file_name
+            if track_path.exists():
+                with open(track_path, "r") as tf:
+                    track_data = json.load(tf)
+                self.logger.info(f"Loaded results from {track_path}")
             else:
-                self.logger.info("No track_focus_results.json found in home directory; returning None.")
+                self.logger.info(f"No {json_file_name} found in home directory; returning None.")
         except Exception as e:
-            self.logger.warning(f"Failed to load track_focus_results.json: {e}")
-        return track_focus_data
+            self.logger.warning(f"Failed to load {json_file_name}: {e}")
+        return track_data
 
+    def _get_track_focus_data(self):
+        return self._get_track_data("track_focus_results.json")
+    
+    def _get_track_tchk_data(self):
+        return self._get_track_data("track_tchk_results.json")
+    
     def _init_tfs(self, energies, margin_mm, 
                   ref_focal_length_um, ref_z_stage_mm,
                   avoid_forbidden, enable_prefocus, map_focus_track,
@@ -472,6 +536,17 @@ class Exafs:
                 enable_prefocus=enable_prefocus,
                 target=target
             )
+
+    def _init_tchk(self, map_tchk_track):
+        from mfx.optimize.beamline_hw import init_devices
+        devices = init_devices()
+        self.vernier_device = devices["vernier_energy"]
+
+        track_tchk_data = self._get_track_tchk_data()
+        if map_tchk_track:
+            self.vernier_offset = None
+            track_tchk_data = []
+        return track_tchk_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None):
         if track_focus_data is not None:
@@ -512,48 +587,63 @@ class Exafs:
             self.logger.warning("No track_focus_data found; how did you get here?.")
             return
 
-    def _move_k_if_necessary(self, energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV, track_feespec):
+    def _current_k_energy(self):
+        """Get the current K energy."""
+        if self.simulate:
+            return self.k_energy
+        else:
+            return self.acr_energy_k.get().setpoint
+        
+    def _delta_eV_to_k_energy(self, energy_keV, abs=False, rounding=1):
+        delta = energy_keV * 1000 - self.k_energy
+        if abs:
+            delta = np.abs(delta)
+        return round(delta, rounding)
+    
+    def _next_k_energy(self, k_stepsize, k_offset, reverse, min_k_keV):
+        """Update K energy based on current vernier position."""
+        k_energy = self._current_k_energy() + k_offset
+        if reverse:
+            k_energy -= k_stepsize
+            if k_energy/1000 < min_k_keV:
+                k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
+        else:
+            k_energy += k_stepsize
+        return k_energy
+    
+    def _request_k_energy_update(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV):
+        """Check if K energy update is needed based on energy request."""
+        request_k_energy_update = False
+        if self._delta_eV_to_k_energy(energy_keV, abs=True) > k_stepsize / 2:
+            new_k_energy = self._next_k_energy(k_stepsize, k_offset, reverse, min_k_keV)
+            if round(new_k_energy,1) != round(self._current_k_energy(),1):
+                self.logger.info(f"Requesting K energy update: {self._current_k_energy()} -> {new_k_energy}")
+                request_k_energy_update = True
+        return request_k_energy_update
+
+    def _move_k_if_necessary(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV, track_feespec):
         """Move K if necessary and manage DAQ state."""
         from mfx.db import daq
+        if self._request_k_energy_update(energy_keV, k_stepsize, k_offset, reverse, min_k_keV):
+            new_k_energy = self._next_k_energy(k_stepsize, k_offset, reverse, min_k_keV)
+            if not self.simulate:
+                self.logger.info("Pausing DAQ for K energy move...")
+                daq.control.setState("paused")
+                while daq.control.getState() != "paused":
+                    ...
+                sleep(0.5)
 
-        if self.simulate:
-            prev_k_energy = copy.copy(k_energy)
-        else:
-            prev_k_energy = self.acr_energy_k.get().setpoint
+            if track_feespec:
+                self.move_feespec_energy(new_k_energy / 1000)
+            self._move_k_energy(new_k_energy)
+            if track_feespec:
+                self.check_feespec_crystal_angle(new_k_energy / 1000)
 
-        e_step = round(np.abs(energy_keV - k_energy / 1000) * 1000, 1)
-        self.logger.info(f"Absolute difference vernier and k {e_step}")
-        
-        # Move K every k_stepsize
-        if e_step > k_stepsize / 2:
-            # Calculate new k_energy (same logic for both simulation and real)
-            k_energy = k_energy + k_stepsize + k_offset
-            if reverse:
-                k_energy = k_energy - k_stepsize + k_offset
-                if k_energy/1000 < min_k_keV:
-                    k_energy = min_k_keV * 1000 + 1 #+1 just to be safe. ACR is quite strict on this minimum in seeded mode.
-
-            if round(k_energy, 1) != round(prev_k_energy, 1):
-                if not self.simulate:
-                    daq.control.setState("paused")
-                    while daq.control.getState() != "paused":
-                        ...
-                    self.logger.info(f"Moving k to {k_energy:0.0f}")
-                    sleep(0.5)
-
-                # Move XRT spectrometer camera if necessary
-                if track_feespec:
-                    self.move_feespec_energy(k_energy / 1000)
-                self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
-                self._move_k_energy(k_energy)
-                if track_feespec:
-                    self.check_feespec_crystal_angle(k_energy / 1000)
-
-                if not self.simulate:
-                    daq.control.setState("running")
-                    while daq.control.getState() != "running":
-                        ...
-        return k_energy
+            if not self.simulate:
+                self.logger.info("Resuming DAQ after K energy move...")
+                daq.control.setState("running")
+                while daq.control.getState() != "running":
+                    ...
 
     def _wait(self, wait_time):
         if np.isnan(wait_time):
@@ -750,8 +840,8 @@ class Exafs:
             min_time_EXAFS: float = 0.5,
             max_time_EXAFS: float = 10.0,
             tchk = False,
-            use_vernier_calibration: bool = True,
             map_focus_track: bool = False,
+            map_tchk_track: bool = False,
             track_focus: bool = False,
             tfs_margin_mm=5.0,
             ref_focal_length_um=None,
@@ -925,15 +1015,15 @@ class Exafs:
                        target=tfs_target)
         if map_focus_track:
             return
-
-        energy_start = self.dccm.energy_with_vernier.energy()
-        k_energy_start = self.acr_energy_k.get().setpoint
-
+        
+        # Load track_tchk data, if available
+        if tchk:
+            track_tchk_data = self._init_tchk(map_tchk_track)
 
         try:
             for i in range(runs):
                 # Initialize energies
-                energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
+                energies, wait_times = self._initialize_energies_and_move(
                     energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
                 )
                 # Check beam status if threshold provided
@@ -945,6 +1035,7 @@ class Exafs:
                 )
                 if not daq_success:
                     break
+
                 if undulator_point:
                     self._align_undulator(
                         on_diagnostic=undulator_on_diagnostic,
@@ -959,8 +1050,8 @@ class Exafs:
                     energy_keV = energy / 1000.0
 
                     # Move K if necessary
-                    k_energy = self._move_k_if_necessary(
-                        energy_keV, k_energy, k_stepsize, k_offset, reverse, min_k_keV, track_feespec
+                    self._move_k_if_necessary(
+                        energy_keV, k_stepsize, k_offset, reverse, min_k_keV, track_feespec
                     )
 
                     # Move TFS to energy
@@ -980,8 +1071,14 @@ class Exafs:
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     if track_feespec_cam:
-                        self.track_feespec_camera(energy_keV)
-
+                        self._track_feespec_camera(energy_keV)
+                    
+                    # Perform Vernier alignment if needed
+                    if tchk:
+                        self._align_vernier_to_dccm(energy_eV=energy,
+                                                    track_tchk_data=track_tchk_data,
+                                                    map_tchk_track=map_tchk_track)
+                    
                     # Wait before moving on
                     self._wait(wait_time)
 
