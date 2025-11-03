@@ -662,6 +662,21 @@ class Exafs:
     def _get_track_tchk_data(self):
         return self._get_track_data("track_tchk_results.json")
 
+    def _save_track_data(self, track_record, json_file_name=None):
+        track_path = Path.home() / json_file_name
+        with open(track_path, "w") as tf:
+            json.dump(track_record, tf, indent=4)
+        print(f"Tracking results saved to {save_path}.")
+
+    def _save_track_focus_data(self, track_record):
+        """not used. See tfs.track_focus()."""
+        self._save_track_data(track_record, json_file_name="track_focus_results.json")
+        if display:
+            self.plot_focus_track(save_path)
+
+    def _save_track_tchk_data(self, track_record):
+        self._save_track_data(track_record, json_file_name="track_tchk_results.json")
+
     def _init_tfs(self, energies, margin_mm,
                   ref_focal_length_um, ref_z_stage_mm,
                   avoid_forbidden, enable_prefocus, map_focus_track,
@@ -1258,7 +1273,6 @@ class Exafs:
                     #output final_offset = final_vernier_actual - final_dccm_energy
                     if tchk == 'single':
                         self._measure_vernier_offset(energy, track_tchk_data)
-
                     # Perform Vernier alignment if needed
                     elif tchk:
                         self._align_vernier_to_dccm(energy_eV=energy,
@@ -1274,6 +1288,10 @@ class Exafs:
 
                     # Wait before moving on
                     self._wait(wait_time)
+
+                # Save track_tchk data
+                if tchk:
+                    self._save_track_tchk_data(track_tchk_data)
 
                 if record:
                     self._post(
