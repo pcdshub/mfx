@@ -593,6 +593,13 @@ class Exafs:
             "vernier_offset": offset
         })
 
+    def _measure_lens_beam_offset(self, energy, track_lens_offset_data):
+        lens_beam_energy = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
+        track_lens_offset_data.append({
+            "energy": energy,
+            "lens_beam_energy": lens_beam_energy
+        })
+
     def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
         """Perform Vernier alignment with DCCM (tchk functionality)."""
         if self.simulate:
@@ -669,6 +676,9 @@ class Exafs:
     def _get_track_tchk_data(self):
         return self._get_track_data("track_tchk_results.json")
 
+    def _get_track_lens_offset_data(self):
+        return self._get_track_lens_offset_data("track_lens_offset_results.json")
+
     def _plot_track_tchk_data(self, json_file_name=None):
         json_file_path = Path.home() / json_file_name
         with open(json_file_path, 'r') as f:
@@ -696,7 +706,7 @@ class Exafs:
             json.dump(track_record, tf, indent=4)
         print(f"Tracking results saved to {save_path}.")
 
-    def _save_track_focus_data(self, track_record, display=True):
+    def _save_track_focus_data(self, track_record, display=False):
         """not used. See tfs.track_focus()."""
         self._save_track_data(track_record, json_file_name="track_focus_results.json")
         #if display:
@@ -706,6 +716,9 @@ class Exafs:
         self._save_track_data(track_record, json_file_name="track_tchk_results.json")
         if display:
             self._plot_track_tchk_data(json_file_name="track_tchk_results.json")
+
+    def _save_track_lens_offset_data(self, track_lens_offset_data, display=False):
+        self._save_track_data(track_lens_offset_data, json_file_name="track_lens_beam_offset_results.json")
 
     def _init_tfs(self, energies, margin_mm,
                   ref_focal_length_um, ref_z_stage_mm,
@@ -740,6 +753,12 @@ class Exafs:
             self.vernier_offset = None
             track_tchk_data = []
         return track_tchk_data
+
+    def _init_lens_offset(self, map_lens_beam_energy_offset):
+        track_lens_offset_data = self._get_track_lens_offset_data()
+        if map_lens_beam_energy_offset:
+            track_lens_offset_data = []
+        return track_lens_offset_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None):
         if track_focus_data is not None:
@@ -1042,6 +1061,7 @@ class Exafs:
             tchk = False,
             map_focus_track: bool = False,
             map_tchk_track: bool = False,
+            map_lens_beam_energy_offset: bool = False,
             track_focus: bool = False,
             tfs_margin_mm=5.0,
             ref_focal_length_um=None,
@@ -1213,6 +1233,7 @@ class Exafs:
         self.tchk = tchk
         self.map_focus_track = map_focus_track
         self.map_tchk_track = map_tchk_track
+        self.map_lens_beam_energy_offset = map_lens_beam_energy_offset
         self.track_focus = track_focus
         self.tfs_margin_mm = tfs_margin_mm
         self.ref_focal_length_um = ref_focal_length_um
@@ -1265,6 +1286,8 @@ class Exafs:
         # Load track_tchk data, if available
         if tchk or tchk == 'single':
             track_tchk_data = self._init_tchk(map_tchk_track)
+
+        track_lens_offset_data = self._init_lens_offset(map_lens_beam_energy_offset)
 
         try:
             for i in range(runs):
@@ -1335,6 +1358,9 @@ class Exafs:
                     if track_feespec_cam:
                         self.track_feespec_camera(energy_keV)
 
+                    if map_lens_beam_energy_offset:
+                        self._measure_lens_beam_offset(energy, track_lens_offset_data)
+
                     # Wait before moving on
                     self._wait(wait_time)
 
@@ -1342,6 +1368,9 @@ class Exafs:
                 if tchk:
                     if map_tchk_track:
                         self._save_track_tchk_data(track_tchk_data)
+
+                if map_lens_beam_energy_offset:
+                    self._save_track_lens_offset_data(track_lens_offset_data)
 
                 if record:
                     self._post(
