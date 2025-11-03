@@ -492,6 +492,7 @@ class Exafs:
         bool
             True if alignment was successful, False otherwise
         """
+        import time
         from mfx.optimize.beamline_hw import init_devices, read_dccm_energy
         # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
         devices = init_devices()
@@ -499,15 +500,15 @@ class Exafs:
         intensity_pv = devices["vernier_intensity3"]
 
         # Get current DCCM energy
-        logger.info(f"Reading current DCCM energy...")
+        self.logger.info(f"Reading current DCCM energy...")
         current_dccm_energy = float(read_dccm_energy())
-        logger.info(f"Current DCCM energy: {current_dccm_energy:.2f} eV")
+        self.logger.info(f"Current DCCM energy: {current_dccm_energy:.2f} eV")
 
         # Scan vernier around current DCCM energy
         scan_start = current_dccm_energy - energy_range_eV / 2
         scan_end = current_dccm_energy + energy_range_eV / 2
 
-        logger.info(
+        self.logger.info(
             f"Scanning vernier from {scan_start:.2f} to {scan_end:.2f} "
             f"eV (range: ±{energy_range_eV/2:.1f} eV around DCCM at {current_dccm_energy:.2f} eV)")
 
@@ -516,11 +517,11 @@ class Exafs:
             if flux_threshold is not None:
                 self.exafs.check_beam_status(flux_threshold)
             vernier_energy = scan_start + step * (scan_end - scan_start) / (energy_steps - 1)
-            logger.info(f"Moving vernier to: {vernier_energy:.2f} eV")
+            self.logger.info(f"Moving vernier to: {vernier_energy:.2f} eV")
             try:
                 vernier_energy_pv.move(vernier_energy).wait()
             except Exception as e:
-                logger.error(f"Failed to move vernier: {e}")
+                self.logger.error(f"Failed to move vernier: {e}")
                 return False
 
             energy_list = []
@@ -536,28 +537,28 @@ class Exafs:
                 time.sleep(0.01)
             intensity = np.mean(intensities) if intensities else float(intensity_pv.get())
 
-            logger.info(f"Measured intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+            self.logger.info(f"Measured intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
 
             # Store best position
             if step == 0 or intensity > best_intensity:
                 best_intensity = intensity
                 best_vernier_energy = vernier_energy
-                logger.warning(f"New best intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+                self.logger.warning(f"New best intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
 
             energy_list.append(vernier_energy)
             intensity_list.append(intensity)
 
         # Print all points for debugging
-        logger.info(f"Alignment scan results:")
+        self.logger.info(f"Alignment scan results:")
         for vernier_energy, intensity in zip(energy_list, intensity_list):
             if best_vernier_energy is not None and vernier_energy == best_vernier_energy:
-                logger.warning(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f} <-- BEST")
+                self.logger.warning(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f} <-- BEST")
             else:
-                logger.info(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f}")
+                self.logger.info(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f}")
 
         # Move to best position (still in alignment mode, vernier will land exactly at commanded position with no offset)
         if best_vernier_energy is not None:
-            logger.info(f"Moving to best vernier energy: {best_vernier_energy:.2f} eV")
+            self.logger.info(f"Moving to best vernier energy: {best_vernier_energy:.2f} eV")
             vernier_energy_pv.move(best_vernier_energy).wait()
 
         # Verify final positions
@@ -567,14 +568,14 @@ class Exafs:
             final_vernier_actual = float(vernier_energy_pv.position)
             final_offset = final_vernier_actual - final_dccm_energy
 
-            logger.info(f"Final DCCM energy: {final_dccm_energy:.2f} eV")
-            logger.info(f"Final vernier energy: {final_vernier_actual:.2f} eV")
-            logger.info(f"Final offset: {final_offset:.2f} eV")
-            logger.info(f"Alignment completed successfully")
+            self.logger.info(f"Final DCCM energy: {final_dccm_energy:.2f} eV")
+            self.logger.info(f"Final vernier energy: {final_vernier_actual:.2f} eV")
+            self.logger.info(f"Final offset: {final_offset:.2f} eV")
+            self.logger.info(f"Alignment completed successfully")
 
             return final_offset
         else:
-            logger.error(f"No valid intensity measurements found")
+            self.logger.error(f"No valid intensity measurements found")
             return False
 
     def _measure_vernier_offset(self, energy, track_tchk_data):
@@ -881,7 +882,8 @@ class Exafs:
         if round(k_energy_start, 1) != round(k_energy, 1):
             self._move_k_energy(k_energy_start)
 
-    def _handle_keyboard_interrupt_and_cleanup(self, sample, tag, run_number, record, inspire, energy_start, k_energy_start):
+    def _handle_keyboard_interrupt_and_cleanup(
+        self, sample, tag, run_number, record, inspire, energy_start, k_energy_start):
         """Handle KeyboardInterrupt and perform cleanup operations."""
         if not self.simulate and record:
             self._post(
@@ -1226,6 +1228,8 @@ class Exafs:
         self.nd_wheel = EpicsSignalRO("MFX:LAS:MMN:08", name="nd_wheel")
         self.waveplate = EpicsSignalRO("MFX:LAS:MMN:10", name="waveplate")
 
+        energy_start = self.dccm.energy_with_vernier.energy()
+        k_energy_start = self.acr_energy_k.get().setpoint
 
         energies, wait_times = self._build_energy_and_wait_time(
                 energies_list, wait_time_list,
@@ -1256,14 +1260,6 @@ class Exafs:
 
         try:
             for i in range(runs):
-                if record:
-                    self._post(
-                        sample=sample,
-                        tag=tag,
-                        run_number=run_number,
-                        post=record,
-                        inspire=inspire,
-                        add_note=f'Starting run {i+1} of {runs}')
                 # Initialize energies
                 energies, wait_times = self._initialize_energies_and_move(
                     energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
@@ -1275,6 +1271,14 @@ class Exafs:
                 run_number, daq_success = self._setup_daq_and_start_recording(
                     sample, picker, inspire, record, i
                 )
+                if record:
+                    self._post(
+                        sample=sample,
+                        tag=tag,
+                        run_number=run_number,
+                        post=record,
+                        inspire=inspire,
+                        add_note=f'Starting run {i+1} of {runs}')
                 if not daq_success:
                     break
 
@@ -1321,7 +1325,7 @@ class Exafs:
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     if track_feespec_cam:
-                        self._track_feespec_camera(energy_keV)
+                        self.track_feespec_camera(energy_keV)
 
                     # Wait before moving on
                     self._wait(wait_time)
