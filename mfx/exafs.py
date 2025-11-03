@@ -59,6 +59,125 @@ class Exafs:
         acr_status_suffix='AO805', pv_index=2
     )
 
+    def _post(
+        self,
+        sample='?',
+        tag=None,
+        run_number=None,
+        post=False,
+        inspire=False,
+        add_note=''):
+        """
+        Posts a message to the elog
+
+        Parameters
+        ----------
+        sample: str, optional
+            Sample Name
+
+        tag: str, optional
+            Run group tag
+
+        run_number: int, optional
+            Run Number. By default this is read off of the DAQ
+
+        post: bool, optional
+            set True to record/post message to elog
+
+        inspire: bool, optional
+            Set false by default because it makes Sandra sad. Set True to inspire
+
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
+
+        add_note: string, optional
+            adds additional note to elog message
+
+        spread: str, optional
+            Special note for running SPREAD
+        """
+        from mfx.db import elog
+        from mfx.autorun import quote
+        from mfx.macros import get_exp
+
+        post_template = """\
+        Run Number {}: {}
+
+        {}
+
+        simulate -> {}
+        start_eV -> {}
+        end_eV -> {}
+        min_k -> {}
+        max_k -> {}
+        element -> {}
+        picker -> {}
+        inspire -> {}
+        daq_delay -> {}
+        record -> {}
+        runs -> {}
+        k_stepsize -> {}
+        lens_stepsize -> {}
+        reverse -> {}
+        min_k_keV -> {}
+        k_offset -> {}
+        flux_threshold -> {}
+        attenuation -> {}
+        min_time_EXAFS -> {}
+        max_time_EXAFS -> {}
+        tchk -> {}
+        map_focus_track -> {}
+        map_tchk_track -> {}
+        track_focus -> {}
+        tfs_margin_mm -> {}
+        ref_focal_length_um -> {}
+        ref_z_stage_mm -> {}
+        tfs_target -> {}
+        avoid_forbidden_combo -> {}
+        enable_prefocus -> {}
+        track_feespec -> {}
+        track_feespec_cam -> {}
+        undulator_point -> {}
+        undulator_on_diagnostic -> {}
+        undulator_using_device -> {}
+        undulator_with_method -> {}
+        undulator_grid_bins -> {}
+        debug -> {}
+
+        """
+
+        variables = [
+            self.simulate, self.start_eV, self.end_eV, self.min_k, self.max_k,
+            self.element, self.picker, self.inspire, self.daq_delay, self.record,
+            self.runs, self.k_stepsize, self.lens_stepsize, self.reverse,
+            self.min_k_keV, self.k_offset, self.flux_threshold, self.attenuation,
+            self.min_time_EXAFS, self.max_time_EXAFS, self.tchk,
+            self.map_focus_track, self.map_tchk_track, self.track_focus,
+            self.tfs_margin_mm, self.ref_focal_length_um, self.ref_z_stage_mm,
+            self.tfs_target, self.avoid_forbidden_combo, self.enable_prefocus,
+            self.track_feespec, self.track_feespec_cam, self.undulator_point,
+            self.undulator_on_diagnostic, self.undulator_using_device,
+            self.undulator_with_method, self.undulator_grid_bins, self.debug
+        ]
+
+        if add_note!='':
+            add_note = '\n' + add_note
+        if tag is None:
+            tag = sample
+        if inspire:
+            comment = f"Running {sample}\n{quote()['quote']}{add_note}"
+        else:
+            comment = f"Running {sample}{add_note}"
+        if run_number is None:
+            run_number = get_run(station=0)
+        info = [run_number, comment]
+        info.extend(variables)
+        post_msg = post_template.format(*info)
+        print('\n' + post_msg + '\n')
+        if post:
+            elog.post(msg=post_msg, tags=tag, run=(run_number))
+        return post_msg
+
     def _build_energy_and_wait_time(
         self, energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, min_time_EXAFS, max_time_EXAFS, debug):
         """Build energy and wait time lists for EXAFS scan."""
@@ -723,14 +842,12 @@ class Exafs:
     def _handle_keyboard_interrupt_and_cleanup(self, sample, tag, run_number, record, inspire, energy_start, k_energy_start):
         """Handle KeyboardInterrupt and perform cleanup operations."""
         if not self.simulate and record:
-            from mfx.autorun import post
-            post(
+            self._post(
                 sample=sample,
                 tag=tag,
                 run_number=run_number,
                 post=record,
                 inspire=inspire,
-                daq_num=2,
                 add_note='Run ended prematurely. Probably sample delivery problem')
         self.logger.warning("[*] Stopping Run and exiting???...")
         self._return_to_start(energy_start, k_energy_start)
@@ -1008,8 +1125,6 @@ class Exafs:
 
             debug: bool = False
         """
-        from mfx.autorun import post
-
         var_names = [
             'simulate', 'inspire', 'record', 'reverse', 'tchk',
             'map_focus_track', 'track_focus', 'map_tchk_track',
@@ -1024,7 +1139,43 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         self.simulate = simulate
+        self start_eV = start_eV
+        self.end_eV = end_eV
+        self.min_k = min_k
+        self.max_k = max_k
+        self.element = element
+        self.picker = picker
+        self.inspire = inspire
+        self.daq_delay = daq_delay
+        self.record = record
+        self.runs = runs
+        self.k_stepsize = k_stepsize
+        self.lens_stepsize = lens_stepsize
+        self.reverse = reverse
+        self.min_k_keV = min_k_keV
+        self.k_offset = k_offset
         self.flux_threshold = flux_threshold
+        self.attenuation = attenuation
+        self.min_time_EXAFS = min_time_EXAFS
+        self.max_time_EXAFS = max_time_EXAFS
+        self.tchk = tchk
+        self.map_focus_track = map_focus_track
+        self.map_tchk_track = map_tchk_track
+        self.track_focus = track_focus
+        self.tfs_margin_mm = tfs_margin_mm
+        self.ref_focal_length_um = ref_focal_length_um
+        self.ref_z_stage_mm = ref_z_stage_mm
+        self.tfs_target = tfs_target
+        self.avoid_forbidden_combo = avoid_forbidden_combo
+        self.enable_prefocus = enable_prefocus
+        self.track_feespec = track_feespec
+        self.track_feespec_cam = track_feespec_cam
+        self.undulator_point = undulator_point
+        self.undulator_on_diagnostic = undulator_on_diagnostic
+        self.undulator_using_device = undulator_using_device
+        self.undulator_with_method = undulator_with_method
+        self.undulator_grid_bins = undulator_grid_bins
+        self.debug = debug
 
         energies, wait_times = self._build_energy_and_wait_time(
                 energies_list, wait_time_list,
@@ -1119,13 +1270,12 @@ class Exafs:
                     self._wait(wait_time)
 
                 if record:
-                    post(
+                    self._post(
                         sample=sample,
                         tag=tag,
                         run_number=run_number,
                         post=record,
-                        inspire=inspire,
-                        daq_num=2)
+                        inspire=inspire)
                 sleep(daq_delay)
 
         except KeyboardInterrupt:
