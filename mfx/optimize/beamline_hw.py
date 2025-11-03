@@ -82,7 +82,9 @@ def init_devices(force: bool = False) -> dict[str, Device]:
     # Add vernier calibration devices
 
     devices["vernier_energy"] = OnePVMotor("MFX:USER:MCC:EPHOT:SET1", name="vernier_energy")
-    devices["vernier_intensity"] = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="vernier_intensity")
+    devices["vernier_intensity1"] = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="vernier_intensity1")
+    devices["vernier_intensity2"] = EpicsSignalRO("MFX:DG2:BMMON:SUM", name="vernier_intensity2")
+    devices["vernier_intensity3"] = EpicsSignalRO("HXX:DG1:BMMON:SUM", name="vernier_intensity3")
 
     return devices
 

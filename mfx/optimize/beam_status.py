@@ -28,18 +28,18 @@ class BeamCheck(BaseInterface, Device):
     def __init__(self, prefix='', name='beam_status', **kwargs):
         super().__init__(prefix=prefix, name=name, **kwargs)
 
-    def gdet_ave(self, threashold=0.1):
+    def gdet_ave(self, threshold=0.1):
         mj_avg_list = [self.mj_avg1.get(), self.mj_avg2.get(),
                     self.mj_avg3.get(), self.mj_avg4.get()]
         for mj_avg in mj_avg_list:
-            if mj_avg > threashold:
+            if mj_avg > threshold:
                 var_value = True
             else:
                 var_value = False
             log_level = logger.info if var_value else logger.error
             log_level(
                 f"Detector:{'ON' if var_value else 'OFF'} - Average Pulse Energy: {mj_avg:.2f} mJ")
-        mj_avg_list = [mj_avg for mj_avg in mj_avg_list if mj_avg > threashold]
+        mj_avg_list = [mj_avg for mj_avg in mj_avg_list if mj_avg > threshold]
         if not mj_avg_list:
             logger.error("All GDET detectors are OFF!")
             return 0.0
