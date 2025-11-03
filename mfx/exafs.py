@@ -143,6 +143,8 @@ class Exafs:
         debug -> {}
         OPO Shutter ->  {}
         Fe foil ->  {}
+        ND Wheel ->  {}
+        Waveplate ->  {}
 
         """
 
@@ -158,7 +160,8 @@ class Exafs:
             self.track_feespec, self.track_feespec_cam, self.undulator_point,
             self.undulator_on_diagnostic, self.undulator_using_device,
             self.undulator_with_method, self.undulator_grid_bins, self.debug,
-            self.opo_shutter, self.fe_foil
+            self.opo_shutter.state.get(), self.fe_foil.state.get(), self.nd_wheel.get(),
+            self.waveplate.get()
         ]
 
         if add_note!='':
@@ -1217,8 +1220,12 @@ class Exafs:
         self.debug = debug
 
         from mfx.devices import LaserShutter
+        from ophyd import EpicsSignalRO
         self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
-        self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='opo_shutter')
+        self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='fe_foil')
+        self.nd_wheel = EpicsSignalRO("MFX:LAS:MMN:08", name="nd_wheel")
+        self.waveplate = EpicsSignalRO("MFX:LAS:MMN:10", name="waveplate")
+
 
         energies, wait_times = self._build_energy_and_wait_time(
                 energies_list, wait_time_list,
