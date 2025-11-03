@@ -473,7 +473,7 @@ class Exafs:
                 target=target
             )
 
-    def _move_tfs_to_energy(self, energy_eV, track_focus_data):
+    def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None):
         if track_focus_data is not None:
             energy_eV = float(energy_eV)
             do_move = False
@@ -488,21 +488,24 @@ class Exafs:
                     self.logger.info(f"Moving TFS to {z_position:.3f} mm")
                     self.tfs.translation.mv(z_position)
                     while self.tfs.translation.moving:
-                        self.logger.warning(f"... TFS moving [current/target (mm)]: {self.tfs.translation.position:.3f}/{z_position:.3f}")
+                        # self.logger.warning(f"... TFS moving [current/target (mm)]: {self.tfs.translation.position:.3f}/{z_position:.3f}")
                         sleep(0.1)
                 for lens in self.tfs.lenses:
                     if lens.prefix in inserted_lenses:
-                        self.logger.info(f"Inserting lens {lens.prefix}")
+                        # self.logger.info(f"Inserting lens {lens.prefix}")
                         if lens.inserted:
-                            self.logger.info(f"Lens {lens.prefix} already inserted")
+                            # self.logger.info(f"Lens {lens.prefix} already inserted")
                             continue
                         lens.insert()
                     else:
-                        self.logger.info(f"Removing lens {lens.prefix}")
+                        # self.logger.info(f"Removing lens {lens.prefix}")
                         if not lens.inserted:
-                            self.logger.info(f"Lens {lens.prefix} already removed")
+                            # self.logger.info(f"Lens {lens.prefix} already removed")
                             continue
                         lens.remove()
+                if attenuation is not None:
+                    from mfx.db import mfx_attenuator as att
+                    att(attenuation)
             else:
                 self.logger.warning(f"Energy {energy_eV=} eV not found. Skipping.")
         else:
@@ -557,8 +560,9 @@ class Exafs:
             wait_time = 0.1
         sleep(wait_time)
 
-    def _check_beam_status(self, flux_threshold):
+    def check_beam_status(self, flux_threshold):
         from mfx.optimize.beam_status import BeamCheck
+        from mfx.db import daq
         beam_status = BeamCheck()
         if beam_status.gdet_ave(threshold=flux_threshold) < flux_threshold and daq.control.getState() == "running":
             self.logger.error(f'Beam intensity below threshold {flux_threshold} mJ. Pausing DAQ...')
@@ -742,6 +746,7 @@ class Exafs:
             min_k_keV: float = 7.035,
             k_offset: int = 0,
             flux_threshold: float = None,
+            attenuation: float = None,
             min_time_EXAFS: float = 0.5,
             max_time_EXAFS: float = 10.0,
             tchk = False,
@@ -820,6 +825,9 @@ class Exafs:
             flux_threshold: float
                 Set a minimum flux threshold in mJ. If the beam flux is below this value the script
                 will wait until the beam is back.
+
+            attenuation: float
+                Set attenuation value to move the MFX attenuator to before each energy step.
 
             min_time_EXAFS (float): 
                 Minimum acquisition time in seconds for the EXAFS region.
@@ -930,7 +938,7 @@ class Exafs:
                 )
                 # Check beam status if threshold provided
                 if flux_threshold is not None:
-                    self._check_beam_status(flux_threshold)
+                    self.check_beam_status(flux_threshold)
                 # Setup DAQ and start recording (or simulate run number)
                 run_number, daq_success = self._setup_daq_and_start_recording(
                     sample, picker, inspire, record, i
@@ -958,11 +966,11 @@ class Exafs:
                     # Move TFS to energy
                     if track_focus:
                         self._move_tfs_to_energy(energy_eV=energy,
-                                                 track_focus_data=track_focus_data)
+                                                 track_focus_data=track_focus_data, attenuation=attenuation)
 
                     # Check beam status if threshold provided
                     if flux_threshold is not None:
-                        self._check_beam_status(flux_threshold)
+                        self.check_beam_status(flux_threshold)
 
                     # Perform Vernier alignment if needed
                     #output final_offset = final_vernier_actual - final_dccm_energy
@@ -972,7 +980,7 @@ class Exafs:
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     if track_feespec_cam:
-                        self._track_feespec_camera(energy_keV)
+                        self.track_feespec_camera(energy_keV)
 
                     # Wait before moving on
                     self._wait(wait_time)

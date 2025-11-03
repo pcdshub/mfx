@@ -685,8 +685,13 @@ class VernierCalibration:
         
         return calib
 
-    def align_to_dccm(self, energy_range_eV: float = 10.0, energy_steps: int = 11,
-                     events_per_step: int = 100, simulate: Optional[bool] = None) -> bool:
+    def align_to_dccm(
+        self,
+        energy_range_eV: float = 5.0,
+        energy_steps: int = 21,
+        events_per_step: int = 60,
+        flux_threshold: float = None,
+        simulate: Optional[bool] = None) -> bool:
         """
         Align vernier to current DCCM energy using intensity-based optimization.
         
@@ -702,6 +707,9 @@ class VernierCalibration:
             Number of steps in alignment scan
         events_per_step : int
             Number of events per step
+        flux_threshold : float, optional
+            Minimum intensity required to consider alignment successful.
+            If None, no threshold is applied.
         simulate : bool, optional
             Whether to run in simulation mode. If None, defaults to False (real hardware).
             If True, uses simulated devices. If False, attempts to use real hardware.
@@ -751,6 +759,11 @@ class VernierCalibration:
         logger.info(f"Scanning vernier from {scan_start:.2f} to {scan_end:.2f} eV (range: ±{energy_range_eV/2:.1f} eV around DCCM at {current_dccm_energy:.2f} eV)")
 
         for step in range(energy_steps):
+            # Check beam status if threshold provided
+            if flux_threshold is not None:
+                from mfx.exafs import Exafs
+                exafs = Exafs()
+                exafs.check_beam_status(flux_threshold)
             vernier_energy = scan_start + step * (scan_end - scan_start) / (energy_steps - 1)
             logger.info(f"Moving vernier to: {vernier_energy:.2f} eV")
             try:
