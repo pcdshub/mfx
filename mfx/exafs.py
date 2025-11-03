@@ -964,15 +964,15 @@ class Exafs:
                     if flux_threshold is not None:
                         self._check_beam_status(flux_threshold)
 
-                    # Move DCCM and Vernier to energy
-                    self._move_dccm_energy_with_vernier(energy_keV)
-                    if track_feespec_cam:
-                        self._track_feespec_camera(energy_keV)
-                    
                     # Perform Vernier alignment if needed
                     #output final_offset = final_vernier_actual - final_dccm_energy
                     if tchk:
                         final_offset = self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
+
+                    # Move DCCM and Vernier to energy
+                    self._move_dccm_energy_with_vernier(energy_keV)
+                    if track_feespec_cam:
+                        self._track_feespec_camera(energy_keV)
 
                     # Wait before moving on
                     self._wait(wait_time)
