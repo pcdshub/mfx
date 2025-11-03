@@ -133,11 +133,11 @@ class Exafs:
         self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         # Move XRT spectrometer camera if necessary
         if track_feespec:
-            self._move_feespec_energy(k_energy / 1000)
+            self.move_feespec_energy(k_energy / 1000)
         if round(k_energy, 1) != round(self.acr_energy_k.get().setpoint, 1):
             self._move_k_energy(k_energy)
         if track_feespec:
-            self._check_feespec_crystal_angle(k_energy / 1000)
+            self.check_feespec_crystal_angle(k_energy / 1000)
 
         return energies, energy_0_keV, k_energy, wait_time
 
@@ -206,7 +206,7 @@ class Exafs:
         else:
             self.acr_energy_k.move(k_energy)
 
-    def _track_feespec_camera(self, energy_keV):
+    def track_feespec_camera(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
         hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
@@ -221,7 +221,7 @@ class Exafs:
             # Current
             ref_camera_angle_deg = hxrsss.tth.position
             # Target
-            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV)
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             # Move
             hxrsss.tth.mv(camera_angle_deg)
@@ -231,7 +231,7 @@ class Exafs:
                 hxrsss.tth.mv(ref_camera_angle_deg)
             return
 
-    def _check_feespec_crystal_angle(self, energy_keV):
+    def check_feespec_crystal_angle(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
         hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
@@ -242,7 +242,7 @@ class Exafs:
             # Current
             ref_crystal_angle_deg = hxrsss.th.position
             # Target
-            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV)
             # Move
             if round(crystal_angle_deg, 2) != round(ref_crystal_angle_deg, 2):
                 # check Camera status and abort if running
@@ -266,7 +266,7 @@ class Exafs:
                     os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
                 return
 
-    def _move_feespec_energy(self, energy_keV):
+    def move_feespec_energy(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
         hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
@@ -284,7 +284,7 @@ class Exafs:
             ref_camera_y_pos_mm = hxrsss.camy.position
             ref_crystal_angle_deg = hxrsss.th.position
             # Target
-            crystal_angle_deg = 82.8 - 5.9 * energy_keV
+            crystal_angle_deg = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV * energy_keV)
             camera_angle_deg = -1.9 + 2 * crystal_angle_deg
             camera_y_pos_mm = -4.92 - 0.111 * energy_keV
             # Move
@@ -380,14 +380,18 @@ class Exafs:
                 
                 # Then align to DCCM using intensity scan
                 self.logger.info("Performing intensity-based vernier alignment")
-                success = vernier_calib.align_to_dccm(
+                final_offset = vernier_calib.align_to_dccm(
                     energy_range_eV=10.0,
                     energy_steps=11,
-                    events_per_step=12
+                    events_per_step=100,
+                    simulate=self.simulate
                 )
-                if not success:
-                    self.logger.warning(f"Intensity-based alignment failed at energy {energy:.4f} keV")
+                if not final_offset:
+                    self.logger.error(f"Intensity-based alignment failed at energy {energy:.4f} keV")
+                else:
+                    return final_offset
 
+                
     def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
         """
         Perform undulator (undulator) alignment using beam alignment system.
@@ -448,7 +452,8 @@ class Exafs:
 
     def _init_tfs(self, energies, margin_mm, 
                   ref_focal_length_um, ref_z_stage_mm,
-                  avoid_forbidden, enable_prefocus, map_focus_track):
+                  avoid_forbidden, enable_prefocus, map_focus_track,
+                  target=400.37):
         tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         if self.simulate:
             self.tfs = make_tfs_sim(tfs)
@@ -464,7 +469,8 @@ class Exafs:
                 ref_focal_length_um=ref_focal_length_um,
                 ref_z_stage_mm=ref_z_stage_mm,
                 avoid_forbidden=avoid_forbidden,
-                enable_prefocus=enable_prefocus
+                enable_prefocus=enable_prefocus,
+                target=target
             )
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data):
@@ -534,11 +540,11 @@ class Exafs:
 
                 # Move XRT spectrometer camera if necessary
                 if track_feespec:
-                    self._move_feespec_energy(k_energy / 1000)
+                    self.move_feespec_energy(k_energy / 1000)
                 self.logger.warning(f"Moving k to new energy range {k_energy:0.0f}")
                 self._move_k_energy(k_energy)
                 if track_feespec:
-                    self._check_feespec_crystal_angle(k_energy / 1000)
+                    self.check_feespec_crystal_angle(k_energy / 1000)
 
                 if not self.simulate:
                     daq.control.setState("running")
@@ -550,6 +556,24 @@ class Exafs:
         if np.isnan(wait_time):
             wait_time = 0.1
         sleep(wait_time)
+
+    def _check_beam_status(self, flux_threshold):
+        from mfx.optimize.beam_status import BeamCheck
+        beam_status = BeamCheck()
+        if beam_status.gdet_ave(threshold=flux_threshold) < flux_threshold and daq.control.getState() == "running":
+            self.logger.error(f'Beam intensity below threshold {flux_threshold} mJ. Pausing DAQ...')
+            daq.control.setState("paused")
+            while daq.control.getState() != "paused":
+                ...
+        while beam_status.gdet_ave(threshold=flux_threshold) < flux_threshold:
+            self.logger.warning(f'Beam intensity below threshold {flux_threshold} mJ. Waiting...')
+            sleep(1)
+        if beam_status.gdet_ave(threshold=flux_threshold) > flux_threshold and daq.control.getState() == "paused":
+            self.logger.info(f'Beam intensity above threshold {flux_threshold} mJ. Resuming DAQ...')
+            daq.control.setState("running")
+            while daq.control.getState() != "running":
+                ...
+        return
 
     def _return_to_start(self, energy_start, k_energy_start):
         """Finalize scan and return to initial positions."""
@@ -585,15 +609,15 @@ class Exafs:
                 add_note='Run ended prematurely. Probably sample delivery problem')
         self.logger.warning("[*] Stopping Run and exiting???...")
         self._return_to_start(energy_start, k_energy_start)
-        self._move_feespec_energy(energy_start)
-        self._check_feespec_crystal_angle(energy_start)
+        self.move_feespec_energy(energy_start)
+        self.check_feespec_crystal_angle(energy_start)
         self.logger.warning('Run ended prematurely. Probably sample delivery problem')
 
     def _finalize_scan(self, energy_start, k_energy_start):
         """Finalize scan and return to initial positions."""
         self._return_to_start(energy_start, k_energy_start)
-        self._move_feespec_energy(energy_start)
-        self._check_feespec_crystal_angle(energy_start)
+        self.move_feespec_energy(energy_start)
+        self.check_feespec_crystal_angle(energy_start)
         self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
     def long_calib(
@@ -717,6 +741,7 @@ class Exafs:
             reverse: bool = False,
             min_k_keV: float = 7.035,
             k_offset: int = 0,
+            flux_threshold: float = None,
             min_time_EXAFS: float = 0.5,
             max_time_EXAFS: float = 10.0,
             tchk = False,
@@ -726,6 +751,7 @@ class Exafs:
             tfs_margin_mm=5.0,
             ref_focal_length_um=None,
             ref_z_stage_mm=None,
+            tfs_target=400.37,
             avoid_forbidden_combo=True,
             enable_prefocus=True,
             track_feespec: bool = False,
@@ -777,7 +803,8 @@ class Exafs:
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
 
-            runs: int = 1
+            runs: int
+                Number of times to repeat the entire energy scan.
 
             k_stepsize: float
                 Stepsize in eV for undulator K motion request.
@@ -789,6 +816,10 @@ class Exafs:
 
             k_offset: float
                 Offset in eV for undulator K motion request.
+
+            flux_threshold: float
+                Set a minimum flux threshold in mJ. If the beam flux is below this value the script
+                will wait until the beam is back.
 
             min_time_EXAFS (float): 
                 Minimum acquisition time in seconds for the EXAFS region.
@@ -809,15 +840,20 @@ class Exafs:
             track_focus: bool = False
                 Uses the focus map to track the focus
 
-            tfs_margin_mm=5.0
+            tfs_margin_mm: float
+                margin in mm for the focus tracking. default is 5.0 mm.
 
-            ref_focal_length_um=None
+            ref_focal_length_um: float
+                reference focal length in microns for focus tracking. default is None
 
-            ref_z_stage_mm=None
+            ref_z_stage_mm: float
+                reference z stage position in mm for focus tracking. default is None
 
-            avoid_forbidden_combo=True
+            avoid_forbidden_combo: bool
+                avoid forbidden lens combinations during focus tracking. default is True
 
-            enable_prefocus=True
+            enable_prefocus: bool
+                enable prefocusing during focus tracking. default is True
 
             track_feespec: bool = False
                 track the energy with the feespec
@@ -843,6 +879,7 @@ class Exafs:
             debug: bool = False
         """
         from mfx.autorun import post
+
         var_names = [
             'simulate', 'inspire', 'record', 'reverse', 'tchk',
             'use_vernier_calibration', 'map_focus_track', 'track_focus',
@@ -857,6 +894,16 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         self.simulate = simulate
+        
+        energies, wait_times = self._build_energy_and_wait_time(
+                energies_list, wait_time_list, 
+                start_eV, end_eV,min_k, max_k,
+                element,
+                min_time_EXAFS,
+                max_time_EXAFS,
+                debug
+                )
+
         # Load track_focus results from current working directory, if available
         track_focus_data = self._get_track_focus_data()
         # Map the focus track over the energy list and record to track_focus_results.json
@@ -865,22 +912,15 @@ class Exafs:
                        ref_focal_length_um=ref_focal_length_um,
                        ref_z_stage_mm=ref_z_stage_mm,
                        avoid_forbidden=avoid_forbidden_combo,
-                       enable_prefocus=enable_prefocus,
-                       map_focus_track=map_focus_track)
+                       enable_prefocus=enable_prefocus, 
+                       map_focus_track=map_focus_track,
+                       target=tfs_target)
         if map_focus_track:
             return
 
-        energies, wait_times = self._build_energy_and_wait_time(
-            energies_list, wait_time_list, start_eV, end_eV,
-            min_k, max_k,
-            element,
-            min_time_EXAFS,
-            max_time_EXAFS,
-            debug
-        )
-
         energy_start = self.dccm.energy_with_vernier.energy()
         k_energy_start = self.acr_energy_k.get().setpoint
+
 
         try:
             for i in range(runs):
@@ -888,7 +928,9 @@ class Exafs:
                 energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
                     energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
                 )
-
+                # Check beam status if threshold provided
+                if flux_threshold is not None:
+                    self._check_beam_status(flux_threshold)
                 # Setup DAQ and start recording (or simulate run number)
                 run_number, daq_success = self._setup_daq_and_start_recording(
                     sample, picker, inspire, record, i
@@ -918,13 +960,19 @@ class Exafs:
                         self._move_tfs_to_energy(energy_eV=energy,
                                                  track_focus_data=track_focus_data)
 
+                    # Check beam status if threshold provided
+                    if flux_threshold is not None:
+                        self._check_beam_status(flux_threshold)
+
+                    # Perform Vernier alignment if needed
+                    #output final_offset = final_vernier_actual - final_dccm_energy
+                    if tchk:
+                        final_offset = self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
+
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     if track_feespec_cam:
                         self._track_feespec_camera(energy_keV)
-                    
-                    # Perform Vernier alignment if needed
-                    self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
 
                     # Wait before moving on
                     self._wait(wait_time)

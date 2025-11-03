@@ -86,18 +86,24 @@ with safe_load('OM'):
 with safe_load('xas'):
     import mfx.xas as xas
 
-with safe_load('beam'):
+with safe_load('optimize'):
     from mfx.optimize.errors import *
     from mfx.optimize.plots import *
     from mfx.optimize.type_checking import *
     from mfx.optimize.user_select import *
     from mfx.optimize.constraints import *
     from mfx.optimize.beam import *
+    from mfx.optimize.vernier_calibration import *
     beam = Beam()
+    vernier_calib = VernierCalibration()
 
 with safe_load('vernier'):
     from mfx.vernier import *
     vernier = Vernier()
+
+with safe_load('beam_status'):
+    from mfx.optimize.beam_status import *
+    beam_status = BeamCheck()
 
 with safe_load('yano-kern_code'):
     from mfx.yano import *
@@ -252,10 +258,24 @@ with safe_load('add laser motor groups'):
         txt = txt
         lxt_ttc = lxt_ttc
         lxt_fast1 = mfx_lxt_fast1
+
 def mfx_reload(module_name):
     import importlib
     import sys
     importlib.reload(sys.modules[module_name])
+
+    if module_name == 'mfx.exafs':
+        from mfx.exafs import Exafs, EXAFSEnergyRangeBuilder
+        exafs = Exafs()
+        exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
+
+    if module_name == 'mfx.optimize.verner_calibration':
+        from mfx.optimize.vernier_calibration import VernierCalibration
+        vernier_calib = VernierCalibration()
+
+    if module_name == 'mfx.optimize.beam_status':
+        from mfx.optimize.beam_status import BeamCheck
+        beam_status = BeamCheck()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
