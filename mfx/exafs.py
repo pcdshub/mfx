@@ -336,12 +336,128 @@ class Exafs:
             measure_offset = True
         return measure_offset
 
+    def align_vernier_to_dccm(
+        self,
+        energy_range_eV: float = 5.0,
+        energy_steps: int = 21,
+        events_per_step: int = 60,
+        flux_threshold: float = None)
+        """
+        Align vernier to current DCCM energy using intensity-based optimization.
+
+        This function scans the vernier around the current DCCM energy and finds
+        the vernier position that maximizes intensity. This is a pure intensity-based
+        alignment without using calibration prediction.
+
+        Parameters
+        ----------
+        energy_range_eV : float
+            Range around current DCCM energy to scan (in eV)
+        energy_steps : int
+            Number of steps in alignment scan
+        events_per_step : int
+            Number of events per step
+        flux_threshold : float, optional
+            Minimum intensity required to consider alignment successful.
+            If None, no threshold is applied.
+        simulate : bool, optional
+            Whether to run in simulation mode. If None, defaults to False (real hardware).
+            If True, uses simulated devices. If False, attempts to use real hardware.
+
+        Returns
+        -------
+        bool
+            True if alignment was successful, False otherwise
+        """
+        from mfx.optimize.beamline_hw import init_devices, read_dccm_energy
+        # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
+        devices = init_devices()
+        vernier_energy_pv = devices["vernier_energy"]
+        intensity_pv = devices["vernier_intensity3"]
+
+        # Get current DCCM energy
+        logger.info(f"Reading current DCCM energy...")
+        current_dccm_energy = float(read_dccm_energy())
+        logger.info(f"Current DCCM energy: {current_dccm_energy:.2f} eV")
+
+        # Scan vernier around current DCCM energy
+        scan_start = current_dccm_energy - energy_range_eV / 2
+        scan_end = current_dccm_energy + energy_range_eV / 2
+
+        logger.info(
+            f"Scanning vernier from {scan_start:.2f} to {scan_end:.2f} "
+            f"eV (range: ±{energy_range_eV/2:.1f} eV around DCCM at {current_dccm_energy:.2f} eV)")
+
+        for step in range(energy_steps):
+            # Check beam status if threshold provided
+            if flux_threshold is not None:
+                self.exafs.check_beam_status(flux_threshold)
+            vernier_energy = scan_start + step * (scan_end - scan_start) / (energy_steps - 1)
+            logger.info(f"Moving vernier to: {vernier_energy:.2f} eV")
+            try:
+                vernier_energy_pv.move(vernier_energy).wait()
+            except Exception as e:
+                logger.error(f"Failed to move vernier: {e}")
+                return False
+
+            energy_list = []
+            intensity_list = []
+            # Average intensity over multiple readings
+            intensities = []
+            for _ in range(events_per_step):
+                try:
+                    intensities.append(float(intensity_pv.get()))
+                except Exception:
+                    pass
+                # Sleep for 10ms
+                time.sleep(0.01)
+            intensity = np.mean(intensities) if intensities else float(intensity_pv.get())
+
+            logger.info(f"Measured intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+
+            # Store best position
+            if step == 0 or intensity > best_intensity:
+                best_intensity = intensity
+                best_vernier_energy = vernier_energy
+                logger.warning(f"New best intensity: {intensity:.2f} at vernier energy: {vernier_energy:.2f} eV")
+
+            energy_list.append(vernier_energy)
+            intensity_list.append(intensity)
+
+        # Print all points for debugging
+        logger.info(f"Alignment scan results:")
+        for vernier_energy, intensity in zip(energy_list, intensity_list):
+            if best_vernier_energy is not None and vernier_energy == best_vernier_energy:
+                logger.warning(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f} <-- BEST")
+            else:
+                logger.info(f"Point: vernier={vernier_energy:.2f} eV, intensity={intensity:.2f}")
+
+        # Move to best position (still in alignment mode, vernier will land exactly at commanded position with no offset)
+        if best_vernier_energy is not None:
+            logger.info(f"Moving to best vernier energy: {best_vernier_energy:.2f} eV")
+            vernier_energy_pv.move(best_vernier_energy).wait()
+
+        # Verify final positions
+        if best_vernier_energy is not None:
+            # Verify final DCCM energy
+            final_dccm_energy = float(read_dccm_energy())
+            final_vernier_actual = float(vernier_energy_pv.position)
+            final_offset = final_vernier_actual - final_dccm_energy
+
+            logger.info(f"Final DCCM energy: {final_dccm_energy:.2f} eV")
+            logger.info(f"Final vernier energy: {final_vernier_actual:.2f} eV")
+            logger.info(f"Final offset: {final_offset:.2f} eV")
+            logger.info(f"Alignment completed successfully")
+
+            return final_offset
+        else:
+            logger.error(f"No valid intensity measurements found")
+            return False
+
     def _measure_vernier_offset(self, energy, track_tchk_data):
-        # align
-        from mfx.optimize.vernier_calibration import VernierCalibration
-        vernier_calib = VernierCalibration()
+        """Measure Vernier offset with DCCM (tchk functionality)."""
         self.logger.info("Performing intensity-based vernier alignment")
-        offset = vernier_calib.align_to_dccm(
+        offset = self.align_vernier_to_dccm(
             energy_range_eV=5.0,
             energy_steps=21,
             events_per_step=50,
@@ -364,92 +480,6 @@ class Exafs:
 
         if self.vernier_offset:
             self._move_energy_with_vernier(energy + self.vernier_offset)
-
-    def _align_vernier_to_dccm_single(self, energy, tchk, use_vernier_calibration):
-        """
-        Perform Vernier alignment with DCCM (tchk functionality).
-
-        This method uses the new VernierCalibration system with two approaches:
-        1. If calibration exists and use_vernier_calibration=True: Use calibration to predict offset
-        2. Otherwise: Use intensity-based alignment scan
-
-        Parameters
-        ----------
-        energy : float
-            Target energy in eV
-        tchk : bool
-            Whether to perform vernier alignment
-        use_vernier_calibration : bool
-            Whether to use calibration if available
-        """
-        if not tchk:
-            return
-
-        # If simulating, force simulated devices to avoid any real hardware motion
-        if self.simulate:
-            try:
-                from mfx.optimize.beamline_hw import sim_devices
-                sim_devices()
-                print("[align_vernier_to_dccm] Simulation devices initialized")
-            except Exception:
-                # Continue even if sim init fails; other simulation guards remain in place
-                ...
-
-        from mfx.optimize.vernier_calibration import VernierCalibration
-        from mfx.dccm import DCCM
-
-        vernier_calib = VernierCalibration()
-
-        # Check if calibration exists and should be used
-        calib = vernier_calib._load_calibration()
-        use_calibration = use_vernier_calibration and calib is not None
-
-        if use_calibration:
-            self.logger.info(f"Using existing calibration from {calib.get('timestamp')}")
-            # Method 1: Use calibration
-            # First, move DCCM alone to target energy (not with vernier)
-            self.logger.info(f"Moving DCCM alone to {energy:.4f} keV")
-            if self.simulate:
-                # In simulation, use sim motor for DCCM energy
-                self.sim.fast_motor1.mv(energy / 1000.0)
-            else:
-                dccm = DCCM(name='DCCM')
-                dccm.energy.mv(energy / 1000.0)  # DCCM uses keV
-
-            # Then align vernier using calibration prediction
-            self.logger.info("Aligning vernier using calibration")
-            success = vernier_calib.move_to_energy_with_calibration()
-            if not success:
-                self.logger.warning(f"Calibration-based alignment failed at energy {energy:.4f} keV")
-        else:
-            if use_vernier_calibration and calib is None:
-                self.logger.info("No calibration found - using intensity-based alignment")
-            elif not use_vernier_calibration:
-                self.logger.info("use_vernier_calibration=False - using intensity-based alignment")
-
-            # Method 2: No calibration - use intensity scan
-            # First move DCCM with vernier to approximate position
-            self.logger.info(f"Moving DCCM with vernier to {energy:.4f} keV")
-            if self.simulate:
-                # In simulation, use sim motor for DCCM+vernier energy
-                self.sim.fast_motor1.mv(energy / 1000.0)
-            else:
-                dccm = DCCM(name='DCCM')
-                dccm.energy_with_vernier.mv(energy / 1000.0)  # DCCM uses keV
-
-                # Then align to DCCM using intensity scan
-                self.logger.info("Performing intensity-based vernier alignment")
-                final_offset = vernier_calib.align_to_dccm(
-                    energy_range_eV=5.0,
-                    energy_steps=21,
-                    events_per_step=50,
-                    simulate=self.simulate
-                )
-                if not final_offset:
-                    self.logger.error(f"Intensity-based alignment failed at energy {energy:.4f} keV")
-                else:
-                    return final_offset
-
 
     def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
         """
@@ -937,10 +967,6 @@ class Exafs:
             map_tchk_track: bool, optional
                 If True, pre-maps the vernier calibration track before run. Default: False
 
-            use_vernier_calibration: bool, optional
-                If True (default), use vernier calibration if available, otherwise use
-                intensity-based alignment. If False, always use intensity-based alignment.
-
             track_focus: bool = False
                 Uses the focus map to track the focus
 
@@ -986,7 +1012,7 @@ class Exafs:
 
         var_names = [
             'simulate', 'inspire', 'record', 'reverse', 'tchk',
-            'use_vernier_calibration', 'map_focus_track', 'track_focus',
+            'map_focus_track', 'track_focus', 'map_tchk_track',
             'avoid_forbidden_combo', 'enable_prefocus', 'track_feespec',
             'track_feespec_cam', 'undulator_point', 'debug'
         ]
@@ -1063,8 +1089,8 @@ class Exafs:
                     # Move TFS to energy
                     if track_focus:
                         self._move_tfs_to_energy(energy_eV=energy,
-                                                 track_focus_data=track_focus_data,
-                                                 attenuation=attenuation)
+                                                track_focus_data=track_focus_data,
+                                                attenuation=attenuation)
 
                     # Check beam status if threshold provided
                     if flux_threshold is not None:
@@ -1073,8 +1099,7 @@ class Exafs:
                     # Perform Vernier alignment if needed
                     #output final_offset = final_vernier_actual - final_dccm_energy
                     if tchk == 'single':
-                        final_offset = self._align_vernier_to_dccm_single(
-                            energy, tchk, use_vernier_calibration)
+                        self._measure_vernier_offset(energy, track_tchk_data)
 
                     # Perform Vernier alignment if needed
                     elif tchk:
