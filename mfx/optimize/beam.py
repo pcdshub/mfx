@@ -140,6 +140,13 @@ class Beam:
         if xopt_obj is None:
             print(f"[check_calibration] No xopt_obj provided")
             return False
+        bounds_undp_x, bounds_undp_y = xopt_obj.vocs.variables[UNDP_KEY_X], xopt_obj.vocs.variables[UNDP_KEY_Y]
+        
+        if curr_xy[0] < bounds_undp_x[0] or curr_xy[0] > bounds_undp_x[1] or curr_xy[1] < bounds_undp_y[0] or curr_xy[1] > bounds_undp_y[1]:
+            print(f"[check_calibration] Current undulator position {curr_xy} outside VOCS bounds {bounds_undp_x, bounds_undp_y}")
+            print(f"[check_calibration] Cannot use calibration for this position, returning False")
+            return False
+
         df_curr = pd.DataFrame([{UNDP_KEY_X: curr_xy[0], UNDP_KEY_Y: curr_xy[1]}])
         res = xopt_obj.evaluate_data(df_curr)
         meas = (float(res["centroid_x"].iat[-1]), float(res["centroid_y"].iat[-1]))
