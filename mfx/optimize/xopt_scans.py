@@ -54,8 +54,8 @@ def get_variables(mover: Movers, narrow: bool = False):
         variables[MP_KEY] = [center - delta, center + delta]
     elif mover == "und":
         # Use fixed absolute bounds for undulator positions
-        variables[UNDP_KEY_X] = [0, 200]
-        variables[UNDP_KEY_Y] = [-450, -200]
+        variables[UNDP_KEY_X] = [-100, 150]
+        variables[UNDP_KEY_Y] = [-750, -350]
     return variables
 
 
