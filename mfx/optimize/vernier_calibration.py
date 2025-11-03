@@ -290,7 +290,7 @@ class VernierCalibration:
         # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
         devices = init_devices()
         vernier_energy_pv = devices["vernier_energy"]
-        intensity_pv = devices["vernier_intensity"]
+        intensity_pv = devices["vernier_intensity3"]
         
         # Determine simulation mode from argument
         is_simulation = simulate if simulate is not None else False
@@ -576,7 +576,7 @@ class VernierCalibration:
         
         devices = init_devices()
         vernier_energy_pv = devices["vernier_energy"]
-        intensity_pv = devices["vernier_intensity"]
+        intensity_pv = devices["vernier_intensity3"]
         
         # Read current positions
         try:
@@ -724,7 +724,7 @@ class VernierCalibration:
         # Get devices from beamline_hw (will be real or simulated based on sim_devices() call)
         devices = init_devices()
         vernier_energy_pv = devices["vernier_energy"]
-        intensity_pv = devices["vernier_intensity"]
+        intensity_pv = devices["vernier_intensity3"]
         
         # Get current DCCM energy
         logger.info(f"Reading current DCCM energy...")
