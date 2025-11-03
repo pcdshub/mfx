@@ -214,6 +214,10 @@ class Exafs:
         else:
             self.acr_energy_k.move(k_energy)
 
+    def _move_vernier_energy(self, vernier_energy):
+        self.logger.info(f"Moving Vernier energy to {vernier_energy:.2f} eV.")
+        self.vernier_device.move(vernier_energy).wait()
+
     def track_feespec_camera(self, energy_keV):
         """Move FEE spectrometer energy."""
         from pcdsdevices.spectrometer import HXRSpectrometer
@@ -314,24 +318,51 @@ class Exafs:
             #     os.system(f'caput CAMR:FEE1:441:Acquire Acquire')
             return
 
-    def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
-        """Perform Vernier alignment with DCCM (tchk functionality)."""
-        if self.simulate:
-            return
-        
+    def _retrieve_vernier_offset(self, energy, track_tchk_data):
+        if track_tchk_data is not None:
+            for data in track_tchk_data:
+                if data["energy"] == energy:
+                    self.vernier_offset = data["vernier_offset"]
+                    break
+
+    def _request_vernier_offset_measurement(self, energy, track_tchk_data, map_tchk_track):
         measure_offset = False
         if self._delta_eV_to_k_energy(energy, abs=True) < 0.1:
             if map_tchk_track:
                 measure_offset = True
-        if self.offset is None:
+        if not measure_offset:
+            self._retrieve_vernier_offset(energy, track_tchk_data)
+        if self.vernier_offset is None:
             measure_offset = True
+        return measure_offset
 
-        if measure_offset:
-            self._find_vernier_offset() # ALIGN AND SAVE
+    def _measure_vernier_offset(self, energy, track_tchk_data):
+        # align
+        from mfx.optimize.vernier_calibration import VernierCalibration
+        vernier_calib = VernierCalibration()
+        self.logger.info("Performing intensity-based vernier alignment")
+        offset = vernier_calib.align_to_dccm(
+            energy_range_eV=10.0,
+            energy_steps=11,
+            events_per_step=100,
+            simulate=False
+        )
+        # save
+        track_tchk_data.append({
+            "energy": energy,
+            "vernier_offset": offset
+        })
 
-        self.offset = self._get_offset_from_track_tchk_data(energy, track_tchk_data) # WRITE ME
+    def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
+        """Perform Vernier alignment with DCCM (tchk functionality)."""
+        if self.simulate:
+            return
 
-        self._move_energy_with_vernier(energy + self.offset / 1000.0) # CHECK ME
+        if self._request_vernier_offset_measurement(energy, track_tchk_data, map_tchk_track):
+            self._measure_vernier_offset(energy, track_tchk_data)
+
+        if self.vernier_offset:
+            self._move_energy_with_vernier(energy + self.vernier_offset)
 
     def _align_vernier_to_dccm_v0(self, energy, tchk, use_vernier_calibration):
         """
@@ -506,8 +537,16 @@ class Exafs:
                 target=target
             )
 
-    def _init_tchk(self):
-        self.vernier_offset = None
+    def _init_tchk(self, map_tchk_track):
+        from mfx.optimize.beamline_hw import init_devices
+        devices = init_devices()
+        self.vernier_device = devices["vernier_energy"]
+
+        track_tchk_data = self._get_track_tchk_data()
+        if map_tchk_track:
+            self.vernier_offset = None
+            track_tchk_data = []
+        return track_tchk_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data):
         if track_focus_data is not None:
@@ -941,8 +980,7 @@ class Exafs:
         
         # Load track_tchk data, if available
         if tchk:
-            track_tchk_data = self._get_track_tchk_data()
-            self._init_tchk()
+            track_tchk_data = self._init_tchk(map_tchk_track)
 
         try:
             for i in range(runs):
