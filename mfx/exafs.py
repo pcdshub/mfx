@@ -253,7 +253,7 @@ class Exafs:
         self._move_dccm_energy_with_vernier(energy_0_keV)
 
         # Move K motor
-        self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
+        self.logger.warning(f"Moving k to initial energy for beginning of scan {self.k_energy:0.0f}")
         # Move XRT spectrometer camera if necessary
         if track_feespec:
             self.move_feespec_energy(self.k_energy / 1000)
@@ -458,7 +458,7 @@ class Exafs:
         energy_range_eV: float = 5.0,
         energy_steps: int = 21,
         events_per_step: int = 60,
-        flux_threshold: float = None)
+        flux_threshold: float = None):
         """
         Align vernier to current DCCM energy using intensity-based optimization.
 
@@ -1175,7 +1175,7 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         self.simulate = simulate
-        self start_eV = start_eV
+        self.start_eV = start_eV
         self.end_eV = end_eV
         self.min_k = min_k
         self.max_k = max_k
@@ -1237,7 +1237,7 @@ class Exafs:
             return
 
         # Load track_tchk data, if available
-        if tchk:
+        if tchk or tchk == 'single':
             track_tchk_data = self._init_tchk(map_tchk_track)
 
         try:
