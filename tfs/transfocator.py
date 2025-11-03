@@ -572,7 +572,8 @@ class MFXTransfocator(TransfocatorBase):
 
     def track_focus(self, energies, *, margin_mm=10.0, show=False,
                     ref_focal_length_um=None, ref_z_stage_mm=None, 
-                    display=True, shrinking_rate=4, enable_prefocus=True, **kwargs):
+                    display=True, shrinking_rate=4, enable_prefocus=True,
+                    lens_beam_energy_offset=0.0, **kwargs):
         """
         Keep the focal length fixed over a provided list of energies by
         compensating with the translation stage. Lenses are NOT actuated.
@@ -607,7 +608,8 @@ class MFXTransfocator(TransfocatorBase):
 
         track_record = []
 
-        for energy in energies:
+        for E in energies:
+            energy = E + lens_beam_energy_offset
             enable_prefocus = enable_prefocus_save
             target_z_stage_mm = self.get_z_stage_target(
                 energy, combo, ref_focal_length_um, ref_z_stage_mm

@@ -723,6 +723,7 @@ class Exafs:
     def _init_tfs(self, energies, margin_mm,
                   ref_focal_length_um, ref_z_stage_mm,
                   avoid_forbidden, enable_prefocus, map_focus_track,
+                  lens_beam_energy_offset,
                   target=400.37):
         tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         if self.simulate:
@@ -736,6 +737,7 @@ class Exafs:
                 energies=energies,
                 margin_mm=margin_mm,
                 show=True,
+                lens_beam_energy_offset=lens_beam_energy_offset,
                 ref_focal_length_um=ref_focal_length_um,
                 ref_z_stage_mm=ref_z_stage_mm,
                 avoid_forbidden=avoid_forbidden,
@@ -1062,6 +1064,7 @@ class Exafs:
             map_focus_track: bool = False,
             map_tchk_track: bool = False,
             map_lens_beam_energy_offset: bool = False,
+            lens_beam_energy_offset: float = 0.0,
             track_focus: bool = False,
             tfs_margin_mm=5.0,
             ref_focal_length_um=None,
@@ -1234,6 +1237,7 @@ class Exafs:
         self.map_focus_track = map_focus_track
         self.map_tchk_track = map_tchk_track
         self.map_lens_beam_energy_offset = map_lens_beam_energy_offset
+        self.map_lens_beam_energy_offset = lens_beam_energy_offset
         self.track_focus = track_focus
         self.tfs_margin_mm = tfs_margin_mm
         self.ref_focal_length_um = ref_focal_length_um
@@ -1279,6 +1283,7 @@ class Exafs:
                        avoid_forbidden=avoid_forbidden_combo,
                        enable_prefocus=enable_prefocus,
                        map_focus_track=map_focus_track,
+                       lens_beam_energy_offset=lens_beam_energy_offset,
                        target=tfs_target)
         if map_focus_track:
             return
