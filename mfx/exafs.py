@@ -765,6 +765,7 @@ class Exafs:
                             # self.logger.info(f"Lens {lens.prefix} already inserted")
                             continue
                         lens.insert()
+                        sleep(0.5)
                         while lens.moving:
                             sleep(0.1)
                     else:
@@ -773,9 +774,11 @@ class Exafs:
                             # self.logger.info(f"Lens {lens.prefix} already removed")
                             continue
                         lens.remove()
+                        sleep(0.5)
                         while lens.moving:
                             sleep(0.1)
                 if attenuation is not None:
+                    sleep(0.1)
                     from mfx.db import mfx_attenuator as att
                     att(attenuation)
             else:
@@ -810,6 +813,7 @@ class Exafs:
 
     def _request_k_energy_update(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV):
         """Check if K energy update is needed based on energy request."""
+        self.logger.info(f"Current distance from K: {self._delta_eV_to_k_energy(energy_keV, abs=True)} eV.")
         request_k_energy_update = False
         if self._delta_eV_to_k_energy(energy_keV, abs=True) > k_stepsize / 2:
             new_k_energy = self._next_k_energy(k_stepsize, k_offset, reverse, min_k_keV)

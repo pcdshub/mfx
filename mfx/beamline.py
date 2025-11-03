@@ -185,14 +185,16 @@ with safe_load('EXAFS_Builder'):
     exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
 with safe_load("laser wp power"):
+    from pcdsdevices.lxe import LaserEnergyPositioner
+    from hutch_python.utils import get_current_experiment
+    from pcdsdevices.device import Component as Cpt
+    from pcdsdevices.epics_motor import Newport
+
     # Hack the LXE class to make it work with Newports
     class LXE(LaserEnergyPositioner):
-        from pcdsdevices.lxe import LaserEnergyPositioner
-        from hutch_python.utils import get_current_experiment
-        from pcdsdevices.device import Component as Cpt
-        from pcdsdevices.epics_motor import Newport
         motor = Cpt(Newport, "")
-        lxe_calib_file = (f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib")
+    
+    lxe_calib_file = (f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib")
     try:
         lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
     except OSError:
@@ -296,7 +298,7 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_pulsepicker as pp
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
-    from mfx.db import um6_ipm as xcs_yag1
+    from mfx.db import um6_pim as xcs_yag1
     from mfx.db import hx2_slits as xpp_s1
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
