@@ -765,12 +765,16 @@ class Exafs:
                             # self.logger.info(f"Lens {lens.prefix} already inserted")
                             continue
                         lens.insert()
+                        while lens.moving:
+                            sleep(0.1)
                     else:
                         # self.logger.info(f"Removing lens {lens.prefix}")
                         if not lens.inserted:
                             # self.logger.info(f"Lens {lens.prefix} already removed")
                             continue
                         lens.remove()
+                        while lens.moving:
+                            sleep(0.1)
                 if attenuation is not None:
                     from mfx.db import mfx_attenuator as att
                     att(attenuation)
