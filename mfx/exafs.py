@@ -62,7 +62,7 @@ class Exafs:
     def _build_energy_and_wait_time(
         self, energies_list, wait_time_list, start_eV, end_eV, min_k, max_k, element, min_time_EXAFS, max_time_EXAFS, debug):
         """Build energy and wait time lists for EXAFS scan."""
-        
+
         if len(energies_list) == 0 or len(wait_time_list) == 0:
             foil_energies = {'Sc': 4492.8, 'Ti': 4966.4, 'V': 5465.1, 'Cr': 5989.2, 'Mn': 6539.0, 'Fe': 7111.2,
                     'Co': 7708.9, 'Ni': 8332.8, 'Cu': 8978.9, 'Zn': 9658.6}
@@ -89,7 +89,7 @@ class Exafs:
                 time_before_edge=2,
                 time_in_edge = 1,
                 time_in_preedge=2,
-                min_time_EXAFS = min_time_EXAFS, 
+                min_time_EXAFS = min_time_EXAFS,
                 max_time_EXAFS = max_time_EXAFS,
                 debug=debug
                 )
@@ -114,15 +114,15 @@ class Exafs:
 
         return energies, wait_time
 
-    def _initialize_energies_and_move(self, 
-                                      energies, 
-                                      wait_time, 
-                                      reverse, 
-                                      k_offset, 
-                                      k_stepsize, 
+    def _initialize_energies_and_move(self,
+                                      energies,
+                                      wait_time,
+                                      reverse,
+                                      k_offset,
+                                      k_stepsize,
                                       track_feespec):
         """Initialize energy values for the scan."""
-        
+
         energy_0_keV = energies[0] / 1000.0  # energy at the beginning or after a und K step
         self.k_energy = energy_0_keV * 1000.0 + (k_stepsize / 2) + k_offset
         if reverse:
@@ -131,10 +131,10 @@ class Exafs:
             self.k_energy = energy_0_keV * 1000.0 - (k_stepsize / 2) + k_offset
             self.logger.info('THE MODE IS REVERSED. FLIPPING ELIST, CLIST, and TLIST.')
             wait_time = wait_time[::-1]
-        
+
         # Move energy motor
         self._move_dccm_energy_with_vernier(energy_0_keV)
-            
+
         # Move K motor
         self.logger.warning(f"Moving k to initial energy for beginning of scan {k_energy:0.0f}")
         # Move XRT spectrometer camera if necessary
@@ -149,18 +149,18 @@ class Exafs:
 
     def _setup_daq_and_start_recording(self, sample, picker, inspire, record, run_index):
         """Setup DAQ and start recording."""
-        
+
         if self.simulate:
             # In simulation mode, just return a run number
             run_number = run_index + 1
             return run_number, True
-        
+
         # Real mode - setup DAQ
         from mfx.db import daq, pp
         from mfx.macros import get_run
         from mfx.autorun import quote
         from psdaq.control.DaqControl import DaqControl
-        
+
         run_number = get_run(station=0) + 1
         daq.control = DaqControl(
             host=daq.control.host,
@@ -195,7 +195,7 @@ class Exafs:
         daq.control.setState("running")
         while daq.control.getState() != "running":
             ...
-            
+
         return run_number, True
 
     def _move_dccm_energy_with_vernier(self, energy_keV):
@@ -342,9 +342,9 @@ class Exafs:
         vernier_calib = VernierCalibration()
         self.logger.info("Performing intensity-based vernier alignment")
         offset = vernier_calib.align_to_dccm(
-            energy_range_eV=10.0,
-            energy_steps=11,
-            events_per_step=100,
+            energy_range_eV=5.0,
+            energy_steps=21,
+            events_per_step=50,
             simulate=False
         )
         # save
@@ -353,25 +353,26 @@ class Exafs:
             "vernier_offset": offset
         })
 
-    def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
+    def _align_vernier_to_dccm(self, energy_eV, track_tchk_data, map_tchk_track):
         """Perform Vernier alignment with DCCM (tchk functionality)."""
         if self.simulate:
             return
 
-        if self._request_vernier_offset_measurement(energy, track_tchk_data, map_tchk_track):
+        if self._request_vernier_offset_measurement(
+            energy, track_tchk_data, map_tchk_track):
             self._measure_vernier_offset(energy, track_tchk_data)
 
         if self.vernier_offset:
             self._move_energy_with_vernier(energy + self.vernier_offset)
 
-    def _align_vernier_to_dccm_v0(self, energy, tchk, use_vernier_calibration):
+    def _align_vernier_to_dccm_single(self, energy, tchk, use_vernier_calibration):
         """
         Perform Vernier alignment with DCCM (tchk functionality).
-        
+
         This method uses the new VernierCalibration system with two approaches:
         1. If calibration exists and use_vernier_calibration=True: Use calibration to predict offset
         2. Otherwise: Use intensity-based alignment scan
-        
+
         Parameters
         ----------
         energy : float
@@ -383,7 +384,7 @@ class Exafs:
         """
         if not tchk:
             return
-        
+
         # If simulating, force simulated devices to avoid any real hardware motion
         if self.simulate:
             try:
@@ -393,16 +394,16 @@ class Exafs:
             except Exception:
                 # Continue even if sim init fails; other simulation guards remain in place
                 ...
-        
+
         from mfx.optimize.vernier_calibration import VernierCalibration
         from mfx.dccm import DCCM
-        
+
         vernier_calib = VernierCalibration()
-        
+
         # Check if calibration exists and should be used
         calib = vernier_calib._load_calibration()
         use_calibration = use_vernier_calibration and calib is not None
-        
+
         if use_calibration:
             self.logger.info(f"Using existing calibration from {calib.get('timestamp')}")
             # Method 1: Use calibration
@@ -414,7 +415,7 @@ class Exafs:
             else:
                 dccm = DCCM(name='DCCM')
                 dccm.energy.mv(energy / 1000.0)  # DCCM uses keV
-            
+
             # Then align vernier using calibration prediction
             self.logger.info("Aligning vernier using calibration")
             success = vernier_calib.move_to_energy_with_calibration()
@@ -425,7 +426,7 @@ class Exafs:
                 self.logger.info("No calibration found - using intensity-based alignment")
             elif not use_vernier_calibration:
                 self.logger.info("use_vernier_calibration=False - using intensity-based alignment")
-            
+
             # Method 2: No calibration - use intensity scan
             # First move DCCM with vernier to approximate position
             self.logger.info(f"Moving DCCM with vernier to {energy:.4f} keV")
@@ -435,13 +436,13 @@ class Exafs:
             else:
                 dccm = DCCM(name='DCCM')
                 dccm.energy_with_vernier.mv(energy / 1000.0)  # DCCM uses keV
-                
+
                 # Then align to DCCM using intensity scan
                 self.logger.info("Performing intensity-based vernier alignment")
                 final_offset = vernier_calib.align_to_dccm(
-                    energy_range_eV=10.0,
-                    energy_steps=11,
-                    events_per_step=100,
+                    energy_range_eV=5.0,
+                    energy_steps=21,
+                    events_per_step=50,
                     simulate=self.simulate
                 )
                 if not final_offset:
@@ -449,7 +450,7 @@ class Exafs:
                 else:
                     return final_offset
 
-                
+
     def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
         """
         Perform undulator (undulator) alignment using beam alignment system.
@@ -510,11 +511,11 @@ class Exafs:
 
     def _get_track_focus_data(self):
         return self._get_track_data("track_focus_results.json")
-    
+
     def _get_track_tchk_data(self):
         return self._get_track_data("track_tchk_results.json")
-    
-    def _init_tfs(self, energies, margin_mm, 
+
+    def _init_tfs(self, energies, margin_mm,
                   ref_focal_length_um, ref_z_stage_mm,
                   avoid_forbidden, enable_prefocus, map_focus_track,
                   target=400.37):
@@ -593,13 +594,13 @@ class Exafs:
             return self.k_energy
         else:
             return self.acr_energy_k.get().setpoint
-        
+
     def _delta_eV_to_k_energy(self, energy_keV, abs=False, rounding=1):
         delta = energy_keV * 1000 - self.k_energy
         if abs:
             delta = np.abs(delta)
         return round(delta, rounding)
-    
+
     def _next_k_energy(self, k_stepsize, k_offset, reverse, min_k_keV):
         """Update K energy based on current vernier position."""
         k_energy = self._current_k_energy() + k_offset
@@ -610,7 +611,7 @@ class Exafs:
         else:
             k_energy += k_stepsize
         return k_energy
-    
+
     def _request_k_energy_update(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV):
         """Check if K energy update is needed based on energy request."""
         request_k_energy_update = False
@@ -723,34 +724,34 @@ class Exafs:
             vernier_events_per_step: int = 120,
             debug: bool = False):
         """Perform calibration scan over energy range for vernier.
-        
+
         This function calls VernierCalibration.calibrate() to perform a calibration scan
         over the specified energy range.
-        
+
         Parameters:
         -----------
         simulate : bool, optional
             Whether to run in simulation mode. Default: False
-            
+
         start_eV : float, optional
             Starting energy for calibration range in eV. Default: 7000.0
-            
+
         end_eV : float, optional
             Ending energy for calibration range in eV. Default: 7500.0
-            
+
         energy_steps : int, optional
             Number of energy points to visit. Default: 6
-            
+
         vernier_events_per_step : int, optional
             Number of events to average for vernier offset measurement. Default: 120
-            
+
         debug : bool, optional
             Enable debug output. Default: False
         """
         from mfx.optimize.vernier_calibration import VernierCalibration
-        
+
         self.simulate = simulate
-        
+
         # If simulating, force simulated devices to avoid any real hardware motion
         if self.simulate:
             try:
@@ -760,7 +761,7 @@ class Exafs:
             except Exception:
                 self.logger.warning("Failed to initialize simulated devices")
                 return
-        
+
         # Store initial position (keV), handling simulation
         try:
             if self.simulate:
@@ -781,35 +782,35 @@ class Exafs:
         except Exception:
             # Last-resort fallback: use requested start energy
             energy_start = float(start_eV) / 1000.0
-        
+
         # Initialize calibration object
         vernier_calib = VernierCalibration()
-        
+
         self.logger.info(f"Starting long calibration scan from {start_eV:.2f} to {end_eV:.2f} eV ({energy_steps} steps)")
-        
+
         try:
             # Call the calibrate method which handles the entire scan and fitting
             vernier_calib_result = vernier_calib.calibrate(
                 energy_start_eV=start_eV,
                 energy_end_eV=end_eV,
                 energy_steps=energy_steps,
-                events_per_step=vernier_events_per_step, 
+                events_per_step=vernier_events_per_step,
                 simulate=simulate
             )
             self.logger.info(f"Vernier calibration completed successfully")
             self.logger.info(f"Calibration model: offset = {vernier_calib_result.get('coeff_offset', 'N/A')}")
-        
+
         except KeyboardInterrupt:
             self.logger.warning("[*] Calibration interrupted by user")
         except Exception as e:
             self.logger.error(f"Failed to complete vernier calibration: {e}")
             if not debug:
                 raise
-        
+
         # Return to initial position
         self.logger.info(f"\nReturning to initial energy: {energy_start:.4f} keV")
         self._move_dccm_energy_with_vernier(energy_start)
-        
+
         self.logger.warning('Finished long calibration scan!\n')
         return
 
@@ -862,21 +863,21 @@ class Exafs:
         Parameters:
             simulate: bool = False
 
-            start_eV (float): 
+            start_eV (float):
                 Photon energy (in eV) to start the scan at.
 
-            end_eV (float): 
+            end_eV (float):
                 Photon energy (in eV) to end the scan at.
 
             min_k (float):
                 Minimum wavenumber value in reciprocal angstroms (K) for the linear region.
-        
+
             max_k (float):
                 Maximum wavenumber value in reciprocal angstroms (K) for the K-to-eV conversion.
 
             energies_list: list
                 Instead of calculating the energy list you can input a custom one.
-            
+
             wait_time_list: float, list
                 Time to wait at each energy step. If list must the same length as energies.
 
@@ -895,7 +896,7 @@ class Exafs:
             daq_delay: int, optional
                 delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
-            record (bool): 
+            record (bool):
                 whether to record the scan or not. Optional. Default: False.
 
             runs: int
@@ -919,21 +920,26 @@ class Exafs:
             attenuation: float
                 Set attenuation value to move the MFX attenuator to before each energy step.
 
-            min_time_EXAFS (float): 
+            min_time_EXAFS (float):
                 Minimum acquisition time in seconds for the EXAFS region.
-            
-            max_time_EXAFS (float): 
+
+            max_time_EXAFS (float):
                 Maximum acquisition time in seconds for the EXAFS region.
-                
+
             tchk: bool, optional
                 If True, perform vernier alignment at each energy step.
-                
-            use_vernier_calibration: bool, optional
-                If True (default), use vernier calibration if available, otherwise use 
-                intensity-based alignment. If False, always use intensity-based alignment.
+                enter 'single' for single vernier alignment at each energy step
+                Default: False
 
-            map_focus_track: bool = False
-                pre-makes focus tracking map before run
+            map_focus_track: bool
+                pre-makes focus tracking map before run. If True, the function will exit after mapping.
+
+            map_tchk_track: bool, optional
+                If True, pre-maps the vernier calibration track before run. Default: False
+
+            use_vernier_calibration: bool, optional
+                If True (default), use vernier calibration if available, otherwise use
+                intensity-based alignment. If False, always use intensity-based alignment.
 
             track_focus: bool = False
                 Uses the focus map to track the focus
@@ -992,9 +998,9 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         self.simulate = simulate
-        
+
         energies, wait_times = self._build_energy_and_wait_time(
-                energies_list, wait_time_list, 
+                energies_list, wait_time_list,
                 start_eV, end_eV,min_k, max_k,
                 element,
                 min_time_EXAFS,
@@ -1010,12 +1016,12 @@ class Exafs:
                        ref_focal_length_um=ref_focal_length_um,
                        ref_z_stage_mm=ref_z_stage_mm,
                        avoid_forbidden=avoid_forbidden_combo,
-                       enable_prefocus=enable_prefocus, 
+                       enable_prefocus=enable_prefocus,
                        map_focus_track=map_focus_track,
                        target=tfs_target)
         if map_focus_track:
             return
-        
+
         # Load track_tchk data, if available
         if tchk:
             track_tchk_data = self._init_tchk(map_tchk_track)
@@ -1057,7 +1063,8 @@ class Exafs:
                     # Move TFS to energy
                     if track_focus:
                         self._move_tfs_to_energy(energy_eV=energy,
-                                                 track_focus_data=track_focus_data, attenuation=attenuation)
+                                                 track_focus_data=track_focus_data,
+                                                 attenuation=attenuation)
 
                     # Check beam status if threshold provided
                     if flux_threshold is not None:
@@ -1065,29 +1072,32 @@ class Exafs:
 
                     # Perform Vernier alignment if needed
                     #output final_offset = final_vernier_actual - final_dccm_energy
-                    if tchk:
-                        final_offset = self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
+                    if tchk == 'single':
+                        final_offset = self._align_vernier_to_dccm_single(
+                            energy, tchk, use_vernier_calibration)
+
+                    # Perform Vernier alignment if needed
+                    elif tchk:
+                        self._align_vernier_to_dccm(energy_eV=energy,
+                                                    track_tchk_data=track_tchk_data,
+                                                    map_tchk_track=map_tchk_track)
+                    else:
+                        self.logger.warning("Skipping vernier alignment at this energy step.")
 
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     if track_feespec_cam:
                         self._track_feespec_camera(energy_keV)
-                    
-                    # Perform Vernier alignment if needed
-                    if tchk:
-                        self._align_vernier_to_dccm(energy_eV=energy,
-                                                    track_tchk_data=track_tchk_data,
-                                                    map_tchk_track=map_tchk_track)
-                    
+
                     # Wait before moving on
                     self._wait(wait_time)
 
                 if record:
                     post(
-                        sample=sample, 
-                        tag=tag, 
-                        run_number=run_number, 
-                        post=record, 
+                        sample=sample,
+                        tag=tag,
+                        run_number=run_number,
+                        post=record,
                         inspire=inspire,
                         daq_num=2)
                 sleep(daq_delay)
@@ -1115,21 +1125,21 @@ class Exafs:
         """Perform Vernier scan.
 
         Parameters:
-            energy_scan_start_eV (float): 
+            energy_scan_start_eV (float):
                 Photon energy (in eV) to start the scan at.
 
-            energy_scan_end_eV (float): 
+            energy_scan_end_eV (float):
                 Photon energy (in eV) to end the scan at.
 
-            energy_scan_steps (int): 
+            energy_scan_steps (int):
                 Number of steps in scan.
 
-            events_per_step (int): 
+            events_per_step (int):
                 Number of events per step. Optional. Default: 120.
 
-            mcc (str): 
+            mcc (str):
                 PV type either 'vernier' or 'k'
-        
+
 
         """
         from pcdsdevices.pv_positioner import OnePVMotor
@@ -1170,20 +1180,20 @@ class Exafs:
             run_number = get_run(station=0) + 1
             self.logger.info(f"Run Number {run_number} Running {tchk}......{quote()['quote']}")
             post(
-                sample=tchk, 
-                tag=tchk, 
-                run_number=run_number, 
-                post=record, 
+                sample=tchk,
+                tag=tchk,
+                run_number=run_number,
+                post=record,
                 inspire=inspire,
                 daq_num=2,
                 add_note=f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, steps:{energy_scan_steps}eV @ {events_per_step} events per step')
         self.logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
-    def calibrate_vernier(self, energy_start_eV: float, energy_end_eV: float, 
+    def calibrate_vernier(self, energy_start_eV: float, energy_end_eV: float,
                          energy_steps: int = 10, events_per_step: int = 120):
         """
         Perform vernier calibration to determine energy-vernier offset relationship.
-        
+
         Parameters
         ----------
         energy_start_eV : float
