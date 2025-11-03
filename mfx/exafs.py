@@ -461,7 +461,7 @@ class Exafs:
             energy_range_eV=5.0,
             energy_steps=21,
             events_per_step=50,
-            simulate=False
+            flux_threshold=self.flux_threshold
         )
         # save
         track_tchk_data.append({
@@ -1024,6 +1024,7 @@ class Exafs:
             log_level(f" {display_name} {'ON' if var_value else 'OFF'}")
 
         self.simulate = simulate
+        self.flux_threshold = flux_threshold
 
         energies, wait_times = self._build_energy_and_wait_time(
                 energies_list, wait_time_list,
