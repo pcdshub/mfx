@@ -594,7 +594,7 @@ class Exafs:
         })
 
     def _measure_lens_beam_offset(self, energy, track_lens_offset_data):
-        lens_beam_energy = str(os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip())
+        lens_beam_energy = str(os.popen("caget MFX:LENS:BEAM:ENERGY | awk '{print $2}'").read().strip())
         track_lens_offset_data.append({
             "energy": energy,
             "lens_beam_energy": lens_beam_energy

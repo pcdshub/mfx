@@ -608,8 +608,7 @@ class MFXTransfocator(TransfocatorBase):
 
         track_record = []
 
-        for E in energies:
-            energy = E + lens_beam_energy_offset
+        for energy in energies:
             enable_prefocus = enable_prefocus_save
             target_z_stage_mm = self.get_z_stage_target(
                 energy, combo, ref_focal_length_um, ref_z_stage_mm
@@ -637,7 +636,21 @@ class MFXTransfocator(TransfocatorBase):
                                     energy, combo, new_target_z_stage_mm, track_record
                                 )
                                 found_combo = True
-                                break
+                                # check compatibility with lens_beam_energy
+                                if 'DIA' in combo.lenses[0].prefix:
+                                    prefocus_lens_radius = combo.lenses[0].radius
+                                    lens_beam_energy = str(
+                                        os.popen("caget MFX:LENS:BEAM:ENERGY | awk '{print $2}'").read().strip())
+                                    radius = combo.tfs_radius
+                                    from tfs.offline_calculator import TFS_Calculator as TFSCalc
+                                    calc = TFSCalc(combo.lenses)
+                                    forbidden = calc.check_forbidden(prefocus_lens_radius,
+                                                         lens_beam_energy,
+                                                         radius)
+                                    if forbidden:
+                                        found_combo = False
+                                if found_combo:
+                                    break
                         shrinking_max_z_stage_mm -= shrinking_rate*margin_mm
                     if found_combo:
                         break
