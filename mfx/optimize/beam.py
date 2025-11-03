@@ -1,8 +1,9 @@
 import traceback
 import datetime
-from typing import Optional
-from pathlib import Path
-from pydantic import validate_call
+from typing import Literal, Optional
+import matplotlib.pyplot as plt
+from pydantic import validate_call, ConfigDict
+import bluesky.plans as bp
 from bluesky import RunEngine
 from xopt import Xopt
 from .errors import FeasibilityError
@@ -10,8 +11,72 @@ from .plots import UpdatingDeviceCentroidPathPlot, UpdatingXoptVisualizeModelPlo
 from .type_checking import validate_w_lowercase_args, Diagnostics, Methods, Devices, Turbo, Movers
 from .user_select import select_diagnostic, select_goal
 from .constraints import constraint_data
+from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky.callbacks import CallbackBase, LivePlot
+import numpy as np
+from pcdsdevices.sim import FastMotor
+from ophyd import EpicsSignal
+from event_model import compose_event_page
+from pprint import pprint, pformat
+from xopt import Xopt
+from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky.callbacks import CallbackBase, LivePlot
+import numpy as np
+from pcdsdevices.sim import FastMotor
+from ophyd import EpicsSignal
+from event_model import compose_event_page
+from pprint import pprint, pformat
+
+Diagnostics = Literal["xcs1", "dg1", "dg2"]
+Methods = Literal["xopt", "blop"]
+Devices = Literal["yag", "wave8"]
+Turbo = Literal["safety", "optimize"]
+
+
+def validate_w_lowercase_args(func):
+    """
+    Decorator to make string inputs lowercase, and then validate.
+
+    Parameters:
+    -----------
+    func (Callable): 
+        The function to decorate.
+
+    Returns:
+    --------
+    Callable: 
+        The decorated function with string arguments converted to lowercase.
+    """
+    def wrapper(*args, **kwargs):
+        # Convert all string arguments to lowercase
+        new_args = tuple(arg.lower() if isinstance(arg, str) else arg for arg in args)
+        new_kwargs = {k: v.lower() if isinstance(v, str) else v for k, v in kwargs.items()}
+
+        # Call the original function with the modified arguments, validated by Pydantic
+        validated_func = validate_call(func, config=ConfigDict(validate_default=True))
+        return validated_func(*new_args, **new_kwargs)
+
+    return wrapper
+
+class FeasibilityError(Exception):
+    """
+    A custom exception class to tell users when no Xopt sample points are feasible,
+    e.g. due to the constraints being too tight.
+    """
+    pass
+
 
 class Beam:
+    @validate_call
+    def __init__(self, mirror_pitch: list[float] = [-549.0, -546.0]):
+        self.mirror_pitch: list[float] = mirror_pitch
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
+        self.RE = RE
+        #self.RE.subscribe(BestEffortCallback())
+
     @validate_w_lowercase_args
     def align(
             self,
@@ -200,14 +265,10 @@ class Beam:
             return xopt
         elif with_method == "blop":
             from .blop_scans import get_blop_agent
-            try:
-                from mfx.db import RE
-            except ImportError:
-                RE = RunEngine({})
             agent = get_blop_agent(on_diagnostic.lower(), wave8_xpos=with_goal)
-            RE(agent.learn("qr", n=blop_qr_n))
-            RE(agent.learn("qei", n=blop_qei_n, iterations=blop_qei_iterations))
-            RE(agent.go_to_best())
+            self.RE(agent.learn("qr", n=blop_qr_n))
+            self.RE(agent.learn("qei", n=blop_qei_n, iterations=blop_qei_iterations))
+            self.RE(agent.go_to_best())
             agent.plot_objectives()
             return agent
         else:
@@ -240,6 +301,8 @@ class Beam:
         sequencer_fps : int, optional
             Sequencer rate in fps. Default is 120.
         """
+        mirror_pitch_start = mirror_pitch_start or self.mirror_pitch[0]
+        mirror_pitch_end = mirror_pitch_end or self.mirror_pitch[1]
         try:
             from mfx.db import RE
         except ImportError:
@@ -347,5 +410,122 @@ class Crystal:
                 scan_start,
                 scan_end,
                 num_steps
+            )
+        )
+
+# this is the plan then apply runengine OUTSIDE RE(beam.focus)
+# yield from plan
+# IP - inflection point
+# IPM - device for measuring position of beam (not real sensor but a way to measure and understand where beam is)
+# YAG - Yttrium Aluminum Garnet laser
+
+    def focus(
+            self,
+            with_goal: float,
+            on_diagnostic: Diagnostics = "ip",
+            with_method: Methods = "xopt",
+            using_device: Devices = "yag",
+            tfs_positions: list[float] = np.arange(1,6,1)
+    ):
+        # tfs_translation = FastMotor()
+        #det = EpicsSignal('MFX:GIGE:02:IMAGE1:ArrayData', name='gige-cam')
+        from ophyd.sim import det, motor as tfs_translation
+        #self.RE.subscribe(AggLivePlot(y=det.name, x=tfs_translation.name))
+        self.RE.subscribe(print)
+        self.RE(bp.scan([det], tfs_translation, tfs_positions[0], tfs_positions[-1], len(tfs_positions)))
+        
+
+class AggLivePlot(LivePlot):
+    def __init__(self, num_points: int = 5, *args, **kwargs):
+        self.num_points = num_points
+        self._cached_events = []
+        self._descriptor = None
+        super().__init__(*args, **kwargs)
+    
+    def descriptor(self, doc):
+        print(f"\n\n\ndescription\n{pformat(doc)}")
+        self._descriptor = doc
+        super().descriptor(doc)
+    
+    def event(self, doc):
+        print(f"\n\n\nevent\n{pformat(doc)}")
+        self._cached_events.append(doc)
+        if len(self._cached_events) >= self.num_points:
+            new_doc = compose_event_page(self._descriptor["uid"], self.num_points, self._cached_events,{}, [])
+            print(f"\n\n\nevent new doc\n{pformat(new_doc)}")
+            super().event_page(new_doc)
+            self._cached_events = []
+            
+    # def event_page(self, doc):
+    #     if len(self._cached_events) > self.num_points:
+    #         new_doc = compose_event_page(self._descriptor["uid"], self.num_points, self._cached_events,{}, [])
+    #         print(f"\n\n\nevent page\n{pformat(new_doc)}")
+    #         super().event_page(new_doc)
+
+    
+    @validate_w_lowercase_args
+    def scan(
+            self,
+            on_diagnostic: Diagnostics = "dg1",
+            using_device: Devices = "yag",
+            mirror_pitch_start = self.mirror_pitch[0],
+            mirror_pitch_end = self.mirror_pitch[1],
+            num_steps: int = 51,
+            sequencer_fps: int = 120,
+            num_events_per_step: int = 120,
+            record: bool = True
+            ):
+        """Perform Beam Alignment
+
+        Parameters
+        ----------
+        on_diagnostic : str, optional
+            Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
+        using_device : str, optional
+            Device to use for alignment. Options: "yag, wave8". Default is "yag".
+        mirror_pitch_start : int, optional
+            Starting mirror pitch for scan.
+        mirror_pitch_end : int, optional
+            Final mirror pitch for scan.
+        num_steps : int, optional
+            Number of steps in scan.
+        sequencer_fps : int, optional
+            Sequencer rate in fps.
+        num_events_per_step : int, optional
+            Number of events to record per step.
+        record : bool, optional
+            Whether to record or not.
+        """
+        try:
+            from mfx.db import RE
+        except ImportError:
+            RE = RunEngine({})
+
+        try:
+            from mfx.db import daq
+        except ImportError:
+            print("> access to the daq is required to scan the beam.")
+
+        from .xopt_scans import init_devices
+
+        if using_device == "yag":
+            from mfx.autorun import ioc_cam_recorder
+            cam_pv = f"MFX:GIGE:{on_diagnostic.upper()}:YAG:"
+            cam_record_length = 1.5 * num_steps * num_events_per_step / sequencer_fps
+            tag = f"{on_diagnostic}_mr1l4_scan"
+            ioc_cam_recorder(cam_pv,
+                             cam_record_length,
+                             tag=tag)
+            print(f"beam.scan: writing {tag} to /cds/data/iocData while scanning...")
+
+        RE(
+            bp.scan(
+                daq,
+                init_devices()["mr1l4_homs"].pitch,
+                mirror_pitch_start,
+                mirror_pitch_end,
+                num_steps,
+                events=num_events_per_step,
+                record=record
             )
         )

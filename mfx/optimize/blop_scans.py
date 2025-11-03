@@ -95,6 +95,8 @@ def clean_re(re: RunEngine, bec: BestEffortCallback):
 
 @validate_w_lowercase_args
 def get_blop_agent(
+    dof_description: str = "MFX Mirror",
+    dof_device: str = "mr1l4_homs",
     wave8: Diagnostics = "dg1",
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
@@ -145,10 +147,20 @@ def get_blop_agent(
     devices = init_devices()
     bluesky_objs = init_bluesky_objs()
 
+    # TODO: make configureable, remove hardcoded values
+    # should be one-d scan since varying z
+    # 
+    # dofs = [
+    #     DOF(
+    #         description="MFX Mirror",
+    #         device=devices["mr1l4_homs"].pitch,
+    #         search_domain=(mirror_nominal - search_delta, mirror_nominal + search_delta),
+    #     ),
+    # ]
     dofs = [
         DOF(
-            description="MFX Mirror",
-            device=devices["mr1l4_homs"].pitch,
+            description=dof_description,
+            device=devices[dof_device].pitch,
             search_domain=(mirror_nominal - search_delta, mirror_nominal + search_delta),
         ),
     ]
