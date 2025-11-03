@@ -586,7 +586,7 @@ class Exafs:
             "vernier_offset": offset
         })
 
-    def _align_vernier_to_dccm(self, energy_eV, track_tchk_data, map_tchk_track):
+    def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
         """Perform Vernier alignment with DCCM (tchk functionality)."""
         if self.simulate:
             return
@@ -1314,7 +1314,8 @@ class Exafs:
 
                 # Save track_tchk data
                 if tchk:
-                    self._save_track_tchk_data(track_tchk_data)
+                    if map_tchk_track:
+                        self._save_track_tchk_data(track_tchk_data)
 
                 if record:
                     self._post(
