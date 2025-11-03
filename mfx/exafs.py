@@ -560,9 +560,19 @@ class Exafs:
     def _check_beam_status(self, flux_threshold):
         from mfx.optimize.beam_status import BeamCheck
         beam_status = BeamCheck()
+        if beam_status.gdet_ave(threshold=flux_threshold) < flux_threshold and daq.control.getState() == "running":
+            self.logger.error(f'Beam intensity below threshold {flux_threshold} mJ. Pausing DAQ...')
+            daq.control.setState("paused")
+            while daq.control.getState() != "paused":
+                ...
         while beam_status.gdet_ave(threshold=flux_threshold) < flux_threshold:
             self.logger.warning(f'Beam intensity below threshold {flux_threshold} mJ. Waiting...')
             sleep(1)
+        if beam_status.gdet_ave(threshold=flux_threshold) > flux_threshold and daq.control.getState() == "paused":
+            self.logger.info(f'Beam intensity above threshold {flux_threshold} mJ. Resuming DAQ...')
+            daq.control.setState("running")
+            while daq.control.getState() != "running":
+                ...
         return
 
     def _return_to_start(self, energy_start, k_energy_start):
@@ -914,14 +924,13 @@ class Exafs:
 
         try:
             for i in range(runs):
-                if flux_threshold is not None:
-                    self._check_beam_status(flux_threshold)
-
                 # Initialize energies
                 energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
                     energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
                 )
-
+                # Check beam status if threshold provided
+                if flux_threshold is not None:
+                    self._check_beam_status(flux_threshold)
                 # Setup DAQ and start recording (or simulate run number)
                 run_number, daq_success = self._setup_daq_and_start_recording(
                     sample, picker, inspire, record, i
@@ -951,6 +960,10 @@ class Exafs:
                         self._move_tfs_to_energy(energy_eV=energy,
                                                  track_focus_data=track_focus_data)
 
+                    # Check beam status if threshold provided
+                    if flux_threshold is not None:
+                        self._check_beam_status(flux_threshold)
+
                     # Move DCCM and Vernier to energy
                     self._move_dccm_energy_with_vernier(energy_keV)
                     if track_feespec_cam:
@@ -958,7 +971,8 @@ class Exafs:
                     
                     # Perform Vernier alignment if needed
                     #output final_offset = final_vernier_actual - final_dccm_energy
-                    final_offset = self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
+                    if tchk:
+                        final_offset = self._align_vernier_to_dccm(energy, tchk, use_vernier_calibration)
 
                     # Wait before moving on
                     self._wait(wait_time)
