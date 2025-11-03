@@ -639,8 +639,8 @@ class MFXTransfocator(TransfocatorBase):
                                 # check compatibility with lens_beam_energy
                                 if 'DIA' in combo.lenses[0].prefix:
                                     prefocus_lens_radius = combo.lenses[0].radius
-                                    lens_beam_energy = str(
-                                        os.popen("caget MFX:LENS:BEAM:ENERGY | awk '{print $2}'").read().strip())
+                                    lens_beam_energy = ebergy + lens_beam_energy_offset
+                                    #str(os.popen("caget MFX:LENS:BEAM:ENERGY | awk '{print $2}'").read().strip())
                                     radius = combo.tfs_radius
                                     from tfs.offline_calculator import TFS_Calculator as TFSCalc
                                     calc = TFSCalc(combo.lenses)
