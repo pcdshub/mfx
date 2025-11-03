@@ -748,7 +748,7 @@ class Exafs:
             for data in track_focus_data:
                 if data["energy"] == energy_eV:
                     z_position = data["z_position"]
-                    inserted_lenses = [lens.replace('SIM::TFS:', 'MFX:LENS:TFS:') for lens in data["inserted_lenses"]]
+                    inserted_lenses = [lens.replace('SIM::', 'MFX:LENS:') for lens in data["inserted_lenses"]]
                     do_move = True
                     break
             if do_move:
