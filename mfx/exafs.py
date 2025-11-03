@@ -557,6 +557,14 @@ class Exafs:
             wait_time = 0.1
         sleep(wait_time)
 
+    def _check_beam_status(self, flux_threshold):
+        from mfx.optimize.beam_status import BeamCheck
+        beam_status = BeamCheck()
+        while beam_status.gdet_ave(threshold=flux_threshold) < flux_threshold:
+            self.logger.warning(f'Beam intensity below threshold {flux_threshold} mJ. Waiting...')
+            sleep(1)
+        return
+
     def _return_to_start(self, energy_start, k_energy_start):
         """Finalize scan and return to initial positions."""
         from mfx.db import daq, pp
@@ -723,6 +731,7 @@ class Exafs:
             reverse: bool = False,
             min_k_keV: float = 7.035,
             k_offset: int = 0,
+            flux_threshold: float = None,
             min_time_EXAFS: float = 0.5,
             max_time_EXAFS: float = 10.0,
             tchk = False,
@@ -784,7 +793,8 @@ class Exafs:
             record (bool): 
                 whether to record the scan or not. Optional. Default: False.
 
-            runs: int = 1
+            runs: int
+                Number of times to repeat the entire energy scan.
 
             k_stepsize: float
                 Stepsize in eV for undulator K motion request.
@@ -796,6 +806,10 @@ class Exafs:
 
             k_offset: float
                 Offset in eV for undulator K motion request.
+
+            flux_threshold: float
+                Set a minimum flux threshold in mJ. If the beam flux is below this value the script
+                will wait until the beam is back.
 
             min_time_EXAFS (float): 
                 Minimum acquisition time in seconds for the EXAFS region.
@@ -816,15 +830,20 @@ class Exafs:
             track_focus: bool = False
                 Uses the focus map to track the focus
 
-            tfs_margin_mm=5.0
+            tfs_margin_mm: float
+                margin in mm for the focus tracking. default is 5.0 mm.
 
-            ref_focal_length_um=None
+            ref_focal_length_um: float
+                reference focal length in microns for focus tracking. default is None
 
-            ref_z_stage_mm=None
+            ref_z_stage_mm: float
+                reference z stage position in mm for focus tracking. default is None
 
-            avoid_forbidden_combo=True
+            avoid_forbidden_combo: bool
+                avoid forbidden lens combinations during focus tracking. default is True
 
-            enable_prefocus=True
+            enable_prefocus: bool
+                enable prefocusing during focus tracking. default is True
 
             track_feespec: bool = False
                 track the energy with the feespec
@@ -850,6 +869,7 @@ class Exafs:
             debug: bool = False
         """
         from mfx.autorun import post
+
         var_names = [
             'simulate', 'inspire', 'record', 'reverse', 'tchk',
             'use_vernier_calibration', 'map_focus_track', 'track_focus',
@@ -894,6 +914,8 @@ class Exafs:
 
         try:
             for i in range(runs):
+                if flux_threshold is not None:
+                    self._check_beam_status(flux_threshold)
 
                 # Initialize energies
                 energies, energy_0_keV, k_energy, wait_times = self._initialize_energies_and_move(
