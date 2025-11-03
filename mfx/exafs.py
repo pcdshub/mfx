@@ -141,6 +141,8 @@ class Exafs:
         undulator_with_method -> {}
         undulator_grid_bins -> {}
         debug -> {}
+        OPO Shutter ->  {}
+        Fe foil ->  {}
 
         """
 
@@ -155,7 +157,8 @@ class Exafs:
             self.tfs_target, self.avoid_forbidden_combo, self.enable_prefocus,
             self.track_feespec, self.track_feespec_cam, self.undulator_point,
             self.undulator_on_diagnostic, self.undulator_using_device,
-            self.undulator_with_method, self.undulator_grid_bins, self.debug
+            self.undulator_with_method, self.undulator_grid_bins, self.debug,
+            self.opo_shutter, self.fe_foil
         ]
 
         if add_note!='':
@@ -1212,6 +1215,10 @@ class Exafs:
         self.undulator_with_method = undulator_with_method
         self.undulator_grid_bins = undulator_grid_bins
         self.debug = debug
+
+        from mfx.devices import LaserShutter
+        self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
+        self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='opo_shutter')
 
         energies, wait_times = self._build_energy_and_wait_time(
                 energies_list, wait_time_list,
