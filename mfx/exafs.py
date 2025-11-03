@@ -677,7 +677,7 @@ class Exafs:
         return self._get_track_data("track_tchk_results.json")
 
     def _get_track_lens_offset_data(self):
-        return self._get_track_lens_offset_data("track_lens_offset_results.json")
+        return self._get_track_data("track_lens_offset_results.json")
 
     def _plot_track_tchk_data(self, json_file_name=None):
         json_file_path = Path.home() / json_file_name
