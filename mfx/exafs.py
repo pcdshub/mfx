@@ -662,20 +662,43 @@ class Exafs:
     def _get_track_tchk_data(self):
         return self._get_track_data("track_tchk_results.json")
 
+    def _plot_track_tchk_data(self, json_file_name=None):
+        json_file_path = Path.home() / json_file_name
+        with open(json_file_path, 'r') as f:
+            data = json.load(f)
+
+        # Extract energy, z_position, and inserted_lenses values
+        energies = [entry['energy'] for entry in data]
+        offset = [entry['vernier_offset'] for entry in data]
+
+        # Create the plot
+        plt.figure(figsize=(12, 8))
+        plt.plot(energies, offset, marker='o', linestyle='-', color='b')
+
+        # Add labels and title
+        plt.title('Vernier Offset vs Energy')
+        plt.xlabel('Energy (eV)')
+        plt.ylabel('Vernier offset (eV)')
+
+        plt.grid(True)
+        plt.show()
+
     def _save_track_data(self, track_record, json_file_name=None):
         track_path = Path.home() / json_file_name
         with open(track_path, "w") as tf:
             json.dump(track_record, tf, indent=4)
         print(f"Tracking results saved to {save_path}.")
 
-    def _save_track_focus_data(self, track_record):
+    def _save_track_focus_data(self, track_record, display=True):
         """not used. See tfs.track_focus()."""
         self._save_track_data(track_record, json_file_name="track_focus_results.json")
         if display:
             self.plot_focus_track(save_path)
 
-    def _save_track_tchk_data(self, track_record):
+    def _save_track_tchk_data(self, track_record, display=True):
         self._save_track_data(track_record, json_file_name="track_tchk_results.json")
+        if display:
+            self._plot_track_tchk_data(json_file_name="track_tchk_results.json")
 
     def _init_tfs(self, energies, margin_mm,
                   ref_focal_length_um, ref_z_stage_mm,
