@@ -692,8 +692,8 @@ class Exafs:
     def _save_track_focus_data(self, track_record, display=True):
         """not used. See tfs.track_focus()."""
         self._save_track_data(track_record, json_file_name="track_focus_results.json")
-        if display:
-            self.plot_focus_track(save_path)
+        #if display:
+        #    self.plot_focus_track(save_path)
 
     def _save_track_tchk_data(self, track_record, display=True):
         self._save_track_data(track_record, json_file_name="track_tchk_results.json")
