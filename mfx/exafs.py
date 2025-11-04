@@ -336,6 +336,7 @@ class Exafs:
             self.k_energy = k_energy
         else:
             self.acr_energy_k.move(k_energy)
+            self.k_energy = k_energy
 
     def _move_vernier_energy(self, vernier_energy):
         self.logger.info(f"Moving Vernier energy to {vernier_energy:.2f} eV.")
@@ -442,11 +443,14 @@ class Exafs:
             return
 
     def _retrieve_vernier_offset(self, energy, track_tchk_data):
+        vernier_offset=None
         if track_tchk_data is not None:
             for data in track_tchk_data:
                 if data["energy"] == energy:
                     self.vernier_offset = data["vernier_offset"]
+                    vernier_offset = data["vernier_offset"]
                     break
+        return vernier_offset
 
     def _request_vernier_offset_measurement(self, energy, track_tchk_data, map_tchk_track):
         measure_offset = False
@@ -502,6 +506,8 @@ class Exafs:
         # Get current DCCM energy
         self.logger.info(f"Reading current DCCM energy...")
         current_dccm_energy = float(read_dccm_energy())
+        if current_dccm_energy == 0.0:
+            current_dccm_energy = float(read_dccm_energy())
         self.logger.info(f"Current DCCM energy: {current_dccm_energy:.2f} eV")
 
         # Scan vernier around current DCCM energy
@@ -565,6 +571,8 @@ class Exafs:
         if best_vernier_energy is not None:
             # Verify final DCCM energy
             final_dccm_energy = float(read_dccm_energy())
+            if final_dccm_energy == 0.0:
+                final_dccm_energy = float(read_dccm_energy())
             final_vernier_actual = float(vernier_energy_pv.position)
             final_offset = final_vernier_actual - final_dccm_energy
 
@@ -600,17 +608,17 @@ class Exafs:
             "lens_beam_energy": lens_beam_energy
         })
 
-    def _align_vernier_to_dccm(self, energy, track_tchk_data, map_tchk_track):
+    def _align_vernier_to_dccm(self, energy_eV, track_tchk_data, map_tchk_track):
         """Perform Vernier alignment with DCCM (tchk functionality)."""
         if self.simulate:
             return
 
         if self._request_vernier_offset_measurement(
-            energy, track_tchk_data, map_tchk_track):
-            self._measure_vernier_offset(energy, track_tchk_data)
+            energy_eV, track_tchk_data, map_tchk_track):
+            self._measure_vernier_offset(energy_eV, track_tchk_data)
 
         if self.vernier_offset:
-            self._move_energy_with_vernier(energy + self.vernier_offset)
+            self._move_energy_with_vernier(energy_eV + self.vernier_offset)
 
     def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins):
         """
@@ -763,6 +771,8 @@ class Exafs:
         return track_lens_offset_data
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None):
+        import os
+        from time import sleep, time
         if track_focus_data is not None:
             energy_eV = float(energy_eV)
             do_move = False
@@ -799,9 +809,19 @@ class Exafs:
                         while lens.moving:
                             sleep(0.1)
                 if attenuation is not None:
-                    sleep(0.1)
+                    start_time = time()
+                    timeout = 20  # seconds
+
+                    while str(os.popen("caget MFX:ATT:COM:STATUS | awk '{print $2}'").read().strip()) == 'Faulted':
+                        if time() - start_time > timeout:
+                            self.logger.error("ATT is still Faulted after 20 seconds. Exiting...")
+                            os.system(f'caput MFX:ATT:COM:STATUS OK')
+                            break
+                        self.logger.error("ATT is Faulted. Waiting...")
+                        sleep(1)
                     from mfx.db import mfx_attenuator as att
                     att(attenuation)
+
             else:
                 self.logger.warning(f"Energy {energy_eV=} eV not found. Skipping.")
         else:
@@ -1349,7 +1369,11 @@ class Exafs:
                     # Perform Vernier alignment if needed
                     #output final_offset = final_vernier_actual - final_dccm_energy
                     if tchk == 'single':
-                        self._measure_vernier_offset(energy, track_tchk_data)
+                        offset = self._retrieve_vernier_offset(energy, track_tchk_data)
+                        if offset is None:
+                            self._measure_vernier_offset(energy, track_tchk_data)
+                        if map_tchk_track:
+                            self._save_track_tchk_data(track_tchk_data)
                     # Perform Vernier alignment if needed
                     elif tchk:
                         self._align_vernier_to_dccm(energy_eV=energy,
