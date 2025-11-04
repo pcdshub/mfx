@@ -39,7 +39,37 @@ class Beam:
         sol = np.linalg.solve(M, rhs)
         return (float(sol[0]), float(sol[1]))
 
-    
+    def _move_und_in_chunks(
+        self,
+        target_xy: tuple[float, float],
+        max_step: float = 50.0,
+        start_with_x: bool = True,
+    ) -> None:
+        """Move undulator in alternating chunks no larger than max_step per axis."""
+        from .xopt_scans import init_devices, evaluator_move
+
+        und = init_devices()["und_abs"]
+        curr_x = float(und.xpos.get())
+        curr_y = float(und.ypos.get())
+        tgt_x, tgt_y = float(target_xy[0]), float(target_xy[1])
+        move_x_next = bool(start_with_x)
+        eps = 1e-9
+        while (abs(tgt_x - curr_x) > eps) or (abs(tgt_y - curr_y) > eps):
+            if move_x_next and abs(tgt_x - curr_x) > eps:
+                dx = tgt_x - curr_x
+                step = np.sign(dx) * min(max_step, abs(dx))
+                curr_x = float(curr_x + step)
+            elif (not move_x_next) and abs(tgt_y - curr_y) > eps:
+                dy = tgt_y - curr_y
+                step = np.sign(dy) * min(max_step, abs(dy))
+                curr_y = float(curr_y + step)
+            else:
+                # If selected axis is already at target, switch axis
+                move_x_next = not move_x_next
+                continue
+            evaluator_move(mover="und", input={UNDP_KEY_X: curr_x, UNDP_KEY_Y: curr_y})
+            move_x_next = not move_x_next
+
     def _save_calibration_plots(self, res, reg_x, reg_y, out_dir, on_diagnostic, ts):
         """Save calibration plots to file."""
         plot_path = None
@@ -172,6 +202,18 @@ class Beam:
         print(f"[calibrate] Grid inputs generated: shape={df_grid.shape}")
         df_snake = snake_order(df_grid)
         print(f"[calibrate] Snaked grid: shape={df_snake.shape}")
+        # Pre-position to the first grid point in small alternating chunks
+        try:
+            start_x = float(df_snake.iloc[0][UNDP_KEY_X])
+            start_y = float(df_snake.iloc[0][UNDP_KEY_Y])
+            print(
+                f"[calibrate] Pre-positioning to first grid point ({start_x}, {start_y}) in chunks of 50..."
+            )
+            self._move_und_in_chunks(
+                (start_x, start_y), max_step=50.0, start_with_x=True
+            )
+        except Exception as exc:
+            print(f"[calibrate] Warning: failed to pre-position to grid start: {exc}")
         res = xopt_obj.evaluate_data(df_snake)
         print(f"[calibrate] Evaluated snaked grid: shape={res.shape}; columns={list(res.columns)}")
         print(res.head())
@@ -275,9 +317,10 @@ class Beam:
 
         print(f"[_calib] Solving for undulator position to achieve goal {goal}...")
         undp_xy = self._undp_solve(goal, calib)
-        print(f"[_calib] Moving to undulator position {undp_xy}...")
-        evaluator_move(
-            mover=mover, input={UNDP_KEY_X: undp_xy[0], UNDP_KEY_Y: undp_xy[1]}
+        print(f"[_calib] Moving to undulator position {undp_xy} in chunks of 50...")
+        # Move in alternating chunks to avoid large single steps
+        self._move_und_in_chunks(
+            (undp_xy[0], undp_xy[1]), max_step=50.0, start_with_x=True
         )
         return xopt
 
