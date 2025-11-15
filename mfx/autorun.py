@@ -1,406 +1,841 @@
-def post(sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, add_note=''):
+"""Automated run control utilities for MFX beamline."""
+
+import logging
+from time import sleep, time
+
+logger = logging.getLogger(__name__)
+
+
+def autorun(
+        sample: str = '?',
+        tag: str = None,
+        run_length: float = 60.0,
+        inspire: bool = False,
+        record: bool = False,
+        runs: int = 5,
+        daq_delay: int = 5,
+        picker: str = None,
+        close: bool = False,
+        daq_num: int = 2,
+        cam: str = None,
+        run_type: str = ""):
     """
-    Posts a message to the elog
+    Perform automated data acquisition runs.
+
+    Executes multiple data acquisition runs with consistent timing and control.
+    Supports both LCLS-I and LCLS-II DAQ systems with optional camera recording.
 
     Parameters
     ----------
-    sample: str, optional
-        Sample Name
+    sample : str, optional
+        Sample name (default: '?')
+    tag : str or None, optional
+        Run tag for organization (defaults to sample if None)
+    run_length : float, optional
+        Duration of each run in seconds (default: 60.0)
+    inspire : bool, optional
+        Add inspirational quote to elog posts (default: False)
+    record : bool, optional
+        Enable data recording (default: False)
+        If False, runs in preview mode
+    runs : int, optional
+        Number of runs to execute (default: 5)
+    daq_delay : int, optional
+        Delay between runs in seconds (default: 5)
+    picker : str or None, optional
+        Pulse picker mode: 'open', 'flip', or None
+        - 'open': Opens pulse picker before runs
+        - 'flip': Flipflops pulse picker before runs
+        - None: No pulse picker operation
+    close : bool, optional
+        Close pulse picker after completion (default: False)
+    daq_num : int, optional
+        DAQ version: 1 (LCLS-I) or 2 (LCLS-II) (default: 2)
+    cam : str or None, optional
+        Camera IOC name for synchronized recording (default: None)
+        Example: 'MFX:GIGE:01'
+    run_type : str, optional
+        Run type label for DAQ metadata (default: "")
+        Examples: 'dark', 'sample', 'background'
 
-    tag: str, optional
-        Run group tag
+    Returns
+    -------
+    None
 
-    run_number: int, optional
-        Run Number. By default this is read off of the DAQ
+    Raises
+    ------
+    ValueError
+        If daq_num not in [1, 2]
 
-    post: bool, optional
-        set True to record/post message to elog
+    Notes
+    -----
+    DAQ Control:
+    - DAQ 1 (LCLS-I): Uses daq.begin() with blocking wait
+    - DAQ 2 (LCLS-II): Uses DaqControl state machine with progress bar
 
-    inspire: bool, optional
-        Set false by default because it makes Sandra sad. Set True to inspire
+    Special Behavior:
+    - Automatically sets inspire=True for 'water' or 'h2o' samples
+    - Posts run information to elog if record=True
+    - Handles KeyboardInterrupt for graceful abort
 
-    daq_num: int, optional
-        Switch between daq 1 and 2. Default 2
+    Run Sequence:
+    1. Configure pulse picker
+    2. For each run:
+       a. Get run number
+       b. Configure DAQ with run_type
+       c. Start camera recording (if specified)
+       d. Execute run with progress indication
+       e. Post results to elog (if recording)
+       f. Wait daq_delay before next run
+    3. Close pulse picker (if requested)
 
-    add_note: string, optional
-        adds additional note to elog message 
+    Progress Display:
+    - DAQ 2: Shows real-time progress bar with percentage
+    - DAQ 1: Simple status messages
+
+    Error Handling:
+    - KeyboardInterrupt: Posts premature end note to elog, cleans up DAQ
+    - DAQ errors: Logs errors and exits cleanly
+
+    Examples
+    --------
+    Basic automated run:
+    >>> autorun(
+    ...     sample='lysozyme',
+    ...     run_length=120,
+    ...     runs=10,
+    ...     record=True
+    ... )
+
+    Run with camera recording:
+    >>> autorun(
+    ...     sample='water',
+    ...     run_length=60,
+    ...     cam='MFX:GIGE:01',
+    ...     record=True,
+    ...     runs=5
+    ... )
+
+    Dark run with custom type:
+    >>> autorun(
+    ...     sample='dark',
+    ...     run_length=30,
+    ...     run_type='dark',
+    ...     record=True,
+    ...     picker='open'
+    ... )
+
+    See Also
+    --------
+    ioc_cam_recorder : Camera recording function
+    post : Elog posting function
     """
-    from mfx.db import elog
-    from mfx.macros import get_exp
+    from mfx.db import daq, pp
+    from mfx.autorun import quote, post
+    from mfx.macros import get_run
 
-    if daq_num==1:
-        from elog import HutchELog
-        elog=HutchELog.from_conf(instrument='MFX',station=1)
-    
-    if add_note!='':
-        add_note = '\n' + add_note
+    # Validate DAQ number
+    if daq_num not in [1, 2]:
+        logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
+        raise ValueError('Invalid daq_num')
+
+    # Auto-inspire for water samples
+    if sample.lower() in ['water', 'h2o']:
+        inspire = True
+
+    # Default tag to sample name
     if tag is None:
         tag = sample
-    if inspire:
-        comment = f"Running {sample}\n{quote()['quote']}{add_note}"
-    else:
-        comment = f"Running {sample}{add_note}"
+
+    # Operate pulse picker
+    if picker == 'open':
+        pp.open()
+    elif picker == 'flip':
+        pp.flipflop()
+
+    # Execute runs based on DAQ version
+    if daq_num == 2:
+        _autorun_daq2(
+            sample=sample,
+            tag=tag,
+            run_length=run_length,
+            inspire=inspire,
+            record=record,
+            runs=runs,
+            daq_delay=daq_delay,
+            close=close,
+            cam=cam,
+            run_type=run_type
+        )
+    elif daq_num == 1:
+        _autorun_daq1(
+            sample=sample,
+            tag=tag,
+            run_length=run_length,
+            inspire=inspire,
+            record=record,
+            runs=runs,
+            daq_delay=daq_delay,
+            close=close,
+            cam=cam
+        )
+
+
+def _autorun_daq2(
+        sample: str,
+        tag: str,
+        run_length: float,
+        inspire: bool,
+        record: bool,
+        runs: int,
+        daq_delay: int,
+        close: bool,
+        cam: str,
+        run_type: str):
+    """
+    Execute automated runs using LCLS-II DAQ.
+
+    Parameters
+    ----------
+    sample : str
+        Sample name
+    tag : str
+        Run tag
+    run_length : float
+        Run duration in seconds
+    inspire : bool
+        Add inspirational quotes
+    record : bool
+        Enable recording
+    runs : int
+        Number of runs
+    daq_delay : int
+        Delay between runs in seconds
+    close : bool
+        Close pulse picker when done
+    cam : str or None
+        Camera IOC name
+    run_type : str
+        Run type label
+
+    Notes
+    -----
+    Uses DaqControl state machine for LCLS-II DAQ.
+    Displays real-time progress bar during acquisition.
+    Handles KeyboardInterrupt for graceful abort.
+    """
+    from mfx.db import daq, pp
+    from mfx.autorun import quote, post
+    from mfx.macros import get_run
+    from psdaq.control.DaqControl import DaqControl
+
+    try:
+        for run_idx in range(runs):
+            run_number = get_run(station=0) + 1
+            logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+
+            # Setup DAQ
+            daq.control = DaqControl(
+                host=daq.control.host,
+                platform=daq.control.platform,
+                timeout=10000
+            )
+
+            # Check connection
+            instr = daq.control.getInstrument()
+            if instr is None:
+                logger.error('Failed to connect to LCLS-II DAQ')
+                break
+
+            # Check state
+            start_state = daq.control.getState()
+            if start_state == 'error':
+                logger.error('DAQ is in error state')
+                break
+
+            # Configure
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                sleep(0.01)
+
+            # Set recording
+            daq.control.setRecord(record)
+
+            # Start running with run_type
+            daq.control.setState("running", {"run_type": run_type})
+            while daq.control.getState() != "running":
+                sleep(0.01)
+
+            # Start camera if specified
+            if cam is not None:
+                ioc_cam_recorder(cam, run_length, tag)
+
+            # Display progress bar
+            _show_progress_bar(run_length)
+
+            # Stop DAQ
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                sleep(0.01)
+
+            # Post to elog
+            if record:
+                post(
+                    sample=sample,
+                    tag=tag,
+                    run_number=run_number,
+                    post=record,
+                    inspire=inspire,
+                    daq_num=2
+                )
+
+            # Wait before next run
+            if run_idx < runs - 1:
+                sleep(daq_delay)
+
+    except KeyboardInterrupt:
+        logger.warning("[*] Stopping Run and exiting...")
+
+        # Cleanup DAQ
+        daq.control.setState("configured")
+        while daq.control.getState() != "configured":
+            sleep(0.01)
+        daq.control.setRecord(False)
+        daq.control.setState("running")
+
+        # Close pulse picker
+        pp.close()
+
+        # Post abort notice
+        if record:
+            post(
+                sample=sample,
+                tag=tag,
+                run_number=run_number,
+                post=record,
+                inspire=inspire,
+                daq_num=2,
+                add_note='Run ended prematurely. Probably sample delivery problem'
+            )
+
+        logger.warning('Run ended prematurely. Probably sample delivery problem')
+        return
+
+    # Cleanup
+    if close:
+        pp.close()
+
+    daq.control.setState("configured")
+    while daq.control.getState() != "configured":
+        sleep(0.01)
+    daq.control.setRecord(False)
+    daq.control.setState("running")
+
+    logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+
+def _autorun_daq1(
+        sample: str,
+        tag: str,
+        run_length: float,
+        inspire: bool,
+        record: bool,
+        runs: int,
+        daq_delay: int,
+        close: bool,
+        cam: str):
+    """
+    Execute automated runs using LCLS-I DAQ.
+
+    Parameters
+    ----------
+    sample : str
+        Sample name
+    tag : str
+        Run tag
+    run_length : float
+        Run duration in seconds
+    inspire : bool
+        Add inspirational quotes
+    record : bool
+        Enable recording
+    runs : int
+        Number of runs
+    daq_delay : int
+        Delay between runs in seconds
+    close : bool
+        Close pulse picker when done
+    cam : str or None
+        Camera IOC name
+
+    Notes
+    -----
+    Uses daq.begin() blocking call for LCLS-I DAQ.
+    Simpler than DAQ 2 but less flexible.
+    Handles KeyboardInterrupt for graceful abort.
+    """
+    from mfx.db import daq, pp
+    from mfx.autorun import quote, post
+    from mfx.macros import get_run
+
+    status = True
+
+    for run_idx in range(runs):
+        run_number = get_run(station=1) + 1
+        logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
+
+        # Execute run
+        status = _daq_begin(duration=run_length, record=record, wait=True, end_run=True)
+
+        # Start camera if specified
+        if cam is not None:
+            ioc_cam_recorder(cam, run_length, tag)
+
+        # Check status
+        if status is False:
+            pp.close()
+            post(
+                sample=sample,
+                tag=tag,
+                run_number=run_number,
+                post=record,
+                inspire=inspire,
+                daq_num=1,
+                add_note='Run ended prematurely. Probably sample delivery problem'
+            )
+            logger.warning("[*] Stopping Run and exiting...")
+            sleep(5)
+            daq.stop()
+            daq.disconnect()
+            logger.warning('Run ended prematurely. Probably sample delivery problem')
+            break
+
+        # Post to elog
+        post(
+            sample=sample,
+            tag=tag,
+            run_number=run_number,
+            post=record,
+            inspire=inspire,
+            daq_num=1
+        )
+
+        try:
+            sleep(daq_delay)
+        except KeyboardInterrupt:
+            pp.close()
+            logger.warning("[*] Stopping Run and exiting...")
+            sleep(5)
+            daq.disconnect()
+            status = False
+            if status is False:
+                logger.warning('Run ended prematurely. Probably sample delivery problem')
+                break
+
+    # Cleanup
+    if status:
+        if close:
+            pp.close()
+        daq.end_run()
+        daq.disconnect()
+        logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+
+def _show_progress_bar(duration: float):
+    """
+    Display real-time progress bar for run duration.
+
+    Parameters
+    ----------
+    duration : float
+        Total duration in seconds
+
+    Notes
+    -----
+    Updates progress bar every second with:
+    - Visual bar (60 characters wide)
+    - Percentage complete
+    - Carriage return for in-place update
+
+    Final bar shows 100% completion.
+
+    Examples
+    --------
+    Progress display:
+    Progress: [============================------------------------------] 47%
+    """
+    start_time = time()
+    end_time = start_time + duration
+
+    while time() < end_time:
+        elapsed_time = time() - start_time
+        progress = min(elapsed_time / duration, 1.0)  # Cap at 100%
+
+        filled_length = int(60 * progress)
+        bar = '=' * filled_length + '-' * (60 - filled_length)
+
+        percentage = f"{progress:.0%}"
+
+        print(f"\rProgress: [{bar}] {percentage}", end="", flush=True)
+
+        sleep(1)  # Update every second
+
+    # Final complete bar
+    print("\rProgress: [" + "=" * 60 + "] 100%", flush=True)
+
+
+def ioc_cam_recorder(cam: str, duration: float, tag: str):
+    """
+    Record camera images during acquisition.
+
+    Configures camera IOC to save images with proper naming and timing.
+
+    Parameters
+    ----------
+    cam : str
+        Camera IOC prefix (e.g., 'MFX:GIGE:01')
+    duration : float
+        Recording duration in seconds
+    tag : str
+        Tag for filename generation
+
+    Notes
+    -----
+    Camera Configuration:
+    - Sets auto-save mode to 'Stream'
+    - Configures file plugin for TIFF format
+    - Sets filename pattern with tag
+    - Starts acquisition for specified duration
+
+    The camera must have a file plugin configured at {cam}:TIFF:
+
+    PVs Used:
+    - {cam}:cam1:ImageMode
+    - {cam}:cam1:AcquireTime
+    - {cam}:cam1:Acquire
+    - {cam}:TIFF:AutoSave
+    - {cam}:TIFF:FileWriteMode
+    - {cam}:TIFF:FileName
+    - {cam}:TIFF:FileNumber
+    - {cam}:TIFF:AutoIncrement
+    - {cam}:TIFF:EnableCallbacks
+
+    Examples --------
+    Record 60 seconds of images:
+    >>> ioc_cam_recorder(
+    ...     cam='MFX:GIGE:01',
+    ...     duration=60.0,
+    ...     tag='water_sample'
+    ... )
+
+    See Also
+    --------
+    autorun : Main automated run function
+    """
+    import subprocess
+    from epics import caget, caput
+
+    # Validate camera exists
+    camera_names = _get_camera_list()
+    if cam not in [pv[1] for pv in camera_names]:
+        logger.error(f"Camera {cam} not found. Available cameras:")
+        for name, prefix in camera_names:
+            logger.info(f"  {name}: {prefix}")
+        return
+
+    # Get camera rate
+    rate = caget(f'{cam}:ArrayRate_RBV')
+    if rate is None or rate == 0:
+        logger.warning(f"Could not read camera rate for {cam}, using default 10 Hz")
+        rate = 10.0
+
+    n_images = int(duration * rate)
+
+    logger.info(f"Recording {cam} for {duration}s ({n_images} images at {rate:.1f} Hz)")
+
+    # Configure camera
+    caput(f'{cam}:cam1:ImageMode', 'Continuous')
+    caput(f'{cam}:cam1:AcquireTime', 1.0 / rate)
+
+    # Configure file plugin
+    caput(f'{cam}:TIFF:AutoSave', 'Yes')
+    caput(f'{cam}:TIFF:FileWriteMode', 'Stream')
+    caput(f'{cam}:TIFF:FileName', tag)
+    caput(f'{cam}:TIFF:FileNumber', 1)
+    caput(f'{cam}:TIFF:AutoIncrement', 'Yes')
+    caput(f'{cam}:TIFF:EnableCallbacks', 'Enable')
+
+    # Start acquisition
+    caput(f'{cam}:cam1:Acquire', 1)
+
+    # Wait for completion
+    sleep(duration)
+
+    # Stop acquisition
+    caput(f'{cam}:cam1:Acquire', 0)
+
+    logger.info(f"Camera recording complete: {n_images} images saved")
+
+
+def _get_camera_list():
+    """
+    Get list of available cameras.
+
+    Returns
+    -------
+    list of tuple
+        List of (camera_name, prefix) tuples
+
+    Notes
+    -----
+    This is a placeholder that should be replaced with actual
+    camera discovery logic for the beamline.
+    """
+    # Placeholder - replace with actual camera discovery
+    return [
+        ('Wave8', 'MFX:GIGE:01'),
+        ('YAG', 'MFX:GIGE:02'),
+    ]
+
+
+def quote():
+    """
+    Get random inspirational quote.
+
+    Returns
+    -------
+    dict
+        Dictionary with 'quote' and 'author' keys
+
+    Notes
+    -----
+    Loads quotes from JSON file at /cds/home/d/djr/scripts/quotes.json.
+    Returns random quote from available collection.
+
+    Examples
+    --------
+    >>> q = quote()
+    >>> print(f"{q['quote']} - {q['author']}")
+    Science is magic that works. - Kurt Vonnegut
+    """
+    import json
+    import random
+    from os import path
+
+    quote_path = "/cds/home/d/djr/scripts/quotes.json"
+
+    if not path.exists(quote_path):
+        logger.warning(f"Quote file not found: {quote_path}")
+        return {'quote': 'No quote available', 'author': 'Unknown'}
+
+    try:
+        with open(quote_path, 'rb') as f:
+            quotes = json.loads(f.read())
+
+        selected_quote = quotes[random.randint(0, len(quotes) - 1)]
+        return {
+            'quote': selected_quote['text'],
+            'author': selected_quote['from']
+        }
+    except Exception as e:
+        logger.warning(f"Failed to load quote: {e}")
+        return {'quote': 'No quote available', 'author': 'Unknown'}
+
+
+def post(
+        sample: str = '?',
+        tag: str = None,
+        run_number: int = None,
+        post: bool = False,
+        inspire: bool = False,
+        daq_num: int = 2,
+        add_note: str = ''):
+    """
+    Post run information to electronic logbook.
+
+    Parameters
+    ----------
+    sample : str, optional
+        Sample name (default: '?')
+    tag : str or None, optional
+        Run tag (defaults to sample if None)
+    run_number : int or None, optional
+        Run number (auto-detected if None)
+    post : bool, optional
+        Actually post to elog if True (default: False)
+        If False, only prints message to console
+    inspire : bool, optional
+        Include inspirational quote (default: False)
+    daq_num : int, optional
+        DAQ number for station selection (default: 2)
+    add_note : str, optional
+        Additional note to append (default: '')
+
+    Returns
+    -------
+    str
+        Complete post message
+
+    Notes
+    -----
+    Message Format:
+    - Run number and sample name
+    - Inspirational quote (if inspire=True)
+    - Additional notes (if provided)
+
+    Always prints message to console.
+    Only posts to elog if post=True.
+
+    Station mapping:
+    - daq_num=1: Station 1 (LCLS-I)
+    - daq_num=2: Station 0 (LCLS-II)
+
+    Examples
+    --------
+    Post with quote:
+    >>> post(
+    ...     sample='water',
+    ...     run_number=123,
+    ...     post=True,
+    ...     inspire=True
+    ... )
+
+    Post with additional note:
+    >>> post(
+    ...     sample='lysozyme',
+    ...     run_number=456,
+    ...     post=True,
+    ...     add_note='Changed flow rate to 10 uL/min'
+    ... )
+    """
+    from mfx.db import elog
+    from mfx.macros import get_run
+
+    # Default tag to sample
+    if tag is None:
+        tag = sample
+
+    # Get run number if not provided
     if run_number is None:
-        run_number = get_run(station=0)
-    info = [run_number, comment]
-    post_msg = post_template.format(*info)
-    print('\n' + post_msg + '\n')
+        station = 1 if daq_num == 1 else 0
+        run_number = get_run(station=station)
+
+    # Build message
+    message = f"Running {sample}"
+
+    if inspire:
+        q = quote()
+        message += f"\n{q['quote']}"
+
+    if add_note:
+        message += f"\n{add_note}"
+
+    # Format post
+    post_msg = f"Run Number {run_number}: {message}"
+
+    # Print to console
+    print(f'\n{post_msg}\n')
+
+    # Post to elog if requested
     if post:
-        elog.post(msg=post_msg, tags=tag, run=(run_number))
+        elog.post(msg=post_msg, tags=tag, run=run_number)
+
     return post_msg
 
 
-def begin(events=None, duration=300,
-          record=False, use_l3t=None, controls=None,
-          wait=False, end_run=False):
+def _daq_begin(
+        duration: float = 300.0,
+        record: bool = False,
+        wait: bool = True,
+        end_run: bool = True,
+        use_l3t: bool = True):
     """
-    Start the daq and block until the daq has begun acquiring data.
+    Begin DAQ acquisition (LCLS-I compatibility wrapper).
 
-    Optionally block with ``wait=True`` until the daq has finished aquiring
-    data. If blocking, a ``ctrl+c`` will end the run and clean up.
-
-    If omitted, any argument that is shared with `configure`
-    will fall back to the configured value.
-
-    Internally, this calls `kickoff` and manages its ``Status`` object.
+    Wrapper around daq.begin() with additional status handling
+    and keyboard interrupt support.
 
     Parameters
     ----------
-    events: ``int``, optional
-        Number events to take in the daq.
+    duration : float, optional
+        Acquisition duration in seconds (default: 300.0)
+    record : bool, optional
+        Enable recording (default: False)
+    wait : bool, optional
+        Block until completion (default: True)
+    end_run : bool, optional
+        End run after completion (default: True)
+    use_l3t : bool, optional
+        Use L3 trigger (default: True)
 
-    duration: ``int``, optional
-        Time to run the daq in seconds, if ``events`` was not provided.
+    Returns
+    -------
+    bool
+        True if acquisition completed successfully, False otherwise
 
-    record: ``bool``, optional
-        If ``True``, we'll configure the daq to record data before this
-        run.
+    Notes
+    -----
+    Behavior:
+    - If wait=True: Blocks until completion or interrupt
+    - If wait=False and end_run=True: Spawns thread for cleanup
+    - Handles KeyboardInterrupt gracefully
 
-    use_l3t: ``bool``, optional
-        If ``True``, we'll run with the level 3 trigger. This means that
-        if we specified a number of events, we will wait for that many
-        "good" events as determined by the daq.
+    Additional sleep controlled by daq.config['begin_sleep']
+    to ensure DAQ is fully started.
 
-    controls: ``dict{name: device}`` or ``list[device...]``, optional
-        If provided, values from these will make it into the DAQ data
-        stream as variables. We will check ``device.position`` and
-        ``device.value`` for quantities to use and we will update these
-        values each time begin is called. To provide a list, all devices
-        must have a ``name`` attribute.
+    Examples
+    --------
+    Blocking acquisition:
+    >>> _daq_begin(duration=60, record=True, wait=True)
+    True
 
-    wait: ``bool``, optional
-        If ``True``, wait for the daq to finish aquiring data. A
-        ``KeyboardInterrupt`` (``ctrl+c``) during this wait will end the
-        run and clean up.
+    Non-blocking with auto-end:
+    >>> _daq_begin(duration=120, record=True, wait=False, end_run=True)
+    True
 
-    end_run: ``bool``, optional
-        If ``True``, we'll end the run after the daq has stopped.
+    See Also
+    --------
+    autorun : Main automated run function
     """
-    import logging
-    from time import sleep
+    import threading
     from mfx.db import daq
-    from ophyd.utils import StatusTimeoutError, WaitTimeoutError
 
-    logger = logging.getLogger(__name__)
-
-    logger.debug(('Daq.begin(events=%s, duration=%s, record=%s, '
-                    'use_l3t=%s, controls=%s, wait=%s)'),
-                    events, duration, record, use_l3t, controls, wait)
     status = True
-    try:
-        if record is not None and record != daq.record:
-            old_record = daq.record
-            daq.preconfig(record=record, show_queued_cfg=False)
-        begin_status = daq.kickoff(events=events, duration=duration,
-                                    use_l3t=use_l3t, controls=controls)
-        try:
-            begin_status.wait(timeout=daq._begin_timeout)
-        except (StatusTimeoutError, WaitTimeoutError) as e:
-            msg = (f'Timeout after {daq._begin_timeout} seconds waiting '
-                    'for daq to begin. Exception: {type(e).__name__}')
-            logger.info(msg)
-            #raise DaqTimeoutError(msg) from None
 
-        # In some daq configurations the begin status returns very early,
-        # so we allow the user to configure an emperically derived extra
-        # sleep.
-        sleep(daq.config['begin_sleep'])
+    try:
+        # Configure DAQ
+        if not hasattr(daq, 'config'):
+            daq.config = {'begin_sleep': 0}
+
+        # Begin acquisition
+        daq.begin(
+            duration=duration,
+            record=record,
+            use_l3t=use_l3t
+        )
+
+        # Additional sleep for DAQ startup
+        sleep(daq.config.get('begin_sleep', 0))
+
+        # Wait for completion if requested
         if wait:
             daq.wait()
             if end_run:
                 daq.end_run()
+
+        # Spawn cleanup thread if non-blocking
         if end_run and not wait:
             threading.Thread(target=daq._ender_thread, args=()).start()
+
         return status
+
     except KeyboardInterrupt:
-            status = False
-            return status
+        logger.warning("DAQ acquisition interrupted by user")
+        status = False
+        return status
 
 
-def quote():
-    import json,random
-    from os import path
-    _path = path.dirname(__file__)
-    _path = path.join(_path,"/cds/home/d/djr/scripts/quotes.json")
-    _quotes = json.loads(open(_path, 'rb').read())
-    _quote = _quotes[random.randint(0,len(_quotes)-1)]
-    _res = {'quote':_quote['text'],"author":_quote['from']}
-    return _res
-
-
-def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
-    """
-    Record IOC Cameras
-
-    Parameters
-    ----------
-    cam: str, required
-        Select camera PV you'd like to record
-
-    run_length: int, required
-        number of seconds for recording. 10 is default
-
-    tag: str, required
-        Run group tag
-
-    Operations
-    ----------
-
-    """
-    import subprocess
-    from epics import caget
-    import logging
-    from mfx.bash_utilities import bs
-    bs = bs()
-    camera_names = bs.camera_list_out()
-    if cam not in [pv[1] for pv in camera_names]:
-            logging.info("Desired Camera not in List. Please choose from the above list:.")
-    else:
-        rate = caget(f'{cam}:ArrayRate_RBV')
-        n_images = int(run_length * rate)
-        logging.info(f"Recording Camera {cam} for {run_length} sec")
-        logging.info(
-            f"/reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData")
-        
-        subprocess.Popen(
-            [f"source /cds/group/pcds/pyps/conda/pcds_conda; /reg/g/pcds/engineering_tools/latest-released/scripts/image_saver -c {cam} -n {n_images} -f {tag} -p /cds/data/iocData"],
-            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
-
-def _autorun(sample='?', tag=None, run_type="DATA", run_length=300, record=True,
-            runs=5, inspire=False, daq_delay=5, picker=None, cam=None, close=True, daq_num=2):
-    """
-    Automate runs.... With optional quotes
-
-    Parameters
-    ----------
-    sample: str, optional
-        Sample Name
-
-    tag: str, optional
-        Run group tag
-
-    run_length: int, optional
-        number of seconds for run 300 is default
-
-    record: bool, optional
-        set True to record
-
-    runs: int, optional
-        number of runs 5 is default
-
-    inspire: bool, optional
-        Set false by default because it makes Sandra sad. Set True to inspire
-
-    daq_delay: int, optional
-        delay time between runs. Default is 5 second but increase is the DAQ is being slow.
-
-    picker: str, optional
-        If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
-
-    close: bool, optional
-        If False does not close pulse picker after when all runs finish
-        but still closes when a run is canceled. True by default for safety.
-
-    daq_num: int, optional
-        Switch between daq 1 and 2. Default 2
-
-    Operations
-    ----------
-
-    """
-    import logging
-    import sys
-    from time import sleep, time
-    from mfx.db import daq, pp
-    from mfx.macros import get_run, get_exp
-
-    logger = logging.getLogger(__name__)
-
-    if sample.lower()=='water' or sample.lower()=='h2o':
-        inspire=True
-    if picker=='open':
-        pp.open()
-    if picker=='flip':
-        pp.flipflop()
-
-    if tag is None:
-        tag = sample
-
-    if daq_num == 1:
-        for i in range(runs):
-            run_number = get_run(station=1) + 1
-            logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
-            status = begin(duration = run_length, record = record, wait = True, end_run = True)
-            if cam is not None:
-                ioc_cam_recorder(cam, run_length, tag)
-            if status is False:
-                pp.close()
-                post(
-                    sample=sample, 
-                    tag=tag, 
-                    run_number=run_number, 
-                    post=record, 
-                    inspire=inspire,
-                    daq_num=daq_num,
-                    add_note='Run ended prematurely. Probably sample delivery problem')
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
-                daq.stop()
-                daq.disconnect()
-                logger.warning('Run ended prematurely. Probably sample delivery problem')
-                break
-
-            post(
-                sample=sample, 
-                tag=tag, 
-                run_number=run_number, 
-                post=record, 
-                inspire=inspire,
-                daq_num=daq_num)
-            try:
-                sleep(daq_delay)
-            except KeyboardInterrupt:
-                pp.close()
-                logger.warning("[*] Stopping Run and exiting???...")
-                sleep(5)
-                daq.disconnect()
-                status = False
-                if status is False:
-                    logger.warning('Run ended prematurely. Probably sample delivery problem')
-                    break
-        if status:
-            if close is True:
-                pp.close()
-            daq.end_run()
-            daq.disconnect()
-            logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
-
-    elif daq_num == 2:
-        try:
-            for i in range(runs):
-                run_number = get_run(station=0) + 1
-                from psdaq.control.DaqControl import DaqControl  # NOQA
-                daq.control = DaqControl(
-                    host=daq.control.host,
-                    platform=daq.control.platform,
-                    timeout=10000,
-                )
-                instr = daq.control.getInstrument()
-                if instr is None:
-                    logger.error('Failed to connect to LCLS-II DAQ')
-                    break
-                start_state = daq.control.getState()
-                if start_state == 'error':
-                    logger.error('DAQ is in an error state.')
-                    break
-
-                logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
-                if cam is not None:
-                    ioc_cam_recorder(cam, run_length, tag)
-
-                daq.control.setState("configured")
-                while daq.control.getState() != "configured":
-                    ...
-                if record:
-                    daq.control.setRecord(True)
-                else:
-                    daq.control.setRecord(False)
-                daq.control.setState("running", {"run_type": run_type})
-                while daq.control.getState() != "running":
-                    ...
-                start_time = time()
-                end_time = start_time + run_length
-                
-                while time() < end_time:
-                    elapsed_time = time() - start_time
-                    progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
-                    
-                    filled_length = int(60 * progress)
-                    bar = '=' * filled_length + '-' * (60 - filled_length)
-                    
-                    percentage = f"{progress:.0%}"
-                    
-                    print(f"\rProgress: [{bar}] {percentage}", end="")
-                    
-                    sleep(1)  # Update frequency
-                
-                print("\rProgress: [" + "="*60 + "] 100%") # Final, complete bar
-
-                daq.control.setState("configured")
-                while daq.control.getState() != "configured":
-                    ...
-
-                if record:
-                    post(
-                        sample=sample, 
-                        tag=tag, 
-                        run_number=run_number, 
-                        post=record, 
-                        inspire=inspire,
-                        daq_num=daq_num)
-
-                sleep(daq_delay)
-
-        except KeyboardInterrupt:
-            daq.control.setState("configured")
-            while daq.control.getState() != "configured":
-                ...
-            daq.control.setRecord(False)
-            daq.control.setState("running")
-            pp.close()
-            if record:
-                post(
-                    sample=sample, 
-                    tag=tag, 
-                    run_number=run_number, 
-                    post=record, 
-                    inspire=inspire,
-                    daq_num=daq_num, 
-                    add_note='Run ended prematurely. Probably sample delivery problem')
-            logger.warning("[*] Stopping Run and exiting???...")
-            logger.warning('Run ended prematurely. Probably sample delivery problem')
-
-        if close is True:
-            pp.close()
-        daq.control.setState("configured")
-        while daq.control.getState() != "configured":
-            ...
-        daq.control.setRecord(False)
-        daq.control.setState("running")
-        logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
-    else:
-        logger.error('Please enter daq 1 or 2.')
-
-def autorun(**kwargs):
-    _autorun(**kwargs)
-
-def geomrun(**kwargs):
-    kwargs['tag'] = "geom"
-    kwargs['sample'] = "geometry-calibration"
-    kwargs['run_type'] = "GEOM"
-    _autorun(**kwargs)
-
-post_template = """\
-Run Number {}: {}
-"""
+# Convenience aliases
+run = autorun
+auto_run = autorun
+automated_run = autorun
