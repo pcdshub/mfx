@@ -834,7 +834,7 @@ class Exafs:
         xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
         if xrt_status != 'NO_ALARM':
             self.logger.error('XRT transmission alarm. Returning to previous position')
-            hxrsss.tth.mv(ref_camera_ angle)
+            hxrsss.tth.mv(ref_camera_angle)
             hxrsss.camy.mv(ref_camera_y)
             hxrsss.th.mv(ref_crystal_angle)
 
@@ -1787,6 +1787,7 @@ class EXAFSEnergyRangeBuilder:
         Sets default element to Fe with K³ weighting.
         Loads standard foil and threshold energy tables.
         """
+        self.logger = logging.getLogger(__name__)
         self.element = 'Fe'
         self.power = 3
         self.foil_energies = {
@@ -1912,7 +1913,14 @@ class EXAFSEnergyRangeBuilder:
 
         Stores arrays as instance attributes for plotting.
         """
+        start_ev = 0.0
         # Build energy regions
+        if min_before_pre_edge >= preedge_end:
+            self.logger.error(
+                "min_before_pre_edge must be less than preedge_end. skipping pre-edge regions.")
+            start_ev = min_before_pre_edge
+            min_before_pre_edge = 7055.0
+
         energy_before_pre_edge = np.arange(
             min_before_pre_edge, max_before_pre_edge, before_edge_eV_increment
         )
@@ -1932,7 +1940,7 @@ class EXAFSEnergyRangeBuilder:
         ))
 
         # Build time arrays
-        time_before_edge_arr = np.ones(len(energy_before _pre_edge)) * time_before_edge
+        time_before_edge_arr = np.ones(len(energy_before_pre_edge)) * time_before_edge
         time_in_preedge_arr = np.ones(len(energy_in_preedge)) * time_in_preedge
         time_in_edge_arr = np.ones(len(energy_in_edge)) * time_in_edge
         time_EXAFS = self.map_time_to_K_weighting(min_time_EXAFS, max_time_EXAFS, K_values)
@@ -1942,10 +1950,19 @@ class EXAFSEnergyRangeBuilder:
         ))
 
         # Store for plotting
-        self.time_range = time_range
-        self.energy_range = energy_range
-        self.energy_K_range = energy_K_range
-        self.K_values = K_values
+        if start_ev >= preedge_end:
+            self.logger.error(
+                "min_before_pre_edge must be less than preedge_end. skipping pre-edge regions.")
+            index = np.argmin(np.abs(energy_range - start_ev))
+            self.energy_range = energy_range[index:]
+            self.time_range = time_range[index:]
+            self.energy_K_range = energy_K_range[index:]
+            self.K_values = K_values[index:]
+        else:
+            self.time_range = time_range
+            self.energy_range = energy_range
+            self.energy_K_range = energy_K_range
+            self.K_values = K_values
 
         if debug:
             self.plot_scan_profile(energy_range, time_range, energy_K_range, K_values)
