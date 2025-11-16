@@ -66,6 +66,20 @@ def check_camviewer_config(PV):
             raise RuntimeError(
                 f"[!] {PV}{suf} must be 0 for raw image display (got {val})"
             )
+import numpy as np
+from scipy.optimize import curve_fit
+
+def gaussian2D(coords, amplitude, xo, yo, sigma_x, sigma_y, offset):
+    x, y = coords
+    xo = float(xo)
+    yo = float(yo)
+
+    g = offset + amplitude * np.exp(
+        -(((x - xo)**2) / (2*sigma_x**2)
+        + ((y - yo)**2) / (2*sigma_y**2))
+    )
+    return g.ravel()
+
 
 
 # ----------------------------------------------------------------------
@@ -98,7 +112,6 @@ def live_view(PV, n_frames=200):
 
     im = None
     cbar = None
-
     for ii in range(n_frames):
         try:
             frame = get_image(PV)
@@ -106,11 +119,53 @@ def live_view(PV, n_frames=200):
             print("[ERROR] Failed to read frame:", exc)
             break
 
-        vmin, vmax = np.min(frame), np.max(frame)
+        # ---------------------------------------------
+        # 2D Gaussian fit (same for first and later frames)
+        # ---------------------------------------------
 
+        ny, nx = frame.shape
+        x = np.arange(nx)
+        y = np.arange(ny)
+        X, Y = np.meshgrid(x, y)
+
+        # Initial guesses
+        amplitude0 = np.max(frame) - np.min(frame)
+        offset0 = np.min(frame)
+        xo0 = nx / 2
+        yo0 = ny / 2
+        sigma_x0 = nx / 6
+        sigma_y0 = ny / 6
+
+        p0 = [amplitude0, xo0, yo0, sigma_x0, sigma_y0, offset0]
+
+        # Fit
+        try:
+            popt, pcov = curve_fit(
+                gaussian2D,
+                (X, Y),
+                frame.ravel(),
+                p0=p0,
+                maxfev=8000
+            )
+
+            amplitude, xo, yo, sigma_x, sigma_y, offset = popt
+
+            print(
+                f"[Frame {ii}] Fit: center=({xo:.1f}, {yo:.1f}), "
+                f"sigma=({sigma_x:.2f}, {sigma_y:.2f}), amp={amplitude:.1f}"
+            )
+
+        except Exception as exc:
+            print("[WARNING] Gaussian fit failed for frame", ii, exc)
+
+        # ---------------------------------------------
+        # Your plotting / updating code
+        # ---------------------------------------------
         if im is None:
-            # First frame: create image + colorbar
-            im = ax.imshow(frame, cmap="gray", vmin=vmin, vmax=vmax)
+            mean = np.mean(frame)
+            std = np.std(frame)
+
+            im = ax.imshow(frame, vmin=0, vmax=1)
             ax.set_title(f"Frame {ii}", fontsize=12)
 
             cbar = fig.colorbar(im, ax=ax)
@@ -119,9 +174,11 @@ def live_view(PV, n_frames=200):
             plt.pause(0.01)
 
         else:
-            # Update frame + limits + colorbar range
+            mean = np.mean(frame)
+            std = np.std(frame)
+
             im.set_data(frame)
-            im.set_clim(vmin, vmax)
+            im.set_clim(0, 1)
 
             if cbar is not None:
                 cbar.update_normal(im)
@@ -132,8 +189,8 @@ def live_view(PV, n_frames=200):
 
     plt.ioff()
     plt.show()
-
     print("[+] Viewer finished.")
+
 
 
 # ----------------------------------------------------------------------
