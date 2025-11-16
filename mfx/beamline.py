@@ -44,7 +44,7 @@ with safe_load('macros'):
 
 with safe_load('MFX_Timing'):
     from mfx.mfx_timing import *
-    mfx_timing = MFX_Timing(sequencer)
+    mfx_timing = MFXTiming(sequencer)
 
 with safe_load('delay_scan'):
     from mfx.delay_scan import *
