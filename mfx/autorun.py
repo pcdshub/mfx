@@ -484,7 +484,7 @@ def _show_progress_bar(duration: float):
     print("\rProgress: [" + "=" * 60 + "] 100%", flush=True)
 
 
-def ioc_cam_recorder(cam: str, duration: float, tag: str):
+def ioc_cam_recorder(cam='camera name', run_length=10, tag='?'):
     """
     Record camera images during acquisition.
 
@@ -507,19 +507,6 @@ def ioc_cam_recorder(cam: str, duration: float, tag: str):
     - Sets filename pattern with tag
     - Starts acquisition for specified duration
 
-    The camera must have a file plugin configured at {cam}:TIFF:
-
-    PVs Used:
-    - {cam}:cam1:ImageMode
-    - {cam}:cam1:AcquireTime
-    - {cam}:cam1:Acquire
-    - {cam}:TIFF:AutoSave
-    - {cam}:TIFF:FileWriteMode
-    - {cam}:TIFF:FileName
-    - {cam}:TIFF:FileNumber
-    - {cam}:TIFF:AutoIncrement
-    - {cam}:TIFF:EnableCallbacks
-
     Examples --------
     Record 60 seconds of images:
     >>> ioc_cam_recorder(
@@ -533,70 +520,26 @@ def ioc_cam_recorder(cam: str, duration: float, tag: str):
     autorun : Main automated run function
     """
     import subprocess
-    from epics import caget, caput
-
-    # Validate camera exists
-    camera_names = _get_camera_list()
+    from epics import caget
+    import logging
+    from mfx.bash_utilities import BashUtilities
+    bs = BashUtilities()
+    camera_names = bs.camera_list_out()
     if cam not in [pv[1] for pv in camera_names]:
-        logger.error(f"Camera {cam} not found. Available cameras:")
-        for name, prefix in camera_names:
-            logger.info(f"  {name}: {prefix}")
-        return
+            logging.info("Desired Camera not in List. Please choose from the above list:.")
+    else:
+        rate = caget(f'{cam}:ArrayRate_RBV')
+        n_images = int(run_length * rate)
+        logging.info(f"Recording Camera {cam} for {run_length} sec")
+        logging.info(
+            f"/reg/g/pcds/engineering_tools/latest-released/scripts/image_saver "
+            f"-c {cam} -n {n_images} -f {tag} -p /cds/data/iocData")
 
-    # Get camera rate
-    rate = caget(f'{cam}:ArrayRate_RBV')
-    if rate is None or rate == 0:
-        logger.warning(f"Could not read camera rate for {cam}, using default 10 Hz")
-        rate = 10.0
-
-    n_images = int(duration * rate)
-
-    logger.info(f"Recording {cam} for {duration}s ({n_images} images at {rate:.1f} Hz)")
-
-    # Configure camera
-    caput(f'{cam}:cam1:ImageMode', 'Continuous')
-    caput(f'{cam}:cam1:AcquireTime', 1.0 / rate)
-
-    # Configure file plugin
-    caput(f'{cam}:TIFF:AutoSave', 'Yes')
-    caput(f'{cam}:TIFF:FileWriteMode', 'Stream')
-    caput(f'{cam}:TIFF:FileName', tag)
-    caput(f'{cam}:TIFF:FileNumber', 1)
-    caput(f'{cam}:TIFF:AutoIncrement', 'Yes')
-    caput(f'{cam}:TIFF:EnableCallbacks', 'Enable')
-
-    # Start acquisition
-    caput(f'{cam}:cam1:Acquire', 1)
-
-    # Wait for completion
-    sleep(duration)
-
-    # Stop acquisition
-    caput(f'{cam}:cam1:Acquire', 0)
-
-    logger.info(f"Camera recording complete: {n_images} images saved")
-
-
-def _get_camera_list():
-    """
-    Get list of available cameras.
-
-    Returns
-    -------
-    list of tuple
-        List of (camera_name, prefix) tuples
-
-    Notes
-    -----
-    This is a placeholder that should be replaced with actual
-    camera discovery logic for the beamline.
-    """
-    # Placeholder - replace with actual camera discovery
-    return [
-        ('Wave8', 'MFX:GIGE:01'),
-        ('YAG', 'MFX:GIGE:02'),
-    ]
-
+        subprocess.Popen(
+            [f"source /cds/group/pcds/pyps/conda/pcds_conda; "
+            f"/reg/g/pcds/engineering_tools/latest-released/scripts/image_saver "
+            f"-c {cam} -n {n_images} -f {tag} -p /cds/data/iocData"],
+            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 def quote():
     """

@@ -1,8 +1,10 @@
 """Bash utility wrappers for MFX beamline operations."""
 
 import os
+import sys
 import subprocess
 import logging
+import re
 from typing import Optional, List, Tuple
 
 logger = logging.getLogger(__name__)
@@ -918,7 +920,7 @@ class BashUtilities:
 
         logger.info("Camera viewer launched")
 
-    def _camera_list_out(self) -> List[List[str]]:
+    def camera_list_out(self):
         """
         Get list of available cameras as structured data.
 
@@ -930,80 +932,20 @@ class BashUtilities:
         List[List[str]]
             List of camera entries, each containing:
             [name, PV_base, description, ...]
-
-        Notes
-        -----
-        Camera Information:
-        - Camera name/identifier
-        - EPICS PV base
-        - Physical location
-        - Purpose/description
-        - Current status
-
-        Data Structure:
-        Each camera entry is a list:
-        - Index 0: Camera name
-        - Index 1: PV prefix
-        - Index 2: Description
-        - Index 3+: Additional metadata
-
-        Use Cases:
-        - Automated camera selection
-        - Camera inventory
-        - Status monitoring
-        - Script integration
-
-        Examples
-        --------
-        Get all cameras:
-        >>> bs = BashUtilities()
-        >>> cameras = bs._camera_list_out()
-        >>> for cam in cameras:
-        ...     print(f"{cam[0]}: {cam[2]}")
-
-        Find specific camera:
-        >>> cameras = bs._camera_list_out()
-        >>> sample_cams = [c for c in cameras if 'sample' in c[2].lower()]
-
-        See Also
-        --------
-        camera_list : Print formatted list
-        cameras : Launch viewer
         """
-        logger.info("Retrieving camera list")
+        logging.info("Opening Camera List")
+        camlist = open("/reg/g/pcds/pyps/config/mfx/camviewer.cfg", "r", encoding="UTF-8")
+        cam_list = camlist.readlines()
+        avail_cams = [cam for cam in cam_list if cam.startswith('GE')]
+        self.camera_names = [['camera_name', 'camera_pv']]
+        print("Available Cameras")
+        for cam in avail_cams:
+            cam = re.split(';|,', cam)
+            self.camera_names.append([cam[4].strip(),cam[2]])
+            print(f"Camera {cam[4].strip()} ....  {cam[2]}")
 
-        try:
-            # Execute camera list script and capture output
-            result = subprocess.run(
-                "/reg/g/pcds/engineering_tools/mfx/scripts/cameralist",
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+        return self.camera_names
 
-            if result.returncode != 0:
-                logger.error(f"Camera list command failed: {result.stderr}")
-                return []
-
-            # Parse output into structured data
-            cameras = []
-            for line in result.stdout.strip().split('\n'):
-                if line.strip():
-                    # Split by whitespace, preserving quoted strings
-                    parts = line.split()
-                    if len(parts) >= 3:
-                        cameras.append(parts)
-
-            logger.info(f"Found {len(cameras)} cameras")
-            return cameras
-
-        except subprocess.TimeoutExpired:
-            logger.error("Camera list command timed out")
-            return []
-        except Exception as e:
-            logger.error(f"Failed to get camera list: {e}")
-            return []
 
     def camera_list(self):
         """
@@ -1011,192 +953,49 @@ class BashUtilities:
 
         Displays human-readable table of all MFX cameras with
         names, locations, and descriptions.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Display Format:
-        - Tabular layout
-        - Camera name
-        - PV prefix
-        - Description/location
-        - Status indicators
-
-        Information Shown:
-        - Total camera count
-        - Individual camera details
-        - Availability status
-        - Configuration hints
-
-        Examples
-        --------
-        >>> bs = BashUtilities()
-        >>> bs.camera_list()
-        MFX Cameras:
-        ============
-        CAM01: MFX:DG1:CAM - Sample viewing camera
-        CAM02: MFX:DG2:CAM - Beam position monitor
-        ...
-
-        See Also
-        --------
-        _camera_list_out : Get data programmatically
-        cameras : View cameras
         """
-        logger.info("Displaying camera list")
+        camera_names = self.camera_list_out()
 
-        cameras = self._camera_list_out()
 
-        if not cameras:
-            print("No cameras found or error retrieving list")
-            return
+    def focus_scan(self, camera, record=False, daq_num=2):
+        logging.info(
+            "Preparing for Focus Scan\n"
+            "Please check the following\n"
+            "One of the following cameras is selected\n\n")
+        self.camera_list()
+        logging.info(
+            "\nCamera orientation set to none\n"
+            "Slits are open\n"
+            "Blue crosshair in upper left corner\n"
+            "Red crosshair in bottom right corner\n")
 
-        print("\nMFX Cameras:")
-        print("=" * 70)
-        print(f"{'Name':<15} {'PV Base':<25} {'Description'}")
-        print("-" * 70)
+        input("Press Enter to continue...")
 
-        for cam in cameras:
-            name = cam[0] if len(cam) > 0 else "Unknown"
-            pv = cam[1] if len(cam) > 1 else "N/A"
-            desc = ' '.join(cam[2:]) if len(cam) > 2 else "No description"
+        if camera not in [pv[1] for pv in self.camera_names]:
+            logging.error("Desired Camera not in List. Please double check camera name.")
 
-            print(f"{name:<15} {pv:<25} {desc}")
+        logging.info("Checking Focus Scan Plot")
+        os.system(f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -p")
+        input("Press Enter to continue...")
 
-        print("=" * 70)
-        print(f"Total cameras: {len(cameras)}")
-
-    def focus_scan(
-            self,
-            camera: str,
-            record: bool = False,
-            daq_num: int = 2):
-        """
-        Run automated focus scan with camera.
-
-        Performs transfocator scan while recording camera images
-        to find optimal focusing condition.
-
-        Parameters
-        ----------
-        camera : str
-            Camera PV name to use for scan
-            Must be from camera_list
-        record : bool, optional
-            Record data with DAQ (default: False)
-        daq_num : int, optional
-            DAQ version: 1 or 2 (default: 2)
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If camera not in available list
-
-        Notes
-        -----
-        Focus Scan Procedure:
-        1. Check camera availability
-        2. Verify camera settings
-        3. Check slit positions
-        4. Preview scan trajectory
-        5. Execute scan with DAQ
-        6. Analyze results
-
-        Requirements:
-        - Camera orientation: none
-        - Slits: open
-        - Blue crosshair: upper left
-        - Red crosshair: lower right
-
-        Scan Process:
-        - Moves transfocator lenses
-        - Records camera at each position
-        - Measures beam size
-        - Finds minimum (best focus)
-
-        Analysis:
-        - Beam size vs. lens position
-        - Gaussian fits
-        - Optimal focus position
-        - Recommendation plot
-
-        Examples
-        --------
-        Test scan (no recording):
-        >>> bs = BashUtilities()
-        >>> bs.camera_list()  # Find camera name
-        >>> bs.focus_scan('MFX:DG1:CAM', record=False)
-
-        Production scan:
-        >>> bs.focus_scan('MFX:DG1:CAM', record=True, daq_num=2)
-
-        See Also
-        --------
-        camera_list : List available cameras
-        tfs : Transfocator control
-        """
-        import sys
-
-        logger.info(f"Preparing focus scan with camera: {camera}")
-
-        # Check camera availability
-        cameras = self._camera_list_out()
-        camera_pvs = [cam[1] for cam in cameras]
-
-        if camera not in camera_pvs:
-            logger.error(f"Camera {camera} not in available list")
-            self.camera_list()
-            raise ValueError(f"Invalid camera: {camera}")
-
-        # Print pre-scan checklist
-        print("\n" + "="*70)
-        print("FOCUS SCAN PRE-FLIGHT CHECKLIST")
-        print("="*70)
-        print("Please verify the following:")
-        print("  ✓ Camera orientation set to NONE")
-        print("  ✓ Slits are OPEN")
-        print("  ✓ Blue crosshair in UPPER LEFT corner")
-        print("  ✓ Red crosshair in LOWER RIGHT corner")
-        print("="*70)
-
-        input("\nPress Enter to continue or Ctrl+C to abort...")
-
-        # Show preview
-        logger.info("Generating focus scan preview")
-        os.system(
-            f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py "
-            f"{camera} -p"
-        )
-
-        input("\nPreview OK? Press Enter to execute scan or Ctrl+C to abort...")
-
-        # Run actual scan
-        logger.info("Executing focus scan")
-
+        logging.info("Running Focus Scan")
         if record:
-            cmd = (
-                f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py "
-                f"{camera} -s -r -d {daq_num}"
-            )
-            logger.info("Recording enabled")
+            logging.info("Recording Focus Scan")
+            cmd = f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -s -r -d {daq_num}"
         else:
-            cmd = (
-                f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py "
-                f"{camera} -s"
-            )
-            logger.info("Recording disabled (test mode)")
+            cmd = f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -s"
 
-        logger.info(f"Executing: {cmd}")
+        logging.info(cmd)
         os.system(cmd)
 
-        logger.info("Focus scan complete")
+        tfs_position = input(
+            "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
+
+        if 0 < int(tfs_position) < 300:
+            logging.info(f"Moving TFS to {tfs_position}")
+            os.system(f'caput MFX:TFS:MMS:21.VAL {tfs_position}')
+        else:
+            logging.error(f"{tfs_position} is not a valid position please use an interger between 1 and 299")
 
     def startami(self, ami_num: int = 1, daq_num: int = 1):
         """
