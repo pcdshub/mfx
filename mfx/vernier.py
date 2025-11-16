@@ -130,6 +130,34 @@ class VernierGet:
         """Initialize VernierGet interface."""
         pass
 
+    def all(self) -> float:
+        """
+        Get all vernier PVs to same energy.
+
+        Convenience method to get REF1, REF2, SET1, and SET2
+        value simultaneously.
+
+        Returns
+        -------
+        Energy : float
+
+        Notes
+        -----
+        Use Cases:
+        - Initial setup
+        - Reset after experiments
+        - Synchronize all PVs
+
+        This ensures all vernier PVs are consistent,
+        which is required for some control modes.
+
+        """
+        logger.info(f"Get all vernier PVs in eV")
+        os.system(f'caget MFX:USER:MCC:EPHOT:REF1')
+        os.system(f'caget MFX:USER:MCC:EPHOT:REF2')
+        os.system(f'caget MFX:USER:MCC:EPHOT:SET1')
+        os.system(f'caget MFX:USER:MCC:EPHOT:SET2')
+
     def ref1(self) -> float:
         """
         Read reference energy 1.
@@ -910,7 +938,7 @@ class VernierOutput:
 vernier = Vernier()
 
 
-def get_vernier_energy(pv: str = 'set1') -> float:
+def get_vernier_energy(pv: str = 'all') -> float:
     """
     Get current vernier energy from specified PV.
 
@@ -942,12 +970,13 @@ def get_vernier_energy(pv: str = 'set1') -> float:
         return vernier.get.set1()
     elif pv == 'set2':
         return vernier.get.set2()
+    elif pv == 'all':
+        return vernier.get.all()
     else:
         logger.error(f"Unknown PV: {pv}. Use 'ref1', 'ref2', 'set1', or 'set2'")
         raise ValueError("Invalid PV name")
 
-
-def set_vernier_energy(energy: float, pv: str = 'set1'):
+def set_vernier_energy(energy: float, pv: str = 'all'):
     """
     Set vernier energy to specified value.
 
