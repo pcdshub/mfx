@@ -565,7 +565,7 @@ class Exafs:
     # ==================== Vernier Alignment ====================
 
     def align_vernier_to_dccm(self, energy_range_eV=5.0, energy_steps=21,
-                              events_per_step=60, flux_threshold=None):
+                              events_per_step=60, flux_threshold=None, diagnostic='dg2'):
         """
         Align vernier to DCCM using intensity-based optimization.
 
@@ -605,7 +605,15 @@ class Exafs:
 
         devices = init_devices()
         vernier_energy_pv = devices["vernier_energy"]
-        intensity_pv = devices["vernier_intensity3"]
+        if diagnostic == 'xcs1':
+            intensity_pv = devices["vernier_intensity1"]
+        elif diagnostic == 'dg1':
+            intensity_pv = devices["vernier_intensity2"]
+        elif diagnostic == 'dg2':
+            intensity_pv = devices["vernier_intensity3"]
+        else:
+            self.logger.error(f"Unknown diagnostic: {diagnostic}")
+            return False
 
         current_dccm_energy = float(read_dccm_energy()) or float(read_dccm_energy())
         self.logger.info(f"DCCM energy: {current_dccm_energy:.2f} eV")
@@ -669,7 +677,7 @@ class Exafs:
         self.logger.error("Alignment failed: no valid measurements")
         return False
 
-    def _measure_vernier_offset(self, energy, track_tchk_data):
+    def _measure_vernier_offset(self, energy, track_tchk_data, diagnostic='dg2'):
         """
         Measure and store vernier offset.
 
@@ -690,7 +698,8 @@ class Exafs:
             energy_range_eV=5.0,
             energy_steps=21,
             events_per_step=50,
-            flux_threshold=getattr(self, 'flux_threshold', None)
+            flux_threshold=getattr(self, 'flux_threshold', None),
+            diagnostic=diagnostic
         )
         track_tchk_data.append({"energy": energy, "vernier_offset": offset})
 
@@ -721,7 +730,7 @@ class Exafs:
                     return data["vernier_offset"]
         return None
 
-    def _align_vernier_to_dccm(self, energy_eV, track_tchk_data, map_tchk_track):
+    def _align_vernier_to_dccm(self, energy_eV, track_tchk_data, map_tchk_track, diagnostic='dg2'):
         """
         Perform vernier alignment with DCCM.
 
@@ -744,7 +753,7 @@ class Exafs:
             return
 
         if self._request_vernier_offset_measurement(energy_eV, track_tchk_data, map_tchk_track):
-            self._measure_vernier_offset(energy_eV, track_tchk_data)
+            self._measure_vernier_offset(energy_eV, track_tchk_data, diagnostic)
 
         if self.vernier_offset:
             self._move_dccm_energy_with_vernier((energy_eV + self.vernier_offset) / 1000)
@@ -1448,7 +1457,7 @@ class Exafs:
             'picker', 'inspire', 'daq_delay', 'record', 'runs', 'k_stepsize',
             'reverse', 'min_k_keV', 'k_offset', 'flux_threshold', 'attenuation',
             'min_time_EXAFS', 'max_time_EXAFS', 'tchk', 'map_focus_track',
-            'track_focus', 'track_feespec', 'undulator_point', 'debug'
+            'track_focus', 'track_feespec', 'undulator_point', 'debug', 'diagnostic'
         ]
 
         params = {name: getattr(self, name, None) for name in param_names}
@@ -1470,8 +1479,8 @@ class Exafs:
                    k_stepsize=120, reverse=False, min_k_keV=7.035,
                    k_offset=0, flux_threshold=None, attenuation=None,
                    min_time_EXAFS=0.5, max_time_EXAFS=10.0, tchk=False,
-                   map_focus_track=False, map_tchk_track=False,
-                   map_lens_beam_energy_offset=False,
+                   diagnostic='dg2', map_focus_track=False,
+                   map_tchk_track=False, map_lens_beam_energy_offset=False,
                    lens_beam_energy_offset=0.0, track_focus=False,
                    tfs_margin_mm=5.0, ref_focal_length_um=None,
                    ref_z_stage_mm=None, tfs_target=400.37,
@@ -1536,6 +1545,8 @@ class Exafs:
             Maximum EXAFS acquisition time in seconds (default: 10.0)
         tchk : bool or str, optional
             Vernier tracking: False/True/'single' (default: False)
+        diagnostic : str, optional
+            Diagnostic for vernier tracking: 'dg1', 'dg2', 'xcs1' (default: 'dg2')
         map_focus_track : bool, optional
             Pre-map focus tracking and exit (default: False)
         map_tchk_track : bool, optional
@@ -1717,11 +1728,12 @@ class Exafs:
                     if tchk == 'single':
                         offset = self._retrieve_vernier_offset(energy, track_tchk_data)
                         if offset is None:
-                            self._measure_vernier_offset(energy, track_tchk_data)
+                            self._measure_vernier_offset(energy, track_tchk_data, diagnostic)
                         if map_tchk_track:
                             self._save_track_tchk_data(track_tchk_data)
                     elif tchk:
-                        self._align_vernier_to_dccm(energy, track_tchk_data, map_tchk_track)
+                        self._align_vernier_to_dccm(
+                            energy, track_tchk_data, map_tchk_track, diagnostic)
 
                     # Move DCCM
                     self._move_dccm_energy_with_vernier(energy_keV)
