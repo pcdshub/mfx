@@ -1,82 +1,72 @@
-# Class-based usage
-from mfx.find import Find
-find = Find()
+import ophyd
+from ophyd.signal import EpicsSignal
 
-# Get motor
-motor = find.get_motor_by_pvname('MFX:DG1:MMS:01')
-motor.mv(10.0)
-print(f"Position: {motor.position}")
+import mfx.db
 
-# Get signal
-temp = find.get_signal_by_pvname('MFX:TEMP:01')
-value = temp.get()
-temp.put(300)
+from pcdsdevices.epics_motor import EpicsMotorInterface as Motor
+from pcdsdevices.pv_positioner import OnePVMotor
 
-# Get simple motor
-piezo = find.get_signal_motor_by_pvname('MFX:PIEZO:01')
-piezo.move(5.0)
+class Find:
+    def __init__(self):
+        pass
 
-# Cache management
-cached = find.list_cached_devices()
-print(f"Cached motors: {cached['motors']}")
-find.clear_caches()
+    def get_motor_by_pvname(self, pvname: str) -> Motor:
+        """
+        Get a motor given its PV name.
 
-# Convenience functions (recommended)
-from mfx.find import get_motor, get_signal, get_simple_motor
+        If it exists in this environment, the existing instance will be reused.
+        If not, a new instance will be created.
+        """
 
-# Quick motor access
-motor = get_motor('MFX:DG1:MMS:01')
-motor.mv(15.0)
+        _motor_cache = {}
+        _pv_cache = {}
+        _pv_motor_cache = {}
+        pvname = pvname.strip()
 
-# Quick signal access
-temp = get_signal('MFX:TEMP:01')
-current_temp = temp.get()
+        for motor in mfx.db.motors:
+            try:
+                if motor.prefix == pvname:
+                    return motor
+            except AttributeError:
+                ...
 
-# Quick simple motor
-piezo = get_simple_motor('MFX:PIEZO:01')
-piezo.move(7.5)
+        if pvname not in _motor_cache:
+            _motor_cache[pvname] = Motor(pvname, name=pvname)
+        return _motor_cache[pvname]
 
-# Search for devices
-from mfx.find import search_motors, search_signals
 
-# Find all DG1 motors
-dg1_motors = search_motors('DG1')
-for name, pv in dg1_motors:
-    print(f"{name}: {pv}")
+    def get_signal_by_pvname(self, pvname: str) -> ophyd.EpicsSignal:
+        """
+        Get an EpicsSignal given its PV name.
 
-# Find temperature signals
-temp_signals = search_signals('temp')
-for name, pv in temp_signals:
-    print(f"{name}: {pv}")
+        If it exists in this environment, the existing instance will be reused.
+        If not, a new instance will be created.
+        """
 
-# Global instance
-from mfx.find import find
+        _motor_cache = {}
+        _pv_cache = {}
+        _pv_motor_cache = {}
+        pvname = pvname.strip()
 
-motor = find.get_motor_by_pvname('MFX:DG1:MMS:01')
-signal = find.get_signal_by_pvname('MFX:PRESSURE:01')
+        for sig in mfx.db.a:
+            if getattr(sig, "setpoint_pvname", None) == pvname:
+                return sig
 
-# Interactive exploration
-from mfx.find import get_motor, search_motors
+        if pvname not in _pv_cache:
+            _pv_cache[pvname] = EpicsSignal(pvname, name=pvname)
+        return _pv_cache[pvname]
 
-# Find motor
-motors = search_motors('focus')
-print(motors)
 
-# Try first match
-if motors:
-    name, pv = motors[0]
-    motor = get_motor(pv)
-    print(f"Current position: {motor.position}")
+    def get_signal_motor_by_pvname(self,pvname: str) -> OnePVMotor:
+        """
+        Get a OnePVMotor given its PV name.
+        """
 
-# Scan integration
-from mfx.find import get_simple_motor
-from bluesky import RunEngine
-import bluesky.plans as bp
+        _motor_cache = {}
+        _pv_cache = {}
+        _pv_motor_cache = {}
+        pvname = pvname.strip()
 
-RE = RunEngine()
-motor = get_simple_motor('MFX:PIEZO:01')
-motor.setpoint.kind = 'hinted'
-
-# Use in scan
-from mfx.db import daq
-RE(bp.scan([daq], motor, 0, 10, 11))
+        if pvname not in _pv_motor_cache:
+            _pv_motor_cache[pvname] = OnePVMotor(pvname, name=pvname)
+        return _pv_motor_cache[pvname]

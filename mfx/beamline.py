@@ -15,10 +15,10 @@ with safe_load('sequencer'):
     sequencer2 = EventSequencer('ECS:SYS0:12', name='mfx_sequencer_spare')
     mfx_sequencer_spare = sequencer2
 
-with safe_load('rayonix utils'):
-    from mfx.rayonix import Rayonix
-    rayonix = Rayonix(mfx_sequencer)
-    mfx_rayonix = rayonix
+# with safe_load('rayonix utils'):
+#     from mfx.rayonix import Rayonix
+#     rayonix = Rayonix(mfx_sequencer)
+#     mfx_rayonix = rayonix
 
 with safe_load('mfx_transfocator'):
     from tfs.transfocator import Transfocator
@@ -35,9 +35,9 @@ with safe_load('Scan PVs'):
     from mfx.db import scan_pvs
     scan_pvs.enable()
 
-with safe_load('beam_suspender'):
-    from mfx.suspenders import BeamEnergySuspendFloor
-    beam_suspender = BeamEnergySuspendFloor(0.6)
+# with safe_load('beam_suspender'):
+#     from mfx.suspenders import BeamEnergySuspendFloor
+#     beam_suspender = BeamEnergySuspendFloor(0.6)
 
 with safe_load('macros'):
     from mfx.macros import *
@@ -55,8 +55,8 @@ with safe_load('autorun'):
 with safe_load('attenuator_scan'):
     from mfx.attenuator_scan import *
 
-with safe_load('focus_scan'):
-    from mfx.focus_scan import *
+# with safe_load('focus_scan'):
+#     from mfx.focus_scan import *
 
 with safe_load('plans'):
     from mfx.plans import *
@@ -65,15 +65,15 @@ with safe_load('Mesh Voltage Control'):
     from pcdsdevices.analog_signals import Mesh
     mesh = Mesh('MFX:USR', 0, 1)
 
-with safe_load('detector_image'):
-    from mfx.detector_image import *
+# with safe_load('detector_image'):
+#     from mfx.detector_image import *
 
 with safe_load("drift_correct"):
     from mfx.timetool import *
 
 with safe_load('bash_utilities'):
     from mfx.bash_utilities import *
-    bs = bs()
+    bs = BashUtilities()
 
 with safe_load('cctbx'):
     from mfx.cctbx import *
@@ -107,7 +107,7 @@ with safe_load('beam_status'):
 
 with safe_load('yano-kern_code'):
     from mfx.yano import *
-    yano = yano()
+    yano = Yano()
 
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *

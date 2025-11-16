@@ -938,7 +938,7 @@ class Yano:
 
             elif delay > self.opo_time_zero + (1e9 / 120):
                 # 2 buckets before (longer)
-                opo_delay += 2 * (1e 9 / 120)
+                opo_delay += 2 * (1e9 / 120)
                 opo_ec = self.opo_ec_longer
                 logger.info('Laser is 2 buckets before the beam')
 

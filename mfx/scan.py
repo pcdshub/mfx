@@ -488,7 +488,8 @@ class Scan:
             while daq.control.getState() != "configured":
                 sleep(0.01)
             daq.control.setRecord(False)
-            daq.control.setState("running") elif daq_num == 1:
+            daq.control.setState("running")
+        elif daq_num == 1:
             daq.disconnect()
 
         logger.warning(
