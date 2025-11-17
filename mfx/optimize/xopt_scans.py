@@ -115,7 +115,7 @@ def evaluator_move(mover: Movers, input: dict):
         curr_y = float(devices["und_abs"].ypos.get())
         print(f"Current undulator position: {curr_x}, {curr_y}")
         # while the current position is not close to the target position, move the undulator
-        while abs(curr_x - input[UNDP_KEY_X]) > 1e-6 or abs(curr_y - input[UNDP_KEY_Y]) > 1e-6:
+        while abs(curr_x - input[UNDP_KEY_X]) > 1 or abs(curr_y - input[UNDP_KEY_Y]) > 1:
             devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
             curr_x = float(devices["und_abs"].xpos.get())
             curr_y = float(devices["und_abs"].ypos.get())
