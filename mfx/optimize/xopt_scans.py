@@ -117,7 +117,7 @@ def evaluator_move(mover: Movers, input: dict):
         # while the current position is not close to the target position, move the undulator
         devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=10)
         start = time.time()
-        while abs(curr_x - input[UNDP_KEY_X]) > 1 or abs(curr_y - input[UNDP_KEY_Y]) > 1:
+        while abs(curr_x - input[UNDP_KEY_X]) > 5 or abs(curr_y - input[UNDP_KEY_Y]) > 5:
             curr_x = float(devices["und_abs"].xpos.get())
             curr_y = float(devices["und_abs"].ypos.get())
             print(f"Current undulator position: {curr_x}, {curr_y}")
@@ -165,7 +165,7 @@ def evaluate_yag_processing(
 ) -> tuple[ImageProjectionFitResult, str]:
     """
     Shared image collection and fitting for use in yag evaluators.
-    
+
     Parameters
     ----------
     diagnostic : Diagnostics
@@ -177,7 +177,7 @@ def evaluate_yag_processing(
         If > 1, will trigger the camera multiple times and average the results.
     """
     image_device = select_diagnostic("yag", diagnostic).image1.shaped_image
-    
+
     if num_frames == 1:
         # Single frame original behavior
         image_device.trigger().wait(timeout=10)
@@ -187,13 +187,13 @@ def evaluate_yag_processing(
         # Multiple frames collect and average
         print(f"Collecting {num_frames} frames for averaging...")
         images = []
-        
+
         for i in range(num_frames):
             image_device.trigger().wait(timeout=10)
             frame = image_device.get()
             images.append(frame)
             print(f"Frame {i+1}/{num_frames} collected, shape: {frame.shape}")
-        
+
         # Average the frames
         image = np.mean(images, axis=0)
         print(f"Averaged image shape: {image.shape}")
@@ -207,7 +207,7 @@ def evaluate_yag_processing(
         np.savez_compressed(file_path, image=image)
     except Exception as exc:
         print(f"Warning: failed to save NPZ image to {file_path}: {exc}")
-    
+
     return fit.fit_image(image), str(file_path)
 
 
@@ -287,7 +287,7 @@ def get_evaluator_yag_2d(
 
     def evaluate(input: dict[str, float]) -> dict[str, float | str]:
         evaluator_move(mover=mover, input=input)
-        time.sleep(2) # WAIT FOR MOTORS TO STOP MOTION 
+        time.sleep(2) # WAIT FOR MOTORS TO STOP MOTION
         fit_result, npz_path = evaluate_yag_processing(yag, fit, num_frames=num_frames, save_dir=images_dir)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = distance2d(fit_result.centroid, goal)
@@ -319,7 +319,7 @@ def get_evaluator_wave8_2d(
     """
     def evaluate(input: dict[str, float]) -> dict[str, float]:
         evaluator_move(mover=mover, input=input)
-        time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION 
+        time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION
         device = select_diagnostic("wave8", wave8)
         device.xpos.trigger().wait(timeout=10)
         device.ypos.trigger().wait(timeout=10)
