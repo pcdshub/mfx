@@ -901,12 +901,14 @@ class MFXTiming:
             self._seq_put(laser_steps)
             logger.info("Laser triggers added to sequence")
 
+        self.seq.start()
+
 
 # Convenience instance for direct import
 mfx_timing = None  # Will be initialized with sequencer in beamline.py
 
 
-def set_timing_sequence(
+def set_timing(
         rep: str,
         sequencer: Optional[str] = None,
         laser: Optional[List[str]] = None):
@@ -928,8 +930,8 @@ def set_timing_sequence(
 
     Examples
     --------
-    >>> set_timing_sequence('120')
-    >>> set_timing_sequence('60', laser=['laser_on', 'laser_off'])
+    >>> set_timing('120')
+    >>> set_timing('60', laser=['laser_on', 'laser_off'])
 
     See Also
     --------
@@ -940,39 +942,3 @@ def set_timing_sequence(
         return
 
     mfx_timing.set_seq(rep=rep, sequencer=sequencer, laser=laser)
-
-
-def get_event_codes() -> Dict[str, int]:
-    """
-    Get dictionary of available event codes.
-
-    Returns
-    -------
-    Dict[str, int]
-        Event code mapping
-
-    Examples
-    --------
-    >>> codes = get_event_codes()
-    >>> print(f"Laser on code: {codes['laser_on']}")
-    """
-    timing = MFXTiming()
-    return timing.evt_code.copy()
-
-
-def get_sync_markers() -> Dict[float, int]:
-    """
-    Get dictionary of sync marker periods.
-
-    Returns
-    -------
-    Dict[float, int]
-        Sync marker mapping (Hz -> marker ID)
-
-    Examples
-    --------
-    >>> markers = get_sync_markers()
-    >>> print(f"120 Hz marker: {markers[120]}")
-    """
-    timing = MFXTiming()
-    return timing.sync_markers.copy()
