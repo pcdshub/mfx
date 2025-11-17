@@ -148,8 +148,9 @@ with safe_load('Compact_Spectrometer'):
     spec = DeterministicVonHamos6Crystal("MFX:SPEC", name="dvh")
 
 with safe_load('Undulator_Pointing'):
-    from mfx.optimize.undpoint import UndPointAbs2DMFX
+    from mfx.optimize.undpoint import UndPointAbs2DMFX, SafeUndPointAbs2DMFX
     und_abs=UndPointAbs2DMFX()
+    und_abs_safe=SafeUndPointAbs2DMFX(max_step=50.0, sleep_between=2.0)
     und_del=und_abs.dxy
 
 with safe_load('RE_Scans'):
