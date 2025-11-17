@@ -122,9 +122,10 @@ def evaluator_move(mover: Movers, input: dict):
             curr_y = float(devices["und_abs"].ypos.get())
             print(f"Current undulator position: {curr_x}, {curr_y}")
             current_time = time.time()
-            if current_time - start > 10:
+            if current_time - start > 20:
                 print(f"Timeout: Failed to move undulator to target position in 10 seconds")
                 break
+            time.sleep(1)
 
 
 @validate_w_lowercase_args
