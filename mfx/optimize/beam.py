@@ -54,7 +54,7 @@ class Beam:
         print(f"[_calib] Current undulator position: {curr_x}, {curr_y}")
         tgt_x, tgt_y = float(target_xy[0]), float(target_xy[1])
         move_x_next = bool(start_with_x)
-        eps = 1e-9
+        eps = 1
         while (abs(tgt_x - curr_x) > eps) or (abs(tgt_y - curr_y) > eps):
             if move_x_next and abs(tgt_x - curr_x) > eps:
                 dx = tgt_x - curr_x
