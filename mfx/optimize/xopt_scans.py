@@ -110,7 +110,16 @@ def evaluator_move(mover: Movers, input: dict):
     if mover == "mirr":
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
     elif mover == "und":
-        devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
+        # get current undulator position
+        curr_x = float(devices["und_abs"].xpos.get())
+        curr_y = float(devices["und_abs"].ypos.get())
+        print(f"Current undulator position: {curr_x}, {curr_y}")
+        # while the current position is not close to the target position, move the undulator
+        while abs(curr_x - input[UNDP_KEY_X]) > 1e-6 or abs(curr_y - input[UNDP_KEY_Y]) > 1e-6:
+            devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
+            curr_x = float(devices["und_abs"].xpos.get())
+            curr_y = float(devices["und_abs"].ypos.get())
+            print(f"Current undulator position: {curr_x}, {curr_y}")
 
 
 @validate_w_lowercase_args
@@ -272,7 +281,7 @@ def get_evaluator_yag_2d(
 
     def evaluate(input: dict[str, float]) -> dict[str, float | str]:
         evaluator_move(mover=mover, input=input)
-        time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION 
+        time.sleep(2) # WAIT FOR MOTORS TO STOP MOTION 
         fit_result, npz_path = evaluate_yag_processing(yag, fit, num_frames=num_frames, save_dir=images_dir)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = distance2d(fit_result.centroid, goal)
