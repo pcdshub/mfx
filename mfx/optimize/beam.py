@@ -299,10 +299,10 @@ class Beam:
         from .xopt_scans import evaluator_move
         
         #print(f"[_calib] Checking calibration freshness...")
-        #fresh = False
-        fresh = self.check_calibration(
-            on_diagnostic=on_diagnostic, xopt_obj=xopt, threshold_sigma=2.0
-        )
+        fresh = False
+        #fresh = self.check_calibration(
+        #    on_diagnostic=on_diagnostic, xopt_obj=xopt, threshold_sigma=2.0
+        #)
         if fresh:
             calib = self._load_calibration(on_diagnostic)
             print(
