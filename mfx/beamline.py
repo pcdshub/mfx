@@ -266,13 +266,8 @@ def mfx_reload(module_name):
         exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
     if module_name == 'mfx.optimize':
-        from mfx.optimize.errors import *
-        from mfx.optimize.plots import *
-        from mfx.optimize.type_checking import *
-        from mfx.optimize.user_select import *
-        from mfx.optimize.constraints import *
-        from mfx.optimize.beam import *
-        from mfx.optimize.vernier_calibration import *
+        from mfx.optimize.beam import Beam
+        from mfx.optimize.vernier_calibration import VernierCalibration
         from mfx.optimize.beam_status import BeamCheck
         beam_status = BeamCheck()
         beam = Beam()
