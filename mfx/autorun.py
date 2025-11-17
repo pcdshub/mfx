@@ -180,6 +180,9 @@ def autorun(
             cam=cam
         )
 
+    # Close pulse picker
+        pp.close()
+
 
 def _autorun_daq2(
         sample: str,
