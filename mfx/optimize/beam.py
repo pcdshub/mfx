@@ -68,6 +68,7 @@ class Beam:
                 move_x_next = not move_x_next
                 continue
             evaluator_move(mover="und", input={UNDP_KEY_X: curr_x, UNDP_KEY_Y: curr_y})
+            time.sleep(2) # Wait for motors to stop motion
             move_x_next = not move_x_next
 
     def _save_calibration_plots(self, res, reg_x, reg_y, out_dir, on_diagnostic, ts):

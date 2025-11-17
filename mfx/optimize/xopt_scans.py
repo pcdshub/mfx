@@ -31,7 +31,7 @@ from .user_select import select_diagnostic, select_goal, MP_KEY, UNDP_KEY_X, UND
 
 
 @validate_w_lowercase_args
-def get_variables(mover: Movers, narrow: bool = False):
+def get_variables(mover: Movers, narrow: bool = False, diagnostic: Optional[Diagnostics] = None):
     """
     Apply info in constraints module for movers to xopt variables
 
@@ -53,9 +53,14 @@ def get_variables(mover: Movers, narrow: bool = False):
             delta = constraint_data.mirr.range_delta
         variables[MP_KEY] = [center - delta, center + delta]
     elif mover == "und":
-        # Use fixed absolute bounds for undulator positions
-        variables[UNDP_KEY_X] = [-100, 150]
-        variables[UNDP_KEY_Y] = [-750, -350]
+        # Use location-specific absolute bounds for undulator positions
+        if str(diagnostic).lower() == "xcs1":
+            variables[UNDP_KEY_X] = [0, 200]
+            variables[UNDP_KEY_Y] = [-450, -200]
+        else:
+            # Default (e.g., dg1)
+            variables[UNDP_KEY_X] = [-100, 150]
+            variables[UNDP_KEY_Y] = [-750, -350]
     return variables
 
 
@@ -79,7 +84,7 @@ def get_vocs(
     device: Devices,
 ) -> VOCS:
     return VOCS(
-        variables=get_variables(mover),
+        variables=get_variables(mover, diagnostic=diagnostic),
         objectives={
             "objective": "MINIMIZE", # RYAN R: SOMETHING TO CONSIDER TO SPEED THINGS UP. ONLY ONE GP
             #"roi_radius": "MINIMIZE",
