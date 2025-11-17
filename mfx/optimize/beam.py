@@ -51,6 +51,7 @@ class Beam:
         und = init_devices()["und_abs"]
         curr_x = float(und.xpos.get())
         curr_y = float(und.ypos.get())
+        print(f"[_calib] Current undulator position: {curr_x}, {curr_y}")
         tgt_x, tgt_y = float(target_xy[0]), float(target_xy[1])
         move_x_next = bool(start_with_x)
         eps = 1e-9
@@ -287,7 +288,7 @@ class Beam:
         return calib
 
 
-    def _calib(self, xopt, goal, on_diagnostic, using_device, mover, grid_bins=5):
+    def _calib(self, xopt, goal, on_diagnostic, using_device, mover, grid_bins=5, retrain=False):
         """Calibrate, fit linear model, solve for undulator position"""
         if mover != "und":
             raise ValueError(f"Only 'und' mover is supported for calibration.")
@@ -299,11 +300,8 @@ class Beam:
         from .xopt_scans import evaluator_move
         
         #print(f"[_calib] Checking calibration freshness...")
-        fresh = False
-        #fresh = self.check_calibration(
-        #    on_diagnostic=on_diagnostic, xopt_obj=xopt, threshold_sigma=2.0
-        #)
-        if fresh:
+        fresh = not retrain
+        if fresh and self.check_calibration(on_diagnostic=on_diagnostic, xopt_obj=xopt, threshold_sigma=2.0):
             calib = self._load_calibration(on_diagnostic)
             print(
                 f"[_calib] Calibration is fresh, using calibration from {calib.get('timestamp')}"
@@ -423,6 +421,7 @@ class Beam:
         save_run: bool = True,
         num_frames: int = 1,
         grid_bins: int = 5,
+        retrain: bool = False,
     ):
         """Perform Beam Alignment
 
@@ -433,7 +432,7 @@ class Beam:
         on_diagnostic : str, optional
             Diagnostic to use for alignment. Options: "xcs1, dg1, dg2". Default is "dg1".
         with_package : str, optional
-            Package to use for alignment. Options: "blop, xopt". Default is "xopt".
+            Package to use for alignment. Options:0,200)(-450,-200)  "blop, xopt". Default is "xopt".
         with_method : str, optional
             Method to use for optimization. Options: "turbo, calib". Default is "turbo".
         using_device : str, optional
@@ -465,6 +464,8 @@ class Beam:
             Only applies when using_device is "yag".
         grid_bins: int, optional
             Number of grid bins for calibration. Default is 5.
+        retrain: bool, optional
+            Retrain the calibration model. Default is False.
         """
         # Validate goals
         if using_device == "wave8" and (with_goal is None and with_goal_2d is None):
@@ -546,6 +547,7 @@ class Beam:
                     using_device=using_device,
                     mover=mover,
                     grid_bins=grid_bins,
+                    retrain=retrain,
                 )
             else:
                 raise ValueError(f"Invalid method: {with_method}. Only 'turbo' and 'calib' are supported.")
