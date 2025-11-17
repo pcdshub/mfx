@@ -175,6 +175,9 @@ with safe_load('EXAFS_Builder'):
     from mfx.exafs import EXAFSEnergyRangeBuilder
     exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
+with safe_load('energy_control'):
+    from mfx.energy_control import *
+
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
@@ -262,13 +265,18 @@ def mfx_reload(module_name):
         exafs = Exafs()
         exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
 
-    if module_name == 'mfx.optimize.verner_calibration':
-        from mfx.optimize.vernier_calibration import VernierCalibration
-        vernier_calib = VernierCalibration()
-
-    if module_name == 'mfx.optimize.beam_status':
+    if module_name == 'mfx.optimize':
+        from mfx.optimize.errors import *
+        from mfx.optimize.plots import *
+        from mfx.optimize.type_checking import *
+        from mfx.optimize.user_select import *
+        from mfx.optimize.constraints import *
+        from mfx.optimize.beam import *
+        from mfx.optimize.vernier_calibration import *
         from mfx.optimize.beam_status import BeamCheck
         beam_status = BeamCheck()
+        beam = Beam()
+        vernier_calib = VernierCalibration()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
