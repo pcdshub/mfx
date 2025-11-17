@@ -93,79 +93,6 @@ class NotchScan:
         # Translation motor
         self.tx = BeckhoffAxis("SP1L0:DCCM:MMS:TX", name='tx')
 
-    def insert(self):
-        """
-        Insert DCCM into beam path.
-
-        Moves DCCM to 'IN' position using state machine control.
-        Blocks until motion is complete.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Uses EPICS state machine PV: SP1L0:DCCM:MMS:STATE:SET
-
-        Position 'IN':
-        - DCCM crystals intercept beam
-        - Beam is monochromated
-        - Energy selection active
-
-        Typical move time: 5-10 seconds
-
-        Examples
-        --------
-        >>> notch = NotchScan()
-        >>> notch.insert()
-
-        See Also
-        --------
-        remove : Remove DCCM from beam
-        """
-        logger.info('Moving DCCM IN')
-        caput('SP1L0:DCCM:MMS:STATE:SET', 'IN', wait=True)
-
-    def remove(self):
-        """
-        Remove DCCM from beam path.
-
-        Moves DCCM to 'OUT' position using state machine control.
-        Blocks until motion is complete.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Uses EPICS state machine PV: SP1L0:DCCM:MMS:STATE:SET
-
-        Position 'OUT':
-        - DCCM crystals clear beam
-        - Full bandwidth beam (pink beam)
-        - No energy selection
-
-        Typical move time: 5-10 seconds
-
-        Use when:
-        - Switching to pink beam mode
-        - Performing DCCM maintenance
-        - Maximizing flux without monochromatization
-
-        Examples
-        --------
-        >>> notch = NotchScan()
-        >>> notch.remove()
-
-        See Also
-        --------
-        insert : Insert DCCM into beam
-        """
-        logger.info('Moving DCCM OUT')
-        caput('SP1L0:DCCM:MMS:State:SET', 'OUT', wait=True)
-
     def set_energy(self, energy: float) -> bool:
         """
         Set DCCM to specific photon energy.
@@ -402,7 +329,7 @@ class NotchScan:
         """
         from mfx.db import pp
         from mfx.autorun import autorun
-        from mfx.macros import get_exp
+        from mfx.macros import get_exp, get_run
         from time import sleep
 
         # Validate DAQ number
@@ -425,7 +352,6 @@ class NotchScan:
             pp.flipflop()
 
         # Get starting run number
-        from mfx.macros import get_run
         run_number = get_run(station=station) + 1
 
         # Generate energy list
@@ -469,7 +395,12 @@ class NotchScan:
         logger.warning(
             'Scan complete. Thank you for choosing the MFX beamline!\n'
         )
-
+        logger.warning(
+            f"ssh -Yt djr@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
+            f"-f s3df -t series -e {exp} -r {run_number} -z {energy_scan_start_eV} -s "
+            f"{energy_scan_steps} -n {len(energies)}"
+            )
         # Prompt to return to initial position
         answer = input("Return to original Bragg angle? (y/n): ")
         if answer.lower() == "y":
@@ -486,11 +417,29 @@ class NotchScan:
         if answer.lower() == "y":
             facility = input("Which facility? (S3DF/NERSC): ")
             if facility.upper() in ['S3DF', 'NERSC']:
-                self.output(exp, facility.upper())
+                user = input("Enter username to continue: ")
+                self.output(
+                    user=user,
+                    facility=facility,
+                    exp=exp,
+                    run=run_number,
+                    energy=energy_scan_start_eV,
+                    step=energy_scan_steps,
+                    num=len(energies),
+                    daq_num=daq_num)
             else:
                 logger.warning(f"Unknown facility: {facility}")
 
-    def output(self, exp: str, facility: str = 'S3DF'):
+    def output(
+        self,
+        user: str,
+        facility: str = 'S3DF',
+        exp: str = None,
+        run: str = None,
+        energy: float = None,
+        step: float = None,
+        num: int = None,
+        daq_num: int = 2):
         """
         Launch analysis script for notch scan results.
 
@@ -553,28 +502,40 @@ class NotchScan:
         series : Perform notch scan
         """
         import os
+        from mfx.db import daq
+        from mfx.macros import get_exp, get_run
+        import mfx.cctbx
 
-        # Select script based on facility
-        if facility == 'S3DF':
-            script = '/cds/home/d/djr/scripts/hsd/Notch_Scan_S3DF.sh'
-        elif facility == 'NERSC':
-            script = '/cds/home/d/djr/scripts/hsd/Notch_Scan_NERSC.sh'
+        if daq_num == 2:
+            station=0
+        elif daq_num == 1:
+            station=1
         else:
-            logger.error(
-                f"Unknown facility: {facility}. "
-                "Must be 'S3DF' or 'NERSC'"
-            )
-            return
+            logger.error('Please enter daq 1 or 2.')
 
-        # Build and execute command
-        cmd = f"{script} {exp}"
-        logger.info(f"Submitting analysis job: {cmd}")
-        os.system(cmd)
+        logger.info("Plotting XRT-Spec Output")
+        if exp is None:
+            exp = str(get_exp(station=station))
 
-        logger.info(
-            f"Analysis job submitted to {facility}. "
-            f"Check progress with: squeue -u $USER"
-        )
+        if run is None:
+            run = int(get_run(station=station))
+
+        facility = facility.upper()
+        if facility == 'NERSC':
+            logger.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                cctbx.sshproxy(user)
+
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
+            f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}"
+            ]
+
+        logger.info(proc)
+        os.system(proc[0])
 
 
 # Convenience instance for direct import
@@ -648,67 +609,3 @@ def notch_scan(
         daq_num=daq_num,
         exp=exp
     )
-
-
-def set_dccm_energy(energy: float) -> bool:
-    """
-    Convenience function to set DCCM energy.
-
-    Wrapper around NotchScan.set_energy() for quick access.
-
-    Parameters
-    ----------
-    energy : float
-        Target energy in eV
-
-    Returns
-    -------
-    bool
-        True if successful, False otherwise
-
-    Examples
-    --------
-    >>> set_dccm_energy(7112)  # Fe K-edge
-    >>> set_dccm_energy(8979)  # Cu K-edge
-
-    See Also
-    --------
-    NotchScan.set_energy : Full implementation
-    """
-    return notch.set_energy(energy)
-
-
-def insert_dccm():
-    """
-    Convenience function to insert DCCM.
-
-    Wrapper around NotchScan.insert() for quick access.
-
-    Examples
-    --------
-    >>> insert_dccm()
-
-    See Also
-    --------
-    NotchScan.insert : Full implementation
-    remove_dccm : Remove DCCM from beam
-    """
-    notch.insert()
-
-
-def remove_dccm():
-    """
-    Convenience function to remove DCCM.
-
-    Wrapper around NotchScan.remove() for quick access.
-
-    Examples
-    --------
-    >>> remove_dccm()
-
-    See Also
-    --------
-    NotchScan.remove : Full implementation
-    insert_dccm : Insert DCCM into beam
-    """
-    notch.remove()
