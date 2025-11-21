@@ -1,4 +1,10 @@
-"""Von Hamos spectrometer control with deterministic positioning for MFX beamline."""
+"""
+Von Hamos spectrometer control for MFX beamline.
+
+Provides device classes for 6-crystal Von Hamos X-ray emission
+spectrometer with deterministic motor positioning and optimization
+routines.
+"""
 
 import logging
 from typing import Optional
