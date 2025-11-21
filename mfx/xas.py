@@ -1,4 +1,9 @@
-"""X-ray Absorption Spectroscopy (XAS) utilities for MFX beamline."""
+"""
+X-ray Absorption Spectroscopy (XAS) utilities for MFX beamline.
+
+Provides DCCM-based energy scanning for XANES and EXAFS measurements
+with automated data collection and vernier coordination.
+"""
 
 import logging
 import time
