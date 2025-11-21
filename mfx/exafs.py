@@ -72,12 +72,10 @@ class Exafs:
         sets up energy range builder, and configures simulation mode.
         """
         from mfx.dccm import DCCM
-        from mfx.vernier import Vernier
         from hutch_python import sim
 
         self.logger = logging.getLogger(__name__)
         self.dccm = DCCM(name='DCCM')
-        self.vernier = Vernier()
         self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
         self.simulate = False
         self.sim = sim.get_hw()
