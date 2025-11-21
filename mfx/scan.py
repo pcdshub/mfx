@@ -1,10 +1,14 @@
-"""Generic scan utilities for MFX beamline experiments."""
+"""
+Generic motor scanning utilities for MFX beamline.
+
+Provides flexible motor scanning capabilities with DAQ integration
+for both LCLS-I and LCLS-II systems, supporting arbitrary motor types
+and scan ranges.
+"""
 
 import logging
 from time import sleep
-from typing import Optional, List, Union
-
-import numpy as np
+from typing import List
 
 logger = logging.getLogger(__name__)
 
