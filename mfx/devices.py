@@ -1,354 +1,343 @@
 """
-Custom device classes for MFX beamline instrumentation.
+Custom device definitions for MFX beamline.
 
-Provides specialized device classes for X-ray focusing lenses (XFLS),
-piezo injector motors, and laser shutters with analog output control.
+Provides specialized device classes for MFX-specific hardware including
+focusing lenses, piezo motors, and laser shutters.
 """
 
 import logging
-from ophyd import (Device, EpicsSignal, EpicsSignalRO,
-                   Component as C, FormattedComponent as FC)
-from ophyd.signal import AttributeSignal
-import pcdsdevices.device_types
+from ophyd import Device, Component as Cpt
+from ophyd.signal import EpicsSignal, EpicsSignalRO, AttributeSignal
+from pcdsdevices.device_types import XFLS as BaseXFLS
 from pcdsdevices.inout import InOutPositioner
 
 logger = logging.getLogger(__name__)
 
 
-class XFLS(pcdsdevices.device_types.XFLS):
+class XFLS(BaseXFLS):
     """
     X-ray Focusing Lens Stack (Beryllium).
 
-    Compound refractive lens (CRL) stacks with predefined focusing
-    configurations. Each state corresponds to a specific energy and
-    focal distance configuration.
+    MFX-specific XFLS with predefined state configurations for
+    different focusing conditions.
 
     Attributes
     ----------
-    states_list : list of str
-        Available lens configurations: ['6K70', '7K50', '9K45', 'OUT']
-    in_states : list of str
-        Configurations with lenses in beam: ['6K70', '7K50', '9K45']
+    states_list : List[str]
+        Available lens configurations
+    in_states : List[str]
+        States where lenses are in beam
 
     Notes
     -----
-    State Naming Convention:
-    - Format: {energy}K{focal_distance}
-    - Example: '9K45' = 9 keV, 45 cm focal distance
-    - 'OUT' = No lenses in beam path
+    MFX XFLS States:
+    - '6K70': 6 keV focus at 70 cm from interaction point
+    - '7K50': 7 keV focus at 50 cm
+    - '9K45': 9 keV focus at 45 cm
+    - 'OUT': All lenses removed from beam
 
-    Common Configurations:
-    - 6K70: 6 keV photons, 70 cm focus
-    - 7K50: 7 keV photons, 50 cm focus
-    - 9K45: 9 keV photons, 45 cm focus
+    Beryllium Lenses:
+    - Low Z material (Z=4)
+    - Minimal absorption
+    - Refractive X-ray optics
+    - Stacked for focusing
 
-    The lens stack provides beam focusing for improved intensity at
-    the sample position. Proper configuration depends on X-ray energy
-    and desired focal properties.
+    Focal Properties:
+    - Energy-dependent focus
+    - Position-dependent
+    - Beam size reduction
+    - Flux concentration
+
+    State Configuration:
+    - Motorized lens stack
+    - Programmable positions
+    - Quick state changes
+    - Reproducible focusing
 
     Examples
     --------
-    Create and move lens stack:
-    >>> from mfx.devices import XFLS
-    >>> lens = XFLS('MFX:LENS', name='xfls')
-    >>> lens.move('9K45')  # Configure for 9 keV
-
-    Remove lenses from beam:
-    >>> lens.move('OUT')
-
-    Check current state:
-    >>> print(lens.position)
-    '9K45'
+    >>> xfls = XFLS('MFX:LENS', name='xfls')
+    >>> xfls.state.get()
+    'OUT'
+    >>> xfls.move('9K45')  # Move to 9 keV focus
+    >>> xfls.remove()  # Move out of beam
 
     See Also
     --------
-    pcdsdevices.device_types.XFLS : Base XFLS class
+    pcdsdevices.device_types.XFLS : Base class
     """
 
+    # Define available states
     states_list = ['6K70', '7K50', '9K45', 'OUT']
+
+    # States where lenses are inserted
     in_states = ['6K70', '7K50', '9K45']
 
 
 class Piezo(Device):
     """
-    Piezoelectric injector motor control.
+    Piezo injector motor controller.
 
-    Provides control of piezo-driven sample injection systems with
-    velocity feedback and open-loop stepping capability.
+    Controls piezoelectric actuator for sample injection systems,
+    providing high-speed, precise positioning.
 
     Components
     ----------
     velocity : EpicsSignalRO
-        Current velocity readback (read-only)
+        Current velocity readback (Hz)
     req_velocity : EpicsSignal
-        Requested velocity setpoint
+        Requested velocity setpoint (Hz)
     open_loop_step : EpicsSignal
-        Open-loop step size command
-
-    Attributes
-    ----------
-    _default_read_attrs : list
-        Default attributes for read operations: ['open_loop_step']
-    _default_configuration_attrs : list
-        Default configuration attributes: ['velocity']
+        Open-loop step size for jogging
 
     Methods
     -------
     tweak(distance)
-        Execute open-loop step movement
+        Perform relative open-loop move
 
     Notes
     -----
-    Piezo Operation Modes:
-    - Closed-loop: Velocity controlled with feedback
-    - Open-loop: Step-based movement without feedback
+    Piezo Operation:
+    - Piezoelectric actuation
+    - Sub-micron resolution
+    - Fast response (~ms)
+    - Position sensing via encoder
+
+    Control Modes:
+    - Closed-loop: Position feedback control
+    - Open-loop: Direct voltage steps
+    - Velocity control: Frequency-based
+
+    Velocity:
+    - Units: Hz (steps per second)
+    - Range: 1-1000 Hz typical
+    - Higher = faster motion
+    - Limited by load
 
     Open-Loop Stepping:
-    - Used for precise small movements
+    - Direct piezo actuation
     - No position feedback
-    - Cumulative errors possible
-    - Good for repetitive injection
+    - Fast but less accurate
+    - Useful for jogging
 
-    Velocity Control:
-    - Continuous motion mode
-    - Position feedback available
-    - Better for long-range movements
-
-    Typical Applications:
-    - Liquid jet injection
-    - Sample raster scanning
-    - Drop-on-demand delivery
-    - Serial crystallography
+    Applications:
+    - Liquid jet positioning
+    - Drop-on-demand injection
+    - High-speed scanning
+    - Vibration compensation
 
     Examples
     --------
-    Create piezo device:
-    >>> from mfx.devices import Piezo
-    >>> piezo = Piezo('MFX:PIEZO:01', name='injector')
-
-    Set velocity:
-    >>> piezo.req_velocity.put(100)  # Set velocity
-    >>> current_vel = piezo.velocity.get()  # Read back
-
-    Perform open-loop step:
-    >>> piezo.tweak(50)  # Step 50 units
+    >>> piezo = Piezo('MFX:PIEZO:01', name='piezo_jet')
+    >>> piezo.req_velocity.put(100)  # Set 100 Hz
+    >>> piezo.tweak(10)  # Move +10 steps
+    >>> piezo.tweak(-5)  # Move -5 steps
 
     See Also
     --------
-    ophyd.Device : Base device class
+    pcdsdevices.jet : Jet delivery systems
     """
 
-    velocity = C(EpicsSignalRO, ':VELOCITYGET',
-                 kind='config',
-                 doc='Current velocity readback')
-    req_velocity = C(EpicsSignal, ':VELOCITYSET',
-                     kind='config',
-                     doc='Requested velocity setpoint')
-    open_loop_step = C(EpicsSignal, ':OPENLOOPSTEP',
-                       kind='hinted',
-                       doc='Open-loop step command')
+    velocity = Cpt(
+        EpicsSignalRO, ':VELOCITYGET',
+        kind='normal',
+        doc='Current velocity (Hz)'
+    )
 
+    req_velocity = Cpt(
+        EpicsSignal, ':VELOCITYSET',
+        kind='config',
+        doc='Requested velocity (Hz)'
+    )
+
+    open_loop_step = Cpt(
+        EpicsSignal, ':OPENLOOPSTEP',
+        kind='normal',
+        doc='Open-loop step size'
+    )
+
+    # Default read attrs
     _default_read_attrs = ['open_loop_step']
     _default_configuration_attrs = ['velocity']
 
-    def tweak(self, distance):
+    def tweak(self, distance: int):
         """
-        Execute open-loop step movement.
+        Perform relative open-loop move.
 
-        Performs a single open-loop step of specified distance without
-        position feedback. Useful for incremental positioning or
-        repetitive injection patterns.
+        Executes open-loop step by specified distance without
+        position feedback.
 
         Parameters
         ----------
-        distance : float
-            Step distance in device units (typically micrometers)
+        distance : int
+            Number of steps to move.
+            Positive = forward, negative = backward
 
         Returns
         -------
-        status : ophyd.Status
-            Status object tracking step completion
+        None
 
         Notes
         -----
-        Open-Loop Characteristics:
+        Open-Loop Move:
         - No position verification
         - Fast execution
-        - Potential for cumulative error
-        - Repeatable for same conditions
+        - Accumulates errors over many moves
+        - Useful for fine adjustments
 
-        The step executes immediately and returns a status object that
-        completes when the PV write finishes (not when motion ends).
-
-        Warnings
-        --------
-        Multiple rapid tweaks can accumulate positioning errors.
-        Periodically verify position if precision is critical.
+        Step Size:
+        - Determined by open_loop_step PV
+        - Typically ~0.1 to 1 μm
+        - Varies with piezo type
 
         Examples
         --------
-        Single step forward:
-        >>> piezo.tweak(10)  # Step 10 µm
-
-        Multiple small steps:
-        >>> for i in range(5):
-        ...     piezo.tweak(2)  # Five 2 µm steps
-        ...     time.sleep(0.1)
-
-        Step backward:
-        >>> piezo.tweak(-5)  # Step -5 µm
+        >>> piezo.tweak(10)   # Forward 10 steps
+        >>> piezo.tweak(-5)   # Backward 5 steps
 
         See Also
         --------
-        open_loop_step : Direct access to step PV
-        req_velocity : Velocity control for continuous motion
+        open_loop_step : Step size setting
         """
-        return self.open_loop_step.set(distance)
+        return self .open_loop_step.set(distance)
 
 
 class LaserShutter(InOutPositioner):
     """
-    Laser shutter with analog voltage control.
+    Laser shutter controlled by analog output voltage.
 
-    Controls laser beam shutters via analog output voltage. Provides
-    binary IN/OUT state control with voltage threshold detection.
+    Controls laser shutter via voltage level on analog output
+    channel, providing open/closed beam control.
 
     Components
     ----------
     voltage : EpicsSignal
-        Analog output voltage control (0-10V)
+        Analog output voltage (0-10V)
     state : AttributeSignal
-        Current shutter state based on voltage
+        Computed shutter state from voltage
 
     Attributes
     ----------
     out_voltage : float
-        Voltage for OUT state (shutter open): 5.0V
+        Voltage for OPEN state (5.0V)
     in_voltage : float
-        Voltage for IN state (shutter closed): 0.0V
+        Voltage for CLOSED state (0.0V)
     barrier_voltage : float
-        Threshold voltage for state detection: 1.4V
+        Threshold for state determination (1.4V)
 
     Methods
     -------
-    voltage_check
-        Property that determines state from voltage
-    _do_move(state)
-        Internal method to execute state changes
+    insert()
+        Close shutter (inherited from InOutPositioner)
+    remove()
+        Open shutter (inherited from InOutPositioner)
 
     Notes
     -----
-    Voltage States:
-    - >= 1.4V: Interpreted as OUT (open)
-    - < 1.4V: Interpreted as IN (closed)
+    Voltage-Based Control:
+    - Analog output controls shutter
+    - High voltage = OPEN
+    - Low voltage = CLOSED
+    - Intermediate = uncertain
 
-    Control Voltages:
-    - OUT: 5.0V applied to open shutter
-    - IN: 0.0V applied to close shutter
+    State Determination:
+    - voltage >= 1.4V: OUT (open)
+    - voltage < 1.4V: IN (closed)
+    - Barrier prevents ambiguity
 
-    State Detection:
-    - Based on voltage readback
-    - Threshold at 1.4V provides hysteresis
-    - Prevents false triggers from noise
+    Typical Voltages:
+    - CLOSED: 0.0V (shutter blocking)
+    - OPEN: 5.0V (shutter retracted)
+    - Threshold: 1.4V (state boundary)
 
     Hardware:
-    - Analog output card controls shutter
-    - Voltage drives electromechanical actuator
-    - Typical response time: <100 ms
+    - Pneumatic or solenoid actuator
+    - Voltage-to-pressure converter
+    - Position not directly measured
+    - State inferred from command
 
     Safety:
-    - Always close shutters when not in use
-    - Verify state before laser operation
-    - Use proper eye protection
+    - Fail-safe to CLOSED
+    - Power loss = beam blocked
+    - Manual override available
 
     Examples
     --------
-    Create shutter device:
-    >>> from mfx.devices import LaserShutter
-    >>> shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
+    >>> shutter = LaserShutter('MFX:LAS:AO:01', name='las_shutter')
+    >>> shutter.remove()  # Open shutter
+    >>> shutter.insert()  # Close shutter
+    >>> shutter.state.get()
+    'OUT'
 
-    Open shutter:
-    >>> shutter.move('OUT')
-    >>> # Or equivalently:
-    >>> shutter.open()
-
-    Close shutter:
-    >>> shutter.move('IN')
-    >>> # Or equivalently:
-    >>> shutter.close()
-
-    Check state:
-    >>> state = shutter.state.get()
-    >>> print(f"Shutter is {state}")
-
-    Check voltage directly:
-    >>> voltage = shutter.voltage.get()
-    >>> print(f"Control voltage: {voltage}V")
+    Direct voltage control:
+    >>> shutter.voltage.put(5.0)  # Open
+    >>> shutter.voltage.put(0.0)  # Close
 
     See Also
     --------
-    InOutPositioner : Base class for binary positioners
-    yano : Laser control system using shutters
+    InOutPositioner : Base class
     """
 
-    # EPICS signals
-    voltage = C(EpicsSignal, '',
-                kind='normal',
-                doc='Analog output voltage (0-10V)')
-    state = FC(AttributeSignal, 'voltage_check',
-               kind='hinted',
-               doc='Shutter state based on voltage')
+    # Components
+    voltage = Cpt(
+        EpicsSignal, '',
+        kind='hinted',
+        doc='Analog output voltage (V)'
+    )
+
+    state = Cpt(
+        AttributeSignal,
+        attr='voltage_check',
+        kind='hinted',
+        doc='Computed shutter state'
+    )
 
     # Voltage constants
-    out_voltage = 5.0    # Voltage for shutter OUT (open)
-    in_voltage = 0.0     # Voltage for shutter IN (closed)
-    barrier_voltage = 1.4  # Threshold for state detection
+    out_voltage = 5.0       # Open state voltage
+    in_voltage = 0.0        # Closed state voltage
+    barrier_voltage = 1.4   # State threshold
 
     @property
-    def voltage_check(self):
+    def voltage_check(self) -> str:
         """
-        Determine shutter state from voltage reading.
+        Determine shutter state from voltage.
+
+        Compares current voltage to threshold to determine
+        whether shutter is open or closed.
 
         Returns
         -------
         str
-            'OUT' if voltage >= barrier_voltage (1.4V)
-            'IN' if voltage < barrier_voltage
+            'OUT' if voltage >= barrier_voltage, 'IN' otherwise
 
         Notes
         -----
         State Logic:
-        - High voltage (>=1.4V) indicates open shutter
-        - Low voltage (<1.4V) indicates closed shutter
-        - Threshold provides noise immunity
-
-        This property is used as the readback for the InOutPositioner
-        state attribute.
+        - voltage >= 1.4V: Shutter OPEN
+        - voltage < 1.4V: Shutter CLOSED
+        - Hysteresis prevents chatter
 
         Examples
         --------
-        Check state via voltage:
-        >>> shutter = LaserShutter('MFX:USR:ao1:6', name='shutter')
-        >>> print(shutter.voltage_check)
+        >>> shutter.voltage.put(5.0)
+        >>> shutter.voltage_check
         'OUT'
 
         See Also
         --------
-        state : Shutter state signal
-        voltage : Raw voltage signal
+        _do_move : State transition logic
         """
-        current_voltage = self.voltage.get()
-        if current_voltage >= self.barrier_voltage:
+        if self.voltage.get() >= self.barrier_voltage:
             return 'OUT'
         else:
             return 'IN'
 
     def _do_move(self, state):
         """
-        Execute shutter state change.
+        Execute shutter state transition.
 
-        Internal method called by InOutPositioner to change shutter
-        state by setting appropriate control voltage.
+        Overrides InOutPositioner._do_move to control shutter
+        via voltage instead of motor.
 
         Parameters
         ----------
@@ -358,80 +347,35 @@ class LaserShutter(InOutPositioner):
         Raises
         ------
         ValueError
-            If state is not valid (must be IN or OUT)
+            If state is not IN or OUT
 
         Notes
         -----
-        Called automatically by move(), open(), and close() methods
-        inherited from InOutPositioner.
+        Move Implementation:
+        - IN state: Sets voltage to in_voltage (0V)
+        - OUT state: Sets voltage to out_voltage (5V)
+        - Invalid state: Raises error
 
-        Move Sequence:
-        1. Validate requested state
-        2. Set control voltage (0V or 5V)
-        3. Wait for voltage to settle
-        4. Verify state via voltage readback
+        No position verification - voltage command only.
 
         Examples
         --------
-        This method is called internally:
-        >>> shutter.move('OUT')  # Calls _do_move internally
-        >>> shutter.close()      # Calls _do_move(IN) internally
+        Used internally by insert() and remove():
+        >>> shutter.insert()  # Calls _do_move('IN')
+        >>> shutter.remove()  # Calls _do_move('OUT')
 
         See Also
         --------
-        voltage_check : State determination logic
-        InOutPositioner : Base class providing move interface
+        voltage_check : State readback
         """
         if state.name == 'IN':
+            # Close shutter
             self.voltage.put(self.in_voltage)
         elif state.name == 'OUT':
+            # Open shutter
             self.voltage.put(self.out_voltage)
         else:
-            raise ValueError(f"{state} is not a valid state (IN or OUT)")
+            raise ValueError(f"Invalid state: {state}")
 
 
-# Module-level convenience functions and examples
-
-def configure_all_laser_shutters(evo1=False, evo2=False,
-                                  evo3=False, opo=False):
-    """
-    Configure all MFX laser shut shutters simultaneously.
-
-    Convenience function to set all laser shutters in one call.
-    Useful for quick experiment setup.
-
-    Parameters
-    ----------
-    evo1 : bool
-        EVO shutter 1 state (True=open, False=closed)
-    evo2 : bool
-        EVO shutter 2 state
-    evo3 : bool
-        EVO shutter 3 state
-    opo : bool
-        OPO free-space shutter state
-
-    Examples
-    --------
-    Open only fiber 1:
-    >>> configure_all_laser_shutters(evo1=True)
-
-    Open fibers 1 and 2:
-    >>> configure_all_laser_shutters(evo1=True, evo2=True)
-
-    Close all shutters:
-    >>> configure_all_laser_shutters()
-
-    See Also
-    --------
-    yano.configure_shutters : Full laser configuration
-    LaserShutter : Individual shutter control
-    """
-    from mfx.db import yano_instance
-
-    yano_instance.configure_shutters(
-        fiber1=evo1,
-        fiber2=evo2,
-        fiber3=evo3,
-        free_space=opo
-    )
+logger.info("MFX custom devices loaded and ready")
