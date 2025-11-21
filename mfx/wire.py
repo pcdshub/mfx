@@ -1,4 +1,9 @@
-"""Wire scanner utilities for beam profile measurements at MFX beamline."""
+"""
+Wire scanner control and scanning utilities for MFX beamline.
+
+Provides automated wire scanner operations for beam profiling,
+position verification, and intensity measurements.
+"""
 
 import os
 import logging
