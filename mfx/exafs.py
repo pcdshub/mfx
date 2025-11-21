@@ -1,4 +1,10 @@
-"""EXAFS scan controller for MFX beamline."""
+"""
+EXAFS (Extended X-ray Absorption Fine Structure) control for MFX beamline.
+
+Provides automated EXAFS data collection with coordinated DCCM, vernier,
+and undulator K parameter control. Supports track-and-check calibration
+for accurate energy scanning.
+"""
 
 import sys
 import os
