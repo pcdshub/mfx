@@ -657,3 +657,5 @@ def notch_scan(
         daq_num=daq_num,
         exp=exp
     )
+
+logger.info("Notch Scan loaded and ready")
