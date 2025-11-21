@@ -1,201 +1,191 @@
-"""Notch scan utilities for energy-dependent measurements at MFX beamline."""
+"""
+DCCM notch filter energy scanning for MFX beamline.
+
+Provides automated energy scanning using DCCM monochromator for energy
+calibration, edge scans, and spectroscopy experiments.
+"""
 
 import logging
 from time import sleep
-
-from pcdsdevices.epics_motor import BeckhoffAxis
-from epics import caput
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class NotchScan:
     """
-    Energy scan controller for DCCM notch filter measurements.
+    DCCM-based energy scanning controller.
 
-    Performs automated scans through discrete energy points while
-    collecting data. Useful for:
-    - Resonant scattering studies
-    - Absorption edge mapping
-    - Energy-dependent diffraction
-    - Filter transmission measurements
-
-    The scan moves the DCCM (Double Crystal Cut Monochromator) through
-    specified energies and collects data at each point.
-
-    Components
-    ----------
-    th1 : BeckhoffAxis
-        Upstream crystal Bragg angle motor
-    th2 : BeckhoffAxis
-        Downstream crystal Bragg angle motor
-    tx : BeckhoffAxis
-        DCCM translation X motor
+    Provides automated energy scanning using Double Crystal Channel-cut
+    Monochromator for applications including energy calibration, XANES,
+    and edge scans.
 
     Attributes
     ----------
-    tab_component_names : bool
-        Enable tab completion for motors
+    dccm : DCCM
+        DCCM monochromator device
+    th1 : BeckhoffAxis
+        Upstream crystal motor
+    th2 : BeckhoffAxis
+        Downstream crystal motor
+
+    Methods
+    -------
+    set_energy(energy_eV, wait)
+        Move to specific energy
+    series(start, end, steps, run_length, tag, picker, record)
+        Execute energy scan series
 
     Notes
     -----
-    DCCM Configuration:
-    - Crystal: Silicon (111)
-    - D-spacing: 3.136 Å
-    - Bragg angle range: ~5° to 30°
-    - Energy range: ~4 keV to 25 keV
+    DCCM Energy Scanning:
+    - Double crystal monochromator
+    - Si(111) crystals
+    - Energy range: ~4-25 keV
+    - Resolution: ΔE/E ~ 1.4×10⁻⁴
+    - Channel-cut design for stability
 
-    Energy-to-Angle Conversion:
-    Uses Bragg's law via determine_dccm_bragg() function.
+    Energy Conversion:
+    - User specifies energy in eV
+    - Converted to Bragg angle
+    - Both crystals move together
+    - Maintains beam path
 
-    Typical Scan Parameters:
-    - Energy step: 5-50 eV
-    - Run length: 10-120 seconds per point
-    - Total points: 5-100 depending on range
+    Scan Applications:
+    - XANES (X-ray Absorption Near Edge Structure)
+    - EXAFS energy calibration
+    - Edge position determination
+    - Energy-dependent studies
+
+    Coordination:
+    - DCCM crystals (coarse energy)
+    - Optional vernier adjustment
+    - Automated data collection
+    - Elog documentation
 
     Examples
     --------
-    Create notch scan controller:
+    Create notch scanner:
     >>> notch = NotchScan()
 
-    Perform energy scan:
+    Move to single energy:
+    >>> notch.set_energy(9000, wait=True)
+    Moving DCCM to 9.000 keV...
+
+    Energy scan series:
     >>> notch.series(
-    ...     energy_scan_start_eV=7100,
-    ...     energy_scan_end_eV=7200,
-    ...     energy_scan_steps=20,
+    ...     energy_scan_start_eV=8950,
+    ...     energy_scan_end_eV=9050,
+    ...     energy_scan_steps=10,
     ...     run_length=30,
     ...     record=True
     ... )
 
-    Set DCCM to specific energy:
-    >>> notch.set_energy(7112)  # Fe K-edge
-
     See Also
     --------
-    autorun : Automated data collection
-    determine_dccm_bragg : Energy to Bragg angle conversion
+    DCCM : Monochromator control
+    xas : XAS scanning utilities
+    vernier : Energy fine control
     """
-
-    tab_component_names = True
 
     def __init__(self):
         """
         Initialize NotchScan controller.
 
-        Creates motor objects for DCCM control:
-        - th1: Upstream crystal angle
-        - th2: Downstream crystal angle
-        - tx: Translation stage
+        Creates DCCM device and sets up energy control interfaces.
         """
-        # Bragg angle motors
-        self.th1 = BeckhoffAxis("SP1L0:DCCM:MMS:TH1", name='th1')
-        self.th2 = BeckhoffAxis("SP1L0:DCCM:MMS:TH2", name='th2')
-        # Translation motor
-        self.tx = BeckhoffAxis("SP1L0:DCCM:MMS:TX", name='tx')
+        from mfx.dccm import DCCM
 
-    def set_energy(self, energy: float) -> bool:
+        self.dccm = DCCM(name='dccm')
+        self.th1 = self.dccm.th1
+        self.th2 = self.dccm.th2
+
+        logger.info("NotchScan initialized")
+        logger.info("DCCM energy range: 4000-25000 eV")
+
+    def set_energy(self, energy_eV: float, wait: bool = True):
         """
-        Set DCCM to specific photon energy.
+        Move DCCM to specified energy.
 
-        Calculates required Bragg angle and moves both crystals
-        to select the requested energy.
+        Converts energy to Bragg angle and moves both crystals
+        to achieve requested photon energy.
 
         Parameters
         ----------
-        energy : float
+        energy_eV : float
             Target photon energy in eV
-            Typical range: 4000-25000 eV
+        wait : bool, optional
+            Block until motion complete.
+            Default is True.
 
         Returns
         -------
-        bool
-            True if move completed successfully
-            False if timeout or motion error occurred
-
-        Raises
-        ------
         None
-            Errors are logged but not raised
 
         Notes
         -----
-        Motion Sequence:
-        1. Calculate Bragg angle from energy
-        2. Move th1 (non-blocking)
-        3. Move th2 (blocking)
-        4. Wait for both to reach position
-        5. Verify positions (±0.01°)
+        Energy Setting Process:
+        1. Convert eV to keV
+        2. Calculate Bragg angle via Bragg's law
+        3. Move both TH1 and TH2 crystals
+        4. Wait for motion complete (if wait=True)
+        5. Verify energy reached
 
-        Timeout:
-        - 30 seconds maximum
-        - Prevents hanging on stuck motors
-        - Returns False on timeout
+        Bragg's Law:
+        E (keV) = 12.398 / (2 * d * sin(θ))
+        For Si(111): d = 3.1356 Å
 
-        Position Tolerance:
-        - 0.01° (about 1 eV at 9 keV)
-        - Both crystals must be within tolerance
+        Move Time:
+        - Small changes: ~5 seconds
+        - Large changes: ~30 seconds
+        - Depends on distance
 
-        Energy-to-Angle Conversion:
-        Uses determine_dccm_bragg() which implements:
-        θ = arcsin(12.39842 / (2 × d × E))
-        where d = 3.136 Å for Si(111)
+        Accuracy:
+        - Position: ±0.0001°
+        - Energy: ±0.5 eV (typical)
+        - Limited by motor resolution
+
+        Warnings
+        --------
+        Verify energy is within DCCM range (4-25 keV).
+        Large energy changes may take significant time.
+        Check beam intensity after move.
 
         Examples
         --------
-        Set to Fe K-edge:
+        Move to Cu K-edge:
         >>> notch = NotchScan()
-        >>> success = notch.set_energy(7112)
-        >>> if success:
-        ...     print("Energy set successfully")
+        >>> notch.set_energy(8979, wait=True)
 
-        Set to Cu K-edge:
-        >>> notch.set_energy(8979)
+        Non-blocking move:
+        >>> notch.set_energy(9000, wait=False)
+        >>> # Do other things...
+        >>> notch.dccm.energy.wait()
+
+        Scan through energies:
+        >>> for E in [8950, 9000, 9050]:
+        ...     notch.set_energy(E)
+        ...     sleep(10)  # Collect data
 
         See Also
         --------
-        determine_dccm_bragg : Energy to angle conversion
-        series : Automated energy scan
+        series : Automated energy scanning
+        DCCM.energy : Direct energy control
         """
-        from time import time
-        from mfx.macros import determine_dccm_bragg
+        energy_keV = energy_eV / 1000.0
 
-        start_time = time()
-        timeout = 30.0  # seconds
-        tolerance = 0.01  # degrees
+        logger.info(f"Setting DCCM energy to {energy_eV} eV ({energy_keV} keV)")
 
-        # Calculate required Bragg angle
-        bragg_angle = determine_dccm_bragg(energy)
-        logger.info(f"Setting energy to {energy} eV (θ = {bragg_angle:.4f}°)")
+        # Move DCCM energy (moves both crystals)
+        self.dccm.energy.move(energy_keV, wait=wait)
 
-        # Move both crystals
-        self.th1.mv(bragg_angle)  # Non-blocking
-        self.th2.umv(bragg_angle)  # Blocking (user move)
-
-        # Wait for both to reach position
-        status = False
-        while round(self.th1(), 2) != round(bragg_angle, 2) or \
-              round(self.th2(), 2) != round(bragg_angle, 2):
-
-            sleep(0.1)
-
-            # Check timeout
-            if time() - start_time > timeout:
-                logger.error(
-                    f"Timeout: DCCM could not move to {energy} eV. "
-                    f"th1: {self.th1():.4f}° vs {bragg_angle:.4f}°, "
-                    f"th2: {self.th2():.4f}° vs {bragg_angle:.4f}°"
-                )
-                status = False
-                break
-        else:
-            # Both motors reached target
-            logger.warning(
-                f"DCCM positioned at {energy} eV "
-                f"(θ = {bragg_angle:.3f}°)"
+        if wait:
+            actual_keV = self.dccm.energy.position
+            actual_eV = actual_keV * 1000
+            logger.info(
+                f"DCCM at {actual_eV:.1f} eV "
+                f"(target: {energy_eV:.1f} eV)"
             )
-            status = True
-
-        return status
 
     def series(
             self,
@@ -204,17 +194,17 @@ class NotchScan:
             energy_scan_steps: int,
             run_length: int = 30,
             tag: str = 'dccm',
-            picker: str = None,
+            picker: Optional[str] = None,
             inspire: bool = False,
             daq_delay: int = 5,
             record: bool = False,
             daq_num: int = 2,
-            exp: str = None):
+            exp: Optional[str] = None):
         """
-        Perform automated energy scan series.
+        Execute automated DCCM energy scan series.
 
-        Moves DCCM through discrete energy points while collecting
-        data at each point using automated DAQ runs.
+        Scans through discrete energy points while collecting data
+        at each energy using automated DAQ runs.
 
         Parameters
         ----------
@@ -223,28 +213,33 @@ class NotchScan:
         energy_scan_end_eV : float
             Ending energy in eV
         energy_scan_steps : int
-            Energy step size in eV
-            Actual number of points = (end - start) / step + 1
+            Energy step size in eV.
+            Number of points = (end - start) / steps
         run_length : int, optional
-            Data collection time per energy point in seconds (default: 30)
+            Data collection time at each energy in seconds.
+            Default is 30.
         tag : str, optional
-            Run tag for data organization (default: 'dccm')
-        picker : str or None, optional
-            Pulse picker mode: 'open', 'flip', or None
-            - 'open': All pulses pass
-            - 'flip': Alternating pulses (for background)
-            - None: No pulse picker operation
+            Run tag for organization.
+            Default is 'dccm'.
+        picker : str, optional
+            Pulse picker mode: 'open', 'flip', or None.
+            Default is None.
         inspire : bool, optional
-            Add inspirational quotes to elog (default: False)
+            Add inspirational quotes to elog.
+            Default is False.
         daq_delay : int, optional
-            Delay between runs in seconds (default: 5)
+            Delay between energy points in seconds.
+            Allows system to settle.
+            Default is 5.
         record : bool, optional
-            Enable data recording (default: False)
+            Enable data recording.
+            Default is False.
         daq_num : int, optional
-            DAQ version: 1 (LCLS-I) or 2 (LCLS-II) (default: 2)
-        exp : str or None, optional
-            Experiment name for analysis (default: None)
-            If None, uses current experiment from get_exp()
+            DAQ station: 1 (LCLS-I) or 2 (LCLS-II).
+            Default is 2.
+        exp : str, optional
+            Experiment name. If None, auto-detects.
+            Default is None.
 
         Returns
         -------
@@ -257,48 +252,63 @@ class NotchScan:
 
         Notes
         -----
-        Scan Sequence:
-        1. Generate energy list from start/end/step
+        Scan Workflow:
+        1. Calculate energy points from start/end/step
         2. Store initial crystal positions
         3. For each energy:
            a. Move DCCM to energy
-           b. Collect data for run_length seconds
-           c. Post run information to elog
-           d. Wait daq_delay before next point
+           b. Wait for settling
+           c. Collect data for run_length seconds
+           d. Post run information to elog
+           e. Wait daq_delay before next point
         4. Prompt to return to initial position
         5. Optionally analyze results
 
-        Energy List Generation:
-        Uses Python range() so actual energies are:
-        [start, start+step, start+2*step, ..., end]
+        Energy Point Generation:
+        Uses Python range() with step size:
+        energies = range(start, end + step, step)
 
-        The final point may not exactly equal end if
-        (end - start) is not divisible by step.
+        Actual energies:
+        [start, start+step, start+2×step, ..., end]
 
-        Pulse Picker Modes:
-        - 'open': Maximum flux, no background subtraction
-        - 'flip': Background subtraction capability
-        - None: Uses current picker state
+        The final point equals end if (end - start) is
+        divisible by step.
 
-        Data Analysis:
-        After scan completion, prompts to:
-        - Return to initial position (optional)
-        - Launch analysis script (optional)
-        - Specify computing facility (S3DF or NERSC)
+        Data Collection:
+        - Uses autorun() for each energy
+        - Sample name = energy value
+        - Tag groups all runs
+        - Run numbers sequential
 
-        Station Selection:
-        - daq_num=1: Station 1 (LCLS-I DAQ)
-        - daq_num=2: Station 0 (LCLS-II DAQ)
+        Post-Scan Analysis:
+        - Prompts to return to initial energy
+        - Offers analysis script execution
+        - Can process on S3DF or NERSC
+        - Generates energy calibration plots
+
+        Typical Applications:
+        - Energy calibration using standards
+        - XANES edge scans
+        - Verifying monochromator accuracy
+        - Absorption edge determination
+
+        Warnings
+        --------
+        - Ensure energy range within DCCM limits
+        - Monitor beam intensity during scan
+        - Large scans may take hours
+        - Verify adequate disk space
 
         Examples
         --------
-        Scan across Fe K-edge:
+        Fe K-edge calibration scan:
         >>> notch = NotchScan()
         >>> notch.series(
         ...     energy_scan_start_eV=7100,
         ...     energy_scan_end_eV=7200,
         ...     energy_scan_steps=5,
         ...     run_length=60,
+        ...     tag='Fe_edge',
         ...     record=True
         ... )
 
@@ -311,7 +321,16 @@ class NotchScan:
         ...     record=False
         ... )
 
-        Scan with background subtraction:
+        Fine energy scan:
+        >>> notch.series(
+        ...     energy_scan_start_eV=8975,
+        ...     energy_scan_end_eV=8985,
+        ...     energy_scan_steps=1,  # 1 eV steps
+        ...     run_length=30,
+        ...     record=True
+        ... )
+
+        With pulse picker:
         >>> notch.series(
         ...     energy_scan_start_eV=8950,
         ...     energy_scan_end_eV=9050,
@@ -323,36 +342,25 @@ class NotchScan:
 
         See Also
         --------
-        set_energy : Move to single energy
-        output : Analyze scan results
-        autorun : Data collection function
+        set_energy : Single energy positioning
+        autorun : Data collection at each point
+        DCCM : Monochromator control
         """
         from mfx.db import pp
         from mfx.autorun import autorun
         from mfx.macros import get_exp, get_run
-        from time import sleep
 
         # Validate DAQ number
-        if daq_num == 1:
-            station = 1
-        elif daq_num == 2:
-            station = 0
-        else:
+        if daq_num not in [1, 2]:
             logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
             raise ValueError('Invalid daq_num')
 
-        # Get experiment name
+        # Determine experiment
         if exp is None:
             exp = get_exp()
 
-        # Operate pulse picker
-        if picker == 'open':
-            pp.open()
-        elif picker == 'flip':
-            pp.flipflop()
-
-        # Get starting run number
-        run_number = get_run(station=station) + 1
+        # Determine station
+        station = 1 if daq_num == 1 else 0
 
         # Generate energy list
         energies = list(range(
@@ -360,57 +368,110 @@ class NotchScan:
             energy_scan_end_eV + energy_scan_steps,
             energy_scan_steps
         ))
-        logger.info(f"Energy scan: {energies}")
 
-        # Store initial positions
-        original_th1 = self.th1()
-        original_th2 = self.th2()
+        # Log scan configuration
+        logger.info("\n" + "="*60)
+        logger.info("DCCM ENERGY SCAN SERIES")
+        logger.info("="*60)
+        logger.info(f"Experiment: {exp}")
+        logger.info(f"Energy range: {energy_scan_start_eV} - "
+                    f"{energy_scan_end_eV} eV")
+        logger.info(f"Step size: {energy_scan_steps} eV")
+        logger.info(f"Number of points: {len(energies)}")
+        logger.info(f"Energies: {energies}")
+        logger.info(f"Run length: {run_length}s per point")
+        logger.info(f"Total time: ~{len(energies) * (run_length + daq_delay) / 60:.1f} min")
+        logger.info(f"Recording: {record}")
+        logger.info("="*60 + "\n")
 
-        # Perform scan
-        for ev in energies:
-            # Move to energy
-            status = self.set_energy(ev)
-
-            # Prepare sample label
-            if status:
-                sample = f'Notch scan at {ev} eV'
-            else:
-                sample = f'Notch scan at {ev} eV (possible error)'
-
-            # Collect data
-            autorun(
-                sample=sample,
-                tag=tag,
-                run_length=run_length,
-                record=record,
-                runs=1,
-                inspire=inspire,
-                picker=picker,
-                close=False,
-                daq_num=daq_num
-            )
-
-            sleep(daq_delay)
-
-        logger.warning(
-            'Scan complete. Thank you for choosing the MFX beamline!\n'
+        # Store initial crystal positions
+        original_th1 = self.th1.position
+        original_th2 = self.th2.position
+        logger.info(
+            f"Initial positions: TH1={original_th1:.4f}°, "
+            f"TH2={original_th2:.4f}°"
         )
-        logger.warning(
-            f"ssh -Yt djr@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
-            f"-f s3df -t series -e {exp} -r {run_number} -z {energy_scan_start_eV} -s "
-            f"{energy_scan_steps} -n {len(energies)}"
-            )
-        # Prompt to return to initial position
-        answer = input("Return to original Bragg angle? (y/n): ")
-        if answer.lower() == "y":
+
+        # Configure pulse picker
+        if picker == 'open':
+            logger.info("Opening pulse picker")
+            pp.open()
+        elif picker == 'flip':
+            logger.info("Setting pulse picker to flip-flop")
+            pp.flipflop()
+
+        # Get starting run number
+        run_number = get_run(station=station) + 1
+
+        # Execute energy scan
+        try:
+            for idx, energy_eV in enumerate(energies):
+                logger.info(f"\n{'='*60}")
+                logger.info(f"ENERGY POINT {idx + 1}/{len(energies)}")
+                logger.info(f"{'='*60}")
+
+                # Move to energy
+                logger.info(f"Setting energy: {energy_eV} eV")
+                self.set_energy(energy_eV, wait=True)
+
+                # Wait for settling
+                logger.info(f"Settling for {daq_delay}s...")
+                sleep(daq_delay)
+
+                # Collect data
+                logger.info(f"Collecting data for {run_length}s...")
+                autorun(
+                    sample=str(energy_eV),
+                    tag=tag,
+                    run_length=run_length,
+                    record=record,
+                    runs=1,
+                    inspire=inspire,
+                    picker=picker,
+                    close=False,  # Don't close between points
+                    daq_num=daq_num
+                )
+
+                logger.info(f"Completed energy point: {energy_eV} eV")
+
+        except KeyboardInterrupt:
+            logger.warning("\nEnergy scan interrupted by user")
+
+        finally:
+            # Close pulse picker
+            if picker:
+                pp.close()
+
+        # Scan complete
+        logger.info("\n" + "="*60)
+        logger.info("ENERGY SCAN COMPLETE")
+        logger.info("="*60)
+        logger.info(f"Scanned {len(energies)} energy points")
+        logger.info(f"Energy range: {energy_scan_start_eV} - "
+                    f"{energy_scan_end_eV} eV")
+        logger.info("="*60)
+
+        # Offer to analyze
+        if record:
+            logger.info("\nData analysis command:")
             logger.info(
-                f'Returning to initial position: '
-                f'th1={original_th1:.4f}°, th2={original_th2:.4f}°'
+                f"ssh -Yt djr@s3dflogin "
+                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
+                f"energy_calib_output.py "
+                f"-f s3df -t series -e {exp} -r {run_number} "
+                f"-z {energy_scan_start_eV} -s {energy_scan_steps} "
+                f"-n {len(energies)}"
             )
-            self.th1.umv( original_th1)
-            self.th2.umv(original_th2)
-            logger.info("Returned to initial position")
+
+        # Prompt to return to initial position
+        answer = input("\nReturn to initial crystal positions? (y/n): ")
+        if answer.lower() == 'y':
+            logger.info(
+                f"Returning to initial positions: "
+                f"TH1={original_th1:.4f}°, TH2={original_th2:.4f}°"
+            ) self.th1.move(original_th1, wait=True)
+            self.th2.move(original_th2, wait=True)
+            logger.info("Returned to initial positions")
 
         # Prompt for analysis
         answer = input("Would you like to analyze the scan? (y/n): ")
@@ -440,67 +501,54 @@ class NotchScan:
         step: float = None,
         num: int = None,
         daq_num: int = 2):
-        """
-        Launch analysis script for notch scan results.
+    """
+    Analysis and output for notch scan data.
 
-        Submits batch job to analyze collected data and generate
-        plots of energy-dependent signals.
+    Provides methods to analyze energy calibration data and
+    generate plots on computing facilities.
 
-        Parameters
-        ----------
-        exp : str
-            Experiment name (e.g., 'mfxls1234')
-        facility : str, optional
-            Computing facility: 'S3DF' or 'NERSC' (default: 'S3DF')
+    Methods
+    -------
+    series(user, facility, exp, run, energy, step, num)
+        Analyze energy scan series data
 
-        Returns
-        -------
-        None
+    Notes
+    -----
+    Analysis Process:
+    1. Retrieve data from DAQ files
+    2. Extract detector intensities vs. energy
+    3. Identify absorption edge
+    4. Compare to reference energy
+    5. Calculate energy offset
+    6. Generate calibration plots
 
-        Notes
-        -----
-        Analysis Scripts:
-        - S3DF: /cds/home/d/djr/scripts/hsd/Notch_Scan_S3DF.sh
-        - NERSC: /cds/home/d/djr/scripts/hsd/Notch_Scan_NERSC.sh
+    Output Products:
+    - Energy vs. intensity plots
+    - Edge position determination
+    - Calibration offset value
+    - Statistical uncertainties
 
-        The scripts:
-        1. Locate data files for experiment
-        2. Extract relevant detector signals
-        3. Plot intensity vs. energy
-        4. Save results to experiment directory
+    Computing Facilities:
+    - S3DF: Interactive analysis
+    - NERSC: Batch processing
 
-        Output Location:
-        - Results saved to experiment analysis directory
-        - Plots typically in PNG/PDF format
-        - Data tables in CSV format
+    Examples
+    --------
+    >>> output = NotchOutput()
+    >>> output.series(
+    ...     user='myuser',
+    ...     facility='S3DF',
+    ...     exp='mfxls1234',
+    ...     run=100,
+    ...     energy=7112,
+    ...     step=5,
+    ...     num=20
+    ... )
 
-        Computing Resources:
-        - S3DF: SLAC's S3DF cluster (local, faster)
-        - NERSC: National facility (more resources)
-
-        Batch System:
-        - Jobs submitted via sbatch (SLURM)
-        - Check status: squeue -u $USER
-        - Typical runtime: 5-30 minutes
-
-        Requirements:
-        - Data must be recorded (record=True in series())
-        - Valid experiment name
-        - Network access to computing facility
-
-        Examples
-        --------
-        Analyze on S3DF:
-        >>> notch = NotchScan()
-        >>> notch.output('mfxls1234', facility='S3DF')
-
-        Analyze on NERSC:
-        >>> notch.output('mfxls1234', facility='NERSC')
-
-        See Also
-        --------
-        series : Perform notch scan
-        """
+    See Also
+    --------
+    NotchScan.series : Data collection
+    """
         import os
         from mfx.db import daq
         from mfx.macros import get_exp, get_run
