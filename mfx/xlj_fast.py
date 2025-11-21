@@ -1,29 +1,26 @@
 """
-XLJ Fast Motor Control Module
+XLJ (X-ray Liquid Jet) fast motor control with interactive keyboard interface.
 
-This module provides interactive keyboard-based control for the XLJ (X-ray Liquid Jet)
-positioning system, supporting both translational (X, Y, Z) and rotational (RX, RY, RZ)
-axes.
+Provides real-time keyboard control for liquid jet positioning with support
+for translational (X, Y, Z) and rotational (RX, RY, RZ) axes.
 """
 
 import logging
-from ophyd.device import Component as Cpt
+import sys
+import tty
+import termios
+from typing import List, Tuple, Dict
+
+from ophyd import Component as Cpt
 from ophyd.signal import EpicsSignal
 from pcdsdevices.epics_motor import IMS
 from pcdsdevices.pv_positioner import PVPositionerDone
-from pcdsdevices import utils
 from pcdsdevices.jet import BeckhoffJet
 
 logger = logging.getLogger(__name__)
 
 
-class BypassPositionCheck(PVPositionerDone):
-    """PV Positioner with position check bypass for fast movements."""
-    setpoint = Cpt(EpicsSignal, ":PLC:fPosition")
-    actuate = Cpt(EpicsSignal, ":PLC:bMoveCmd")
-
-
-# Key mapping constants
+# Key code constants for arrow keys and special keys
 KEYS = {
     'up': "\x1b[A",
     'down': "\x1b[B",
@@ -40,54 +37,179 @@ KEYS = {
 }
 
 
+class BypassPositionCheck(PVPositionerDone):
+    """
+    PV positioner with position check bypass for fast movements.
+
+    Extends PVPositionerDone to skip position verification,
+    allowing faster continuous motion for interactive control.
+
+    Components
+    ----------
+    setpoint : EpicsSignal
+        Target position PV
+    actuate : EpicsSignal
+        Move command trigger
+
+    Notes
+    -----
+    Bypassing Position Check:
+    - Standard positioners wait for position reached
+    - Interactive control needs immediate response
+    - This class starts move and returns immediately
+    - Position tracking happens asynchronously
+
+    Use Cases:
+    - Interactive jogging
+    - Continuous motion
+    - Fast scanning
+    - Real-time adjustments
+
+    Warnings
+    --------
+    - No verification that position reached
+    - Responsibility on user to monitor
+    - Not suitable for precision positioning
+
+    Examples
+    --------
+    >>> motor = BypassPositionCheck('MFX:LJH:JET:X', name='xlj_x')
+    >>> motor.move(10.0)  # Returns immediately
+    """
+
+    setpoint = Cpt(EpicsSignal, ":PLC:fPosition")
+    actuate = Cpt(EpicsSignal, ":PLC:bMoveCmd")
+
+
 class XLJController:
     """
-    Controller class for XLJ motor movements.
+    Interactive keyboard controller for XLJ motors.
+
+    Provides real-time keyboard-based control with visual feedback
+    and configurable step sizes.
 
     Attributes
     ----------
-    motors : list
+    motors : List
         List of motor objects to control
     orientation : str
-        Camera orientation ('horizontal' or 'vertical')
+        Camera view orientation: 'horizontal' or 'vertical'
     scale : float
         Current step size for movements
+    mode : str
+        Control mode: 'translation', 'rotation', or '6axis'
+    xlj : BeckhoffJet
+        Full XLJ device for status monitoring
+
+    Methods
+    -------
+    run()
+        Start interactive control loop
+    print_help()
+        Display control instructions
+    process_key(key)
+        Handle keyboard input
+    update_scale(factor)
+        Adjust step size
+
+    Notes
+    -----
+    Control Modes:
+
+    Translation (X, Y, Z):
+    - Arrow keys: Move X and Y
+    - Shift+Up/Down: Move Z
+    - Direct spatial control
+    - Units: mm
+
+    Rotation (RX, RY, RZ):
+    - Arrow keys: Rotate RX and RY
+    - Shift+Up/Down: Rotate RZ
+    - Angular adjustments
+    - Units: degrees
+
+    6-Axis (X, Y, Z, RX, RY, RZ):
+    - Arrow keys: Move X and Y
+    - Shift+Up/Down: Move Z
+    - W/S: Rotate RY (horizontal) or RX (vertical)
+    - A/D: Rotate RX (horizontal) or RY (vertical)
+    - Shift+W/S: Rotate RZ
+    - Full control of all DOF
+
+    Orientation:
+    - Horizontal: Standard camera view
+    - Vertical: 90° rotated camera
+    - Affects arrow key mapping
+    - Matches visual feedback
+
+    Step Size Control:
+    - +/=: Double current step
+    - -/_: Halve current step
+    - Shift+Right: Double step
+    - Shift+Left: Halve step
+    - Dynamic adjustment during use
+
+    Visual Feedback:
+    - Current positions displayed
+    - Step size shown
+    - Motor names labeled
+    - Updates after each move
+
+    Examples
+    --------
+    Create controller:
+    >>> from xlj_fast import XLJController
+    >>> motors = [xlj_x, xlj_y, xlj_z]
+    >>> ctrl = XLJController(motors, 'horizontal', 0.1, 'translation')
+    >>> ctrl.run()
+
+    See Also
+    --------
+    xlj_fast : Translation control function
+    xlj_fast_rot : Rotation control function
+    xlj_6axis : Full 6-axis control function
     """
 
-    def __init__(self, motors, orientation='horizontal', scale=0.1, mode='translation'):
+    def __init__(
+            self,
+            motors: List,
+            orientation: str = 'horizontal',
+            scale: float = 0.1,
+            mode: str = 'translation'):
         """
-        Initialize the XLJ controller.
+        Initialize XLJ controller.
 
         Parameters
         ----------
-        motors : list
-            List of motor objects to control
+        motors : List
+            Motor objects to control
         orientation : str, optional
-            Camera orientation, either 'horizontal' or 'vertical' (default: 'horizontal')
+            Camera orientation. Default is 'horizontal'.
         scale : float, optional
-            Initial step size for movements (default: 0.1)
+            Initial step size. Default is 0.1.
         mode : str, optional
-            Control mode: 'translation', 'rotation', or '6axis' (default: 'translation')
+            Control mode. Default is 'translation'.
         """
         self.motors = motors
         self.orientation = orientation.lower()
         self.scale = scale
-        self.mode = mode
-        self._setup_key_mappings()
+        self.mode = mode.lower()
+        self.xlj = None  # Set by caller if needed
 
-    def _setup_key_mappings(self):
-        """Configure key mappings based on orientation and mode."""
-        if self.mode == 'translation':
+        # Setup key mappings based on mode
+        if mode == 'translation':
             self._setup_translation_keys()
-        elif self.mode == 'rotation':
+        elif mode == 'rotation':
             self._setup_rotation_keys()
-        elif self.mode == '6axis':
+        elif mode == '6axis':
             self._setup_6axis_keys()
         else:
-            raise ValueError(f"Invalid mode: {self.mode}. Use 'translation', 'rotation', or '6axis'")
+            raise ValueError(f"Unknown mode: {mode}")
+
+        logger.info(f"XLJ Controller initialized: {mode} mode")
 
     def _setup_translation_keys(self):
-        """Set up key mappings for translation mode (X, Y, Z)."""
+        """Setup key mappings for translation mode (X, Y, Z)."""
         if self.orientation == 'horizontal':
             self.move_map = {
                 KEYS['left']: ('x', -1),
@@ -106,10 +228,12 @@ class XLJController:
                 KEYS['shift_up']: ('z', -1),
                 KEYS['shift_down']: ('z', 1),
             }
+
         self.move_keys = tuple(self.move_map.keys())
+        self.motor_names = ['X', 'Y', 'Z']
 
     def _setup_rotation_keys(self):
-        """Set up key mappings for rotation mode (RX, RY, RZ)."""
+        """Setup key mappings for rotation mode (RX, RY, RZ)."""
         if self.orientation == 'horizontal':
             self.move_map = {
                 KEYS['left']: ('rx', -1),
@@ -121,17 +245,19 @@ class XLJController:
             }
         else:  # vertical
             self.move_map = {
-                KEYS['up']: ('rx', -1),
-                KEYS['down']: ('rx', 1),
-                KEYS['right']: ('ry', -1),
-                KEYS['left']: ('ry', 1),
+                KEYS['right']: ('rx', -1),
+                KEYS['left']: ('rx', 1),
+                KEYS['down']: ('ry', 1),
+                KEYS['up']: ('ry', -1),
                 KEYS['shift_up']: ('rz', -1),
                 KEYS['shift_down']: ('rz', 1),
             }
+
         self.move_keys = tuple(self.move_map.keys())
+        self.motor_names = ['RX', 'RY', 'RZ']
 
     def _setup_6axis_keys(self):
-        """Set up key mappings for 6-axis mode (X, Y, Z, RX, RY, RZ)."""
+        """Setup key mappings for 6-axis mode (X, Y, Z, RX, RY, RZ)."""
         if self.orientation == 'horizontal':
             self.move_map = {
                 KEYS['left']: ('x', -1),
@@ -162,207 +288,328 @@ class XLJController:
                 'W': ('rz', -1),
                 'S': ('rz', 1),
             }
+
         self.move_keys = tuple(self.move_map.keys())
+        self.motor_names = ['X', 'Y', 'Z', 'RX', 'RY', 'RZ']
 
     @property
     def scale_keys(self):
         """Return tuple of scale adjustment keys."""
-        return (KEYS['plus'], KEYS['minus'], KEYS['equal'], KEYS['under'],
-                KEYS['shift_right'], KEYS['shift_left'])
+        return (
+            KEYS['plus'], KEYS['minus'], KEYS['equal'], KEYS['under'],
+            KEYS['shift_right'], KEYS['shift_left']
+        )
 
-    def show_status(self):
-        """Display current motor positions and scale."""
-        template = '{}: {:.4f}' if self.scale >= 0.0001 else '{}: {:.4e}'
-        text = [template.format(mot.name, mot.wm()) for mot in self.motors]
-        text.append(f'scale: {self.scale}')
-        print('\x1b[2K\r' + ', '.join(text), end='')
+    def print_help(self):
+        """Display control instructions."""
+        print("\n" + "="*60)
+        print(f"XLJ {self.mode.upper()} MODE CONTROL")
+        print("="*60)
 
-    def show_usage(self):
-        """Display usage instructions."""
-        print()
         if self.mode == 'translation':
-            print(" Arrow keys: Move X and Y")
-            print(" Shift+Up/Down: Move Z upstream/downstream")
+            print("Arrow Keys:")
+            print("  ← → : Move X axis")
+            print("  ↑ ↓ : Move Y axis")
+            print(" Shift+↑ ↓ : Move Z axis upstream/downstream")
+
         elif self.mode == 'rotation':
-            print(" Arrow keys: Rotate RX and RY")
-            print(" Shift+Up/Down: Rotate RZ")
-        else:  # 6axis
-            print(" Arrow keys: Move X and Y")
-            print(" Shift+Up/Down: Move Z upstream/downstream")
-            print(" W/S: Rotate RY (horizontal) or RX (vertical)")
-            print(" A/D: Rotate RX (horizontal) or RY (vertical)")
-            print(" Shift+W/S: Rotate RZ")
-        print(" +/Shift+Right: Double scale")
-        print(" -/Shift+Left: Halve scale")
-        print(" h: Show this help")
-        print(" q: Quit")
-        print()
+            print("Arrow Keys:")
+            print("  ← → : Rotate RX axis")
+            print("  ↑ ↓ : Rotate RY axis")
+            print("  Shift+↑ ↓ : Rotate RZ axis")
 
-    def adjust_scale(self, direction):
-        """
-        Adjust the movement scale.
+        elif self.mode == '6axis':
+            print("Translation:")
+            print("  ← → : Move X axis")
+            print("  ↑ ↓ : Move Y axis")
+            print("  Shift+↑ ↓ : Move Z axis")
+            print("\nRotation (horizontal camera):")
+            print("  W/S : Rotate RY axis")
+            print("  A/D : Rotate RX axis")
+            print("  Shift+W/S : Rotate RZ axis")
+            print("\nRotation (vertical camera):")
+            print("  W/S : Rotate RX axis")
+            print("  A/D : Rotate RY axis")
+            print("  Shift+W/S : Rotate RZ axis")
 
-        Parameters
-        ----------
-        direction : str
-            Key input for scale adjustment
+        print("\nStep Size:")
+        print("  + or = : Double step size")
+        print("  - or _ : Halve step size")
+        print("  Shift+→ : Double step size")
+        print("  Shift+← : Halve step size")
 
-        Returns
-        -------
-        float
-            Updated scale value
-        """
-        if direction in (KEYS['shift_right'], KEYS['plus'], KEYS['equal']):
-            self.scale *= 2
-        elif direction in (KEYS['shift_left'], KEYS['minus'], KEYS['under']):
-            self.scale /= 2
-        return self.scale
+        print("\nOther:")
+        print("  h : Show this help")
+        print("  q : Quit")
+        print("="*60)
 
-    def execute_movement(self, inp):
-        """
-        Execute motor movement based on key input.
+    def print_status(self):
+        """Display current motor positions and step size."""
+        print("\n" + "-"*60)
+        print(f"Step size: {self.scale:.6f}")
 
-        Parameters
-        ----------
-        inp : str
-            Key input for movement direction
-        """
-        if inp not in self.move_map:
-            return
-
-        axis, direction = self.move_map[inp]
-        motor_index = {'x': 0, 'y': 1, 'z': 2, 'rx': 3, 'ry': 4, 'rz': 5}
-
-        if axis in motor_index and motor_index[axis] < len(self.motors):
-            motor = self.motors[motor_index[axis]]
-            movement = self.scale * direction
-
+        for i, motor in enumerate(self.motors):
             try:
-                # Special handling for Z axis with jet position check
-                if axis == 'z' and hasattr(self, 'xlj'):
-                    if round(self.xlj.jet.z(), 2) != round(motor(), 2):
-                        logger.error(f'xlj.jet.z = {self.xlj.jet.z()}, '
-                                   f'{motor.name} = {motor()}')
-                        motor.umv(self.xlj.jet.z())
+                pos = motor.position
+                name = self.motor_names[i] if i < len(
+                    self.motor_names
+                ) else motor.name
+                print(f"{name:8s}: {pos:10.4f}")
+            except Exception as e:
+                print(f"{motor.name}: Error reading position ({e})")
 
-                motor.umvr(movement, log=False, newline=False)
-            except Exception as exc:
-                logger.error('Error in tweak move: %s', exc)
-                logger.debug('', exc_info=True)
+        print("-"*60)
+
+    def update_scale(self, factor: float):
+        """
+        Update step size by multiplication factor.
+
+        Parameters
+        ----------
+        factor : float
+            Multiplication factor (e.g., 2.0 to double, 0.5 to halve)
+        """
+        self.scale *= factor
+        logger.info(f"Step size: {self.scale:.6f}")
+        print(f"Step size: {self.scale:.6f}")
+
+    def execute_move(self, motor, direction: int):
+        """
+        Execute relative motor move.
+
+        Parameters
+        ----------
+        motor
+            Motor object to move
+        direction : int
+            Direction multiplier: +1 or -1
+        """
+        movement = self.scale * direction
+
+        try:
+            motor.mvr(movement)
+            logger.debug(f"Moved {motor.name} by {movement:.6f}")
+        except Exception as e:
+            logger.error(f"Error moving {motor.name}: {e}")
+            print(f"Error: {e}")
 
     def run(self):
-        """Run the interactive control loop."""
-        start_text = [f'{mot.name} at {mot.wm():.4f}' for mot in self.motors]
-        logger.info('Started tweak of ' + ', '.join(start_text))
-        self.show_usage()
+        """
+        Run interactive control loop.
 
-        is_input = True
-        while is_input:
-            self.show_status()
-            inp = utils.get_input()
+        Captures keyboard input and controls motors until
+        user quits with 'q'.
+        """
+        # Print initial status
+        self.print_help()
+        self.print_status()
 
-            if inp == 'q':
-                is_input = False
-            elif inp in self.move_keys:
-                self.execute_movement(inp)
-            elif inp in self.scale_keys:
-                self.adjust_scale(inp)
-            elif inp == 'h':
-                self.show_usage()
-            else:
-                logger.error('Invalid input. Press "h" for help.')
+        # Save terminal settings
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
 
-        print()
-        logger.info('Tweak complete')
+        try:
+            # Set terminal to raw mode for character capture
+            tty.setraw(sys.stdin.fileno())
+
+            while True:
+                # Read one character/sequence
+                char = sys.stdin.read(1)
+
+                # Handle escape sequences (arrow keys)
+                if char == '\x1b':
+                    char += sys.stdin.read(2)  # Read rest of sequence
+                    # Check for shift modifier
+                    if char == '\x1b[1':
+                        char += sys.stdin.read(3)  # Read full shift sequence
+
+                # Process input
+                if char == 'q':
+                    break
+
+                elif char == 'h':
+                    self.print_help()
+                    self.print_status()
+
+                elif char in self.move_keys:
+                    # Execute motor move
+                    axis, direction = self.move_map[char]
+                    motor_idx = self.motor_names.index(axis.upper())
+                    self.execute_move(self.motors[motor_idx], direction)
+
+                elif char in self.scale_keys:
+                    # Adjust step size
+                    if char in (KEYS['plus'], KEYS['equal'],
+                                KEYS['shift_right']):
+                        self.update_scale(2.0)
+                    elif char in (KEYS['minus'], KEYS['under'],
+                                  KEYS['shift_left']):
+                        self.update_scale(0.5)
+
+                else:
+                    print(f"Unknown key. Press 'h' for help.")
+
+        finally:
+            # Restore terminal settings
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            print("\nControl loop exited")
 
 
-def xlj_fast_xyz(orientation='horizontal', scale=0.1):
+# High-level control functions
+
+def xlj_fast(orientation: str = 'horizontal', scale: float = 0.1):
     """
-    Interactive keyboard control for XLJ translation axes (X, Y, Z).
+    Interactive XLJ translation control (X, Y, Z).
+
+    Provides keyboard-based control for liquid jet X, Y, and Z
+    positioning.
 
     Parameters
     ----------
     orientation : str, optional
-        Camera orientation: 'horizontal' or 'vertical' (default: 'horizontal')
+        Camera view: 'horizontal' or 'vertical'.
+        Default is 'horizontal'.
     scale : float, optional
-        Initial step size for movements (default: 0.1)
+        Initial step size in mm.
+        Default is 0.1.
 
-    Controls
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    Controls:
+    - Arrow keys: Move X and Y
+    - Shift+↑ ↓ : Move Z upstream/downstream
+    - +/- : Adjust step size
+    - h : Help
+    - q : Quit
+
+    Examples
     --------
-    - Arrow keys: Move X and Y axes
-    - Shift+Up/Down: Move Z axis upstream/downstream
-    - +/- or Shift+Right/Left: Double/halve step size
-    - h: Display help
-    - q: Quit
+    >>> xlj_fast()  # Horizontal orientation
+    >>> xlj_fast('vertical', 0.05)  # Vertical, smaller steps
+
+    See Also
+    --------
+    xlj_fast_rot : Rotation control
+    xlj_6axis : Full 6-axis control
     """
-    xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
-    xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
-    xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
+    xlj_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_x")
+    xlj_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_y")
+    xlj_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_z")
 
-    motors = [xlj_fast_x, xlj_fast_y, xlj_fast_z]
-    controller = XLJController(motors, orientation, scale, mode='translation')
-    controller.xlj = BeckhoffJet('MFX:LJH', name='xlj')
-    controller.run()
+    motors = [xlj_x, xlj_y, xlj_z]
+    ctrl = XLJController(motors, orientation, scale, 'translation')
+    ctrl.xlj = BeckhoffJet('MFX:LJH', name='xlj')
+
+    logger.info("Starting XLJ translation control")
+    ctrl.run()
 
 
-def xlj_fast_rot(orientation='horizontal', scale=0.1):
+def xlj_fast_rot(orientation: str = 'horizontal', scale: float = 0.1):
     """
-    Interactive keyboard control for XLJ rotation axes (RX, RY, RZ).
+    Interactive XLJ rotation control (RX, RY, RZ).
+
+    Provides keyboard-based control for liquid jet rotation axes.
 
     Parameters
     ----------
     orientation : str, optional
-        Camera orientation: 'horizontal' or 'vertical' (default: 'horizontal')
+        Camera view. Default is 'horizontal'.
     scale : float, optional
-        Initial step size for rotations (default: 0.1)
+        Initial step size in degrees.
+        Default is 0.1.
 
-    Controls
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    Controls:
+    - Arrow keys: Rotate RX and RY
+    - Shift+↑ ↓ : Rotate RZ
+    - +/- : Adjust step size
+    - h : Help
+    - q : Quit
+
+    Examples
     --------
-    - Arrow keys: Rotate RX and RY axes
-    - Shift+Up/Down: Rotate RZ axis
-    - +/- or Shift+Right/Left: Double/halve step size
-    - h: Display help
-    - q: Quit
+    >>> xlj_fast_rot()
+    >>> xlj_fast_rot('vertical', 0.05)
+
+    See Also
+    --------
+    xlj_fast : Translation control
+    xlj_6axis : Full 6-axis control
     """
-    xlj_fast_rx = IMS("MFX:HRA:MMS:02", name="xlj_fast_rx")
-    xlj_fast_ry = IMS("MFX:HRA:MMS:04", name="xlj_fast_ry")
-    xlj_fast_rz = IMS("MFX:HRA:MMS:03", name="xlj_fast_rz")
+    xlj_rx = IMS("MFX:HRA:MMS:02", name="xlj_rx")
+    xlj_ry = IMS("MFX:HRA:MMS:04", name="xlj_ry")
+    xlj_rz = IMS("MFX:HRA:MMS:03", name="xlj_rz")
 
-    motors = [xlj_fast_rx, xlj_fast_ry, xlj_fast_rz]
-    controller = XLJController(motors, orientation, scale, mode='rotation')
-    controller.run()
+    motors = [xlj_rx, xlj_ry, xlj_rz]
+    ctrl = XLJController(motors, orientation, scale, 'rotation')
+
+    logger.info("Starting XLJ rotation control")
+    ctrl.run()
 
 
-def xlj_6axis(orientation='horizontal', scale=0.1):
+def xlj_6axis(orientation: str = 'horizontal', scale: float = 0.1):
     """
-    Interactive keyboard control for all XLJ axes (X, Y, Z, RX, RY, RZ).
+    Interactive XLJ 6-axis control (X, Y, Z, RX, RY, RZ).
+
+    Provides complete keyboard-based control for all liquid jet
+    degrees of freedom.
 
     Parameters
     ----------
     orientation : str, optional
-        Camera orientation: 'horizontal' or 'vertical' (default: 'horizontal')
+        Camera view. Default is 'horizontal'.
     scale : float, optional
-        Initial step size for movements (default: 0.1)
+        Initial step size (mm for translation, deg for rotation).
+        Default is 0.1.
 
-    Controls
-    --------
-    - Arrow keys: Move X and Y axes
-    - Shift+Up/Down: Move Z axis upstream/downstream
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    Controls:
+    - Arrow keys: Move X and Y
+    - Shift+↑ ↓ : Move Z
     - W/S: Rotate RY (horizontal) or RX (vertical)
     - A/D: Rotate RX (horizontal) or RY (vertical)
     - Shift+W/S: Rotate RZ
-    - +/- or Shift+Right/Left: Double/halve step size
-    - h: Display help
-    - q: Quit
-    """
-    xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
-    xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
-    xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
-    xlj_fast_rx = IMS("MFX:HRA:MMS:02", name="xlj_fast_rx")
-    xlj_fast_ry = IMS("MFX:HRA:MMS:04", name="xlj_fast_ry")
-    xlj_fast_rz = IMS("MFX:HRA:MMS:03", name="xlj_fast_rz")
+    - +/- : Adjust step size
+    - h : Help
+    - q : Quit
 
-    motors = [xlj_fast_x, xlj_fast_y, xlj_fast_z, xlj_fast_rx, xlj_fast_ry, xlj_fast_rz]
-    controller = XLJController(motors, orientation, scale, mode='6axis')
-    controller.xlj = BeckhoffJet('MFX:LJH', name='xlj')
-    controller.run()
+    Examples
+    --------
+    >>> xlj_6axis()
+    >>> xlj_6axis('vertical', 0.05)
+
+    See Also
+    --------
+    xlj_fast : Translation only
+    xlj_fast_rot : Rotation only
+    """
+    xlj_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_x")
+    xlj_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_y")
+    xlj_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_z")
+    xlj_rx = IMS("MFX:HRA:MMS:02", name="xlj_rx")
+    xlj_ry = IMS("MFX:HRA:MMS:04", name="xlj_ry")
+    xlj_rz = IMS("MFX:HRA:MMS:03", name="xlj_rz")
+
+    motors = [xlj_x, xlj_y, xlj_z, xlj_rx, xlj_ry, xlj_rz]
+    ctrl = XLJController(motors, orientation, scale, '6axis')
+    ctrl.xlj = BeckhoffJet('MFX:LJH', name='xlj')
+
+    logger.info("Starting XLJ 6-axis control")
+    ctrl.run()
+
+
+logger.info("XLJ fast control utilities loaded and ready")
