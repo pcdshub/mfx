@@ -1,51 +1,43 @@
-"""CCTBX (Computational Crystallography Toolbox) integration for MFX beamline."""
+"""
+CCTBX (Computational Crystallography Toolbox) integration for MFX beamline.
+
+Provides interfaces for serial crystallography data processing, including
+hit finding, indexing, geometry refinement, and result visualization on
+S3DF and NERSC computing facilities.
+"""
 
 import os
-import subprocess
-import sys
 import logging
-from typing import Optional, List, Union
+from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
 
 class cctbx:
     """
-    CCTBX integration for crystallography data processing.
+    CCTBX data processing interface for serial crystallography.
 
-    Provides interface to CCTBX suite for X-ray crystallography
-    data analysis at remote computing facilities (S3DF, NERSC).
-    Handles SSH connections, job submission, and result retrieval.
-
-    CCTBX (Computational Crystallography Toolbox) enables:
-    - Diffraction data processing
-    - Structure determination
-    - Geometry refinement
-    - Hit finding and indexing
-    - Integration and scaling
-    - Real-time feedback
-
-    Methods
-    -------
-    geom_refine(...) : None
-        Refine detector geometry
-    average(...) : None
-        Average diffraction patterns
-    image_viewer(...) : None
-        Launch interactive image viewer
-    indexing(...) : None
-        Index diffraction patterns
-    merge(...) : None
-        Merge indexed reflections
-    sshproxy(user) : None
-        Renew SSH proxy for NERSC access
-    notch_check(...) : None
-        Check notch scan energy calibration
+    Provides Python wrappers for CCTBX processing scripts running on
+    S3DF (SLAC) and NERSC (Berkeley) computing facilities. Supports
+    hit finding, indexing, integration, and geometry refinement.
 
     Attributes
     ----------
     experiment : str
         Current experiment name (e.g., 'mfxls1234')
+
+    Methods
+    -------
+    sshproxy(user)
+        Renew SSH proxy for NERSC access
+    image_viewer(user, facility, image_type, exp, run, group, debug)
+        Launch interactive image viewer for detector data
+    indexing(user, facility, exp, run, group, debug)
+        Submit indexing job for diffraction data
+    merge(user, facility, exp, group, debug)
+        Merge indexed data into structure factors
+    geom_refine(user, facility, group, level, exp)
+        Refine detector geometry from indexed data
 
     Notes
     -----
@@ -54,77 +46,74 @@ class cctbx:
     S3DF (SLAC):
     - SLAC Shared Scientific Data Facility
     - Direct network access from MFX
-    - Fast data transfer
-    - Interactive processing
+    - Fast data transfer to/from experiment
+    - Interactive and batch processing
     - Preferred for real-time analysis
+    - Location: SLAC campus
+    - Access: mfxopr@s3dflogin
 
     NERSC (Berkeley):
     - National Energy Research Scientific Computing Center
+    - High-performance computing resources
     - Requires SSH proxy authentication
     - Large-scale batch processing
-    - High-performance computing
-    - Good for offline analysis
+    - Good for offline/post-experiment analysis
+    - Location: Berkeley, CA
+    - Access: username@perlmutter-p1.nersc.gov
 
     CCTBX Pipeline:
-    1. Data collection (DAQ)
-    2. Hit finding (OnDA or cctbx)
-    3. Indexing (cctbx.xfel)
-    4. Integration
-    5. Scaling and merging
-    6. Structure determination
+    1. Hit finding: Identify frames with diffraction
+    2. Indexing: Determine crystal orientation
+    3. Integration: Extract intensities
+    4. Scaling: Merge multiple crystals
+    5. Structure determination: Solve structure
 
     Data Flow:
     - Raw data: /cds/data/psdm/mfx/{exp}/xtc/
-    - Processing: /sdf/data/lcls/ds/mfx/{exp}/scratch/
+    - Processing scratch: /sdf/data/lcls/ds/mfx/{exp}/scratch/
     - Results: /sdf/data/lcls/ds/mfx/{exp}/results/
+    - NERSC: /global/cfs/cdirs/lcls/mfx/{exp}/
 
     SSH Proxy (NERSC):
-    - Time-limited authentication
-    - Must renew daily
+    - Time-limited authentication (24 hours)
+    - Must renew daily during beam time
     - Uses sshproxy.sh script
-    - Required for NERSC access
+    - Required for all NERSC operations
 
     Typical Workflow:
     1. Check SSH proxy (NERSC only)
     2. Submit processing job
-    3. Monitor progress
-    4. Retrieve results
-    5. Iterate if needed
-
-    Common Applications:
-    - Serial crystallography (SFX)
-    - Time-resolved crystallography
-    - Room temperature structures
-    - Damage-free data collection
-    - Mix-and-inject experiments
+    3. Monitor progress via logs
+    4. Retrieve and analyze results
+    5. Iterate geometry/parameters if needed
 
     Examples
     --------
-    Create CCTBX interface:
-    >>> cctbx = cctbx()  # Auto-detects experiment
-    >>> cctbx = cctbx(experiment='mfxls1234')  # Specific experiment
+    Create CCTBX interface (auto-detects experiment):
+    >>> cctbx_obj = cctbx()
 
-    Refine geometry:
-    >>> cctbx.geom_refine(
+    Create for specific experiment:
+    >>> cctbx_obj = cctbx(experiment='mfxls1234')
+
+    View images from run 100:
+    >>> cctbx_obj.image_viewer(
     ...     user='myuser',
-    ...     group='000_rg005',
-    ...     level=0
+    ...     facility='S3DF',
+    ...     image_type='idx',
+    ...     run=100
     ... )
 
-    Average patterns:
-    >>> cctbx.average(user='myuser', run=123)
-
-    View images:
-    >>> cctbx.image_viewer(
+    Index diffraction data:
+    >>> cctbx_obj.indexing(
     ...     user='myuser',
-    ...     run=123,
-    ...     image_type='average'
+    ...     facility='S3DF',
+    ...     run=100,
+    ...     group='001_rg001'
     ... )
 
     See Also
     --------
-    om : OnDA real-time monitoring
-    autorun : Automated data collection
+    BashUtilities.xfel_gui : Launch CCTBX GUI
     """
 
     def __init__(self, experiment: Optional[str] = None):
@@ -133,533 +122,43 @@ class cctbx:
 
         Parameters
         ----------
-        experiment : str or None, optional
-            Experiment name (e.g., 'mfxls1234')
-            If None, auto-detects from current session
+        experiment : str, optional
+            Experiment name. If None, attempts to determine from
+            current hutch configuration. Default is None.
+
+        Notes
+        -----
+        Experiment name format: {hutch}{ls|lr}{number}
+        - hutch: mfx, cxi, xpp, etc.
+        - ls: long shutdown (new experiment)
+        - lr: long run (continuing experiment)
+        - number: sequential experiment number
+
+        Example: mfxls1234 = MFX long shutdown experiment 1234
+
+        Examples
+        --------
+        Auto-detect experiment:
+        >>> cctbx_obj = cctbx()
+
+        Specify experiment:
+        >>> cctbx_obj = cctbx(experiment='mfxls1234')
         """
         if experiment is None:
             from mfx.macros import get_exp
             self.experiment = str(get_exp())
+            logger.info(f"Auto-detected experiment: {self.experiment}")
         else:
             self.experiment = experiment
-
-        logger.info(f"CCTBX interface initialized for {self.experiment}")
-
-    def geom_refine(
-            self,
-            user: str,
-            group: str,
-            level: Optional[int] = None,
-            facility: str = "NERSC",
-            exp: str = ''):
-        """
-        Refine detector geometry from diffraction data.
-
-        Optimizes detector panel positions and orientations to
-        minimize indexing residuals. Critical for accurate
-        structure determination in serial crystallography.
-
-        Parameters
-        ----------
-        user : str
-            Username for computing facility account
-        group : str
-            Trial and rungroup identifier (format: '000_rg005')
-            Identifies which processed data to refine
-        level : int or None, optional
-            Refinement level:
-            - 0: Whole detector (6 DOF: X, Y, Z, rotX, rotY, rotZ)
-            - 1: Individual panels (6 DOF × N panels)
-            - None: Systematic refinement (both levels)
-        facility : str, optional
-            Computing facility: 'NERSC' or 'S3DF' (default: 'NERSC')
-        exp : str, optional
-            Experiment name (default: '' = current experiment)
-
-        Returns
-        -------
-        None
-            Launches remote processing job
-
-        Raises
-        ------
-        ValueError
-            If facility not 'NERSC' or 'S3DF'
-
-        Notes
-        -----
-        Geometry Refinement:
-
-        Purpose:
-        - Correct detector positioning errors
-        - Improve indexing success rate
-        - Reduce indexing residuals
-        - Enable accurate unit cell determination
-
-        Refinement Levels:
-
-        Level 0 (Whole Detector):
-        - Treats detector as rigid body
-        - 6 degrees of freedom total
-        - Fast optimization
-        - Good first approximation
-        - Typical corrections: mm-scale position, mrad rotations
-
-        Level 1 (Panel-by-Panel):
-        - Independent panel positioning
-        - 6 DOF per panel (typically 32-64 panels)
-        - Slower optimization
-        - Corrects manufacturing tolerances
-        - Typical corrections: 0.1 mm, 0.1 mrad
-
-        Systematic (level=None):
-        - Runs level 0 first
-        - Then level 1 with refined geometry
-        - Best final geometry
-        - Recommended workflow
-
-        Requirements:
-        - Indexed data available
-        - Sufficient statistics (>1000 indexed images)
-        - Known unit cell
-        - Good initial geometry estimate
-
-        Input Files:
-        - Indexed reflections (*.refl)
-        - Experiments list (*.expt)
-        - Initial geometry file (.geom)
-
-        Output:
-        - Refined geometry (.geom)
-        - Refinement statistics
-        - Residual plots
-        - Panel shift visualization
-
-        Quality Metrics:
-        - RMSD of spot positions
-        - Indexing rate improvement
-        - Unit cell parameter consistency
-        - Panel shift magnitudes
-
-        Iteration:
-        - May need multiple refinements
-        - Check residuals after each
-        - Converges when shifts < threshold
-        - Typical: 2-4 iterations
-
-        Common Issues:
-        - Insufficient indexed images
-        - Poor initial geometry
-        - Incorrect unit cell
-        - Systematic errors (e.g., energy calibration)
-
-        Examples
-        --------
-        Whole detector refinement:
-        >>> cctbx = cctbx()
-        >>> cctbx.geom_refine(
-        ...     user='myuser',
-        ...     group='002_rg003',
-        ...     level=0,
-        ...     facility='S3DF'
-        ... )
-
-        Panel-by-panel refinement:
-        >>> cctbx.geom_refine(
-        ...     user='myuser',
-        ...     group='002_rg003',
-        ...     level=1
-        ... )
-
-        Systematic refinement (recommended):
-        >>> cctbx.geom_refine(
-        ...     user='myuser',
-        ...     group='002_rg003',
-        ...     level=None  # Both levels
-        ... )
-
-        Specific experiment:
-        >>> cctbx.geom_refine(
-        ...     user='myuser',
-        ...     group='000_rg005',
-        ...     exp='mfxls1234'
-        ... )
-
-        See Also
-        --------
-        indexing : Index diffraction patterns
-        merge : Merge indexed data
-        """
-        import logging
-        import os
-
-        # Determine experiment
-        if exp:
-            experiment = exp
-        else:
-            experiment = self.experiment
-
-        # Validate facility
-        facility = facility.upper()
-        if facility not in ['NERSC', 'S3DF']:
-            logger.error(f"Unknown facility: {facility}. Use 'NERSC' or 'S3DF'")
-            raise ValueError("Invalid facility")
-
-        logger.info(
-            f"Starting geometry refinement:\n"
-            f"  Experiment: {experiment}\n"
-            f"  Group: {group}\n"
-            f"  Level: {level if level is not None else 'systematic'}\n"
-            f"  Facility: {facility}"
-        )
-
-        # Build command based on facility
-        if facility == 'NERSC':
-            cmd = (
-                f"ssh -Yt {user}@s3dflogin "
-                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
-                f"-e {experiment} -f {facility} -g {group} -l {level}"
-            )
-        elif facility == 'S3DF':
-            cmd = (
-                f"ssh -Yt {user}@s3dflogin "
-                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python "
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
-                f"-e {experiment} -f {facility} -g {group} -l {level}"
-            )
-
-        logger.info(f"Executing: {cmd}")
-
-        # Check SSH proxy for NERSC
-        if facility == 'NERSC':
-            logger.warning("Have you renewed your SSH token today?")
-            token = input("(y/n)? ")
-
-            if token.lower() == "n":
-                self.sshproxy(user)
-
-        # Execute command
-        os.system(cmd)
-
-        logger.info("Geometry refinement submitted")
-
-    def average(
-            self,
-            user: str,
-            run: int,
-            facility: str = "NERSC",
-            exp: str = '',
-            debug: bool = False):
-        """
-        Average diffraction patterns from run.
-
-        Computes average of all images in run to identify
-        systematic features, powder rings, ice rings, and
-        assess data quality.
-
-        Parameters
-        ----------
-        user : str
-            Username for computing facility
-        run : int
-            Run number to average
-        facility : str, optional
-            'NERSC' or 'S3DF' (default: 'NERSC')
-        exp : str, optional
-            Experiment name (default: '' = current)
-        debug : bool, optional
-            Enable debug output (default: False)
-
-        Returns
-        -------
-        None
-            Launches remote averaging job
-
-        Notes
-        -----
-        Image Averaging:
-
-        Purpose:
-        - Identify powder/ice rings
-        - Check beam position
-        - Assess background levels
-        - Verify detector function
-        - Quality control
-
-        Output:
-        - Average image (HDF5/CBF)
-        - Standard deviation image
-        - Maximum projection
-        - Radial profile
-
-        Use Cases:
-        - Initial data assessment
-        - Geometry verification
-        - Background characterization
-        - Troubleshooting
-
-        Statistics:
-        - Mean intensity per pixel
-        - Std deviation per pixel
-        - Identifies hot/dead pixels
-        - Shows systematic features
-
-        Examples
-        --------
-        Average run 123:
-        >>> cctbx = cctbx()
-        >>> cctbx.average(user='myuser', run=123)
-
-        With debug output:
-        >>> cctbx.average(
-        ...     user='myuser',
-        ...     run=123,
-        ...     debug=True
-        ... )
-
-        Specific experiment on S3DF:
-        >>> cctbx.average(
-        ...     user='myuser',
-        ...     run=123,
-        ...     facility='S3DF',
-        ...     exp='mfxls1234'
-        ... )
-
-        See Also
-        --------
-        image_viewer : View averaged images
-        """
-        import logging
-        import os
-        import subprocess
-
-        # Determine experiment
-        if exp:
-            experiment = exp
-        else:
-            experiment = self.experiment
-
-        # Validate facility
-        facility = facility.upper()
-        if facility not in ['NERSC', 'S3DF']:
-            logger.error(f"Unknown facility: {facility}")
-            raise ValueError("Invalid facility")
-
-        logger.info(
-            f"Averaging run {run} for experiment {experiment} on {facility}"
-        )
-
-        # Build command
-        cmd = (
-            f"ssh -Yt {user}@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.py "
-            f"-e {experiment} -f {facility} -d {str(debug)} -r {run}"
-        )
-
-        logger.info(f"Executing: {cmd}")
-
-        # Check SSH proxy for NERSC
-        if facility == 'NERSC':
-            logger.warning("Have you renewed your SSH token today?")
-            token = input("(y/n)? ")
-
-            if token.lower() == "n":
-                self.sshproxy(user)
-
-        # Execute command
-        if debug:
-            # Show output for debugging
-            os.system(cmd)
-        else:
-            # Background execution
-            subprocess.Popen(
-                cmd,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT
-            )
-
-        logger.info("Averaging job submitted")
-
-    def image_viewer(
-            self,
-            user: str,
-            run: int,
-            image_type: str,
-            group: Optional[str] = None,
-            facility: str = "NERSC",
-            exp: str = '',
-            debug: bool = False):
-        """
-        Launch interactive image viewer for diffraction data.
-
-        Opens GUI for browsing diffraction images with annotations,
-        indexing overlays, and interactive analysis tools.
-
-        Parameters
-        ----------
-        user : str
-            Username for computing facility
-        run : int
-            Run number to view
-        image_type : str
-            Type of images to view:
-            - 'average': Averaged images
-            - 'raw': Raw detector images
-            - 'indexed': With indexing overlays
-            - 'integrated': After integration
-        group : str or None, optional
-            Trial/rungroup (for processed data)
-            Format: '000_rg005'
-        facility : str, optional
-            'NERSC' or 'S3DF' (default: 'NERSC')
-        exp : str, optional
-            Experiment name (default: '' = current)
-        debug : bool, optional
-            Debug mode (default: False) Returns
-        -------
-        None
-            Launches GUI viewer
-
-        Notes
-        -----
-        Image Viewer Features:
-        - Browse all images in run
-        - Zoom and pan
-        - Intensity scaling
-        - Spot finding overlays
-        - Indexing solution display
-        - Resolution rings
-        - Panel boundaries
-        - Pixel value inspection
-
-        Image Types:
-
-        'average':
-        - Mean of all images
-        - Shows systematic features
-        - Good for geometry check
-
-        'raw':
-        - Unprocessed detector data
-        - As collected
-        - Full dynamic range
-
-        'indexed':
-        - Predicted spot positions
-        - Miller indices shown
-        - Indexing solution overlay
-
-        'integrated':
-        - After background subtraction
-        - Integrated intensities
-        - Quality metrics
-
-        Viewer Controls:
-        - Arrow keys: Navigate images
-        - Mouse wheel: Zoom
-        - Click: Pixel info
-        - Keyboard shortcuts: Various functions
-
-        Examples
-        --------
-        View averaged images:
-        >>> cctbx = cctbx()
-        >>> cctbx.image_viewer(
-        ...     user='myuser',
-        ...     run=123,
-        ...     image_type='average'
-        ... )
-
-        View indexed images:
-        >>> cctbx.image_viewer(
-        ...     user='myuser',
-        ...     run=123,
-        ...     image_type='indexed',
-        ...     group='002_rg003'
-        ... )
-
-        View raw data:
-        >>> cctbx.image_viewer(
-        ...     user='myuser',
-        ...     run=123,
-        ...     image_type='raw'
-        ... )
-
-        See Also
-        --------
-        average : Generate averaged images
-        indexing : Index diffraction patterns
-        """
-        import logging
-        import os
-        import subprocess
-
-        # Determine experiment
-        if exp:
-            experiment = exp
-        else:
-            experiment = self.experiment
-
-        # Validate facility
-        facility = facility.upper()
-        if facility not in ['NERSC', 'S3DF']:
-            logger.error(f"Unknown facility: {facility}")
-            raise ValueError("Invalid facility")
-
-        logger.info(
-            f"Launching image viewer:\n"
-            f"  Type: {image_type}\n"
-            f"  Run: {run}\n"
-            f"  Group: {group if group else 'N/A'}"
-        )
-
-        # Build command
-        if facility == 'S3DF':
-            cmd = (
-                f"ssh -Yt {user}@s3dflogin "
-                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python "
-                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
-                f"-e {experiment} -f {facility} -d {str(debug)} "
-                f"-t {image_type} -r {run} -g {group if group else ''}"
-            )
-        elif facility == 'NERSC':
-            cmd = (
-                f"ssh -Yt {user}@s3dflogin "
-                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
-                f"-e {experiment} -f {facility} -d {str(debug)} "
-                f"-t {image_type} -r {run} -g {group if group else ''}"
-            )
-
-        logger.info(f"Executing: {cmd}")
-
-        # Check SSH proxy for NERSC
-        if facility == 'NERSC':
-            logger.warning("Have you renewed your SSH token today?")
-            token = input("(y/n)? ")
-
-            if token.lower() == "n":
-                self.sshproxy(user)
-
-        # Execute command
-        if debug:
-            os.system(cmd)
-        else:
-            subprocess.Popen(
-                cmd,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT
-            )
-
-        logger.info("Image viewer launched")
+            logger.info(f"Using specified experiment: {self.experiment}")
 
     def sshproxy(self, user: str):
         """
         Renew SSH proxy for NERSC access.
 
-        NERSC requires time-limited SSH proxy authentication.
-        This must be renewed periodically (typically daily).
+        Runs sshproxy.sh script to obtain time-limited SSH certificate
+        for accessing NERSC resources. Required daily for NERSC
+        operations.
 
         Parameters
         ----------
@@ -669,289 +168,770 @@ class cctbx:
         Returns
         -------
         None
-            Runs interactive SSH proxy renewal
 
         Notes
         -----
         SSH Proxy:
-        - Required for NERSC access
-        - Time-limited (24 hours typical)
-        - Must renew before expiration
-        - Interactive password entry
+        - One-time password (OTP) required
+        - Valid for 24 hours
+        - Must be renewed daily
+        - Required for all NERSC SSH connections
 
-        Renewal Process:
-        1. Executes sshproxy.sh script
-        2. Prompts for NERSC password
-        3. Optionally requests OTP
-        4. Stores credentials locally
+        The sshproxy creates a certificate stored in ~/.ssh/ that
+        allows passwordless SSH to NERSC for the validity period.
+
+        Process:
+        1. Run sshproxy.sh
+        2. Enter NERSC password
+        3. Enter OTP from authenticator app
+        4. Certificate created (~/.ssh/nersc)
         5. Valid for 24 hours
 
-        When to Renew:
-        - Daily before processing
-        - When access fails
-        - After credential expiration
+        Troubleshooting:
+        - "Permission denied": Renew proxy
+        - "OTP incorrect": Check authenticator app time sync
+        - "Password incorrect": Reset NERSC password
 
-        Security:
-        - Credentials stored securely
-        - Automatic expiration
-        - Required for each session
+        Warnings
+        --------
+        Keep OTP device (phone) accessible during beam time.
+        Renew proxy before starting overnight processing jobs.
 
         Examples
         --------
-        >>> cctbx = cctbx()
-        >>> cctbx.sshproxy('myuser')
-        [Interactive password prompt]
+        Renew proxy:
+        >>> cctbx_obj = cctbx()
+        >>> cctbx_obj.sshproxy('myuser')
+        Enter NERSC password:
+        Enter OTP:
+        Success: SSH certificate valid for 24 hours
 
         See Also
         --------
-        geom_refine : Uses NERSC (checks proxy)
-        average : Uses NERSC (checks proxy)
+        indexing : Uses SSH proxy for NERSC access
+        merge : Uses SSH proxy for NERSC access
         """
-        import os
-        import logging
-
         logger.info(f"Renewing SSH proxy for NERSC user: {user}")
-        logger.info("Please enter your NERSC password when prompted")
+        logger.info("You will be prompted for:")
+        logger.info("  1. NERSC password")
+        logger.info("  2. One-time password (OTP) from authenticator")
 
-        cmd = f"sshproxy.sh -u {user}"
-        os.system(cmd)
+        cmd = "sshproxy.sh"
+        logger.info(f"Executing: {cmd}")
 
-        logger.info("SSH proxy renewal complete")
+        result = os.system(cmd)
 
-    def notch_check(
+        if result == 0:
+            logger.info("SSH proxy renewed successfully")
+            logger.info("Certificate valid for 24 hours")
+        else:
+            logger.error("SSH proxy renewal failed")
+            logger.error("Check password and OTP")
+
+    def image_viewer(
             self,
             user: str,
-            facility: str = "NERSC",
-            exp: str = '',
-            runs: Optional[List[int]] = None,
-            energy_range: Optional[tuple] = None):
+            facility: str = 'S3DF',
+            image_type: str = 'avg',
+            exp: Optional[str] = None,
+            run: Optional[int] = None,
+            group: Optional[str] = None,
+            debug: bool = False):
         """
-        Check energy calibration from notch filter scan.
+        Launch interactive image viewer for detector data.
 
-        Analyzes notch filter scan data to verify X-ray energy
-        calibration. Compares measured vs. expected absorption edges.
+        Opens CCTBX image viewer to display detector images, indexed
+        patterns, or averaged frames from specified run.
 
         Parameters
         ----------
         user : str
-            Username for computing facility
+            Username for remote facility access
         facility : str, optional
-            'NERSC' or 'S3DF' (default: 'NERSC')
+            Computing facility: 'S3DF' or 'NERSC' (case-insensitive).
+            Default is 'S3DF'.
+        image_type : str, optional
+            Type of images to display:
+            - 'avg': Averaged frames (default)
+            - 'idx': Indexed diffraction patterns
+            - 'max': Maximum projections
+            - 'raw': Raw detector frames
+            Default is 'avg'.
         exp : str, optional
-            Experiment name (default: '' = current)
-        runs : List[int] or None, optional
-            List of run numbers in notch scan
-        energy_range : tuple or None, optional
-            (start_eV, end_eV, step_eV) for scan
+            Experiment name. If None, uses instance experiment.
+            Default is None.
+        run : int, optional
+            Run number to display. If None, prompts user.
+            Default is None.
+        group : str, optional
+            Processing group (e.g., '001_rg001'). Required for
+            indexed images. Default is None.
+        debug : bool, optional
+            Enable debug output. Default is False.
 
         Returns
         -------
         None
-            Launches analysis and displays results
 
         Notes
         -----
-        Notch Filter Calibration:
+        Image Types:
 
-        Purpose:
-        - Verify monochromator energy
-        - Check energy calibration
-        - Measure energy resolution
-        - Detect systematic errors
+        avg (Average):
+        - Average of many frames
+        - Useful for powder patterns
+        - Shows overall detector response
+        - Good for geometry verification
 
-        Procedure:
-        1. Scan across absorption edge
-        2. Measure transmitted intensity
-        3. Fit edge position
-        4. Compare to literature value
-        5. Calculate offset
+        idx (Indexed):
+        - Frames with successful indexing
+        - Shows found Bragg peaks
+        - Miller indices overlaid
+        - Requires group specification
 
-        Analysis:
-        - Fits absorption edge
-        - Determines edge energy
-        - Calculates calibration offset
-        - Plots results
+        max (Maximum):
+        - Maximum projection over run
+        - Highlights brightest spots
+        - Good for spot finding validation
+        - Shows detector active area
 
-        Output:
-        - Edge position plot
-        - Fitted parameters
-        - Calibration offset
-        - Recommendations
+        raw (Raw):
+        - Unprocessed detector frames
+        - Full resolution
+        - Large file sizes
+        - Useful for diagnostics
+
+        Viewer Features:
+        - Zoom and pan
+        - Colormap adjustment
+        - ROI (Region of Interest) selection
+        - Bragg peak overlay (idx mode)
+        - Distance/resolution rings
+        - Export to image files
+
+        Requirements:
+        - X11 forwarding or FastX
+        - Sufficient bandwidth for image transfer
+        - Processing must be complete (idx mode)
+
+        Warnings
+        --------
+        Viewer requires X11 display. Use FastX or ssh -Y for
+        remote connections. Large images may be slow to load.
 
         Examples
         --------
-        Check notch scan:
-        >>> cctbx = cctbx()
-        >>> cctbx.notch_check(
+        View averaged images:
+        >>> cctbx_obj = cctbx()
+        >>> cctbx_obj.image_viewer(
         ...     user='myuser',
-        ...     runs=[100, 101, 102, 103, 104]
+        ...     facility='S3DF',
+        ...     image_type='avg',
+        ...     run=100
         ... )
 
-        With energy range:
-        >>> cctbx.notch_check(
+        View indexed patterns:
+        >>> cctbx_obj.image_viewer(
         ...     user='myuser',
-        ...     runs=[100, 101, 102],
-        ...     energy_range=(7100, 7140, 10)  # eV
+        ...     facility='S3DF',
+        ...     image_type='idx',
+        ...     run=100,
+        ...     group='001_rg001'
+        ... )
+
+        View on NERSC (requires proxy):
+        >>> cctbx_obj.sshproxy('myuser')
+        >>> cctbx_obj.image_viewer(
+        ...     user='myuser',
+        ...     facility='NERSC',
+        ...     image_type='avg',
+        ...     run=100
         ... )
 
         See Also
         --------
-        vernier : Energy vernier scans
+        indexing : Process data before viewing indexed images
+        BashUtilities.xfel_gui : Alternative CCTBX GUI
         """
-        logger.info("Notch filter calibration check")
-        logger.warning("This feature is under development")
+        # Determine experiment
+        if exp is None:
+            experiment = self.experiment
+        else:
+            experiment = exp
+
+        # Get run number if not specified
+        if run is None:
+            run = int(input("Enter run number to view: "))
+
+        # Validate facility
+        facility = facility.upper()
+        if facility not in ['S3DF', 'NERSC']:
+            logger.error(f"Unknown facility: {facility}")
+            logger.error("Use 'S3DF' or 'NERSC'")
+            raise ValueError("Invalid facility")
+
+        logger.info("Launching image viewer:")
+        logger.info(f"  Facility: {facility}")
+        logger.info(f"  Experiment: {experiment}")
+        logger.info(f"  Run: {run}")
+        logger.info(f"  Image type: {image_type}")
+        if group:
+            logger.info(f"  Group: {group}")
+
+        # Build command based on facility
+        if facility == 'S3DF':
+            script = ("/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
+                      "image_viewer.py")
+            cmd = (
+                f"ssh -Yt {user}@s3dflogin "
+                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python "
+                f"{script} "
+                f"-e {experiment} -f {facility} -t {image_type} "
+                f"-r {run} "
+                f"{'-g ' + group if group else ''} "
+                f"{'-d' if debug else ''}"
+            )
+        elif facility == 'NERSC':
+            # Check SSH proxy
+            logger.warning("Have you renewed your SSH token today?")
+            token = input("(y/n)? ")
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+            script = ("/global/cfs/cdirs/lcls/mfxopr/scripts/cctbx/"
+                      "image_viewer.py")
+            cmd = (
+                f"ssh -Yt {user}@perlmutter-p1.nersc.gov "
+                f"python {script} "
+                f"-e {experiment} -f {facility} -t {image_type} "
+                f"-r {run} "
+                f"{'-g ' + group if group else ''} "
+                f"{'-d' if debug else ''}"
+            )
+
+        logger.info(f"Executing: {cmd}")
+        logger.info("Image viewer will open in new window...")
+
+        os.system(cmd)
+
+    def indexing(
+            self,
+            user: str,
+            facility: str = 'S3DF',
+            exp: Optional[str] = None,
+            run: Optional[int] = None,
+            group: str = '001_rg001',
+            debug: bool = False):
+        """
+        Submit indexing job for diffraction data.
+
+        Processes diffraction images to determine crystal orientations
+        and unit cell parameters. Runs as batch job on specified
+        computing facility.
+
+        Parameters
+        ----------
+        user : str
+            Username for job submission
+        facility : str, optional
+            Computing facility: 'S3DF' or 'NERSC'.
+            Default is 'S3DF'.
+        exp : str, optional
+            Experiment name. If None, uses instance experiment.
+            Default is None.
+        run : int, optional
+            Run number to process. If None, prompts user.
+            Default is None.
+        group : str, optional
+            Processing group identifier for organizing results.
+            Format: '{trial}_{rungroup}'
+            Example: '001_rg001' = trial 1, run group 1
+            Default is '001_rg001'.
+        debug : bool, optional
+            Enable verbose debug output in logs.
+            Default is False.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Indexing Process:
+        1. Read detector images from run
+        2. Find Bragg peaks on each image
+        3. Attempt to index peaks (determine orientation)
+        4. Refine unit cell parameters
+        5. Integrate indexed spots
+        6. Write results to files
+
+        Output Files:
+        - indexed.refl: Reflection intensities
+        - indexed.expt: Experiment geometry
+        - indexing.log: Processing log
+        - plots/: Diagnostic plots
+
+        Processing Time:
+        - S3DF: 10-60 minutes (depends on hits)
+        - NERSC: 30-120 minutes
+        - Scales with number of hits
+
+        Indexing Parameters:
+        - Space group: From input or auto-determined
+        - Unit cell: Target or refined
+        - Detector distance: From geometry
+        - Beam center: From geometry
+
+        Success Metrics:
+        - Indexing rate: % of hits indexed
+        - Unit cell consistency
+        - Spot prediction residuals
+        - Crystal mosaicity
+
+        Group Naming:
+        - Trial: Parameter set number (001, 002, etc .)
+        - Run group: Subset of runs (rg001, rg002, etc.)
+        - Allows parallel processing strategies
+
+        Warnings
+        --------
+        Indexing requires accurate detector geometry.
+        Refine geometry before large-scale processing.
+        Monitor indexing rate - low rates indicate problems.
+
+        Examples
+        --------
+        Index single run on S3DF:
+        >>> cctbx_obj = cctbx()
+        >>> cctbx_obj.indexing(
+        ...     user='myuser',
+        ...     facility='S3DF',
+        ...     run=100,
+        ...     group='001_rg001'
+        ... )
+
+        Index on NERSC with debug:
+        >>> cctbx_obj.sshproxy('myuser')
+        >>> cctbx_obj.indexing(
+        ...     user='myuser',
+        ...     facility='NERSC',
+        ...     run=100,
+        ...     group='002_rg001',
+        ...     debug=True
+        ... )
+
+        See Also
+        --------
+        merge : Merge indexed data
+        geom_refine : Refine detector geometry
+        """
+        # Determine experiment
+        if exp is None:
+            experiment = self.experiment
+        else:
+            experiment = exp
+
+        # Get run number if not specified
+        if run is None:
+            run = int(input("Enter run number to index: "))
+
+        # Validate facility
+        facility = facility.upper()
+        if facility not in ['S3DF', 'NERSC']:
+            logger.error(f"Unknown facility: {facility}")
+            raise ValueError("Invalid facility")
+
+        logger.info("Submitting indexing job:")
+        logger.info(f"  Facility: {facility}")
+        logger.info(f"  Experiment: {experiment}")
+        logger.info(f"  Run: {run}")
+        logger.info(f"  Group: {group}")
+        logger.info(f"  Debug: {debug}")
+
+        # Build submission command
+        if facility == 'S3DF':
+            script = "/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/index.sh"
+            cmd = (
+                f"ssh {user}@s3dflogin "
+                f"'{script} {experiment} {run} {group} "
+                f"{'-d' if debug else ''}'"
+            )
+        elif facility == 'NERSC':
+            # Check SSH proxy
+            logger.warning("Have you renewed your SSH token today?")
+            token = input("(y/n)? ")
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+            script = ("/global/cfs/cdirs/lcls/mfxopr/scripts/cctbx/"
+                      "index.sh")
+            cmd = (
+                f"ssh {user}@perlmutter-p1.nersc.gov "
+                f"'{script} {experiment} {run} {group} "
+                f"{'-d' if debug else ''}'"
+            )
+
+        logger.info(f"Executing: {cmd}")
+        result = os.system(cmd)
+
+        if result == 0:
+            logger.info("Indexing job submitted successfully")
+            logger.info(f"Monitor with: squeue -u {user}")
+            logger.info(f"Results: {experiment}/scratch/{group}/")
+        else:
+            logger.error(f"Indexing submission failed (code {result})")
+
+    def merge(
+            self,
+            user: str,
+            facility: str = 'S3DF',
+            exp: Optional[str] = None,
+            group: str = '001_rg001',
+            debug: bool = False):
+        """
+        Merge indexed data into structure factors.
+
+        Combines reflections from multiple crystals into single dataset
+        of structure factor amplitudes for structure determination.
+
+        Parameters
+        ----------
+        user : str
+            Username for job submission
+        facility : str, optional
+            Computing facility: 'S3DF' or 'NERSC'.
+            Default is 'S3DF'.
+        exp : str, optional
+            Experiment name. If None, uses instance experiment.
+            Default is None.
+        group : str, optional
+            Processing group containing indexed data to merge.
+            Default is '001_rg001'.
+        debug : bool, optional
+            Enable verbose debug output.
+            Default is False.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Merging Process:
+        1. Read all indexed reflections in group
+        2. Apply scaling corrections
+        3. Resolve symmetry-equivalent reflections
+        4. Merge equivalent observations
+        5. Calculate structure factors
+        6. Write MTZ file for refinement
+
+        Scaling:
+        - Accounts for crystal-to-crystal variation
+        - Corrects for beam decay
+        - Normalizes intensities
+        - Rejects outliers
+
+        Output Files:
+        - merged.mtz: Structure factors (CCP4 format)
+        - scaling.log: Scaling statistics
+        - plots/: Scaling diagnostic plots
+        - stats.txt: Merging statistics
+
+        Quality Metrics:
+        - R-split: Agreement between half-datasets
+        - CC1/2: Correlation coefficient
+        - I/σ(I): Signal-to-noise ratio
+        - Completeness: % of unique reflections
+        - Multiplicity: Average observations per reflection
+
+        Typical Statistics (good data):
+        - R-split < 0.10 at high resolution
+        - CC1/2 > 0.50 at resolution limit
+        - I/σ(I) > 2.0 at cutoff
+        - Completeness > 90%
+
+        Processing Time:
+        - S3DF: 30-120 minutes
+        - NERSC: 1-3 hours
+        - Depends on dataset size
+
+        Warnings
+        --------
+        Merging requires completed indexing jobs.
+        Check indexing statistics before merging.
+        Poor scaling may indicate geometry problems.
+
+        Examples
+        --------
+        Merge on S3DF:
+        >>> cctbx_obj = cctbx()
+        >>> cctbx_obj.merge(
+        ...     user='myuser',
+        ...     facility='S3DF',
+        ...     group='001_rg001'
+        ... )
+
+        Merge on NERSC with debug:
+        >>> cctbx_obj.sshproxy('myuser')
+        >>> cctbx_obj.merge(
+        ...     user='myuser',
+        ...     facility='NERSC',
+        ...     group='002_rg001',
+        ...     debug=True
+        ... )
+
+        See Also
+        --------
+        indexing : Generate data to merge
+        geom_refine : Optimize geometry before merging
+        """
+        # Determine experiment
+        if exp is None:
+            experiment = self.experiment
+        else:
+            experiment = exp
+
+        # Validate facility
+        facility = facility.upper()
+        if facility not in ['S3DF', 'NERSC']:
+            logger.error(f"Unknown facility: {facility}")
+            raise ValueError("Invalid facility")
+
+        logger.info("Submitting merging job:")
+        logger.info(f"  Facility: {facility}")
+        logger.info(f"  Experiment: {experiment}")
+        logger.info(f"  Group: {group}")
+        logger.info(f"  Debug: {debug}")
+
+        # Build submission command
+        if facility == 'S3DF':
+            script = "/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/merge.sh"
+            cmd = (
+                f"ssh {user}@s3dflogin "
+                f"'{script} {experiment} {group} "
+                f"{'-d' if debug else ''}'"
+            )
+        elif facility == 'NERSC':
+            # Check SSH proxy
+            logger.warning("Have you renewed your SSH token today?")
+            token = input("(y/n)? ")
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+            script = ("/global/cfs/cdirs/lcls/mfxopr/scripts/cctbx/"
+                      "merge.sh")
+            cmd = (
+                f"ssh {user}@perlmutter-p1.nersc.gov "
+                f"'{script} {experiment} {group} "
+                f"{'-d' if debug else ''}'"
+            )
+
+        logger.info(f"Executing: {cmd}")
+        result = os.system(cmd)
+
+        if result == 0:
+            logger.info("Merging job submitted successfully")
+            logger.info(f"Monitor with: squeue -u {user}")
+            logger.info(f"Results: {experiment}/results/{group}/")
+        else:
+            logger.error(f"Merging submission failed (code {result})")
+
+    def geom_refine(
+            self,
+            user: str,
+            facility: str = 'S3DF',
+            group: str = '001_rg001',
+            level: Optional[int] = 0,
+            exp: Optional[str] = None):
+        """
+        Refine detector geometry from indexed diffraction data.
+
+        Optimizes detector panel positions and orientations to minimize
+        spot prediction residuals, improving indexing and integration
+        accuracy.
+
+        Parameters
+        ----------
+        user : str
+            Username for job submission
+        facility : str, optional
+            Computing facility: 'S3DF' or 'NERSC'.
+            Default is 'S3DF'.
+        group : str, optional
+            Processing group with indexed data for refinement.
+            Default is '001_rg001'.
+        level : int, optional
+            Refinement hierarchy level:
+            - 0: Whole detector (6 DOF)
+            - 1: Panel groups (multiple DOF)
+            - 2: Individual panels (highest detail)
+            - None: All levels sequentially
+            Default is 0 (whole detector).
+        exp : str, optional
+            Experiment name. If None, uses instance experiment.
+            Default is None.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Refinement Levels:
+
+        Level 0 (Whole Detector):
+        - 6 degrees of freedom
+        - 3 translations (x, y, z)
+        - 3 rotations (rx, ry, rz)
+        - Fast refinement
+        - Good for initial geometry
+
+        Level 1 (Panel Groups):
+        - Refine groups of panels
+        - Detector-dependent grouping
+        - More parameters than level 0
+        - Corrects for misalignments
+
+        Level 2 (Individual Panels):
+        - Each panel refined independently
+        - Maximum flexibility
+        - Hundreds of parameters
+        - Best accuracy but slowest
+        - Risk of overfitting
+
+        Refinement Process:
+        1. Read indexed reflections
+        2. Predict spot positions from current geometry
+        3. Calculate residuals (predicted - observed)
+        4. Optimize geometry to minimize residuals
+        5. Write refined geometry file
+
+        Output Files:
+        - refined.expt: Updated geometry
+        - refinement.log: Optimization details
+        - before_after.pdf: Residual comparison plots
+        - geometry_shifts.txt: Parameter changes
+
+        Quality Metrics:
+        - RMS residual: Should decrease
+        - Indexing rate: May improve
+        - Unit cell consistency: Should improve
+        - Systematic shifts: Should be corrected
+
+        Typical Workflow:
+        1. Initial indexing with approximate geometry
+        2. Level 0 refinement (whole detector)
+        3. Re-index with refined geometry
+        4. Level 1/2 refinement if needed
+        5. Final re-indexing
+
+        Processing Time:
+        - Level 0: 10-30 minutes
+        - Level 1: 30-90 minutes
+        - Level 2: 1-4 hours
+        - All levels: 2-5 hours
+
+        Warnings
+        --------
+        Requires high-quality indexed data (>1000 patterns).
+        Level 2 refinement can overfit with insufficient data.
+        Always validate refined geometry with test dataset.
+
+        Examples
+        --------
+        Whole detector refinement:
+        >>> cctbx_obj = cctbx()
+        >>> cctbx_obj.geom_refine(
+        ...     user='myuser',
+        ...     facility='S3DF',
+        ...     group='001_rg001',
+        ...     level=0
+        ... )
+
+        Panel group refinement:
+        >>> cctbx_obj.geom_refine(
+        ...     user='myuser',
+        ...     group='001_rg001',
+        ...     level=1
+        ... )
+
+        Full hierarchical refinement:
+        >>> cctbx_obj.geom_refine(
+        ...     user='myuser',
+        ...     group='001_rg001',
+        ...     level=None  # All levels
+        ... )
+
+        On NERSC:
+        >>> cctbx_obj.sshproxy('myuser')
+        >>> cctbx_obj.geom_refine(
+        ...     user='myuser',
+        ...     facility='NERSC',
+        ...     group='001_rg001',
+        ...     level=0
+        ... )
+
+        See Also
+        --------
+        indexing : Generate data for refinement
+        merge : Use refined geometry for better merging
+        """
+        # Determine experiment
+        if exp is None:
+            experiment = self.experiment
+        else:
+            experiment = exp
+
+        # Validate facility
+        facility = facility.upper()
+        if facility not in ['S3DF', 'NERSC']:
+            logger.error(f"Unknown facility: {facility}")
+            raise ValueError("Invalid facility")
+
+        logger.info("Submitting geometry refinement job:")
+        logger.info(f"  Facility: {facility}")
+        logger.info(f"  Experiment: {experiment}")
+        logger.info(f"  Group: {group}")
+        if level is not None:
+            logger.info(f"  Level: {level}")
+        else:
+            logger.info("  Level: All (hierarchical)")
+
+        # Build submission command
+        level_arg = str(level) if level is not None else 'all'
+
+        if facility == 'S3DF':
+            script = ("/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
+                      "geom_refine.sh")
+            cmd = (
+                f"ssh {user}@s3dflogin "
+                f"'{script} {experiment} {group} {level_arg}'"
+            )
+        elif facility == 'NERSC':
+            # Check SSH proxy
+            logger.warning("Have you renewed your SSH token today?")
+            token = input("(y/n)? ")
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+            script = ("/global/cfs/cdirs/lcls/mfxopr/scripts/cctbx/"
+                      "geom_refine.sh")
+            cmd = (
+                f"ssh {user}@perlmutter-p1.nersc.gov "
+                f"'{script} {experiment} {group} {level_arg}'"
+            )
+
+        logger.info(f"Executing: {cmd}")
+        result = os.system(cmd)
+
+        if result == 0:
+            logger.info("Geometry refinement job submitted")
+            logger.info(f"Monitor with: squeue -u {user}")
+            logger.info(f"Results: {experiment}/scratch/{group}/geom/")
+            logger.info("Use refined.expt for subsequent processing")
+        else:
+            logger.error(f"Refinement submission failed (code {result})")
 
 
-# Convenience instance for direct import
+# Convenience module-level instance
 cctbx_instance = cctbx()
-
-
-# Convenience functions
-
-def refine_geometry(
-        user: str,
-        group: str,
-        level: Optional[int] = None,
-        facility: str = "S3DF"):
-    """
-    Convenience function for geometry refinement.
-
-    Parameters
-    ----------
-    user : str
-        Username
-    group : str
-        Trial/rungroup (e.g., '002_rg003')
-    level : int or None, optional
-        Refinement level (0, 1, or None for both)
-    facility : str, optional
-        'NERSC' or 'S3DF' (default: 'S3DF')
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> from mfx.cctbx import refine_geometry
-    >>> refine_geometry('myuser', '002_rg003', level=0)
-
-    See Also
-    --------
-    cctbx.geom_refine : Full implementation
-    """
-    cctbx_instance.geom_refine(
-        user=user,
-        group=group,
-        level=level,
-        facility=facility
-    )
-
-
-def view_images(
-        user: str,
-        run: int,
-        image_type: str = 'average',
-        group: Optional[str] = None,
-        facility: str = "S3DF"):
-    """
-    Convenience function for image viewer.
-
-    Parameters
-    ----------
-    user : str
-        Username
-    run : int
-        Run number
-    image_type : str, optional
-        Image type (default: 'average')
-    group : str or None, optional
-        Trial/rungroup
-    facility : str, optional
-        'NERSC' or 'S3DF' (default: 'S3DF')
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> from mfx.cctbx import view_images
-    >>> view_images('myuser', 123, image_type='indexed', group='002_rg003')
-
-    See Also
-    --------
-    cctbx.image_viewer : Full implementation
-    """
-    cctbx_instance.image_viewer(
-        user=user,
-        run=run,
-        image_type=image_type,
-        group=group,
-        facility=facility
-    )
-
-
-def average_run(
-        user: str,
-        run: int,
-        facility: str = "S3DF"):
-    """
-    Convenience function for averaging run.
-
-    Parameters
-    ----------
-    user : str
-        Username
-    run : int
-        Run number
-    facility : str, optional
-        'NERSC' or 'S3DF' (default: 'S3DF')
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> from mfx.cctbx import average_run
-    >>> average_run('myuser', 123)
-
-    See Also
-    --------
-    cctbx.average : Full implementation
-    """
-    cctbx_instance.average(
-        user=user,
-        run=run,
-        facility=facility
-    )
-
-
-def renew_nersc_proxy(user: str):
-    """
-    Convenience function to renew NERSC SSH proxy.
-
-    Parameters
-    ----------
-    user : str
-        NERSC username
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> from mfx.cctbx import renew_nersc_proxy
-    >>> renew_nersc_proxy('myuser')
-
-    See Also
-    --------
-    cctbx.sshproxy : Full implementation
-    """
-    cctbx_instance.sshproxy(user)
-
-
-# Module initialization
-logger.info("CCTBX integration loaded for crystallography data processing")
