@@ -469,7 +469,8 @@ class NotchScan:
             logger.info(
                 f"Returning to initial positions: "
                 f"TH1={original_th1:.4f}°, TH2={original_th2:.4f}°"
-            ) self.th1.move(original_th1, wait=True)
+            )
+            self.th1.move(original_th1, wait=True)
             self.th2.move(original_th2, wait=True)
             logger.info("Returned to initial positions")
 
@@ -501,54 +502,54 @@ class NotchScan:
         step: float = None,
         num: int = None,
         daq_num: int = 2):
-    """
-    Analysis and output for notch scan data.
+        """
+        Analysis and output for notch scan data.
 
-    Provides methods to analyze energy calibration data and
-    generate plots on computing facilities.
+        Provides methods to analyze energy calibration data and
+        generate plots on computing facilities.
 
-    Methods
-    -------
-    series(user, facility, exp, run, energy, step, num)
-        Analyze energy scan series data
+        Methods
+        -------
+        series(user, facility, exp, run, energy, step, num)
+            Analyze energy scan series data
 
-    Notes
-    -----
-    Analysis Process:
-    1. Retrieve data from DAQ files
-    2. Extract detector intensities vs. energy
-    3. Identify absorption edge
-    4. Compare to reference energy
-    5. Calculate energy offset
-    6. Generate calibration plots
+        Notes
+        -----
+        Analysis Process:
+        1. Retrieve data from DAQ files
+        2. Extract detector intensities vs. energy
+        3. Identify absorption edge
+        4. Compare to reference energy
+        5. Calculate energy offset
+        6. Generate calibration plots
 
-    Output Products:
-    - Energy vs. intensity plots
-    - Edge position determination
-    - Calibration offset value
-    - Statistical uncertainties
+        Output Products:
+        - Energy vs. intensity plots
+        - Edge position determination
+        - Calibration offset value
+        - Statistical uncertainties
 
-    Computing Facilities:
-    - S3DF: Interactive analysis
-    - NERSC: Batch processing
+        Computing Facilities:
+        - S3DF: Interactive analysis
+        - NERSC: Batch processing
 
-    Examples
-    --------
-    >>> output = NotchOutput()
-    >>> output.series(
-    ...     user='myuser',
-    ...     facility='S3DF',
-    ...     exp='mfxls1234',
-    ...     run=100,
-    ...     energy=7112,
-    ...     step=5,
-    ...     num=20
-    ... )
+        Examples
+        --------
+        >>> output = NotchOutput()
+        >>> output.series(
+        ...     user='myuser',
+        ...     facility='S3DF',
+        ...     exp='mfxls1234',
+        ...     run=100,
+        ...     energy=7112,
+        ...     step=5,
+        ...     num=20
+        ... )
 
-    See Also
-    --------
-    NotchScan.series : Data collection
-    """
+        See Also
+        --------
+        NotchScan.series : Data collection
+        """
         import os
         from mfx.db import daq
         from mfx.macros import get_exp, get_run
