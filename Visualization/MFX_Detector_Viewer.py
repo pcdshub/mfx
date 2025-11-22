@@ -183,7 +183,13 @@ class PSANALiveAnalysis(QtWidgets.QMainWindow):
         acq_layout.addRow("Run Number:", self.run_number_spin)
         
         self.detector_name_edit = QtWidgets.QLineEdit("epix100_0")
-        acq_layout.addRow("Detector Name:", self.detector_name_edit)
+        detector_layout = QtWidgets.QHBoxLayout()
+        detector_layout.addWidget(self.detector_name_edit)
+        self.show_detectors_btn = QtWidgets.QPushButton("Show Available")
+        self.show_detectors_btn.setToolTip("Query available detector names for current run")
+        self.show_detectors_btn.clicked.connect(self.show_available_detectors)
+        detector_layout.addWidget(self.show_detectors_btn)
+        acq_layout.addRow("Detector Name:", detector_layout)
         
         self.accumulation_spin = QtWidgets.QSpinBox()
         self.accumulation_spin.setRange(1, 1000)
@@ -670,6 +676,92 @@ class PSANALiveAnalysis(QtWidgets.QMainWindow):
             self.hist.setLevels(vmin, vmax)
 
     # --- Acquisition and Threading Methods ---
+
+    def show_available_detectors(self):
+        """
+        Query and display available 2D detectors from the current PSANA run.
+        
+        Connects to PSANA data source, retrieves the run object, and queries
+        available detectors using myrun.detinfo. Filters to only 2D detectors
+        that have an 'image' attribute. Displays results in a dialog and allows 
+        user to select a detector for use.
+        """
+        try:
+            self.status_signal.emit("Querying available 2D detectors...")
+            
+            from psana import DataSource
+            
+            ds = DataSource(
+                exp=self.experiment_edit.text(),
+                run=self.run_number_spin.value(),
+                xdetectors=['jungfrau'],
+                live=False
+            )
+            
+            myrun = next(ds.runs())
+            detinfo = myrun.detinfo
+            
+            # Filter to only 2D detectors that have an 'image' attribute
+            image_detectors = []
+            for (det_name, det_type), attributes in detinfo.items():
+                if 'image' in attributes:
+                    image_detectors.append(det_name)
+            
+            if not image_detectors:
+                self.status_signal.emit("No 2D image detectors found for this run")
+                QtWidgets.QMessageBox.information(
+                    self, 
+                    "Available Detectors",
+                    "No 2D image detectors found for this run."
+                )
+                return
+            
+            # Create a dialog to display and select detectors
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Available 2D Detectors")
+            dialog.setGeometry(100, 100, 400, 300)
+            
+            layout = QtWidgets.QVBoxLayout(dialog)
+            
+            label = QtWidgets.QLabel("Available 2D Image Detectors:")
+            layout.addWidget(label)
+            
+            # Create list widget for detector selection
+            list_widget = QtWidgets.QListWidget()
+            for det in image_detectors:
+                item = QtWidgets.QListWidgetItem(det)
+                list_widget.addItem(item)
+            layout.addWidget(list_widget)
+            
+            # Button layout
+            button_layout = QtWidgets.QHBoxLayout()
+            
+            select_btn = QtWidgets.QPushButton("Select")
+            def select_detector():
+                if list_widget.currentItem():
+                    selected = list_widget.currentItem().text()
+                    self.detector_name_edit.setText(selected)
+                    self.status_signal.emit(f"Detector selected: {selected}")
+                    dialog.accept()
+            select_btn.clicked.connect(select_detector)
+            button_layout.addWidget(select_btn)
+            
+            cancel_btn = QtWidgets.QPushButton("Cancel")
+            cancel_btn.clicked.connect(dialog.reject)
+            button_layout.addWidget(cancel_btn)
+            
+            layout.addLayout(button_layout)
+            
+            dialog.exec_()
+            self.status_signal.emit(f"Found {len(image_detectors)} 2D image detectors")
+            
+        except Exception as e:
+            self.status_signal.emit(f"Error querying detectors: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, 
+                "Error",
+                f"Failed to query detectors:\n{str(e)}"
+            )
 
     def start_acquisition(self):
         """
