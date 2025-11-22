@@ -544,9 +544,6 @@ class Yano:
         end_run: ``bool``, optional
             If ``True``, we'll end the run after the daq has stopped.
         """
-
-
-
         from mfx.db import daq
         from ophyd.utils import StatusTimeoutError, WaitTimeoutError
 
@@ -736,10 +733,6 @@ class Yano:
 
         For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
-
-
-
-
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
