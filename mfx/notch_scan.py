@@ -390,10 +390,12 @@ class NotchScan:
         # Store initial crystal positions
         original_th1 = self.th1.position
         original_th2 = self.th2.position
+        original_energy_eV = self.dccm.energy_with_vernier.energy() * 1000
         logger.info(
             f"Initial positions: TH1={original_th1:.4f}°, "
             f"TH2={original_th2:.4f}°"
         )
+        logger.info(f"Initial energy: {original_energy_eV} eV")
 
         # Configure pulse picker
         if picker == 'open':
@@ -465,16 +467,19 @@ class NotchScan:
                 f"-z {energy_scan_start_eV} -s {energy_scan_steps} "
                 f"-n {len(energies)}"
             )
+            logger.warning(
+                f"notch.output(user='your_username', facility='S3DF', "
+                f"exp='{exp}', run={run_number}, "
+                f"energy={energy_scan_start_eV}, "
+                f"step={energy_scan_steps}, num={len(energies)}), "
+                f"daq_num={daq_num}"
+            )
 
         # Prompt to return to initial position
         answer = input("\nReturn to initial crystal positions? (y/n): ")
         if answer.lower() == 'y':
-            logger.info(
-                f"Returning to initial positions: "
-                f"TH1={original_th1:.4f}°, TH2={original_th2:.4f}°"
-            )
-            self.th1.move(original_th1, wait=True)
-            self.th2.move(original_th2, wait=True)
+            logger.info(f"Returning to initial energy: {original_energy_eV} eV")
+            self.set_energy(original_energy_eV, vernier=vernier, wait=True)
             logger.info("Returned to initial positions")
 
         # Prompt for analysis
