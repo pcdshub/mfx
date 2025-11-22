@@ -103,7 +103,7 @@ class NotchScan:
         logger.info("NotchScan initialized")
         logger.info("DCCM energy range: 4000-25000 eV")
 
-    def set_energy(self, energy_eV: float, wait: bool = True):
+    def set_energy(self, energy_eV: float, vernier: bool = False,  wait: bool = True):
         """
         Move DCCM to specified energy.
 
@@ -114,6 +114,9 @@ class NotchScan:
         ----------
         energy_eV : float
             Target photon energy in eV
+        vernier : bool, optional
+            Use vernier for fine energy adjustment.
+            Default is False.
         wait : bool, optional
             Block until motion complete.
             Default is True.
@@ -177,15 +180,11 @@ class NotchScan:
         logger.info(f"Setting DCCM energy to {energy_eV} eV ({energy_keV} keV)")
 
         # Move DCCM energy (moves both crystals)
-        self.dccm.energy.move(energy_keV, wait=wait)
+        if vernier:
+            self.dccm.energy_with_vernier(energy_keV, wait=wait)
+        else:
+            self.dccm.energy.move(energy_keV, wait=wait)
 
-        if wait:
-            actual_keV = self.dccm.energy.position
-            actual_eV = actual_keV * 1000
-            logger.info(
-                f"DCCM at {actual_eV:.1f} eV "
-                f"(target: {energy_eV:.1f} eV)"
-            )
 
     def series(
             self,
@@ -198,6 +197,7 @@ class NotchScan:
             inspire: bool = False,
             daq_delay: int = 5,
             record: bool = False,
+            vernier: bool = False,
             daq_num: int = 2,
             exp: Optional[str] = None):
         """
@@ -233,6 +233,9 @@ class NotchScan:
             Default is 5.
         record : bool, optional
             Enable data recording.
+            Default is False.
+        vernier : bool, optional
+            Use vernier for fine energy adjustment.
             Default is False.
         daq_num : int, optional
             DAQ station: 1 (LCLS-I) or 2 (LCLS-II).
@@ -412,7 +415,7 @@ class NotchScan:
 
                 # Move to energy
                 logger.info(f"Setting energy: {energy_eV} eV")
-                self.set_energy(energy_eV, wait=True)
+                self.set_energy(energy_eV, vernier=vernier, wait=True)
 
                 # Wait for settling
                 logger.info(f"Settling for {daq_delay}s...")
