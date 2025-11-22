@@ -426,7 +426,8 @@ def autorun(
         _autorun_daq2(
             sample=sample, tag=tag, run_length=run_length,
             inspire=inspire, record=record, runs=runs,
-            daq_delay=daq_delay, cam=cam, run_type=run_type
+            daq_delay=daq_delay, cam=cam, run_type=run_type,
+            close=close
         )
     elif daq_num == 1:
         _autorun_daq1(
