@@ -483,7 +483,7 @@ def set_slits(
         mfx_dg2_downstream_slits.move(dg2_ds, wait=False)
 
 
-def get_exp() -> str:
+def get_exp(hutch='mfx', station: int = 0) -> str:
     """
     Get current experiment name.
 
@@ -549,7 +549,7 @@ def get_exp() -> str:
     return exp
 
 
-def get_run(station: int = 0) -> int:
+def get_run(hutch='mfx', station: int = 0) -> int:
     """
     Get current DAQ run number.
 
