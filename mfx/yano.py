@@ -116,47 +116,47 @@ class Yano:
         """
         from mfx.devices import LaserShutter
         from pcdsdevices.evr import Trigger
-        self._delay = None
+        self.delay = None
 
         # Initialize shutter objects with hardware PVs
-        self._opo_shutter = LaserShutter(
+        self.opo_shutter = LaserShutter(
             'MFX:USR:ao1:6',
             name='opo_shutter'
         )
-        self._evo_shutter1 = LaserShutter(
+        self.evo_shutter1 = LaserShutter(
             'MFX:USR:ao1:8',
             name='evo_shutter1'
         )
-        self._evo_shutter2 = LaserShutter(
+        self.evo_shutter2 = LaserShutter(
             'MFX:USR:ao1:2',
             name='evo_shutter2'
         )
-        self._evo_shutter3 = LaserShutter(
+        self.evo_shutter3 = LaserShutter(
             'MFX:USR:ao1:3',
             name='evo_shutter3'
         )
 
         # Initialize timing trigger objects
-        self._opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
-        self._evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
+        self.opo = Trigger('MFX:LAS:EVR:01:TRIG6', name='opo_trigger')
+        self.evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
         # Laser timing parameters
-        self._opo_time_zero = 671740  # nanoseconds
+        self.opo_time_zero = 671740  # nanoseconds
 
         # Event code definitions for delay control
-        self._opo_ec_short = 212     # Shortest delay
-        self._opo_ec_long = 211      # Long delay
-        self._opo_ec_longer = 210    # Longer delay
-        self._opo_ec_longest = 213   # Longest delay
+        self.opo_ec_short = 212     # Shortest delay
+        self.opo_ec_long = 211      # Long delay
+        self.opo_ec_longer = 210    # Longer delay
+        self.opo_ec_longest = 213   # Longest delay
 
         # Experiment event codes
-        self._PP = 197      # Pump-probe
-        self._DAQ = 198     # DAQ trigger
-        self._WATER = 211   # Water reference
-        self._SAMPLE = 212  # Sample measurement
+        self.PP = 197      # Pump-probe
+        self.DAQ = 198     # DAQ trigger
+        self.WATER = 211   # Water reference
+        self.SAMPLE = 212  # Sample measurement
 
         # Laser operating parameters
-        self._rep_rate = 20  # Hz
+        self.rep_rate = 20  # Hz
 
     @property
     def shutter_status(self):
@@ -183,8 +183,8 @@ class Yano:
         ...     print("At least one shutter is open")
         """
         status = []
-        for shutter in (self._evo_shutter1, self._evo_shutter2,
-                        self._evo_shutter3, self._opo_shutter):
+        for shutter in (self.evo_shutter1, self.evo_shutter2,
+                        self.evo_shutter3, self.opo_shutter):
             status.append(shutter.state.get())
         return status
 
@@ -257,8 +257,8 @@ class Yano:
         """
 
         for state, shutter in zip((fiber1, fiber2, fiber3, free_space),
-                                  (self._evo_shutter1, self._evo_shutter2,
-                                   self._evo_shutter3, self._opo_shutter)):
+                                  (self.evo_shutter1, self.evo_shutter2,
+                                   self.evo_shutter3, self.opo_shutter)):
             if state is not None:
                 if state == True or state == 'OUT' or state == 2:
                     shutter('OUT')
@@ -288,7 +288,7 @@ class Yano:
         """
         OPO delay string
         """
-        if self._opo_shutter.state.value == 'IN':
+        if self.opo_shutter.state.value == 'IN':
             return 'No OPO Laser'
         elif delay >= 1e6:
             return 'Laser delay is set to {:10.6f} ms'.format(delay/1.e6)
@@ -335,69 +335,69 @@ class Yano:
         # Determine event code of inhibit pulse
         logger.info("Setting delay %s ns (%s us)", delay, delay/1000.)
         logger.info(f"Setting reprate: {rep}")
-        self._delay = delay
-        opo_delay = self._opo_time_zero - delay
-        opo_ec = self._opo_ec_short
+        self.delay = delay
+        opo_delay = self.opo_time_zero - delay
+        opo_ec = self.opo_ec_short
 
         if rep == 30:
-            mfx_timing.set_seq(rep=30)
-            if delay > self._opo_time_zero + 3e9/120:
+            mfx_timing.set_seq(rep='30')
+            if delay > self.opo_time_zero + 3e9/120:
                 logger.error('Laser delay requested is too long. GO TO A SYNCHROTRON')
                 sys.exit()
-            elif delay > self._opo_time_zero + 2e9/120:
+            elif delay > self.opo_time_zero + 2e9/120:
                 opo_delay += 3e9/120
-                opo_ec = self._opo_ec_longest
+                opo_ec = self.opo_ec_longest
                 logger.info('Laser is 3 buckets before the beam')
-            elif delay > self._opo_time_zero + 1e9/120:
+            elif delay > self.opo_time_zero + 1e9/120:
                 opo_delay += 2e9/120
-                opo_ec = self._opo_ec_longer
+                opo_ec = self.opo_ec_longer
                 logger.info('Laser is 2 buckets before the beam')
-            elif delay > self._opo_time_zero:
+            elif delay > self.opo_time_zero:
                 opo_delay += 1e9/120
-                opo_ec = self._opo_ec_long
+                opo_ec = self.opo_ec_long
                 logger.info('Laser is 1 bucket before the beam')
             else:
-                opo_ec = self._DAQ
+                opo_ec = self.DAQ
                 logger.info('Laser is in the same bucket as the beam')
 
         elif rep == 60:
             mfx_timing.set_seq(rep='60_yano')
-            if delay > self._opo_time_zero + 1e9/120:
+            if delay > self.opo_time_zero + 1e9/120:
                 logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
                 sys.exit()
-            elif delay > self._opo_time_zero:
+            elif delay > self.opo_time_zero:
                 opo_delay += 1e9/120
-                opo_ec = self._opo_ec_long
+                opo_ec = self.opo_ec_long
                 logger.info('Laser is 1 bucket before the beam')
             else:
-                opo_ec = self._DAQ
+                opo_ec = self.DAQ
                 logger.info('Laser is in the same bucket as the beam')
 
         elif rep == 90:
             mfx_timing.set_seq(rep='90_yano')
-            if delay > self._opo_time_zero:
+            if delay > self.opo_time_zero:
                 logger.error('Laser delay requested is too long at 60 Hz. Switch to 30 Hz')
                 sys.exit()
             else:
-                opo_ec = self._DAQ
+                opo_ec = self.DAQ
                 logger.info('Laser and drolet in the same bucket as the beam')
 
         elif rep == 120:
             mfx_timing.set_seq(rep='120_yano')
-            if delay > self._opo_time_zero:
+            if delay > self.opo_time_zero:
                 logger.error('Laser delay requested is too long at 120 Hz. Switch to 30 Hz')
                 sys.exit()
             else:
-                opo_ec = self._DAQ
+                opo_ec = self.DAQ
                 logger.info('Laser and drolet in the same bucket as the beam')
 
         else:
             logger.error('Please enter either 30 or 60 Hz.')
 
 
-        self._opo.ns_delay.put(opo_delay)
+        self.opo.ns_delay.put(opo_delay)
         logger.info("Setting OPO delay %s ns", opo_delay)
-        self._opo.eventcode.put(opo_ec)
+        self.opo.eventcode.put(opo_ec)
         logger.info("Setting OPO ec %s", opo_ec)
         logger.info(self._delaystr(delay))
         return
@@ -414,11 +414,11 @@ class Yano:
         """
 
         logger = logging.getLogger(__name__)
-        if self._opo.eventcode.get() == self._opo_ec_long:
-            opo_delay = self._opo.ns_delay.get() - 1e9/120
+        if self.opo.eventcode.get() == self.opo_ec_long:
+            opo_delay = self.opo.ns_delay.get() - 1e9/120
         else:
-            opo_delay = self._opo.ns_delay.get()
-        delay = self._opo_time_zero - opo_delay
+            opo_delay = self.opo.ns_delay.get()
+        delay = self.opo_time_zero - opo_delay
         logger.info(self._delaystr(delay))
         return delay
 
@@ -602,12 +602,21 @@ class Yano:
             energy_scan_steps (int):
                 Step Size (in eV).
 
-            run_length: int, optional
-                number of seconds for run 300 is default
+            run_length (int):
+                Number of seconds for run (300 is default).
 
-            brewster: int, optional
-                weights the bottom division of sequence twice.
-                ie 2 weights the bottom half.
+            step_time (float):
+                Time per step in seconds.
+
+            brewster (int, optional):
+                Weights the bottom division of sequence twice.
+                i.e. 2 weights the bottom half. Default is 0.
+
+        Returns:
+            list: Energy sequence for the scan.
+
+        Raises:
+            ValueError: If step size is not positive.
         """
         if energy_scan_steps <= 0:
             raise ValueError("Step size must be positive")
@@ -615,32 +624,56 @@ class Yano:
         run_total = round(run_length / step_time)
 
         up = list(range(
-            energy_scan_start_eV, energy_scan_end_eV, energy_scan_steps))
+            energy_scan_start_eV,
+            energy_scan_end_eV,
+            energy_scan_steps))
 
         down = list(range(
             energy_scan_end_eV - energy_scan_steps,
             energy_scan_start_eV - energy_scan_steps,
             -energy_scan_steps))
 
-        up_down = len(up) + len(down)
+        # Check if run_length is sufficient for at least one complete cycle
+        up_down_length = len(up) + len(down)
+        if run_total < up_down_length:
+            logger.error(
+                f"run_length ({run_length}s) is too short for one complete "
+                f"cycle. Minimum required: {up_down_length * step_time}s "
+                f"({up_down_length} steps at {step_time}s per step)"
+            )
+            logger.error('Do you want to proceed anyway? (Y/n): ')
+            answer = input()
+            if answer.lower() != 'y':
+                logger.error("Insufficient run_length for one complete cycle. Exiting.")
+                sys.exit()
 
-        part_up = []
-        part_down = []
+        # Build the single cycle pattern
+        cycle = []
         if brewster > 0:
             part_up = up[:len(up) // brewster]
-
             part_down = down[-len(down) // brewster:]
+            cycle.extend(part_up)
+            cycle.extend(part_down)
+        cycle.extend(up)
+        cycle.extend(down)
 
-            up_down = len(part_up) + len(part_down) + up_down
+        cycle_length = len(cycle)
 
-        number_iterations = run_total // up_down
+        if cycle_length == 0:
+            raise ValueError("Cycle length is zero - check input parameters")
 
+        # Calculate full iterations and remainder
+        number_iterations = run_total // cycle_length
+        remainder = run_total % cycle_length
+
+        # Build energy sequence
         energy_seq = []
-        for seq in range(number_iterations):
-            energy_seq.extend(part_up)
-            energy_seq.extend(part_down)
-            energy_seq.extend(up)
-            energy_seq.extend(down)
+        for _ in range(number_iterations):
+            energy_seq.extend(cycle)
+
+        # Add partial cycle if there's remaining time
+        if remainder > 0:
+            energy_seq.extend(cycle[:remainder])
 
         return energy_seq
 
@@ -736,8 +769,9 @@ class Yano:
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
-
-        logger = logging.getLogger(__name__)
+        from mfx.energy_control import EnergyGet, EnergyPut
+        get = EnergyGet()
+        put = EnergyPut()
 
         # Configure the shutters
         if fiber == 0:
@@ -756,9 +790,9 @@ class Yano:
                 free_space).lower()==str('out') or int(
                     free_space) == 2 or str(
                         free_space).lower()==str('open'):
-                self._opo_shutter('OUT')
+                self.opo_shutter('OUT')
             else:
-                self._opo_shutter('IN')
+                self.opo_shutter('IN')
 
         if laser_delay is not None:
             self.set_delay(laser_delay, rep=rep)
@@ -860,39 +894,57 @@ class Yano:
                     end_time = start_time + run_length
 
                     if len(spread) == 3 and spread_type is not None:
-                        if spread_type.lower() == 'vernier':
-                            spread_pv = 'MFX:USER:MCC:EPHOT:SET1'
-                            spead_ref = "caget MFX:USER:MCC:EPHOT:SET1 | awk '{print $2}'"
-                            if step_time is None:
+                        if step_time is None:
+                            if spread_type.lower() == 'vernier':
                                 step_time=1
-                        elif spread_type.lower() == 'k':
-                            spread_pv = 'MFX:USER:MCC:EPHOT:SET2'
-                            spead_ref = "caget MFX:USER:MCC:EPHOT:SET2 | awk '{print $2}'"
-                            if step_time is None:
+                            elif spread_type.lower() == 'k':
                                 step_time=10
-                        else:
-                            logger.error('Please enter spread type of vernier or k only')
-                            sys.exit()
-                        spread_comment = f'SPREAD Conditions: type:{spread_type}, range:{spread[0]}-{spread[1]}eV, step:{spread[2]}eV @ {step_time}s, Brewster: {brewster}'
-                        energy_seq = self.generate_energy_seq(spread[0], spread[1], spread[2], run_length, step_time, brewster)
+                            else:
+                                logger.error('Please enter spread type of vernier or k only')
+                                sys.exit()
+
+                        spread_comment = (
+                            f'SPREAD Conditions: type:{spread_type}, '
+                            f'range:{spread[0]}-{spread[1]}eV, '
+                            f'step:{spread[2]}eV @ {step_time}s, '
+                            f'Brewster: {brewster}'
+                        )
+                        energy_seq = self.generate_energy_seq(
+                            spread[0], spread[1], spread[2], run_length, step_time, brewster)
+
+                        logger.info(energy_seq)
 
                         if brewster > 0:
-                            energy = int(os.popen(spead_ref).read().strip())
+                            if spread_type.lower() == 'vernier':
+                                energy = get.vernier()
+                            elif spread_type.lower() == 'k':
+                                energy = get.k()
+                            else:
+                                logger.error('Please enter spread type of vernier or k only')
+                                sys.exit()
                             try:
                                 ind = energy_seq.index(energy)
                                 energy_seq = energy_seq[ind:]
                             except ValueError:
-                                logger.error(f"{energy} not found in the sequence. Starting with first energy")
+                                logger.error(
+                                    f"{energy} not found in the sequence. "
+                                    f"Starting with first energy")
 
                         for eng in energy_seq:
-                            os.system(f'caput {spread_pv} {eng}')
+                            if spread_type.lower() == 'vernier':
+                                put.vernier(eng)
+                            elif spread_type.lower() == 'k':
+                                put.k(eng)
+                            else:
+                                logger.error('Please enter spread type of vernier or k only')
+                                sys.exit()
                             sleep(step_time)
 
                     else:
                         spread_comment = None
                         while time() < end_time:
                             elapsed_time = time() - start_time
-                            progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+                            progress = min(elapsed_time / run_length, 1)
 
                             filled_length = int(60 * progress)
                             bar = '=' * filled_length + '-' * (60 - filled_length)
