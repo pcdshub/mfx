@@ -274,6 +274,10 @@ def mfx_reload(module_name):
         beam = Beam()
         vernier_calib = VernierCalibration()
 
+    if module_name == 'mfx.notch_scan':
+        from mfx.notch_scan import NotchScan
+        notch = NotchScan()
+
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
     from mfx.db import mfx_attenuator as att
