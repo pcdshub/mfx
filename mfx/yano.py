@@ -9,6 +9,7 @@ automated pump-probe experiments with optional energy spread measurements.
 import os
 import sys
 import logging
+import matplotlib.pyplot as plt
 from time import sleep, time
 
 logger = logging.getLogger(__name__)
@@ -582,6 +583,75 @@ class Yano:
                 return status
 
 
+    def plot_scan_profile(
+        self,
+        energy_seq,
+        step_time,
+        title="Energy Scan Sequence",
+        highlight_cycles=True,
+        figsize=(14, 7)):
+        """Plot energy sequence with additional details and cycle highlighting.
+
+        Parameters:
+            energy_seq (list):
+                List of energy values from generate_energy_seq.
+
+            step_time (float):
+                Time per step in seconds.
+
+            title (str, optional):
+                Plot title.
+
+            highlight_cycles (bool, optional):
+                If True, use different colors for up/down sweeps.
+
+            figsize (tuple, optional):
+                Figure size.
+
+        Returns:
+            tuple: (fig, ax) matplotlib figure and axes objects.
+        """
+        if not energy_seq:
+            raise ValueError("Energy sequence is empty")
+
+        time_array = [i * step_time for i in range(len(energy_seq))]
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize,
+                                        height_ratios=[3, 1])
+
+        # Main plot
+        ax1.plot(time_array, energy_seq, 'b-', linewidth=1.5,
+                marker='o', markersize=3)
+        ax1.set_ylabel('Energy (eV)', fontsize=12)
+        ax1.set_title(title, fontsize=14, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+
+        # Step changes plot
+        energy_changes = [0] + [energy_seq[i] - energy_seq[i-1]
+                                for i in range(1, len(energy_seq))]
+        ax2.plot(time_array, energy_changes, 'r-', linewidth=1, alpha=0.7)
+        ax2.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+        ax2.set_xlabel('Time (s)', fontsize=12)
+        ax2.set_ylabel('ΔE (eV)', fontsize=12)
+        ax2.set_title('Energy Change per Step', fontsize=10)
+        ax2.grid(True, alpha=0.3)
+
+        # Info box
+        info_text = (
+            f'Total steps: {len(energy_seq)}\n'
+            f'Total time: {time_array[-1]:.1f}s\n'
+            f'Energy range: {min(energy_seq)}-{max(energy_seq)} eV\n'
+            f'Step time: {step_time}s'
+        )
+        ax1.text(0.02, 0.98, info_text, transform=ax1.transAxes,
+                verticalalignment='top', bbox=dict(boxstyle='round',
+                facecolor='wheat', alpha=0.5), fontsize=10)
+
+        plt.tight_layout()
+
+        return fig, (ax1, ax2)
+
+
     def generate_energy_seq(
         self,
         energy_scan_start_eV,
@@ -589,7 +659,8 @@ class Yano:
         energy_scan_steps,
         run_length,
         step_time,
-        brewster=0):
+        brewster=0,
+        debug=False):
         """Perform Vernier scan.
 
         Parameters:
@@ -611,6 +682,9 @@ class Yano:
             brewster (int, optional):
                 Weights the bottom division of sequence twice.
                 i.e. 2 weights the bottom half. Default is 0.
+
+            debug (bool, optional):
+                If True, plot the generated energy sequence. Default is False.
 
         Returns:
             list: Energy sequence for the scan.
@@ -675,6 +749,14 @@ class Yano:
         if remainder > 0:
             energy_seq.extend(cycle[:remainder])
 
+        if debug:
+            self.plot_scan_profile(
+                energy_seq,
+                step_time,
+                title="Generated Energy Scan Sequence",
+                highlight_cycles=True,
+                figsize=(14, 7))
+
         return energy_seq
 
 
@@ -696,7 +778,8 @@ class Yano:
         spread=[],
         spread_type=None,
         step_time=None,
-        brewster=0):
+        brewster=0,
+        debug=False):
         """
         Perform a single run of the experiment
 
@@ -756,6 +839,9 @@ class Yano:
         brewster: int, optional
             weights the bottom division of SPREAD sequence twice.
             ie 2 weights the bottom half.
+
+        debug: bool, optional
+            If True, plot the generated energy sequence for SPREAD. Default is False.
 
         Note
         ----
@@ -910,9 +996,8 @@ class Yano:
                             f'Brewster: {brewster}'
                         )
                         energy_seq = self.generate_energy_seq(
-                            spread[0], spread[1], spread[2], run_length, step_time, brewster)
-
-                        logger.info(energy_seq)
+                            spread[0], spread[1], spread[2],
+                            run_length, step_time, brewster, debug=False)
 
                         if brewster > 0:
                             if spread_type.lower() == 'vernier':
@@ -925,6 +1010,16 @@ class Yano:
                             try:
                                 ind = energy_seq.index(energy)
                                 energy_seq = energy_seq[ind:]
+                                if debug and i==0:
+                                    self.plot_scan_profile(
+                                        energy_seq,
+                                        step_time,
+                                        title="Generated Energy Scan Sequence",
+                                        highlight_cycles=True,
+                                        figsize=(14, 7))
+                                    answer = input("Continue? (Y/n): ")
+                                    if answer.lower() == "n":
+                                        sys.exit("User aborted")
                             except ValueError:
                                 logger.error(
                                     f"{energy} not found in the sequence. "
