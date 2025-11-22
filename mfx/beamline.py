@@ -278,6 +278,14 @@ def mfx_reload(module_name):
         from mfx.notch_scan import NotchScan
         notch = NotchScan()
 
+    if module_name == 'mfx.dccm':
+        from mfx.dccm import DCCM
+        dccm = DCCM(name='DCCM')
+
+    if module_name == 'mfx.yano':
+        from mfx.yano import Yano
+        yano = Yano()
+
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
     from mfx.db import mfx_attenuator as att
