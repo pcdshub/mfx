@@ -117,6 +117,9 @@ class Yano:
         """
         from mfx.devices import LaserShutter
         from pcdsdevices.evr import Trigger
+        from mfx.energy_control import EnergyGet, EnergyPut
+        self.get_energy = EnergyGet()
+        self.put_energy = EnergyPut()
         self.delay = None
 
         # Initialize shutter objects with hardware PVs
@@ -660,6 +663,7 @@ class Yano:
         run_length,
         step_time,
         brewster=0,
+        spread_type='vernier',
         debug=False):
         """Perform Vernier scan.
 
@@ -683,6 +687,9 @@ class Yano:
                 Weights the bottom division of sequence twice.
                 i.e. 2 weights the bottom half. Default is 0.
 
+            spread_type: str, optional
+                SPREAD type either 'vernier' or 'k'
+
             debug (bool, optional):
                 If True, plot the generated energy sequence. Default is False.
 
@@ -692,6 +699,14 @@ class Yano:
         Raises:
             ValueError: If step size is not positive.
         """
+        if spread_type.lower() == 'vernier':
+            current_energy = self.get_energy.vernier()
+        elif spread_type.lower() == 'k':
+            current_energy = self.get_energy.k()
+        else:
+            logger.error('Please enter spread type of vernier or k only')
+            sys.exit()
+
         if energy_scan_steps <= 0:
             raise ValueError("Step size must be positive")
 
@@ -721,15 +736,72 @@ class Yano:
                 logger.error("Insufficient run_length for one complete cycle. Exiting.")
                 sys.exit()
 
-        # Build the single cycle pattern
-        cycle = []
-        if brewster > 0:
-            part_up = up[:len(up) // brewster]
-            part_down = down[-len(down) // brewster:]
-            cycle.extend(part_up)
-            cycle.extend(part_down)
-        cycle.extend(up)
-        cycle.extend(down)
+        # Determine starting direction and position based on current_energy
+        if current_energy < energy_scan_start_eV:
+            # Below range - start at energy_scan_start_eV and go up
+            logger.info(f"Current energy ({current_energy} eV) is below scan range. "
+                       f"Starting at {energy_scan_start_eV} eV (going up).")
+            start_going_up = True
+            start_energy = energy_scan_start_eV
+        elif current_energy > energy_scan_end_eV:
+            # Above range - start at energy_scan_end_eV and go down
+            logger.info(f"Current energy ({current_energy} eV) is above scan range. "
+                       f"Starting at {energy_scan_end_eV} eV (going down).")
+            start_going_up = False
+            start_energy = energy_scan_end_eV - energy_scan_steps
+        else:
+            # Within range - find closest energy point and determine direction
+            all_energies = sorted(set(up + down))
+            # Find the closest energy in the scan sequence
+            closest_energy = min(all_energies, key=lambda x: abs(x - current_energy))
+            start_energy = closest_energy
+
+            # Determine which end is closer to decide direction
+            distance_to_start = abs(current_energy - energy_scan_start_eV)
+            distance_to_end = abs(current_energy - energy_scan_end_eV)
+            start_going_up = distance_to_start <= distance_to_end
+
+            direction = "up" if start_going_up else "down"
+            logger.info(f"Current energy ({current_energy} eV) is within scan range. "
+                       f"Starting at {start_energy} eV and going {direction}.")
+
+        # Build the single cycle pattern based on starting direction
+        if start_going_up:
+            # Find where start_energy appears in up sequence
+            if start_energy in up:
+                start_idx = up.index(start_energy)
+            else:
+                start_idx = 0
+
+            # Build cycle starting from start_energy going up
+            cycle = []
+            if brewster > 0:
+                part_up = up[:len(up) // brewster]
+                part_down = down[-len(down) // brewster:]
+                cycle.extend(part_up[start_idx:])
+                cycle.extend(part_down)
+                cycle.extend(part_up[:start_idx])
+            cycle.extend(up[start_idx:])
+            cycle.extend(down)
+            cycle.extend(up[:start_idx])
+        else:
+            # Find where start_energy appears in down sequence
+            if start_energy in down:
+                start_idx = down.index(start_energy)
+            else:
+                start_idx = 0
+
+            # Build cycle starting from start_energy going down
+            cycle = []
+            if brewster > 0:
+                part_down = down[-len(down) // brewster:]
+                part_up = up[:len(up) // brewster]
+                cycle.extend(part_down[start_idx:])
+                cycle.extend(part_up)
+                cycle.extend(part_down[:start_idx])
+            cycle.extend(down[start_idx:])
+            cycle.extend(up)
+            cycle.extend(down[:start_idx])
 
         cycle_length = len(cycle)
 
@@ -855,9 +927,6 @@ class Yano:
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
-        from mfx.energy_control import EnergyGet, EnergyPut
-        get = EnergyGet()
-        put = EnergyPut()
 
         # Configure the shutters
         if fiber == 0:
@@ -997,19 +1066,18 @@ class Yano:
                         )
                         energy_seq = self.generate_energy_seq(
                             spread[0], spread[1], spread[2],
-                            run_length, step_time, brewster, debug=False)
+                            run_length, step_time, brewster,
+                            spread_type=spread_type, debug=False)
 
                         if brewster > 0:
                             if spread_type.lower() == 'vernier':
-                                energy = get.vernier()
+                                energy = self.get_energy.vernier()
                             elif spread_type.lower() == 'k':
-                                energy = get.k()
+                                energy = self.get_energy.k()
                             else:
                                 logger.error('Please enter spread type of vernier or k only')
                                 sys.exit()
                             try:
-                                ind = energy_seq.index(energy)
-                                energy_seq = energy_seq[ind:]
                                 if debug and i==0:
                                     self.plot_scan_profile(
                                         energy_seq,
@@ -1027,9 +1095,9 @@ class Yano:
 
                         for eng in energy_seq:
                             if spread_type.lower() == 'vernier':
-                                put.vernier(eng)
+                                self.put_energy.vernier(eng)
                             elif spread_type.lower() == 'k':
-                                put.k(eng)
+                                self.put_energy.k(eng)
                             else:
                                 logger.error('Please enter spread type of vernier or k only')
                                 sys.exit()
