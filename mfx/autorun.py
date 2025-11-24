@@ -448,6 +448,38 @@ def autorun(
     logger.info("Thank you for using MFX!")
     logger.info("="*60 + "\n")
 
+def _display_progress(run_length):
+    """
+    Display simple progress bar during run.
+    Parameters
+    ----------
+    run_length : float
+        Total run length in seconds
+    Returns
+    -------
+    None
+    Notes
+    -----
+    Updates progress bar in terminal.
+    """
+    # Simple progress bar
+    start_time = time()
+    end_time = start_time + run_length
+
+    while time() < end_time:
+        elapsed_time = time() - start_time
+        progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+
+        filled_length = int(60 * progress)
+        bar = '=' * filled_length + '-' * (60 - filled_length)
+
+        percentage = f"{progress:.0%}"
+
+        print(f"\rProgress: [{bar}] {percentage}", end="")
+
+        sleep(0.2)  # Update frequency
+    return
+
 
 def _autorun_daq1(sample, tag, run_length, inspire, record,
                   runs, daq_delay, cam, run_type):
@@ -534,6 +566,7 @@ def _autorun_daq1(sample, tag, run_length, inspire, record,
             logger.warning("\nRun interrupted by user")
             from mfx.db import pp
             pp.close()
+            daq.disconnect()
             if record:
                 post(
                     sample=sample, tag=tag, run_number=run_number,
@@ -639,15 +672,7 @@ def _autorun_daq2(sample, tag, run_length, inspire, record,
                 sleep(0.01)
 
             # Wait for run completion
-            start_time = time()
-            end_time = start_time + run_length
-
-            while time() < end_time:
-                current_state = daq.control.getState()
-                if current_state != "running":
-                    logger.warning(f"DAQ left running state: {current_state}")
-                    break
-                sleep(0.1)
+            _display_progress(run_length)
 
             # Stop acquisition
             logger.info("Stopping acquisition...")
