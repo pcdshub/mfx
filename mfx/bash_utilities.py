@@ -859,7 +859,7 @@ class BashUtilities:
 
         logger.info("Shared memory cleanup complete")
 
-    def cameras(self):
+    def cameras(self, pro=False):
         """
         Launch camera viewer GUI.
 
@@ -909,7 +909,10 @@ class BashUtilities:
         """
         logger.info("Launching camera viewer")
 
-        cmd = "/reg/g/pcds/engineering_tools/mfx/scripts/cameras"
+        if pro:
+            cmd = 'bash /cds/home/opr/mfxopr/camViewerPro.sh'
+        else:
+            cmd = "/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer"
 
         subprocess.Popen(
             cmd,
