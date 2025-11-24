@@ -286,6 +286,26 @@ def mfx_reload(module_name):
         from mfx.yano import Yano
         yano = Yano()
 
+    if module_name == 'mfx.scan':
+        from mfx.scan import Scan
+        scan = Scan()
+
+    if module_name == 'mfx.find':
+        from mfx.find import Find
+        find = Find()
+
+    if module_name == 'mfx.wire':
+        from mfx.wire import Wire
+        wire = Wire()
+
+    if module_name == 'mfx.debug':
+        from mfx.debug import Debug
+        debug = Debug()
+
+    if module_name == 'mfx.vernier':
+        from mfx.vernier import Vernier
+        vernier = Vernier()
+
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
     from mfx.db import mfx_attenuator as att
