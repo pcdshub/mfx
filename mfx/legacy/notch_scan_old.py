@@ -261,6 +261,7 @@ class NotchScan():
 
         proc = [
             f"ssh -Yt {user}@s3dflogin "
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}"
             ]

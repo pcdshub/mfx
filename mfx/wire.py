@@ -581,6 +581,7 @@ class Wire:
         if facility == 'S3DF':
             cmd = (
                 f"ssh -Yt {user}@s3dflogin "
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
                 f"energy_calib_output.py "
                 f"-f {facility} -t {run_type} -e {exp} -r {run}"

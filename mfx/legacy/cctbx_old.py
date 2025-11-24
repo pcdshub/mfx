@@ -44,6 +44,7 @@ class cctbx:
         if facility == 'NERSC':
             proc = [
                 f"ssh -Yt {user}@s3dflogin "
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
                 f"-e {experiment} -f {facility} -g {group} -l {level} "
                 ]
@@ -101,6 +102,7 @@ class cctbx:
 
         proc = [
             f"ssh -Yt {user}@s3dflogin "
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.py "
             f"-e {experiment} -f {facility} -d {str(debug)} -r {run}"
             ]
@@ -172,6 +174,7 @@ class cctbx:
         elif facility == 'NERSC':
             proc = [
                 f"ssh -Yt {user}@s3dflogin "
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
                 f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
                 ]

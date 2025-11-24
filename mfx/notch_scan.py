@@ -358,12 +358,11 @@ class NotchScan:
             logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
             raise ValueError('Invalid daq_num')
 
-        # Determine experiment
-        if exp is None:
-            exp = get_exp()
-
         # Determine station
         station = 1 if daq_num == 1 else 0
+
+        if exp is None:
+            exp = str(get_exp(station=station))
 
         # Generate energy list
         energies = list(range(
@@ -461,6 +460,7 @@ class NotchScan:
             logger.info("\nData analysis command:")
             logger.info(
                 f"ssh -Yt djr@s3dflogin "
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
                 f"energy_calib_output.py "
                 f"-f s3df -t series -e {exp} -r {run_number} "
@@ -471,8 +471,8 @@ class NotchScan:
                 f"notch.output(user='your_username', facility='S3DF', "
                 f"exp='{exp}', run={run_number}, "
                 f"energy={energy_scan_start_eV}, "
-                f"step={energy_scan_steps}, num={len(energies)}), "
-                f"daq_num={daq_num}"
+                f"step={energy_scan_steps}, num={len(energies)}, "
+                f"daq_num={daq_num})"
             )
 
         # Prompt to return to initial position
@@ -561,7 +561,8 @@ class NotchScan:
         import os
         from mfx.db import daq
         from mfx.macros import get_exp, get_run
-        import mfx.cctbx
+        from mfx.cctbx import cctbx
+        cctbx = cctbx()
 
         if daq_num == 2:
             station=0
@@ -587,6 +588,7 @@ class NotchScan:
 
         proc = [
             f"ssh -Yt {user}@s3dflogin "
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}"
             ]

@@ -166,6 +166,7 @@ class Vernier:
         else:
             logger.error('Please enter daq 1 or 2.')
 
+        original_ev = self.get.vernier()
         run_number = get_run(station=station) + 1
         logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
 
@@ -209,8 +210,20 @@ class Vernier:
             post=record,
             inspire=inspire,
             daq_num=daq_num,
-            add_note=f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, steps:{energy_scan_steps}eV @ {events_per_step} events per step')
+            add_note=(
+                f'Energy range:{energy_scan_start_eV}-{energy_scan_end_eV}eV, '
+                f'steps:{energy_scan_steps}eV @ {events_per_step} events per step'
+                ))
+
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
+        exp = str(get_exp())
+        logger.warning(
+                f"vernier.output.scan(user='user', facility='s3df', run_type='scan', "
+                f"exp='{exp}', run={run_number}")
+
+        logger.info(f'Moving energy back to original energy: {original_ev}')
+        self.put.vernier(original_ev)
 
         logger.warning(f"Scan completed. Would you like to analyze the output?")
         answer = input("(y/n)? ")
@@ -218,7 +231,6 @@ class Vernier:
         if answer.lower() == "y":
             facility = input("Enter facility (s3df or nersc) to continue: ")
             user = input("Enter username to continue: ")
-            exp = str(get_exp())
             self.output.scan(
                 user=user,
                 facility=facility,
@@ -314,6 +326,13 @@ class Vernier:
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
+        exp = str(get_exp())
+        logger.warning(
+                f"vernier.output.series(user='user', facility='s3df', run_type='series', "
+                f"exp={exp}, run={run_number}, energy={energy_scan_start_eV}, "
+                f"step={energy_scan_steps}, num={len(energies)})"
+            )
+
         logger.info(f'Moving energy back to original energy: {original_ev}')
         self.put.vernier(original_ev)
 
@@ -323,7 +342,6 @@ class Vernier:
         if answer.lower() == "y":
             facility = input("Enter facility (s3df or nersc) to continue: ")
             user = input("Enter username to continue: ")
-            exp = str(get_exp())
             self.output.series(
                 user=user,
                 facility=facility,
@@ -452,44 +470,41 @@ class VernierOutput:
         """
         import mfx.cctbx as cctbx
 
-        logger.info("Plotting FEE spectrometer data for run list")
-
-        # Get experiment name
+        logging.info("Plotting XRT-Spec Output")
         if exp is None:
             exp = str(get_exp())
 
-        # Get run list if not provided
-        if run_list is None:
-            run_input = input("Enter run numbers (comma-separated): ")
-            run_list = [int(r.strip()) for r in run_input.split(',')]
+        if len(run_list) == 0:
+            run_list = [daq.run_number()]
 
-        # Validate facility
-        facility = facility.lower()
-        if facility not in ['s3df', 'nersc']:
-            logger.error("Facility must be 's3df' or 'nersc'")
-            raise ValueError("Invalid facility")
+        exp_run_list=[]
 
-        # Execute analysis script
-        logger.info(f"Analyzing runs {run_list} on {facility.upper()}")
+        for run in run_list:
+            exp_run_list.append(f"{exp}:{run}")
+        exp_run_list = " ".join(exp_run_list)
 
-        if facility == 's3df':
-            script = ('/sdf/group/lcls/ds/tools/mfx/scripts/'
-                      'FEE_Spec_List_S3DF.sh')
-        else:
-            script = ('/global/cfs/cdirs/lcls/mfxopr/scripts/hsd/'
-                      'FEE_Spec_List_NERSC.sh')
+        facility = facility.upper()
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
 
-        # Format run list for script
-        runs_str = ','.join(str(r) for r in run_list)
+            if token.lower() == "n":
+                cctbx.sshproxy(user)
 
-        # Construct and execute command
-        cmd = f"{script} {user} {exp} {runs_str}"
-        logger.info(f"Executing: {cmd}")
-        os.system(cmd)
+        proc = [
+            f"ssh -Yt {user}@s3dflogin "
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
+            f"-e {exp} -f {facility} -r {exp_run_list}"
+            ]
+
+        logging.info(proc)
+        os.system(proc[0])
 
         logger.info("FEE spectrometer analysis complete")
 
     def series(
+            self,
             user: str,
             facility: str = "S3DF",
             run_type: str = 'series',
@@ -540,6 +555,7 @@ class VernierOutput:
 
         proc = [
             f"ssh -Yt {user}@s3dflogin "
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t {run_type} -e {exp} -r {run} -z {energy} -s {step} -n {num}"
             ]
@@ -549,6 +565,7 @@ class VernierOutput:
 
 
     def scan(
+            self,
             user: str,
             facility: str = "S3DF",
             run_type: str = 'scan',
@@ -590,6 +607,7 @@ class VernierOutput:
 
         proc = [
             f"ssh -Yt {user}@s3dflogin "
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t {run_type} -e {exp} -r {run}"
             ]
