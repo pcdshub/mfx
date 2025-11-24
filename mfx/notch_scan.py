@@ -459,13 +459,13 @@ class NotchScan:
         if record:
             logger.info("\nData analysis command:")
             logger.info(
-                f"ssh -Yt djr@s3dflogin "
-                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
+                f"ssh -Yt djr@s3dflogin '"
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
                 f"energy_calib_output.py "
                 f"-f s3df -t series -e {exp} -r {run_number} "
                 f"-z {energy_scan_start_eV} -s {energy_scan_steps} "
-                f"-n {len(energies)}"
+                f"-n {len(energies)}'"
             )
             logger.warning(
                 f"notch.output(user='your_username', facility='S3DF', "
@@ -587,10 +587,10 @@ class NotchScan:
                 cctbx.sshproxy(user)
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
+            f"ssh -Yt {user}@s3dflogin '"
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
-            f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}"
+            f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}'"
             ]
 
         logger.info(proc)

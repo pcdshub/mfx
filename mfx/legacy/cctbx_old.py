@@ -43,16 +43,18 @@ class cctbx:
 
         if facility == 'NERSC':
             proc = [
-                f"ssh -Yt {user}@s3dflogin "
-                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
+                f"ssh -Yt {user}@s3dflogin '"
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
-                f"-e {experiment} -f {facility} -g {group} -l {level} "
+                f"-e {experiment} -f {facility} -g {group} -l {level}'"
                 ]
         elif facility == 'S3DF':
             proc = [
-                f"ssh -Yt {user}@s3dflogin "
-                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
-                f"-e {experiment} -f {facility} -g {group} -l {level} "
+                f"ssh -Yt {user}@s3dflogin '"
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
+                f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python "
+                f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/geom_refine.py "
+                f"-e {experiment} -f {facility} -g {group} -l {level}'"
                 ]
 
         logging.info(proc)
@@ -101,10 +103,10 @@ class cctbx:
         facility = facility.upper()
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
+            f"ssh -Yt {user}@s3dflogin '"
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.py "
-            f"-e {experiment} -f {facility} -d {str(debug)} -r {run}"
+            f"-e {experiment} -f {facility} -d {str(debug)} -r {run}'"
             ]
 
         logging.info(proc)
@@ -167,16 +169,17 @@ class cctbx:
 
         if facility == 'S3DF':
             proc = [
-                f"ssh -Yt {user}@s3dflogin "
+                f"ssh -Yt {user}@s3dflogin '"
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
                 f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
                 f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
                 ]
         elif facility == 'NERSC':
             proc = [
-                f"ssh -Yt {user}@s3dflogin "
-                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh; "
+                f"ssh -Yt {user}@s3dflogin '"
+                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
                 f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/image_viewer.py "
-                f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}"
+                f"-e {experiment} -f {facility} -d {str(debug)} -t {image_type} -r {run} -g {group}'"
                 ]
 
         logging.info(proc)
