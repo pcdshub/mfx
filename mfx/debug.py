@@ -173,106 +173,14 @@ class Debug:
         Notes
         -----
         Readiness Checks:
-        1. All IOC servers powered on
-        2. All DAQ servers powered on
-        3. Critical motors responsive
-        4. Network connectivity good
-        5. No error conditions
 
-        Status Indicators:
-        - ✓ Green: System ready
-        - ✗ Red: Problem detected
-        - ? Yellow: Warning condition
-
-        The check provides quick "go/no-go" decision for
-        starting beam operations.
-
-        Common Issues Found:
-        - Servers offline after maintenance
-        - Network connectivity problems
-        - Motors not powered
-        - DAQ not running
-
-        Resolution:
-        - Power on servers
-        - Check network connections
-        - Power motors
-        - Restart DAQ processes
-
-        Examples
-        --------
-        Check MFX beamline:
-        >>> debug = Debug()
-        >>> debug.awr('mfx')
-        Checking MFX beamline readiness...
-        IOC Servers: ✓ All online (45/45)
-        DAQ Servers: ✓ All online (12/12)
-        Motors: ✓ All powered (156/156)
-        Beamline ready for operations!
-
-        Check with problems:
-        >>> debug.awr('mfx')
-        Checking MFX beamline readiness...
-        IOC Servers: ✗ 2 offline (43/45)
-          - ioc-mfx-rec01: offline
-          - ioc-mfx-usr02: offline
-        DAQ Servers: ✓ All online (12/12)
-        Motors: ? 3 unpowered (153/156)
-        Beamline NOT ready - resolve issues above
-
-        See Also
-        --------
-        check_servers : Detailed server checks
-        motor_check : Motor diagnostics
         """
         logger.info(f"\n{'='*60}")
         logger.info(f"BEAMLINE READINESS CHECK: {hutch.upper()}")
         logger.info(f"{'='*60}\n")
 
-        all_ready = True
-
-        # Check IOC servers
-        logger.info("Checking IOC servers...")
-        ioc_errors = self.check_servers('ioc')
-        if not ioc_errors:
-            logger.info("  ✓ All IOC servers online")
-        else:
-            logger.error(
-                f"  ✗ {len(ioc_errors)} IOC server(s) offline:"
-            )
-            for server in ioc_errors:
-                logger.error(f"    - {server}")
-            all_ready = False
-
-        # Check DAQ servers
-        logger.info("\nChecking DAQ servers...")
-        daq_errors = self.check_servers('daq')
-        if not daq_errors:
-            logger.info("  ✓ All DAQ servers online")
-        else:
-            logger.error(
-                f"  ✗ {len(daq_errors)} DAQ server(s) offline:"
-            )
-            for server in daq_errors:
-                logger.error(f"    - {server}")
-            all_ready = False
-
-        # Check motors
-        logger.info("\nChecking motors...")
-        try:
-            self.motor_check()
-            logger.info("  ✓ All motors powered")
-        except Exception as e:
-            logger.warning(f"  ? Motor check warning: {e}")
-            # Don't fail readiness for motor warnings
-
-        # Overall status
-        logger.info(f"\n{'='*60}")
-        if all_ready:
-            logger.info("✓ BEAMLINE READY FOR OPERATIONS")
-        else:
-            logger.error("✗ BEAMLINE NOT READY - RESOLVE ISSUES ABOVE")
-        logger.info(f"{'='*60}\n")
+        os.system(
+            f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/awr {hutch}")
 
     def motor_check(self):
         """
@@ -327,17 +235,8 @@ class Debug:
         awr : Full beamline readiness including motors
         """
         logger.info("Checking and powering motors...")
-
-        # This would typically interface with motor management system
-        # For now, log the intent
-        logger.info("Motor check functionality:")
-        logger.info("  - Enumerating motor PVs")
-        logger.info("  - Checking power status")
-        logger.info("  - Powering on if needed")
-        logger.info("  - Verifying communication")
-
-        # Placeholder for actual implementation
-        logger.info("Motor check complete (mock)")
+        os.system(
+            f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/mfxpowerup.sh")
 
     def check_server(self, server: str) -> List[str]:
         """
@@ -395,135 +294,105 @@ class Debug:
         check_servers : Check multiple servers
         cycle_server : Power cycle problem server
         """
-        logger.info(f"Checking server: {server}")
+        status = None
+        if str(server) in self.ioc_serverlist or str(server) in self.daq_serverlist:
+            logging.info(f"Checking the status of: {server}")
+            status = os.popen(f"/reg/g/pcds/engineering_tools/latest-released/scripts/serverStat {server} status").read().splitlines()
+        else:
+            logging.info(f"The server you are looking for does not exist please select one of the following")
+            self.server_list('ioc')
+            self.server_list('daq')
+        return status
 
-        status_messages = []
-
-        # Check power status using serverStat
-        power_cmd = (
-            f"/reg/g/pcds/engineering_tools/latest-released/scripts/"
-            f"serverStat {server}"
-        )
-        power_status = os.popen(power_cmd).read().strip()
-
-        if 'on' not in power_status.lower():
-            msg = f"{server}: Power OFF"
-            logger.warning(msg)
-            status_messages.append(msg)
-            return status_messages  # No point checking further
-
-        # Check network connectivity
-        ping_result = os.system(f"ping -c 1 -W 1 {server} > /dev/null 2>&1")
-        if ping_result != 0:
-            msg = f"{server}: Network unreachable"
-            logger.warning(msg)
-            status_messages.append(msg)
-
-        # Check console accessibility (telnet port 2049)
-        console_cmd = f"timeout 2 telnet {server} 2049 2>&1"
-        console_result = os.popen(console_cmd).read()
-
-        if 'Connected' not in console_result:
-            msg = f"{server}: Console not accessible"
-            logger.warning(msg)
-            status_messages.append(msg)
-
-        if not status_messages:
-            logger.info(f"{server}: All checks passed")
-
-        return status_messages
-
-    def check_servers(self, server_type: str = 'all') -> List[str]:
+    def cycle_server(self, server):
         """
-        Check status of all servers of specified type.
-
-        Performs health checks on all IOC servers, DAQ servers,
-        or both. Returns list of servers with detected issues.
+        Cycles an individual server
 
         Parameters
         ----------
-        server_type : str, optional
-            Type of servers to check: 'ioc', 'daq', or 'all'.
-            Default is 'all'.
-
-        Returns
-        -------
-        List[str]
-            List of server names with detected issues
-
-        Notes
-        -----
-        Check Process:
-        - Iterates through all servers of type
-        - Runs health check on each
-        - Collects servers with problems
-        - Returns problem list
-
-        This provides systematic infrastructure health
-        monitoring for the entire beamline.
-
-        Typical Uses:
-        - Daily operations check
-        - Post-maintenance verification
-        - Troubleshooting investigations
-        - Automated monitoring
-
-        Examples
-        --------
-        Check all IOC servers:
-        >>> debug = Debug()
-        >>> errors = debug.check_servers('ioc')
-        >>> if errors:
-        ...     print(f"Problem servers: {errors}")
-
-        Check all servers:
-        >>> all_errors = debug.check_servers('all')
-        >>> print(f"Total issues: {len(all_errors)}")
-
-        Check and fix:
-        >>> errors = debug.check_servers('ioc')
-        >>> for server in errors:
-        ...     print(f"Cycling {server}...")
-        ...     debug.cycle_server(server)
-
-        See Also
-        --------
-        check_server : Single server check
-        server_list : List available servers
+        server: str, required
+            Specify the server name to cycle. Use debug.server_list('all') to see all servers
         """
-        logger.info(f"Checking {server_type} servers...")
-
-        # Determine which servers to check
-        if server_type.lower() == 'ioc':
-            servers = self.ioc_serverlist
-        elif server_type.lower() == 'daq':
-            servers = self.daq_serverlist
-        elif server_type.lower() == 'all':
-            servers = self.ioc_serverlist + self.daq_serverlist
+        import os
+        import logging
+        if str(server) in self.ioc_serverlist or str(server) in self.daq_serverlist:
+            logging.info(f"Power cycling: {server}")
+            os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/serverStat {server} cycle")
         else:
-            logger.error(f"Unknown server type: {server_type}")
-            logger.error("Use 'ioc', 'daq', or 'all'")
-            raise ValueError("Invalid server_type")
+            logging.info(f"The server you are looking for does not exist please select one of the following")
+            self.server_list('ioc')
+            self.server_list('daq')
 
-        # Check each server
-        error_servers = []
-        for server in servers:
-            status = self.check_server(server)
-            if status:
-                error_servers.append(server)
 
-        # Update instance error list
-        self.error_servers = error_servers
+    def check_all_servers(self, server_type):
+        """
+        Checks the status of all servers local to MFX
 
-        # Report summary
-        if error_servers:
-            logger.warning(
-                f"Found {len(error_servers)} server(s) with issues"
-            )
+        Parameters
+        ----------
+        server_type: str, required
+            Specify the server type input either 'all', 'ioc', or 'daq
+        """
+        import logging
+        self.error_servers = []
+        if str(server_type) == 'all':
+            logging.info(f"You've decided to check all {len(self.ioc_serverlist) + len(self.daq_serverlist)} servers.")
+            for server in self.ioc_serverlist:
+                status = self.check_server(str(server))
+                if status[0].endswith('on') and status[1].split(", ")[0].endswith('1)') and status[2].endswith('up'):
+                    logging.info(f"Server {server} has passed all tests")
+                else:
+                    logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
+                    logging.error(status)
+                    self.error_servers.append(server)
+
+            for server in self.daq_serverlist:
+                status = self.check_server(str(server))
+                if status[0].endswith('on') and status[1].split(", ")[0].endswith('1)') and status[2].endswith('up'):
+                    logging.info(f"Server {server} has passed all tests")
+                else:
+                    logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
+                    logging.error(status)
+                    self.error_servers.append(server)
+
+        elif str(server_type) == 'ioc':
+            logging.info(f"You've decided to check all {len(self.ioc_serverlist)} ioc servers.")
+            for server in self.ioc_serverlist:
+                status = self.check_server(str(server))
+                if status[0].endswith('on') and status[1].endswith('1)') and status[2].endswith('up'):
+                    logging.info(f"Server {server} has passed all tests")
+                else:
+                    logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
+                    self.error_servers.append(server)
+
+        elif str(server_type) == 'daq':
+            logging.info(f"You've decided to check all {len(self.daq_serverlist)} daq servers.")
+            for server in self.daq_serverlist:
+                status = self.check_server(str(server))
+                if status[0].endswith('on') and status[1].endswith('1)') and status[2].endswith('up'):
+                    logging.info(f"Server {server} has passed all tests")
+                else:
+                    logging.error(f"Server {server} has failed one or more tests and is added to the broken list")
+                    self.error_servers.append(server)
         else:
-            logger.info(f"All {len(servers)} servers OK")
+            logging.warning(f"There is no server of the type you requested. Please use either ioc or daq or all.")
 
-        return error_servers
+        if len(self.error_servers) != 0:
+            logging.warning(f"There is something wrong with the following servers.")
+            for server in self.error_servers:
+                print(f'{server}')
+            cycle = input("\nWould you like to power cycle all error servers? (y/n)? ")
+
+            if cycle.lower() == "y":
+                logging.info(f"You've decided to cycle all {len(self.error_servers)} broken servers.")
+                for server in self.error_servers:
+                    self.cycle_server(str(server))
+            else:
+                logging.info(f"You've decided not to cycle {len(self.error_servers)} broken servers.")
+        else:
+            logging.info(f"All {len(self.error_servers)} servers are ready to rock.")
+
+        return self.error_servers
 
     def server_list(self, server_type: str = 'all'):
         """
@@ -556,170 +425,20 @@ class Debug:
         --------
         check_servers : Check server health
         """
-        if server_type.lower () in ['ioc', 'all']:
-            logger.info(f"\nIOC Servers ({len(self.ioc_serverlist)}):")
-            for server in sorted(self.ioc_serverlist):
-                logger.info(f"  - {server}")
-
-        if server_type.lower() in ['daq', 'all']:
-            logger.info(f"\nDAQ Servers ({len(self.daq_serverlist)}):")
-            for server in sorted(self.daq_serverlist):
-                logger.info(f"  - {server}")
-
-    def cycle_server(self, server: str):
-        """
-        Power cycle a server.
-
-        Performs full power cycle (off, wait, on) of specified
-        server to recover from hung state or errors.
-
-        Parameters
-        ----------
-        server : str
-            Server hostname to power cycle
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Power Cycle Process:
-        1. Power off via IPMI
-        2. Wait 10 seconds
-        3. Power on via IPMI
-        4. Wait for boot (60 seconds)
-        5. Verify recovery
-
-        Recovery Time:
-        - Power cycle: 70 seconds
-        - Full boot: 2-5 minutes
-        - Service restart: Additional time
-
-        Warnings
-        --------
-        Power cycling interrupts all services on server.
-        Coordinate with operations before cycling critical
-        servers. Some servers require manual intervention
-        after power cycle.
-
-        Examples
-        --------
-        Cycle problem server:
-        >>> debug = Debug()
-        >>> debug.cycle_server('ioc-mfx-rec01')
-        Powering off ioc-mfx-rec01...
-        Waiting 10 seconds...
-        Powering on ioc-mfx-rec01...
-        Waiting for boot...
-        Server should be online in ~2 minutes
-
-        See Also
-        --------
-        check_server : Check if cycle needed
-        """
-        logger.warning(f"Power cycling server: {server}")
-        logger.warning("This will interrupt all services!")
-
-        confirm = input("Continue? (yes/no): ")
-        if confirm.lower() != 'yes':
-            logger.info("Power cycle cancelled")
-            return
-
-        cycle_script = (
-            "/reg/g/pcds/engineering_tools/latest-released/scripts/"
-            "serverCtl"
-        )
-
-        # Power off
-        logger.info("Powering off...")
-        os.system(f"{cycle_script} {server} off")
-
-        # Wait
-        logger.info("Waiting 10 seconds...")
-        import time
-        time.sleep(10)
-
-        # Power on
-        logger.info("Powering on...")
-        os.system(f"{cycle_script} {server} on")
-
-        logger.info("Server should boot in ~2 minutes")
-        logger.info("Run check_server() to verify recovery")
-
-
-# Convenience module-level instance and functions
-debug = Debug()
-
-
-def check_beamline_ready(hutch: str = 'mfx'):
-    """
-    Check beamline readiness.
-
-    Convenience function for AWR check.
-
-    Parameters
-    ----------
-    hutch : str, optional
-        Hutch to check. Default is 'mfx'.
-
-    Examples
-    --------
-    >>> check_beamline_ready('mfx')
-
-    See Also
-    --------
-    Debug.awr : Full implementation
-    """
-    debug.awr(hutch)
-
-
-def check_all_servers(server_type: str = 'all') -> List[str]:
-    """
-    Check all servers.
-
-    Convenience function for server health checks.
-
-    Parameters
-    ----------
-    server_type : str, optional
-        Server type: 'ioc', 'daq', or 'all'.
-        Default is 'all'.
-
-    Returns
-    -------
-    List[str]
-        Servers with issues
-
-    Examples
-    --------
-    >>> errors = check_all_servers('ioc')
-    >>> print(f"Found {len(errors)} issues")
-
-    See Also
-    --------
-    Debug.check_servers : Full implementation
-    """
-    return debug.check_servers(server_type)
-
-
-def list_servers(server_type: str = 'all'):
-    """
-    List servers.
-
-    Convenience function to display server list.
-
-    Parameters
-    ----------
-    server_type : str, optional
-        Server type. Default is 'all'.
-
-    Examples
-    --------
-    >>> list_servers('ioc')
-
-    See Also
-    --------
-    Debug.server_list : Full implementation
-    """
-    debug.server_list(server_type)
+        if str(server_type) == 'all':
+            print('IOC SERVERS\n#########################')
+            for server in self.ioc_serverlist:
+                print(f'{server}')
+            print('\nDAQ SERVERS\n#########################')
+            for server in self.daq_serverlist:
+                print(f'{server}')
+        elif str(server_type) == 'ioc':
+            print('IOC SERVERS\n#########################')
+            for server in self.ioc_serverlist:
+                print(f'{server}')
+        elif str(server_type) == 'daq':
+            print('DAQ SERVERS\n#########################')
+            for server in self.daq_serverlist:
+                print(f'{server}')
+        else:
+            logging.warning(f"There is no server of the type you requested. Please use either ioc or daq.")
