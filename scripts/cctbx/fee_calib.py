@@ -29,7 +29,7 @@ calibration {
     n_runs = None
         .type = int
         .help = Number of runs to process
-    detector = 'FEE-SPEC0'
+    detector = 'feespec'
         .type = str
         .help = Detector name
     events_per_run = 1000
@@ -56,7 +56,7 @@ def process_run(exp, run_num, detector_name, max_events):
         ds = psana.DataSource(f'exp={exp}:run={run_num}:smd')
     except:
         # psana2
-        ds = psana.DataSource(exp={exp},run={run_num},detectors=[f'{detector_name}'],max_events={max_events})
+        ds = psana.DataSource(exp=exp,run=run_num,detectors=[f'{detector_name}'],max_events=max_events)
     try:
         detector = psana.Detector(detector_name)
     except:
@@ -79,13 +79,15 @@ def process_run(exp, run_num, detector_name, max_events):
                 is_psana1=True
                 spectrum = detector.get(evt)
                 dta = spectrum.hproj().astype(float)
+                if not spectrum:
+                    continue
             except:
                 # psana2
                 is_psana1 = False
                 spectrum = detector.raw.hproj(evt)
+                if spectrum is None:
+                    continue
                 dta = spectrum.astype(float)
-            if not spectrum:
-                continue
 
             if data is None:
                 data = dta
