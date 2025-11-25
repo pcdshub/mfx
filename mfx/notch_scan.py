@@ -4,7 +4,7 @@ DCCM notch filter energy scanning for MFX beamline.
 Provides automated energy scanning using DCCM monochromator for energy
 calibration, edge scans, and spectroscopy experiments.
 """
-
+import os
 import logging
 from time import sleep
 from typing import Optional
@@ -558,8 +558,6 @@ class NotchScan:
         --------
         NotchScan.series : Data collection
         """
-        import os
-        from mfx.db import daq
         from mfx.macros import get_exp, get_run
         from mfx.cctbx import cctbx
         cctbx = cctbx()

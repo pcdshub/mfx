@@ -416,9 +416,11 @@ class EnergyPut:
         Creates DCCM device instance for monochromator control.
         """
         from mfx.dccm import DCCM
+        from mfx.xrt_spec import XRTspec
+        self.xrtspec = XRTspec()
         self.dccm = DCCM(name='DCCM')
 
-    def all(self, energy):
+    def all(self, energy, crystal_angle_offset=0.0):
         """
         Set all vernier PVs to same energy.
 
@@ -469,6 +471,8 @@ class EnergyPut:
         self.k_ref(energy)
         self.vernier(energy)
         self.k_energy(energy)
+        self.mono(energy)
+        self.xrt(energy, crystal_angle_offset)
 
     def vernier_ref(self, energy):
         """
@@ -672,6 +676,49 @@ class EnergyPut:
         energy_kev = energy / 1000.0
         self.dccm.energy.move(energy_kev)
 
+    def xrt(self, energy, crystal_angle_offset=0.0):
+        """
+        Set XRT-spec monochromator energy.
+
+        Parameters
+        ----------
+        energy : float
+            Target energy in eV
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Sets XRT-spec energy by moving crystal Bragg angle. Energy
+        converted from eV to keV for XRT-spec interface.
+
+        Large energy changes may require:
+        - Beam position adjustments
+        - Focus optimization
+        - Harmonic rejection verification
+
+        Warnings
+        --------
+        Moving XRT-spec changes beam position and may require
+        reoptimization of downstream optics.
+
+        Examples
+        --------
+        Set XRT-spec to 9 keV:
+        >>> vput = EnergyPut()
+        >>> vput.xrt(9000)
+
+        See Also
+        --------
+        XRT-spec : Monochromator device class
+        EnergyGet.mono : Read XRT-spec energy
+        """
+        logger.info(f"Setting XRT-spec to {energy} eV")
+        energy_kev = energy / 1000.0
+        self.xrtspec.move_feespec_energy(energy_kev, crystal_angle_offset)
+
 # Convenience instance for direct import
 get = EnergyGet()
 put = EnergyPut()
@@ -711,7 +758,7 @@ def get_energy(pv_list: list = ['vr', 'kr', 'v', 'k', 'd']) -> float:
         logger.error(f"Unknown PV: {pv_list}. Use 'vr', 'kr', 'v', 'k', 'd', or 'all'")
         raise ValueError("Invalid PV name")
 
-def set_energy(energy: float, pv_list: list = []):
+def set_energy(energy: float, pv_list: list = [], crystal_angle_offset: float = 0.0):
     """
     Set vernier energy to specified value.
 
@@ -745,8 +792,10 @@ def set_energy(energy: float, pv_list: list = []):
         put.k_energy(energy)
     if 'd' in [pv.lower() for pv in pv_list]:
         put.mono(energy)
+    if 'x' in [pv.lower() for pv in pv_list]:
+        put.xrt(energy, crystal_angle_offset)
     if 'all' in [pv.lower() for pv in pv_list]:
-        put.all(energy)
+        put.all(energy, crystal_angle_offset)
     if not pv_list:
         logger.error(f"Unknown PV: {pv_list}. Use 'vr', 'kr', 'v', 'k', 'd', or 'all'")
         raise ValueError("Invalid PV name")

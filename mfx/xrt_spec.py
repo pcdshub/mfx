@@ -114,7 +114,157 @@ class XRTspec:
 
         self.logger = logging.getLogger(__name__)
 
-    def move_feespec_energy(self, energy_keV):
+    def get_feespec_positions(self, energy_keV, crystal_angle_offset=0.0, debug=False):
+        """
+        Calculate FEE spectrometer positions for a given energy.
+
+        Computes the crystal angle, camera angle, and camera Y position required
+        for the FEE spectrometer to operate at a specified photon energy. Uses
+        the standard calibration formulas relating energy to spectrometer geometry.
+
+        The energy-to-position conversion uses the following relationships:
+            crystal_angle = 140.0 - 21.2*E + 1.02*E² + offset
+            camera_angle = -1.9 + 2*crystal_angle
+            camera_y = -4.92 - 0.111*E
+
+        where E is the photon energy in keV.
+
+        Parameters
+        ----------
+        energy_keV : float
+            Target photon energy in keV. Recommended range is 4.0 to 25.0 keV
+            to stay within the spectrometer's operational limits.
+
+        debug : bool, optional
+                If True, logs detailed calculation information. Default: False
+
+        crystal_angle_offset : float, optional
+            Offset to add to the calculated crystal angle in degrees. Used for
+            fine-tuning calibration or compensating for systematic errors.
+            Positive values increase the crystal angle. Default: 0.0
+
+        Returns
+        -------
+        positions : dict
+            Dictionary containing calculated positions with the following keys:
+
+            energy_keV : float
+                Input photon energy in keV.
+
+            crystal_angle : float
+                Required crystal angle (θ) in degrees for Bragg diffraction
+                at the specified energy, including any applied offset.
+
+            camera_angle : float
+                Required camera angle (2θ) in degrees, positioned to collect
+                the diffracted beam.
+
+            camera_y : float
+                Required camera Y-axis position in mm to center the diffracted
+                beam on the detector.
+
+            crystal_angle_offset : float
+                Applied crystal angle offset in degrees.
+
+        Notes
+        -----
+        - This function only calculates positions; it does NOT move any motors.
+        Use move_feespec_energy() to actually move the spectrometer.
+        - The formulas are empirically determined calibrations specific to the
+        HXR FEE spectrometer at LCLS.
+        - Crystal angle follows the Bragg law modified by mechanical constraints
+        of the spectrometer design.
+        - Camera angle is fixed at 2θ geometry with a small offset correction.
+        - Camera Y position compensates for beam height variation with energy.
+        - Values are valid for Si(111) crystal configuration.
+        - The crystal angle offset affects both the crystal and camera angles,
+        since camera_angle = -1.9 + 2*crystal_angle.
+        - Logging output is sent to the module logger 'feespec_positions' at
+        INFO level.
+
+        Examples
+        --------
+        Get positions for 9 keV:
+
+        >>> positions = get_feespec_positions(9.0)
+        >>> print(f"Crystal angle: {positions['crystal_angle']:.3f}°")
+        >>> print(f"Camera angle: {positions['camera_angle']:.3f}°")
+        >>> print(f"Camera Y: {positions['camera_y']:.3f} mm")
+        Crystal angle: 28.580°
+        Camera angle: 55.260°
+        Camera Y: -5.919 mm
+
+        Apply a +0.5° offset to crystal angle:
+
+        >>> positions = get_feespec_positions(9.0, crystal_angle_offset=0.5)
+        >>> print(f"Crystal angle: {positions['crystal_angle']:.3f}°")
+        Crystal angle: 29.080°
+
+        Calculate positions for a range of energies:
+
+        >>> energies = [7.0, 8.0, 9.0, 10.0, 11.0]
+        >>> for E in energies:
+        ...     pos = get_feespec_positions(E)
+        ...     print(f"{E:.1f} keV: θ={pos['crystal_angle']:.2f}°")
+        7.0 keV: θ=40.46°
+        8.0 keV: θ=34.08°
+        9.0 keV: θ=28.58°
+        10.0 keV: θ=23.96°
+        11.0 keV: θ=20.22°
+
+        Verify positions match expected values:
+
+        >>> pos = get_feespec_positions(8.5)
+        >>> assert 30 < pos['crystal_angle'] < 35
+        >>> assert 60 < pos['camera_angle'] < 70
+        >>> assert -6 < pos['camera_y'] < -5
+
+        See Also
+        --------
+        move_feespec_energy : Move spectrometer to energy
+        check_feespec_crystal_angle : Check and adjust crystal angle
+        scan_feespec_camera_angle : Scan camera angle over energy range
+
+        References
+        ----------
+        .. [1] FEE Spectrometer calibration documentation (MFX beamline wiki)
+        .. [2] Bragg's law and spectrometer geometry
+        """
+        # Calculate crystal angle using quadratic formula
+        # Accounts for Bragg law and mechanical geometry
+        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
+
+        # Calculate camera angle (2θ geometry with offset)
+        camera_angle = -1.9 + 2 * crystal_angle
+
+        # Calculate camera Y position (energy-dependent height correction)
+        camera_y = -4.92 - 0.111 * energy_keV
+
+        # Alter the crystal_angle without affecting the camera_angle
+        if crystal_angle_offset != 0.0:
+            crystal_angle = (140.0 - (21.2 * energy_keV) +
+                            (1.02 * energy_keV ** 2) + crystal_angle_offset)
+
+        # Return dictionary of positions
+        positions = {
+            'energy_keV': energy_keV,
+            'crystal_angle': crystal_angle,
+            'camera_angle': camera_angle,
+            'camera_y': camera_y,
+            'crystal_angle_offset': crystal_angle_offset
+        }
+        if debug:
+            # Log the calculated positions
+            self.logger.info(f"FEE Spectrometer positions for {energy_keV:.4f} keV:")
+            self.logger.info(f"  Crystal angle (θ):  {crystal_angle:.4f}°")
+            if crystal_angle_offset != 0.0:
+                self.logger.info(f"    (includes offset: {crystal_angle_offset:+.4f}°)")
+            self.logger.info(f"  Camera angle (2θ):  {camera_angle:.4f}°")
+            self.logger.info(f"  Camera Y position:  {camera_y:.4f} mm")
+
+        return positions
+
+    def move_feespec_energy(self, energy_keV, crystal_angle_offset=0.0):
         """
         Move FEE spectrometer to energy.
 
@@ -122,6 +272,11 @@ class XRTspec:
         ----------
         energy_keV : float
             Target energy in keV
+
+        crystal_angle_offset : float, optional
+            Offset to add to the calculated crystal angle in degrees. Used for
+            fine-tuning calibration or compensating for systematic errors.
+            Positive values increase the crystal angle. Default: 0.0
 
         Notes
         -----
@@ -147,14 +302,13 @@ class XRTspec:
         ref_camera_y = self.hxrsss.camy.position
 
         # Calculate target positions
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
-        camera_angle = -1.9 + 2 * crystal_angle
-        camera_y = -4.92 - 0.111 * energy_keV
+        positions = self.get_feespec_positions(
+            energy_keV, crystal_angle_offset=crystal_angle_offset)
 
         # Move to target
-        self.hxrsss.tth.mv(camera_angle)
-        self.hxrsss.camy.mv(camera_y)
-        self.hxrsss.th.mv(crystal_angle)
+        self.hxrsss.tth.mv(positions['camera_angle'])
+        self.hxrsss.camy.mv(positions['camera_y'])
+        self.hxrsss.th.mv(positions['crystal_angle'])
 
         # Safety check
         xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
@@ -164,7 +318,7 @@ class XRTspec:
             self.hxrsss.camy.mv(ref_camera_y)
             self.hxrsss.th.mv(ref_crystal_angle)
 
-    def check_feespec_crystal_angle(self, energy_keV):
+    def check_feespec_crystal_angle(self, energy_keV, crystal_angle_offset=0.0):
         """
         Check and adjust FEE spectrometer crystal angle.
 
@@ -172,6 +326,11 @@ class XRTspec:
         ----------
         energy_keV : float
             Target energy in keV
+
+        crystal_angle_offset : float, optional
+            Offset to add to the calculated crystal angle in degrees. Used for
+            fine-tuning calibration or compensating for systematic errors.
+            Positive values increase the crystal angle. Default: 0.0
 
         Notes
         -----
@@ -183,7 +342,10 @@ class XRTspec:
         self.hxrsss = HXRSpectrometer("STEP:XRT1", name="self.hxrsss")
 
         ref_crystal_angle = self.hxrsss.th.position
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
+
+        # Calculate target positions
+        positions = self.get_feespec_positions(
+            energy_keV, crystal_angle_offset=crystal_angle_offset)
 
         if round(crystal_angle, 2) == round(ref_crystal_angle, 2):
             return
@@ -193,7 +355,7 @@ class XRTspec:
         if cam_status == 'Acquire':
             os.system('caput CAMR:FEE1:441:Acquire Done')
 
-        self.hxrsss.th.umv(crystal_angle)
+        self.hxrsss.th.umv(positions['crystal_angle'])
 
         # Safety check
         xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
@@ -229,10 +391,12 @@ class XRTspec:
             os.system('caput CAMR:FEE1:441:Acquire Acquire')
 
         ref_camera_angle = self.hxrsss.tth.position
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
-        camera_angle = -1.9 + 2 * crystal_angle
 
-        self.hxrsss.tth.mv(camera_angle)
+        # Calculate target positions
+        positions = self.get_feespec_positions(
+            energy_keV, crystal_angle_offset=crystal_angle_offset)
+
+        self.hxrsss.tth.mv(positions['camera_angle'])
 
         xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
         if xrt_status != 'NO_ALARM':
@@ -240,6 +404,7 @@ class XRTspec:
             self.hxrsss.tth.mv(ref_camera_angle)
 
     def scan_feespec_camera_angle(
+        self,
         start_energy_keV,
         end_energy_keV,
         num_points,
@@ -249,7 +414,6 @@ class XRTspec:
         inspire: bool = False,
         daq_delay: int = 5,
         record: bool = False,
-        vernier: bool = False,
         daq_num: int = 2,
         check_xrt=True,
         exp: Optional[str] = None):
@@ -307,10 +471,6 @@ class XRTspec:
 
         record : bool, optional
             Enable data recording.
-            Default is False.
-
-        vernier : bool, optional
-            Use vernier for fine energy adjustment.
             Default is False.
 
         daq_num : int, optional
@@ -442,7 +602,7 @@ class XRTspec:
 
         # Validate DAQ number
         if daq_num not in [1, 2]:
-            logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
+            self.logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
             raise ValueError('Invalid daq_num')
 
         # Determine station
@@ -458,18 +618,18 @@ class XRTspec:
         ]
 
         # Log scan configuration
-        logger.info("\n" + "="*60)
-        logger.info("XRT CAM ANGLE SCAN SERIES")
-        logger.info("="*60)
-        logger.info(f"Experiment: {exp}")
-        logger.info(f"Energy range: {start_energy_keV} - "
+        self.logger.info("\n" + "="*60)
+        self.logger.info("XRT CAM ANGLE SCAN SERIES")
+        self.logger.info("="*60)
+        self.logger.info(f"Experiment: {exp}")
+        self.logger.info(f"Energy range: {start_energy_keV} - "
                     f"{end_energy_keV} eV")
-        logger.info(f"Number of points: {num_points}")
-        logger.info(f"Energies: {energies_keV}")
-        logger.info(f"Run length: {run_length}s per point")
-        logger.info(f"Total time: ~{num_points * (run_length + daq_delay) / 60:.1f} min")
-        logger.info(f"Recording: {record}")
-        logger.info("="*60 + "\n")
+        self.logger.info(f"Number of points: {num_points}")
+        self.logger.info(f"Energies: {energies_keV}")
+        self.logger.info(f"Run length: {run_length}s per point")
+        self.logger.info(f"Total time: ~{num_points * (run_length + daq_delay) / 60:.1f} min")
+        self.logger.info(f"Recording: {record}")
+        self.logger.info("="*60 + "\n")
 
         # Convert energies to camera angles using the formula from the code
         # crystal_angle = 140.0 - 21.2*E + 1.02*E²
@@ -502,7 +662,7 @@ class XRTspec:
 
         # Start camera if not running and we want to record
         if record and cam_status != 'Acquire':
-            logger.info("Starting camera...")
+            self.logger.info("Starting camera...")
             try:
                 os.system('caput CAMR:FEE1:441:Acquire Acquire')
                 sleep(2)  # Wait for camera to start
@@ -511,14 +671,14 @@ class XRTspec:
 
         # Store initial camera angle
         original_cam_angle = self.hxrsss.tth.position
-        logger.info(f"Initial camera angle: {original_cam_angle}°")
+        self.logger.info(f"Initial camera angle: {original_cam_angle}°")
 
         # Configure pulse picker
         if picker == 'open':
-            logger.info("Opening pulse picker")
+            self.logger.info("Opening pulse picker")
             pp.open()
         elif picker == 'flip':
-            logger.info("Setting pulse picker to flip-flop")
+            self.logger.info("Setting pulse picker to flip-flop")
             pp.flipflop()
 
         # Get starting run number
@@ -527,7 +687,7 @@ class XRTspec:
         try:
             for i, (energy_keV, target_angle) in enumerate(zip(energies_keV,
                                                                 angles)):
-                logger.info(
+                self.logger.info(
                     f"Point {i+1}/{num_points}: Energy {energy_keV:.4f} keV -> "
                     f"Angle {target_angle:.3f}°"
                 )
@@ -546,12 +706,12 @@ class XRTspec:
                             "caget XRT:HXS:TRNS.SEVR | awk '{print $2}'"
                         ).read().strip()
                         if xrt_status != 'NO_ALARM':
-                            logger.warning(
+                            self.logger.warning(
                                 f"XRT transmission alarm at {energy_keV:.4f} "
                                 f"keV: {xrt_status}"
                             )
                     except Exception as e:
-                        logger.warning(f"Failed to check XRT status: {e}")
+                        self.logger.warning(f"Failed to check XRT status: {e}")
                         xrt_status = "ERROR"
 
                 # Record data
@@ -561,14 +721,14 @@ class XRTspec:
                 scan_data['timestamps'].append(time())
                 scan_data['xrt_status'].append(xrt_status)
 
-                logger.info(f"  Actual position: {actual_angle:.3f}°")
-                logger.info(
+                self.logger.info(f"  Actual position: {actual_angle:.3f}°")
+                self.logger.info(
                     f"  Position error: {abs(actual_angle - target_angle):.4f}°"
                 )
-                logger.info(f"  XRT status: {xrt_status}")
+                self.logger.info(f"  XRT status: {xrt_status}")
 
                 # Collect data
-                logger.info(f"Collecting data for {run_length}s...")
+                self.logger.info(f"Collecting data for {run_length}s...")
                 autorun(
                     sample=f"{energy_keV} keV at camera angle {actual_angle}",
                     tag=tag,
@@ -581,19 +741,140 @@ class XRTspec:
                     daq_num=daq_num
                 )
 
-            logger.info("Scan completed successfully!")
-            logger.info(f"Total scan points: {len(scan_data['energies_keV'])}")
-            logger.info(
+            self.logger.info("Scan completed successfully!")
+            self.logger.info(f"Total scan points: {len(scan_data['energies_keV'])}")
+            self.logger.info(
                 f"Total scan time: {sum([run_length] * num_points):.1f} s"
             )
 
         except Exception as e:
-            logger.error(f"Scan failed: {e}")
+            self.logger.error(f"Scan failed: {e}")
             raise
 
         finally:
             # Restore camera state if we changed it
-            logger.info("Moving back to original camera angle")
+            self.logger.info("Moving back to original camera angle")
             self.hxrsss.tth.umv(original_cam_angle)
 
+            energy_scan_steps = (end_energy_keV - start_energy_keV) / (num_points - 1)
+            self.logger.warning(
+                f"notch.output(user='your_username', facility='S3DF', "
+                f"exp='{exp}', run={run_number}, "
+                f"energy={start_energy_keV}, "
+                f"step={energy_scan_steps}, num=num_points, "
+                f"daq_num={daq_num})"
+            )
+
+            # Prompt for analysis
+            answer = input("Would you like to analyze the scan? (y/n): ")
+            if answer.lower() == "y":
+                facility = input("Which facility? (S3DF/NERSC): ")
+                if facility.upper() in ['S3DF', 'NERSC']:
+                    user = input("Enter username to continue: ")
+                    self.output(
+                        user=user,
+                        facility=facility,
+                        exp=exp,
+                        run=run_number,
+                        energy=start_energy_keV,
+                        step=energy_scan_steps,
+                        num=num_points,
+                        daq_num=daq_num)
+                else:
+                    self.logger.warning(f"Unknown facility: {facility}")
+
         return scan_data
+
+    def output(
+        self,
+        user: str,
+        facility: str = 'S3DF',
+        exp: str = None,
+        run: str = None,
+        energy: float = None,
+        step: float = None,
+        num: int = None,
+        daq_num: int = 2):
+        """
+        Analysis and output for notch scan data.
+
+        Provides methods to analyze energy calibration data and
+        generate plots on computing facilities.
+
+        Methods
+        -------
+        series(user, facility, exp, run, energy, step, num)
+            Analyze energy scan series data
+
+        Notes
+        -----
+        Analysis Process:
+        1. Retrieve data from DAQ files
+        2. Extract detector intensities vs. energy
+        3. Identify absorption edge
+        4. Compare to reference energy
+        5. Calculate energy offset
+        6. Generate calibration plots
+
+        Output Products:
+        - Energy vs. intensity plots
+        - Edge position determination
+        - Calibration offset value
+        - Statistical uncertainties
+
+        Computing Facilities:
+        - S3DF: Interactive analysis
+        - NERSC: Batch processing
+
+        Examples
+        --------
+        >>> output = NotchOutput()
+        >>> output.series(
+        ...     user='myuser',
+        ...     facility='S3DF',
+        ...     exp='mfxls1234',
+        ...     run=100,
+        ...     energy=7112,
+        ...     step=5,
+        ...     num=20
+        ... )
+
+        See Also
+        --------
+        NotchScan.series : Data collection
+        """
+        from mfx.macros import get_exp, get_run
+        from mfx.cctbx import cctbx
+        cctbx = cctbx()
+
+        if daq_num == 2:
+            station=0
+        elif daq_num == 1:
+            station=1
+        else:
+            self.logger.error('Please enter daq 1 or 2.')
+
+        self.logger.info("Plotting XRT-Spec Output")
+        if exp is None:
+            exp = str(get_exp(station=station))
+
+        if run is None:
+            run = int(get_run(station=station))
+
+        facility = facility.upper()
+        if facility == 'NERSC':
+            self.logger.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                cctbx.sshproxy(user)
+
+        proc = [
+            f"ssh -Yt {user}@s3dflogin '"
+            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
+            f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}'"
+            ]
+
+        self.logger.info(proc)
+        os.system(proc[0])

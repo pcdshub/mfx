@@ -363,11 +363,13 @@ class Exafs:
 
         self.logger.warning(f"Moving K to initial energy: {self.k_energy:.0f} eV")
         if track_feespec:
-            self.xrtspec.xrtspec.move_feespec_energy(self.k_energy / 1000)
+            self.xrtspec.xrtspec.move_feespec_energy(
+                self.k_energy / 1000, crystal_angle_offset=crystal_angle_offset)
         if round(self.k_energy, 1) != round(self._current_k_energy(), 1):
             self._move_k_energy(self.k_energy)
         if track_feespec:
-            self.xrtspec.check_feespec_crystal_angle(self.k_energy / 1000)
+            self.xrtspec.check_feespec_crystal_angle(
+                self.k_energy / 1000, crystal_angle_offset=crystal_angle_offset)
 
         return energies, wait_time
 
@@ -958,12 +960,14 @@ class Exafs:
             sleep(0.5)
 
         if track_feespec:
-            self.xrtspec.move_feespec_energy(new_k_energy / 1000)
+            self.xrtspec.move_feespec_energy(
+                new_k_energy / 1000, crystal_angle_offset=crystal_angle_offset)
 
         self._move_k_energy(new_k_energy)
 
         if track_feespec:
-            self.xrtspec.check_feespec_crystal_angle(new_k_energy / 1000)
+            self.xrtspec.check_feespec_crystal_angle(
+                new_k_energy / 1000, crystal_angle_offset=crystal_angle_offset)
 
         if not self.simulate:
             from mfx.db import daq
@@ -1224,8 +1228,10 @@ class Exafs:
 
         self.logger.warning("Stopping run and cleaning up...")
         self._return_to_start(energy_start, k_energy_start)
-        self.xrtspec.move_feespec_energy(energy_start)
-        self.xrtspec.check_feespec_crystal_angle(energy_start)
+        self.xrtspec.move_feespec_energy(
+            energy_start, crystal_angle_offset=crystal_angle_offset)
+        self.xrtspec.check_feespec_crystal_angle(
+            energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Run ended prematurely')
 
     def _finalize_scan(self, energy_start, k_energy_start):
@@ -1245,8 +1251,10 @@ class Exafs:
         Logs completion message.
         """
         self._return_to_start(energy_start, k_energy_start)
-        self.xrtspec.move_feespec_energy(energy_start)
-        self.xrtspec.check_feespec_crystal_angle(energy_start)
+        self.xrtspec.move_feespec_energy(
+            energy_start, crystal_angle_offset=crystal_angle_offset)
+        self.xrtspec.check_feespec_crystal_angle(
+            energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Scan completed successfully\n')
 
     def _wait(self, wait_time):
@@ -1342,7 +1350,7 @@ class Exafs:
                    min_time_EXAFS=0.5, max_time_EXAFS=10.0, tchk=False,
                    diagnostic='dg2', map_focus_track=False,
                    map_tchk_track=False, map_lens_beam_energy_offset=False,
-                   lens_beam_energy_offset=0.0, track_focus=False,
+                   lens_beam_energy_offset=0.0, track_focus=False, crystal_angle_offset=0.0,
                    tfs_margin_mm=5.0, ref_focal_length_um=None,
                    ref_z_stage_mm=None, tfs_target=400.37,
                    avoid_forbidden_combo=True, enable_prefocus=True,
@@ -1418,6 +1426,10 @@ class Exafs:
             Lens beam energy offset in eV (default: 0.0)
         track_focus : bool, optional
             Enable focus tracking during scan (default: False)
+        crystal_angle_offset : float, optional
+            Offset to add to the calculated crystal angle in degrees. Used for
+            fine-tuning calibration or compensating for systematic errors.
+            Positive values increase the crystal angle. Default: 0.0
         tfs_margin_mm : float, optional
             Transfocator margin in mm (default: 5.0)
         ref_focal_length_um : float or None, optional

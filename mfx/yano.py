@@ -1103,10 +1103,23 @@ class Yano:
                             if track_focus:
                                 # Move Z stage
                                 z_position = - (27 / 20) * eng + 9702
-                                self.logger.info(f"Moving TFS to {z_position:.3f} mm")
-                                self.tfs.translation.mv(z_position)
-                                while self.tfs.translation.moving:
-                                    sleep(0.1)
+                                if z_position >=0 or z_position <=299:
+                                    logger.info(f"Moving TFS to {z_position:.3f} mm")
+                                    self.tfs.translation.mv(z_position)
+                                    while self.tfs.translation.moving:
+                                        sleep(0.1)
+                                else:
+                                    logger.error(
+                                        f"Calcualted TFS Z={z_position:.3f}mm. "
+                                        f"This is outside the 0-299mm range. "
+                                        f"Would you like to proceed without track_focus?")
+                                    answer = input("(Y/n): ")
+                                    if answer.lower() == "y":
+                                        track_focus = False
+                                    else:
+                                        logger.warning(f"Exiting...")
+                                        sys.exit()
+
                             if spread_type.lower() == 'vernier':
                                 self.put_energy.vernier(eng)
                             elif spread_type.lower() == 'k':
