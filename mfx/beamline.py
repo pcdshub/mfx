@@ -172,6 +172,10 @@ with safe_load('EXAFS'):
     from mfx.exafs import *
     exafs = Exafs()
 
+with safe_load('XRT-Spec Controls'):
+    from mfx.xrt_spec import *
+    xrtspec = XRTspec()
+
 with safe_load('EXAFS_Builder'):
     from mfx.exafs import EXAFSEnergyRangeBuilder
     exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
@@ -305,6 +309,10 @@ def mfx_reload(module_name):
     if module_name == 'mfx.vernier':
         from mfx.vernier import Vernier
         vernier = Vernier()
+
+    if module_name == 'mfx.xrt_spec':
+        from mfx.xrt_spec import XRTspec
+        xrtspec = XRTspec()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):

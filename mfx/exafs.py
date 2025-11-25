@@ -79,7 +79,8 @@ class Exafs:
         """
         from mfx.dccm import DCCM
         from hutch_python import sim
-
+        from mfx.xrt_spec import XRTspec
+        self.xrtspec = XRTspec()
         self.logger = logging.getLogger(__name__)
         self.dccm = DCCM(name='DCCM')
         self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
@@ -362,11 +363,11 @@ class Exafs:
 
         self.logger.warning(f"Moving K to initial energy: {self.k_energy:.0f} eV")
         if track_feespec:
-            self.move_feespec_energy(self.k_energy / 1000)
+            self.xrtspec.xrtspec.move_feespec_energy(self.k_energy / 1000)
         if round(self.k_energy, 1) != round(self._current_k_energy(), 1):
             self._move_k_energy(self.k_energy)
         if track_feespec:
-            self.check_feespec_crystal_angle(self.k_energy / 1000)
+            self.xrtspec.check_feespec_crystal_angle(self.k_energy / 1000)
 
         return energies, wait_time
 
@@ -792,150 +793,6 @@ class Exafs:
             return True
         return False
 
-    # ==================== FEE Spectrometer Methods ====================
-
-    def move_feespec_energy(self, energy_keV):
-        """
-        Move FEE spectrometer to energy.
-
-        Parameters
-        ----------
-        energy_keV : float
-            Target energy in keV
-
-        Notes
-        -----
-        Moves crystal angle, camera angle, and camera Y position.
-        Formula: crystal_angle = 140.0 - 21.2*E + 1.02*E²
-        camera_angle = -1.9 + 2*crystal_angle
-        camera_y = -4.92 - 0.111*E
-
-        Performs safety check on XRT transmission after move.
-        Returns to previous position if alarm detected.
-        Stops/starts camera acquisition as needed.
-        """
-        from pcdsdevices.spectrometer import HXRSpectrometer
-
-        hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
-        self.logger.warning(f'Calibrating XRT-Spec for {energy_keV:.3f} keV')
-
-        if self.simulate:
-            self.sim.slow_motor2.mv(energy_keV)
-            return
-
-        # Stop camera if running
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Acquire':
-            os.system('caput CAMR:FEE1:441:Acquire Done')
-
-        # Store current positions
-        ref_crystal_angle = hxrsss.th.position
-        ref_camera_angle = hxrsss.tth.position
-        ref_camera_y = hxrsss.camy.position
-
-        # Calculate target positions
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
-        camera_angle = -1.9 + 2 * crystal_angle
-        camera_y = -4.92 - 0.111 * energy_keV
-
-        # Move to target
-        hxrsss.tth.mv(camera_angle)
-        hxrsss.camy.mv(camera_y)
-        hxrsss.th.mv(crystal_angle)
-
-        # Safety check
-        xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
-        if xrt_status != 'NO_ALARM':
-            self.logger.error('XRT transmission alarm. Returning to previous position')
-            hxrsss.tth.mv(ref_camera_angle)
-            hxrsss.camy.mv(ref_camera_y)
-            hxrsss.th.mv(ref_crystal_angle)
-
-    def check_feespec_crystal_angle(self, energy_keV):
-        """
-        Check and adjust FEE spectrometer crystal angle.
-
-        Parameters
-        ----------
-        energy_keV : float
-            Target energy in keV
-
-        Notes
-        -----
-        Only moves crystal if angle differs from target by >0.01°.
-        Uses user move (umv) which blocks until complete.
-        Performs XRT transmission safety check.
-        Manages camera acquisition state.
-        """
-        from pcdsdevices.spectrometer import HXRSpectrometer
-
-        hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
-
-        if self.simulate:
-            return
-
-        ref_crystal_angle = hxrsss.th.position
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
-
-        if round(crystal_angle, 2) == round(ref_crystal_angle, 2):
-            return
-
-        # Stop camera
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Acquire':
-            os.system('caput CAMR:FEE1:441:Acquire Done')
-
-        hxrsss.th.umv(crystal_angle)
-
-        # Safety check
-        xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
-        if xrt_status != 'NO_ALARM':
-            self.logger.error('XRT transmission alarm after move')
-            hxrsss.th.mv(ref_crystal_angle)
-
-        # Restart camera
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Done':
-            os.system('caput CAMR:FEE1:441:Acquire Acquire')
-
-    def track_feespec_camera(self, energy_keV):
-        """
-        Move FEE spectrometer camera position.
-
-        Parameters
-        ----------
-        energy_keV : float
-            Target energy in keV
-
-        Notes
-        -----
-        Moves only camera angle (tth), not crystal or Y position.
-        Used to compensate for vignetting during energy scans.
-        Starts camera if currently stopped.
-        Performs XRT transmission safety check.
-        """
-        from pcdsdevices.spectrometer import HXRSpectrometer
-
-        hxrsss = HXRSpectrometer("STEP:XRT1", name="hxrsss")
-
-        if self.simulate:
-            return
-
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Done':
-            os.system('caput CAMR:FEE1:441:Acquire Acquire')
-
-        ref_camera_angle = hxrsss.tth.position
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
-        camera_angle = -1.9 + 2 * crystal_angle
-
-        hxrsss.tth.mv(camera_angle)
-
-        xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()
-        if xrt_status != 'NO_ALARM':
-            self.logger.error('XRT transmission alarm')
-            hxrsss.tth.mv(ref_camera_angle)
-
     # ==================== Transfocator Methods ====================
 
     def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None):
@@ -1101,12 +958,12 @@ class Exafs:
             sleep(0.5)
 
         if track_feespec:
-            self.move_feespec_energy(new_k_energy / 1000)
+            self.xrtspec.move_feespec_energy(new_k_energy / 1000)
 
         self._move_k_energy(new_k_energy)
 
         if track_feespec:
-            self.check_feespec_crystal_angle(new_k_energy / 1000)
+            self.xrtspec.check_feespec_crystal_angle(new_k_energy / 1000)
 
         if not self.simulate:
             from mfx.db import daq
@@ -1367,8 +1224,8 @@ class Exafs:
 
         self.logger.warning("Stopping run and cleaning up...")
         self._return_to_start(energy_start, k_energy_start)
-        self.move_feespec_energy(energy_start)
-        self.check_feespec_crystal_angle(energy_start)
+        self.xrtspec.move_feespec_energy(energy_start)
+        self.xrtspec.check_feespec_crystal_angle(energy_start)
         self.logger.warning('Run ended prematurely')
 
     def _finalize_scan(self, energy_start, k_energy_start):
@@ -1388,8 +1245,8 @@ class Exafs:
         Logs completion message.
         """
         self._return_to_start(energy_start, k_energy_start)
-        self.move_feespec_energy(energy_start)
-        self.check_feespec_crystal_angle(energy_start)
+        self.xrtspec.move_feespec_energy(energy_start)
+        self.xrtspec.check_feespec_crystal_angle(energy_start)
         self.logger.warning('Scan completed successfully\n')
 
     def _wait(self, wait_time):
@@ -1743,7 +1600,7 @@ class Exafs:
                     self._move_dccm_energy_with_vernier(energy_keV)
 
                     if track_feespec_cam:
-                        self.track_feespec_camera(energy_keV)
+                        self.xrtspec.track_feespec_camera(energy_keV)
 
                     if map_lens_beam_energy_offset:
                         self._measure_lens_beam_offset(energy, track_lens_offset_data)

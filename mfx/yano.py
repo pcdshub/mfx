@@ -118,8 +118,10 @@ class Yano:
         from mfx.devices import LaserShutter
         from pcdsdevices.evr import Trigger
         from mfx.energy_control import EnergyGet, EnergyPut
+        from tfs.transfocator import Transfocator
         self.get_energy = EnergyGet()
         self.put_energy = EnergyPut()
+        self.tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         self.delay = None
 
         # Initialize shutter objects with hardware PVs
@@ -845,6 +847,7 @@ class Yano:
         fiber=0,
         free_space=None,
         laser_delay=None,
+        track_focus=False,
         rep=30,
         daq_num=2,
         spread=[],
@@ -890,6 +893,9 @@ class Yano:
 
         laser_delay: float
             Requested laser delay in nanoseconds.
+
+        track_focus : bool, optional
+            Enable focus tracking during spread scan (default: False)
 
         rep: int, optional
             Set repitition rate only 120, 60, 30 Hz are currently available.
@@ -1094,6 +1100,13 @@ class Yano:
                                     f"Starting with first energy")
 
                         for eng in energy_seq:
+                            if track_focus:
+                                # Move Z stage
+                                z_position = - (27 / 20) * eng + 9702
+                                self.logger.info(f"Moving TFS to {z_position:.3f} mm")
+                                self.tfs.translation.mv(z_position)
+                                while self.tfs.translation.moving:
+                                    sleep(0.1)
                             if spread_type.lower() == 'vernier':
                                 self.put_energy.vernier(eng)
                             elif spread_type.lower() == 'k':
