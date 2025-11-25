@@ -239,7 +239,7 @@ def ioc_cam_recorder(cam_name, duration, tag):
         logger.error(f"Failed to start camera recording: {e}")
 
 
-def autorun(
+def _autorun(
         sample: str = '?',
         tag: str = None,
         run_length: float = 60.0,
@@ -248,7 +248,7 @@ def autorun(
         runs: int = 5,
         daq_delay: int = 5,
         picker: str = None,
-        close: bool = False,
+        close: bool = True,
         daq_num: int = 2,
         cam: str = None,
         run_type: str ='data'):
@@ -722,6 +722,17 @@ def _autorun_daq2(sample, tag, run_length, inspire, record,
         logger.debug("DAQ returned to running/non-recording state")
     except Exception as e:
         logger.warning(f"DAQ cleanup warning: {e}")
+
+
+def autorun(**kwargs):
+    _autorun(**kwargs)
+
+
+def geomrun(**kwargs):
+    kwargs['tag'] = "geom"
+    kwargs['sample'] = "geometry-calibration"
+    kwargs['run_type'] = "GEOM"
+    _autorun(**kwargs)
 
 
 def quick_run(sample, duration=60, record=True):
