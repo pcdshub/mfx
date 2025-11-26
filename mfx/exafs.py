@@ -319,7 +319,7 @@ class Exafs:
     # ==================== Initialization Methods ====================
 
     def _initialize_energies_and_move(self, energies, wait_time, reverse,
-                                     k_offset, k_stepsize, track_feespec):
+                                     k_offset, k_stepsize, track_feespec, crystal_angle_offset=0.0):
         """
         Initialize energy values and move to starting position.
 
@@ -363,7 +363,7 @@ class Exafs:
 
         self.logger.warning(f"Moving K to initial energy: {self.k_energy:.0f} eV")
         if track_feespec:
-            self.xrtspec.xrtspec.move_feespec_energy(
+            self.xrtspec.move_feespec_energy(
                 self.k_energy / 1000, crystal_angle_offset=crystal_angle_offset)
         if round(self.k_energy, 1) != round(self._current_k_energy(), 1):
             self._move_k_energy(self.k_energy)
@@ -571,7 +571,7 @@ class Exafs:
 
     # ==================== Vernier Alignment ====================
 
-    def align_vernier_to_dccm(self, energy_range_eV=5.0, energy_steps=21,
+    def align_vernier_to_dccm(self, energy_center_offset_eV=0.0, energy_range_eV=5.0, energy_steps=21,
                               events_per_step=60, flux_threshold=None, diagnostic='dg2'):
         """
         Align vernier to DCCM using intensity-based optimization.
@@ -582,6 +582,8 @@ class Exafs:
 
         Parameters
         ----------
+        energy_center_offset_eV: float, optional
+            Center of the scan (default: 0.0)
         energy_range_eV : float, optional
             Range around current DCCM energy to scan in eV (default: 5.0)
         energy_steps : int, optional
@@ -600,7 +602,7 @@ class Exafs:
         -----
         Procedure:
         1. Read current DCCM energy
-        2. Scan vernier ±energy_range_eV/2 around DCCM
+        2. Scan vernier ±energy_range_eV/2 around DCCM + offset
         3. Measure intensity at each point
         4. Move to position with maximum intensity
         5. Calculate and return offset
@@ -622,11 +624,11 @@ class Exafs:
             self.logger.error(f"Unknown diagnostic: {diagnostic}")
             return False
 
-        current_dccm_energy = float(read_dccm_energy()) or float(read_dccm_energy())
+        current_dccm_energy = float(read_dccm_energy())
         self.logger.info(f"DCCM energy: {current_dccm_energy:.2f} eV")
 
-        scan_start = current_dccm_energy - energy_range_eV / 2
-        scan_end = current_dccm_energy + energy_range_eV / 2
+        scan_start = current_dccm_energy + energy_center_offset_eV - energy_range_eV / 2
+        scan_end = current_dccm_energy + energy_center_offset_eV + energy_range_eV / 2
 
         best_intensity = float('-inf')
         best_vernier_energy = None
@@ -672,7 +674,7 @@ class Exafs:
             self.logger.info(f"Moving to optimal position: {best_vernier_energy:.2f} eV")
             vernier_energy_pv.move(best_vernier_energy).wait()
 
-            final_dccm_energy = float(read_dccm_energy()) or float(read_dccm_energy())
+            final_dccm_energy = float(read_dccm_energy())
             final_vernier_actual = float(vernier_energy_pv.position)
             final_offset = final_vernier_actual - final_dccm_energy
 
@@ -700,14 +702,21 @@ class Exafs:
         Performs intensity-based alignment and appends result to tracking data.
         Uses flux_threshold from instance attribute if available.
         """
+        try:
+            current_offset = track_tchk_data[-1]['vernier_offset']
+        except:
+            current_offset = 0.0
+
         self.logger.info("Performing intensity-based vernier alignment")
         offset = self.align_vernier_to_dccm(
+            energy_center_offset_eV=current_offset,
             energy_range_eV=5.0,
             energy_steps=21,
             events_per_step=50,
             flux_threshold=getattr(self, 'flux_threshold', None),
             diagnostic=diagnostic
         )
+        print(f"... ... ... TCHK DATA NEW ITEM: {energy=} {offset=}")
         track_tchk_data.append({"energy": energy, "vernier_offset": offset})
 
     def _retrieve_vernier_offset(self, energy, track_tchk_data):
@@ -759,8 +768,12 @@ class Exafs:
         if self.simulate:
             return
 
+        print(f"... checking if need to request Vernier offset measurement {energy_eV=}")
         if self._request_vernier_offset_measurement(energy_eV, track_tchk_data, map_tchk_track):
+            print(f"... ... requesting Vernier offset measurement {energy_eV=}")
             self._measure_vernier_offset(energy_eV, track_tchk_data, diagnostic)
+        else:
+            print(f"... ... not needed.")
 
         if self.vernier_offset:
             self._move_dccm_energy_with_vernier((energy_eV + self.vernier_offset) / 1000)
@@ -797,7 +810,7 @@ class Exafs:
 
     # ==================== Transfocator Methods ====================
 
-    def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None):
+    def _move_tfs_to_energy(self, energy_eV, track_focus_data, attenuation=None, tfs_offset=0.0):
         """
         Move transfocator to energy configuration.
 
@@ -826,13 +839,15 @@ class Exafs:
             return
 
         energy_eV = float(energy_eV)
-        target_config = next((d for d in track_focus_data if d["energy"] == energy_eV), None)
+        #target_config = next((d for d in track_focus_data if d["energy"] == energy_eV), None)
+        target_config = min(track_focus_data, key=lambda d: abs(d['energy']-energy_eV))
+        #should add if the target config E and target energy are too far apart it returns None or does something
 
         if not target_config:
             self.logger.warning(f"Energy {energy_eV} eV not found in tracking data")
             return
 
-        z_position = target_config["z_position"]
+        z_position = target_config["z_position"]+tfs_offset
         inserted_lenses = [
             lens.replace('SIM::', 'MFX:LENS:')
             for lens in target_config["inserted_lenses"]
@@ -1192,7 +1207,7 @@ class Exafs:
             self._move_k_energy(k_energy_start)
 
     def _handle_keyboard_interrupt(self, sample, tag, run_number, record,
-                                   inspire, energy_start, k_energy_start):
+                                   inspire, energy_start, k_energy_start, crystal_angle_offset=0.0):
         """
         Handle KeyboardInterrupt and cleanup.
 
@@ -1234,7 +1249,7 @@ class Exafs:
             energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Run ended prematurely')
 
-    def _finalize_scan(self, energy_start, k_energy_start):
+    def _finalize_scan(self, energy_start, k_energy_start, crystal_angle_offset=0.0):
         """
         Finalize scan and return to initial positions.
 
@@ -1357,7 +1372,7 @@ class Exafs:
                    track_feespec=False, track_feespec_cam=False,
                    undulator_point=False, undulator_on_diagnostic="dg1",
                    undulator_using_device="yag", undulator_with_method="calib",
-                   undulator_grid_bins=5, debug=False):
+                   undulator_grid_bins=5, debug=False,tfs_offset=0.0):
         """
         Perform EXAFS scan with comprehensive automation.
 
@@ -1550,7 +1565,8 @@ class Exafs:
             for run_idx in range(runs):
                 # Initialize energies and move to start
                 energies, wait_times = self._initialize_energies_and_move(
-                    energies, wait_times, reverse, k_offset, k_stepsize, track_feespec
+                    energies, wait_times, reverse,
+                    k_offset, k_stepsize, track_feespec, crystal_angle_offset
                 )
 
                 # Check beam
@@ -1591,11 +1607,14 @@ class Exafs:
 
                     # Move TFS
                     if track_focus:
-                        self._move_tfs_to_energy(energy, track_focus_data, attenuation)
+                        self._move_tfs_to_energy(energy, track_focus_data, attenuation,tfs_offset)
 
                     # Check beam
                     if flux_threshold:
                         self.check_beam_status(flux_threshold)
+
+                   # Move DCCM
+                    self._move_dccm_energy_with_vernier(energy_keV) 
 
                     # Vernier alignment
                     if tchk == 'single':
@@ -1605,14 +1624,16 @@ class Exafs:
                         if map_tchk_track:
                             self._save_track_tchk_data(track_tchk_data)
                     elif tchk:
+                        print(f"DEBUG ALIGN TCHK {energy=}")
                         self._align_vernier_to_dccm(
                             energy, track_tchk_data, map_tchk_track, diagnostic)
-
-                    # Move DCCM
-                    self._move_dccm_energy_with_vernier(energy_keV)
+                        # Save tracking data
+                        if tchk and map_tchk_track:
+                            print(f"DEBUG SAVING TCHK DATA {energy=} {track_tchk_data=}")
+                            self._save_track_tchk_data(track_tchk_data, display=False)
 
                     if track_feespec_cam:
-                        self.xrtspec.track_feespec_camera(energy_keV)
+                        self.xrtspec.track_feespec_camera(energy_keV, crystal_angle_offset)
 
                     if map_lens_beam_energy_offset:
                         self._measure_lens_beam_offset(energy, track_lens_offset_data)
@@ -1638,10 +1659,11 @@ class Exafs:
 
         except KeyboardInterrupt:
             self._handle_keyboard_interrupt(
-                sample, tag, run_number, record, inspire, energy_start, k_energy_start
+                sample, tag, run_number, record, inspire,
+                energy_start, k_energy_start, crystal_angle_offset
             )
 
-        self._finalize_scan(energy_start, k_energy_start)
+        self._finalize_scan(energy_start, k_energy_start, crystal_angle_offset)
 
 
 class EXAFSEnergyRangeBuilder:
