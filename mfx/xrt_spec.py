@@ -339,15 +339,13 @@ class XRTspec:
         Performs XRT transmission safety check.
         Manages camera acquisition state.
         """
-        self.hxrsss = HXRSpectrometer("STEP:XRT1", name="self.hxrsss")
-
         ref_crystal_angle = self.hxrsss.th.position
 
         # Calculate target positions
         positions = self.get_feespec_positions(
             energy_keV, crystal_angle_offset=crystal_angle_offset)
 
-        if round(crystal_angle, 2) == round(ref_crystal_angle, 2):
+        if round(positions['crystal_angle'], 2) == round(ref_crystal_angle, 2):
             return
 
         # Stop camera
@@ -368,7 +366,7 @@ class XRTspec:
         if cam_status == 'Done':
             os.system('caput CAMR:FEE1:441:Acquire Acquire')
 
-    def track_feespec_camera(self, energy_keV):
+    def track_feespec_camera(self, energy_keV, crystal_angle_offset=0.0):
         """
         Move FEE spectrometer camera position.
 
@@ -384,8 +382,6 @@ class XRTspec:
         Starts camera if currently stopped.
         Performs XRT transmission safety check.
         """
-        self.hxrsss = HXRSpectrometer("STEP:XRT1", name="self.hxrsss")
-
         cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Done':
             os.system('caput CAMR:FEE1:441:Acquire Acquire')
