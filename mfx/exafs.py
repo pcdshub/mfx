@@ -841,7 +841,7 @@ class Exafs:
         # Move Z stage
         if z_position is not None:
             self.logger.info(f"Moving TFS to {z_position:.3f} mm")
-            self.tfs.translation.mv(z_position)
+            self.tfs.translation.umv(z_position)
             while self.tfs.translation.moving:
                 sleep(0.1)
 

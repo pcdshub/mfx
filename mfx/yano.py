@@ -1105,7 +1105,7 @@ class Yano:
                                 z_position = - (27 / 20) * eng + 9702
                                 if z_position >=0 or z_position <=299:
                                     logger.info(f"Moving TFS to {z_position:.3f} mm")
-                                    self.tfs.translation.mv(z_position)
+                                    self.tfs.translation.umv(z_position)
                                     while self.tfs.translation.moving:
                                         sleep(0.1)
                                 else:
