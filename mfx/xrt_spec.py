@@ -232,17 +232,17 @@ class XRTspec:
         """
         # Calculate crystal angle using quadratic formula
         # Accounts for Bragg law and mechanical geometry
-        crystal_angle = 140.0 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
+        crystal_angle = 140.08 - (21.2 * energy_keV) + (1.02 * energy_keV ** 2)
 
         # Calculate camera angle (2θ geometry with offset)
-        camera_angle = -1.9 + 2 * crystal_angle
+        camera_angle = -1.91 + 2 * crystal_angle
 
         # Calculate camera Y position (energy-dependent height correction)
         camera_y = -4.92 - 0.111 * energy_keV
 
         # Alter the crystal_angle without affecting the camera_angle
         if crystal_angle_offset != 0.0:
-            crystal_angle = (140.0 - (21.2 * energy_keV) +
+            crystal_angle = (140.08 - (21.2 * energy_keV) +
                             (1.02 * energy_keV ** 2) + crystal_angle_offset)
 
         # Return dictionary of positions
@@ -636,8 +636,8 @@ class XRTspec:
         # camera_angle = -1.9 + 2*crystal_angle
         angles = []
         for E in energies_keV:
-            crystal_angle = 140.0 - (21.2 * E) + (1.02 * E ** 2)
-            camera_angle = -1.9 + 2 * crystal_angle
+            crystal_angle = 140.08 - (21.2 * E) + (1.02 * E ** 2)
+            camera_angle = -1.91 + 2 * crystal_angle
             angles.append(camera_angle)
 
         # Data storage
