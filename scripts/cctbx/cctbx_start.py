@@ -94,16 +94,16 @@ db {{
                 f"Phil file is for a different experiment. Would you like to change it?")
             answer = input("(y/n)? ")
 
-        if answer.lower() == "y":
-            logging.info(f"Changing experiment to current: {exp}")
-            change = True
-        elif answer.lower() == "n":
-            logging.info("Not changing phil")
-            change = False
-        else:
-            logging.info("Not valid response. so no change")
-            change = False
-        
+            if answer.lower() == "y":
+                logging.info(f"Changing experiment to current: {exp}")
+                change = True
+            elif answer.lower() == "n":
+                logging.info("Not changing phil")
+                change = False
+            else:
+                logging.info("Not valid response. so no change")
+                change = False
+
     else:
         logging.warning(f"settings.phil file doesn't exist. Writing new one for {exp}")
         change = True
