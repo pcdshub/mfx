@@ -333,8 +333,8 @@ class Yano:
         """
 
 
-        from mfx.mfx_timing import MFX_Timing
-        mfx_timing = MFX_Timing()
+        from mfx.mfx_timing import MFXTiming
+        mfx_timing = MFXTiming()
 
         logger = logging.getLogger(__name__)
 
@@ -895,7 +895,8 @@ class Yano:
             Requested laser delay in nanoseconds.
 
         track_focus : str, optional
-            Enable focus tracking during spread scan by element either 'Fe' or 'Mn' (default: None)
+            Enable focus tracking during spread scan by element either 'Fe' or 'Mn'
+            (default: None)
 
         rep: int, optional
             Set repitition rate only 120, 60, 30 Hz are currently available.
@@ -933,6 +934,9 @@ class Yano:
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
+
+        if track_focus is not None:
+            from mfx.db import mr1l4_homs
 
         # Configure the shutters
         if fiber == 0:
@@ -1101,13 +1105,21 @@ class Yano:
 
                         for eng in energy_seq:
                             if track_focus is not None:
-                                # Move Z stage
                                 if track_focus.lower() == 'fe':
                                     z_position = -1.35 * eng + 9702
-                                if track_focus.lower() == 'mn':
+                                    # mirror_pitch = -1.35 * eng + 9702
+                                elif track_focus.lower() == 'mn':
                                     z_position = -2.3036 * eng + 15329
+                                    mirror_pitch = -554.7 + 0.057 * (eng - 6550)
+                                else:
+                                    logger.error(
+                                        'Please enter track_focus element of Fe or Mn only')
+                                    sys.exit()
                                 if z_position >=0 or z_position <=299:
-                                    logger.info(f"Moving TFS to {z_position:.3f} mm")
+                                    logger.info(
+                                        f"Moving TFS to {z_position:.3f} mm "
+                                        f"and Mirror Pitch {mirror_pitch} ")
+                                    mr1l4_homs.pitch.move(mirror_pitch)
                                     self.tfs.translation.umv(z_position)
                                     while self.tfs.translation.moving:
                                         sleep(0.1)
