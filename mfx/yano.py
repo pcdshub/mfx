@@ -847,7 +847,7 @@ class Yano:
         fiber=0,
         free_space=None,
         laser_delay=None,
-        track_focus=False,
+        track_focus=None,
         rep=30,
         daq_num=2,
         spread=[],
@@ -894,8 +894,8 @@ class Yano:
         laser_delay: float
             Requested laser delay in nanoseconds.
 
-        track_focus : bool, optional
-            Enable focus tracking during spread scan (default: False)
+        track_focus : str, optional
+            Enable focus tracking during spread scan by element either 'Fe' or 'Mn' (default: None)
 
         rep: int, optional
             Set repitition rate only 120, 60, 30 Hz are currently available.
@@ -1100,9 +1100,12 @@ class Yano:
                                     f"Starting with first energy")
 
                         for eng in energy_seq:
-                            if track_focus:
+                            if track_focus is not None:
                                 # Move Z stage
-                                z_position = - (27 / 20) * eng + 9702
+                                if track_focus.lower() == 'fe':
+                                    z_position = -1.35 * eng + 9702
+                                if track_focus.lower() == 'mn':
+                                    z_position = -2.3036 * eng + 15329
                                 if z_position >=0 or z_position <=299:
                                     logger.info(f"Moving TFS to {z_position:.3f} mm")
                                     self.tfs.translation.umv(z_position)
