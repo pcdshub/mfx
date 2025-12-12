@@ -1182,7 +1182,6 @@ class Yano:
                                     self.direction = 'up'
                                 elif eng < self._eng:
                                     self.direction = 'down'
-                                    logger.warning(
                             self._eng = eng
                     else:
                         spread_comment = None
