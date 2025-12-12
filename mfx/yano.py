@@ -1110,7 +1110,7 @@ class Yano:
                                     # mirror_pitch = -1.35 * eng + 9702
                                 elif track_focus.lower() == 'mn':
                                     z_position = -2.3036 * eng + 15329
-                                    mirror_pitch = -554.7 + 0.057 * (eng - 6550)
+                                    mirror_pitch = -554.7 - 0.057 * (eng - 6550)
                                 else:
                                     logger.error(
                                         'Please enter track_focus element of Fe or Mn only')
@@ -1118,7 +1118,7 @@ class Yano:
                                 if z_position >=0 or z_position <=299:
                                     logger.info(
                                         f"Moving TFS to {z_position:.3f} mm "
-                                        f"and Mirror Pitch {mirror_pitch} ")
+                                        f"and Mirror Pitch {mirror_pitch} mrad")
                                     mr1l4_homs.pitch.move(mirror_pitch)
                                     self.tfs.translation.umv(z_position)
                                     while self.tfs.translation.moving:
