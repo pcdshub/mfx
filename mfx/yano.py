@@ -503,6 +503,41 @@ class Yano:
             elog.post(msg=post_msg, tags=tag, run=(run_number))
         return post_msg
 
+    def track_focus(self, energy):
+        """
+        Move TFS to track focus during SPREAD scan
+
+        Parameters
+        ----------
+        energy: float
+            Photon energy in eV. Used to calculate TFS Z position.
+            Must be between 6500-6600 eV or 7050-7150 eV.
+        """
+        from mfx.db import mr1l4_homs
+
+        if energy >= 7050 and energy <= 7150:
+            z_position = -1.35 * energy + 9702
+            # mirror_pitch = -1.35 * energy + 9702
+        elif energy >= 6500 and energy <= 6600:
+            z_position = -2.3036 * energy + 15314
+            mirror_pitch = -554.7 - 0.057 * (energy - 6550)
+        else:
+            logger.error(
+                'Energy is outside the 6500-6600 eV and 7050-7150 eV range.')
+            sys.exit()
+        if z_position >= 0 and z_position <= 299:
+            logger.info(
+                f"Moving TFS to {z_position:.3f} mm "
+                f"and Mirror Pitch {mirror_pitch} mrad")
+            mr1l4_homs.pitch.move(mirror_pitch)
+            self.tfs.translation.umv(z_position)
+            while self.tfs.translation.moving:
+                sleep(0.1)
+        else:
+            logger.error(
+                f"Calcualted TFS Z={z_position:.3f}mm. "
+                f"This is outside the 0-299mm range. ")
+            sleep(2)
 
     def _begin(self, events=None, duration=300,
               record=False, use_l3t=None, controls=None,
@@ -847,7 +882,7 @@ class Yano:
         fiber=0,
         free_space=None,
         laser_delay=None,
-        track_focus=None,
+        track_focus=False,
         rep=30,
         daq_num=2,
         spread=[],
@@ -894,9 +929,8 @@ class Yano:
         laser_delay: float
             Requested laser delay in nanoseconds.
 
-        track_focus : str, optional
-            Enable focus tracking during spread scan by element either 'Fe' or 'Mn'
-            (default: None)
+        track_focus : bool, optional
+            If True, move TFS to track focus during SPREAD scan. Default is False.
 
         rep: int, optional
             Set repitition rate only 120, 60, 30 Hz are currently available.
@@ -934,9 +968,6 @@ class Yano:
         from mfx.db import daq, pp
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
-
-        if track_focus is not None:
-            from mfx.db import mr1l4_homs
 
         # Configure the shutters
         if fiber == 0:
@@ -1104,37 +1135,8 @@ class Yano:
                                     f"Starting with first energy")
 
                         for eng in energy_seq:
-                            if track_focus is not None:
-                                if track_focus.lower() == 'fe':
-                                    z_position = -1.35 * eng + 9702
-                                    # mirror_pitch = -1.35 * eng + 9702
-                                elif track_focus.lower() == 'mn':
-                                    z_position = -2.3036 * eng + 15329
-                                    mirror_pitch = -554.7 - 0.057 * (eng - 6550)
-                                else:
-                                    logger.error(
-                                        'Please enter track_focus element of Fe or Mn only')
-                                    sys.exit()
-                                if z_position >=0 or z_position <=299:
-                                    logger.info(
-                                        f"Moving TFS to {z_position:.3f} mm "
-                                        f"and Mirror Pitch {mirror_pitch} mrad")
-                                    mr1l4_homs.pitch.move(mirror_pitch)
-                                    self.tfs.translation.umv(z_position)
-                                    while self.tfs.translation.moving:
-                                        sleep(0.1)
-                                else:
-                                    logger.error(
-                                        f"Calcualted TFS Z={z_position:.3f}mm. "
-                                        f"This is outside the 0-299mm range. "
-                                        f"Would you like to proceed without track_focus?")
-                                    answer = input("(Y/n): ")
-                                    if answer.lower() == "y":
-                                        track_focus = False
-                                    else:
-                                        logger.warning(f"Exiting...")
-                                        sys.exit()
-
+                            if track_focus:
+                                self.track_focus(eng)
                             if spread_type.lower() == 'vernier':
                                 self.put_energy.vernier(eng)
                             elif spread_type.lower() == 'k':
