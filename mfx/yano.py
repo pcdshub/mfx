@@ -531,8 +531,6 @@ class Yano:
                 f"and Mirror Pitch {mirror_pitch} mrad")
             mr1l4_homs.pitch.move(mirror_pitch)
             self.tfs.translation.umv(z_position)
-            while self.tfs.translation.moving:
-                sleep(0.1)
         else:
             logger.error(
                 f"Calcualted TFS Z={z_position:.3f}mm. "
@@ -751,7 +749,7 @@ class Yano:
 
         up = list(range(
             energy_scan_start_eV,
-            energy_scan_end_eV,
+            energy_scan_end_eV + energy_scan_steps,
             energy_scan_steps))
 
         down = list(range(
@@ -889,6 +887,7 @@ class Yano:
         spread_type=None,
         step_time=None,
         brewster=0,
+        bs=None,
         debug=False):
         """
         Perform a single run of the experiment
@@ -952,6 +951,10 @@ class Yano:
         brewster: int, optional
             weights the bottom division of SPREAD sequence twice.
             ie 2 weights the bottom half.
+
+        bs: float, optional
+            bs (brewster simplified) adds a dwell time (s) at highest and lowest energies during
+            SPREAD scan. For example bs=10 means spend 10s + 'step_time' at extreme energies.
 
         debug: bool, optional
             If True, plot the generated energy sequence for SPREAD. Default is False.
@@ -1110,29 +1113,21 @@ class Yano:
                             run_length, step_time, brewster,
                             spread_type=spread_type, debug=False)
 
-                        if brewster > 0:
-                            if spread_type.lower() == 'vernier':
-                                energy = self.get_energy.vernier()
-                            elif spread_type.lower() == 'k':
-                                energy = self.get_energy.k()
-                            else:
-                                logger.error('Please enter spread type of vernier or k only')
-                                sys.exit()
-                            try:
-                                if debug and i==0:
-                                    self.plot_scan_profile(
-                                        energy_seq,
-                                        step_time,
-                                        title="Generated Energy Scan Sequence",
-                                        highlight_cycles=True,
-                                        figsize=(14, 7))
-                                    answer = input("Continue? (Y/n): ")
-                                    if answer.lower() == "n":
-                                        sys.exit("User aborted")
-                            except ValueError:
-                                logger.error(
-                                    f"{energy} not found in the sequence. "
-                                    f"Starting with first energy")
+                        try:
+                            if debug and i==0:
+                                self.plot_scan_profile(
+                                    energy_seq,
+                                    step_time,
+                                    title="Generated Energy Scan Sequence",
+                                    highlight_cycles=True,
+                                    figsize=(14, 7))
+                                answer = input("Continue? (Y/n): ")
+                                if answer.lower() == "n":
+                                    sys.exit("User aborted")
+                        except ValueError:
+                            logger.error(
+                                f"{energy} not found in the sequence. "
+                                f"Starting with first energy")
 
                         for eng in energy_seq:
                             if track_focus:
@@ -1144,8 +1139,10 @@ class Yano:
                             else:
                                 logger.error('Please enter spread type of vernier or k only')
                                 sys.exit()
+                            if bs is not None:
+                                if eng == spread[0] or eng == spread[1]:
+                                    sleep(bs)
                             sleep(step_time)
-
                     else:
                         spread_comment = None
                         while time() < end_time:
