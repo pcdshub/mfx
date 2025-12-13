@@ -516,28 +516,33 @@ class Yano:
             Must be between 6500-6600 eV or 7050-7150 eV.
         """
         from mfx.db import mr1l4_homs
+        from mfx.optimize.undpoint import UndPointAbs2DMFX
+        und_abs=UndPointAbs2DMFX()
 
         if energy >= 7050 and energy <= 7150:
             z_position = -1.35 * energy + 9702
             # mirror_pitch = -1.35 * energy + 9702
         elif energy >= 6500 and energy <= 6600:
-            z_position = -2.3036 * energy + 15314
-            mirror_pitch = -554.7 - 0.057 * (energy - 6550)
+            z_position = -2.3036 * energy + 15300
+            mirror_pitch = -0.0476 * energy - 243.34
+            und_x = 3.8649 * energy - 25101
         else:
             logger.error(
                 'Energy is outside the 6500-6600 eV and 7050-7150 eV range.')
             sys.exit()
         if z_position >= 0 and z_position <= 299:
             logger.info(
-                f"Moving TFS to {z_position:.3f} mm "
-                f"and Mirror Pitch {mirror_pitch} mrad")
+                f"Moving TFS to {z_position:.3f} mm, "
+                f"Mirror Pitch to {mirror_pitch} mrad, "
+                f"Undulator X to {und_x} um.")
             mr1l4_homs.pitch.move(mirror_pitch)
+            und_abs((und_x, -440))
             self.tfs.translation.umv(z_position)
         else:
             logger.error(
                 f"Calcualted TFS Z={z_position:.3f}mm. "
                 f"This is outside the 0-299mm range. ")
-            sleep(2)
+            sleep(3)
 
     def _begin(self, events=None, duration=300,
               record=False, use_l3t=None, controls=None,
