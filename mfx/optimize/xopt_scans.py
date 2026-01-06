@@ -31,7 +31,7 @@ from .user_select import select_diagnostic, select_goal, MP_KEY, UNDP_KEY_X, UND
 
 
 @validate_w_lowercase_args
-def get_variables(mover: Movers, narrow: bool = False):
+def get_variables(mover: Movers, narrow: bool = False, diagnostic: Optional[Diagnostics] = None):
     """
     Apply info in constraints module for movers to xopt variables
 
@@ -53,14 +53,14 @@ def get_variables(mover: Movers, narrow: bool = False):
             delta = constraint_data.mirr.range_delta
         variables[MP_KEY] = [center - delta, center + delta]
     elif mover == "und":
-        undp = init_devices()["und_abs"]
-        pos = undp.position
-        if narrow and constraint_data.und.max_travel_distance is not None:
-            delta = constraint_data.und.max_travel_distance
+        # Use location-specific absolute bounds for undulator positions
+        if str(diagnostic).lower() == "xcs1":
+            variables[UNDP_KEY_X] = [0, 200]
+            variables[UNDP_KEY_Y] = [-450, -200]
         else:
-            delta = constraint_data.und.xy_delta
-        variables[UNDP_KEY_X] = [pos[0] - delta, pos[0] + delta]
-        variables[UNDP_KEY_Y] = [pos[1] - delta, pos[1] + delta]
+            # Default (e.g., dg1)
+            variables[UNDP_KEY_X] = [-100, 150]
+            variables[UNDP_KEY_Y] = [-750, -350]
     return variables
 
 
@@ -84,7 +84,7 @@ def get_vocs(
     device: Devices,
 ) -> VOCS:
     return VOCS(
-        variables=get_variables(mover),
+        variables=get_variables(mover, diagnostic=diagnostic),
         objectives={
             "objective": "MINIMIZE", # RYAN R: SOMETHING TO CONSIDER TO SPEED THINGS UP. ONLY ONE GP
             #"roi_radius": "MINIMIZE",
@@ -110,7 +110,22 @@ def evaluator_move(mover: Movers, input: dict):
     if mover == "mirr":
         devices["mr1l4_homs"].pitch.set(input["mirror_pitch"]).wait(timeout=20)
     elif mover == "und":
-        devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=20)
+        # get current undulator position
+        curr_x = float(devices["und_abs"].xpos.get())
+        curr_y = float(devices["und_abs"].ypos.get())
+        print(f"Current undulator position: {curr_x}, {curr_y}")
+        # while the current position is not close to the target position, move the undulator
+        devices["und_abs"].move((input[UNDP_KEY_X], input[UNDP_KEY_Y]), wait=True, timeout=10)
+        start = time.time()
+        while abs(curr_x - input[UNDP_KEY_X]) > 5 or abs(curr_y - input[UNDP_KEY_Y]) > 5:
+            curr_x = float(devices["und_abs"].xpos.get())
+            curr_y = float(devices["und_abs"].ypos.get())
+            print(f"Current undulator position: {curr_x}, {curr_y}")
+            current_time = time.time()
+            if current_time - start > 20:
+                print(f"Timeout: Failed to move undulator to target position in 10 seconds")
+                break
+            time.sleep(1)
 
 
 @validate_w_lowercase_args
@@ -150,7 +165,7 @@ def evaluate_yag_processing(
 ) -> tuple[ImageProjectionFitResult, str]:
     """
     Shared image collection and fitting for use in yag evaluators.
-    
+
     Parameters
     ----------
     diagnostic : Diagnostics
@@ -162,7 +177,7 @@ def evaluate_yag_processing(
         If > 1, will trigger the camera multiple times and average the results.
     """
     image_device = select_diagnostic("yag", diagnostic).image1.shaped_image
-    
+
     if num_frames == 1:
         # Single frame original behavior
         image_device.trigger().wait(timeout=10)
@@ -172,13 +187,13 @@ def evaluate_yag_processing(
         # Multiple frames collect and average
         print(f"Collecting {num_frames} frames for averaging...")
         images = []
-        
+
         for i in range(num_frames):
             image_device.trigger().wait(timeout=10)
             frame = image_device.get()
             images.append(frame)
             print(f"Frame {i+1}/{num_frames} collected, shape: {frame.shape}")
-        
+
         # Average the frames
         image = np.mean(images, axis=0)
         print(f"Averaged image shape: {image.shape}")
@@ -192,7 +207,7 @@ def evaluate_yag_processing(
         np.savez_compressed(file_path, image=image)
     except Exception as exc:
         print(f"Warning: failed to save NPZ image to {file_path}: {exc}")
-    
+
     return fit.fit_image(image), str(file_path)
 
 
@@ -272,11 +287,52 @@ def get_evaluator_yag_2d(
 
     def evaluate(input: dict[str, float]) -> dict[str, float | str]:
         evaluator_move(mover=mover, input=input)
-        time.sleep(10) # WAIT FOR MOTORS TO STOP MOTION 
+        time.sleep(2) # WAIT FOR MOTORS TO STOP MOTION
         fit_result, npz_path = evaluate_yag_processing(yag, fit, num_frames=num_frames, save_dir=images_dir)
         results = evaluate_yag_results(yag, fit_result)
         results["objective"] = distance2d(fit_result.centroid, goal)
         results["image_npz_path"] = npz_path
+        try:
+            w8 = select_diagnostic("wave8", yag)
+            w8.xpos.trigger().wait(timeout=10)
+            w8.ypos.trigger().wait(timeout=10)
+            w8.sum.trigger().wait(timeout=10)
+            results["wave8_x"] = float(w8.xpos.get())
+            results["wave8_y"] = float(w8.ypos.get())
+            results["wave8_sum"] = float(w8.sum.get())
+        except Exception as exc:
+            print(f"Warning: failed to read wave8 x/y/sum: {exc}")
+        print(f"Distance from goal is {results['objective']}")
+        return results
+
+    return Evaluator(function=evaluate)
+
+
+@validate_w_lowercase_args
+def get_evaluator_wave8_2d(
+    wave8: Diagnostics,
+    goal: tuple[float, float],
+    mover: Movers,
+) -> Evaluator:
+    """
+    2D evaluator for wave8 using xpos and ypos.
+    """
+    def evaluate(input: dict[str, float]) -> dict[str, float]:
+        evaluator_move(mover=mover, input=input)
+        time.sleep(5) # WAIT FOR MOTORS TO STOP MOTION
+        device = select_diagnostic("wave8", wave8)
+        device.xpos.trigger().wait(timeout=10)
+        device.ypos.trigger().wait(timeout=10)
+        device.sum.trigger().wait(timeout=10)
+        x = device.xpos.get()
+        y = device.ypos.get()
+        sum_ = device.sum.get()
+        results = {
+            "centroid_x": x,
+            "centroid_y": y,
+            "intensity": sum_,
+            "objective": distance2d((x, y), goal),
+        }
         print(f"Distance from goal is {results['objective']}")
         return results
 
@@ -347,7 +403,7 @@ def get_xopt_obj(
     #vocs.constraints = {}
     if device_type == "yag":
         # Create per run images directory
-        images_root = Path("/cds/home/opr/mfxopr")
+        images_root = Path.home() #Path("/cds/home/opr/mfxopr")
         images_root.mkdir(parents=True, exist_ok=True)
         run_dir_name = Path(dump_file).stem
         run_images_dir = images_root / run_dir_name
@@ -369,11 +425,18 @@ def get_xopt_obj(
                 images_dir=str(run_images_dir),
             )
     else:
-        evaluator = get_evaluator_wave8(
-            wave8=location,
-            wave8_xpos=goal_value,
-            mover=mover,
-        )
+        if isinstance(goal_value, tuple):
+            evaluator = get_evaluator_wave8_2d(
+                wave8=location,
+                goal=goal_value,
+                mover=mover,
+            )
+        else:
+            evaluator = get_evaluator_wave8(
+                wave8=location,
+                wave8_xpos=goal_value,
+                mover=mover,
+            )
 
     generator = ExpectedImprovementGenerator(vocs=vocs, turbo_controller=xopt_generator_turbo_controller)
     generator.turbo_controller.restrict_model_data = False
@@ -408,10 +471,10 @@ def get_xopt_obj(
 
 def test_write_permissions():
     """
-    Simple test function to check if we can write to /cds/home/opr/mfxopr
+    Simple test function to check if we can write to /cds/home/opr/mfxopr (or your home)
     """
 
-    test_dir = Path("/cds/home/opr/mfxopr")
+    test_dir = Path.home() #Path("/cds/home/opr/mfxopr")
     test_dir.mkdir(parents=True, exist_ok=True)
     test_file = test_dir / f"test_write.txt"
 

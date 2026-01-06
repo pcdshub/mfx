@@ -4,6 +4,8 @@ import json
 import sys
 import time
 import os
+import pyaudio
+import wave
 
 import numpy as np
 from hutch_python.utils import safe_load
@@ -20,7 +22,7 @@ from pcdsdevices.epics_motor import Newport, IMS, MMC100, BeckhoffAxis
 from pcdsdevices.interface import BaseInterface
 from pcdsdevices.device_types import Trigger
 from pcdsdevices.areadetector import plugins
-from mfx.db import daq
+from mfx.db import daq, pp
 from mfx.db import sequencer as seq
 from mfx.db import camviewer
 from mfx.db import RE
@@ -28,14 +30,21 @@ from mfx.db import RE
 from mfx.db import mfx_pulsepicker as pp
 from mfx.db import bp, bpp, bps
 from mfx.plans import serp_seq_scan
-from time import sleep
+from time import sleep, time
+from epics import PV
+
+import logging
+import sys
+
+from mfx.macros import get_run, get_exp
+
 
 class User():
     def __init__(self):
         self._sync_markers = {0.5:0, 1:1, 5:2, 10:3, 30:4, 60:5, 120:6, 360:7}
         self.evr_pp = Trigger('XRT:EVR:R48:TRIG1',name='evr_pp')
         self.pp_delay = EpicsSignal('XRT:EVR:R48:TRIG1:TDES', name='pp_delay')
-
+        self.test='Hungry_hippos'
         with safe_load('sam_x'):
             self.sam_x = BeckhoffAxis('MFX:LJH:JET:X', name='sam_x')
         with safe_load('sam_y'):
@@ -211,7 +220,7 @@ class User():
         return ff_seq
 
     def prepare_seq_PPburst_pattern(self, nShots=None, nOffShots=None, nTimes=1):
-        ## Setup sequencer for requested rate
+         ## Setup sequencer for requested rate
         #sync_mark = int(self._sync_markers[self._rate])
         #leave the sync marker: assume no dropping.
         sync_mark = int(self._sync_markers[120])
@@ -223,10 +232,70 @@ class User():
         ff_seq = self.PPburst_sequence_pattern(nShots=nShots, nOffShots=nOffShots, nTimes=nTimes)
         seq.sequence.put_seq(ff_seq)
         
-    def dumbSnake(self, xStart, xEnd, yDelta, zStart, zEnd, nRoundTrips, sweepTime):
+    def post(self, sample='?', tag=None, run_number=None, post=False, inspire=False, daq_num=2, add_note=''):
+        """
+        Posts a message to the elog
+
+        Parameters
+        ----------
+        sample: str, optional
+            Sample Name
+
+        tag: str, optional
+            Run group tag
+
+        run_number: int, optional
+            Run Number. By default this is read off of the DAQ
+
+        post: bool, optional
+            set True to record/post message to elog
+
+        inspire: bool, optional
+            Set false by default because it makes Sandra sad. Set True to inspire
+
+        daq_num: int, optional
+            Switch between daq 1 and 2. Default 2
+
+        add_note: string, optional
+            adds additional note to elog message 
+        """
+        
+        post_template = """\
+        Run Number {}: {}
+        """
+
+
+        from mfx.db import elog
+        from mfx.macros import get_exp
+
+     #   if daq_num==1:
+     #       from elog import HutchELog
+     #       elog=HutchELog.from_conf(instrument='MFX',station=1)
+
+        if add_note!='':
+            add_note = '\n' + add_note
+        if tag is None:
+            tag = sample
+        if inspire:
+            comment = f"Running {sample}\n{quote()['quote']}{add_note}"
+        else:
+            comment = f"Running {sample}{add_note}"
+        if run_number is None:
+            run_number = get_run(station=0)
+        info = [run_number, comment]
+        post_msg = post_template.format(*info)
+        print('\n' + post_msg + '\n')
+        if post:
+            elog.post(msg=post_msg, tags=tag, run=(run_number))
+        return post_msg
+
+
+    def dumbSnake(self, xStart, xEnd, yDelta, zStart, zEnd, nRoundTrips, sweepTime,sample='?',record=True,tag=None,inspire=False):
         """ 
         simple rastering for running at 120Hz with shutter open/close before
-        and after motion stop.
+        and after motion stop.uthor
+Oct/24/2025 14:11:09
+
          
         Need some testing how to deal with intermittent motion errors.
         
@@ -234,45 +303,155 @@ class User():
         
         Edit October 2025: edited zStart and zEnd so it compensates in the vertical direction instead of the horizontal direction for XRD+XES at MFX
         """
-        zDelta = (zEnd - zStart)/nRoundTrips
+
+        zDelta = (zEnd - zStart)/nRoundTrips/2
         self.sam_x.umv(xStart)
         self.sam_z.umv(zStart)
-        #daq.connect()
-        #daq.begin()
+
         sleep(2)
         print('Reached horizontal start position')
-        # looping through n round trips
-        for i in range(nRoundTrips):
-            try:
-                print('starting round trip %d' % (i+1))
-                sleep(1)
-                pp.open()
-                sleep(1)
-                self.sam_x.mv(xEnd)
-                #sleep(0.1)
-                #pp.open()
-                sleep(sweepTime)
-                pp.close()
-                self.sam_x.wait()
-                self.sam_y.mvr(yDelta)
-                self.sam_z.mvr(zDelta)
-                sleep(1)#orignal was 1.2
-                pp.open()
-                sleep(1)
-                self.sam_x.mv(xStart)
-                #sleep(0.1)
-                #pp.open()
-                sleep(sweepTime)
-                pp.close()
-                self.sam_x.wait()
-                self.sam_y.mvr(yDelta)
-                self.sam_z.mvr(zDelta)
-                #print('ypos',x.sam_y.wm())
-                #sleep(2)#original was 1.2
-            except:
-                print('round trip %d didn not end happily' % i)
+
+        #I broke with MFX DAQ-II
+        #daq.connect()
+        #daq.begin()
+        logger = logging.getLogger(__name__)
+
+        runs=1
+        daq_num=2
+        run_type="DATA"
+
+        try:
+            for i in range(runs):
+                run_number = get_run(station=0) + 1
+                from psdaq.control.DaqControl import DaqControl  # NOQA
+                daq.control = DaqControl(
+                    host=daq.control.host,
+                    platform=daq.control.platform,
+                    timeout=10000,
+                )
+                instr = daq.control.getInstrument()
+                if instr is None:
+                    logger.error('Failed to connect to LCLS-II DAQ')
+                    break
+                start_state = daq.control.getState()
+                if start_state == 'error':
+                    logger.error('DAQ is in an error state.')
+                    break
+
+                logger.info(f"Run Number {run_number} Running {sample}......")
+#                if cam is not None:
+#                    ioc_cam_recorder(cam, run_length, tag)
+
+                daq.control.setState("configured")
+                while daq.control.getState() != "configured":
+                    ...
+                if record:
+                    daq.control.setRecord(True)
+                else:
+                    daq.control.setRecord(False)
+                daq.control.setState("running", {"run_type": run_type})
+#                while daq.control.getState() != "running":
+#                    ...
+#                start_time = time()
+#                end_time = start_time + run_length
+
+#                while time() < end_time:
+#                    elapsed_time = time() - start_time
+#                    progress = min(elapsed_time / run_length, 1)  # Ensure progress doesn't exceed 1
+#
+#                    filled_length = int(60 * progress)
+#                    bar = '=' * filled_length + '-' * (60 - filled_length)
+
+#                    percentage = f"{progress:.0%}"
+
+#                    print(f"\rProgress: [{bar}] {percentage}", end="")
+
+#                    sleep(1)  # Update frequency
+
+ #               print("\rProgress: [" + "="*60 + "] 100%") # Final, complete bar
+
+            sleep(2)
+            print('Reached horizontal start position')
+
+            # looping through n round trips
+            for i in range(nRoundTrips):
+                try:
+                    print('starting round trip %d' % (i+1))
+                    sleep(1)
+                    #pp.open()
+                    #sleep(1)
+                    self.sam_x.mv(xEnd)
+                    sleep(0.5)
+                    pp.open()
+                    sleep(sweepTime)
+                    sleep(1.0)
+                    pp.close()
+                    self.sam_x.wait()
+                    self.sam_y.mvr(yDelta)
+                    self.sam_z.mvr(zDelta)
+                    sleep(3.5)#orignal was 1.2
+                    #pp.open()
+                    #sleep(1)
+                    self.sam_x.mv(xStart)
+                    sleep(0.5)
+                    pp.open()
+                    sleep(sweepTime)
+                    sleep(0.8)
+                    pp.close()
+                    self.sam_x.wait()
+                    self.sam_y.mvr(yDelta)
+                    self.sam_z.mvr(zDelta)
+                    sleep(3.5) #the y and z motor are super slow
+                    #print('ypos',x.sam_y.wm())
+                    #sleep(2)#original was 1.2
+                except:
+                    print('round trip %d didn not end happily' % i)
+
 #        daq.end_run()
 #        daq.disconnect()
+        
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+
+            if record:
+                self.post(
+                    sample=sample,
+                    tag=tag,
+                    run_number=run_number,
+                    post=record,
+                    inspire=inspire,
+                    daq_num=daq_num)
+
+            sleep(5)
+
+        except KeyboardInterrupt:
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setRecord(False)
+            daq.control.setState("running")
+            pp.close()
+            if record:
+                self.post(
+                    sample=sample,
+                    tag=tag,
+                    run_number=run_number,
+                    post=record,
+                    inspire=inspire,
+                    daq_num=daq_num,
+                    add_note='Run ended early')
+                logger.warning("[*] Stopping Run and exiting???...")
+                logger.warning('Run ended early')
+
+            pp.close()
+            daq.control.setState("configured")
+            while daq.control.getState() != "configured":
+                ...
+            daq.control.setRecord(False)
+            daq.control.setState("running")
+            logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
+
 
     def dumbSnake_burst(self, xStart, xEnd, yDelta, nRoundTrips):
         """ 
@@ -567,5 +746,61 @@ class User():
 #            daq.disconnect()
 #            sys.exit()
 
+    chunk = 1024
 
+    def play_wav(wav_filename,chunk_size = chunk):
+
+        wf = wave.open(wav_filename, 'rb')
+
+        p = pyaudio.PyAudio()
+
+        soundfile = p.open(format=p.get_format_from_width(wf.getsampwidth()), channels = wf.getnchannels(), rate = wf.getframerate(), output=True)
+
+        data = wf.readframes(chunk_size)
+        while len(data) > 0:
+            soundfile.write(data)
+            data = wf.readframes(chunk_size)
+
+
+        #stop stream
+        soundfile.stop_stream()
+        soundfile.close()
+
+        #Close PyAudio
+        p.terminate()
+
+
+    def ebeamDownWarning(self):
+    #This will play an audible warning when the ebeam goes missing in the data stream for more than 2 seconds. If this happens, request ACR to reboot the IOC.
+
+        ebeamMon = PV('BLD:SYS0:500:PHOTONENERGY')
+        beamdownWav = "/cds/home/opr/cxiopr/pyaudio/beamdown_british.wav"
+
+        warningTrigger = 0
+        i = 3
+        beamClock = 0
+    
+        print(f"Ebeam monitoring has started... terminal hijacked")
+
+        while i > 0:
+            ebeamCheck = ebeamMon.get()
+            if ebeamCheck < 6000:
+                warningTrigger += 1
+                print("Warning... ebeam outside of expected range")
+            else:
+                warningTrigger = 0
+            sleep(1)
+            i -= 1
+
+            if i == 0:
+                i = 3
+                beamClock += 3
+        
+                if warningTrigger == 3:
+                    beamClock = 0
+                    play_wav(beamdownWav)
+                    sleep(1)
+        
+                warningTrigger = 0
+                print(f"Ebeam has been recorded since ", str(beamClock)," seconds. Yay!")
 

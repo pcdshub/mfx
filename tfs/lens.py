@@ -183,19 +183,22 @@ class MFXLens(InOutPVStatePositioner, LensCalcMixin):
     y = FCpt(OnePVMotorRetry, '{y_pv}', kind='normal')
 
     def __init__(self, prefix, **kwargs):
-        if 'TFS' not in prefix:
-            self.x_pv = None
-            self.y_pv = None
-        else:
-            lens_num = _parse_lens_number(prefix)
+        # Only assign X/Y motor PVs for true TFS lenses of the form ":TFS:##"
+        # Prefocus lenses (":DIA:##") should not use the TFS X/Y motor map.
+        m = re.search(r":(TFS|DIA):(\d+)$", prefix)
+        if m and m.group(1) == 'TFS':
+            lens_num = int(m.group(2))
             try:
                 mapping = LENS_MOTOR_PVS[lens_num]
             except KeyError:
-                raise ValueError(f"Unknown lens number {lens_num} parsed from prefix {prefix}")
+                raise ValueError(f"Unknown TFS lens number {lens_num} parsed from prefix {prefix}")
             self.x_pv = mapping['x']
             self.y_pv = mapping['y']
+        else:
+            # For DIA or any non-matching suffix, do not configure X/Y PVs
+            self.x_pv = None
+            self.y_pv = None
         super().__init__(prefix, **kwargs)
-        
 
     @property
     def radius(self):

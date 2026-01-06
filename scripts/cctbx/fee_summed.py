@@ -18,19 +18,21 @@ data = None
 
 maxes = []
 for r in runs:
-  ds = psana.DataSource('exp=%s:run=%d:smd'%(exp,r))
-  d = psana.Detector('FEE-SPEC0')
+  #ds = psana.DataSource('exp=%s:run=%d:smd'%(exp,r))
+  ds = psana.DataSource(exp=exp,run=r,detectors=['feespec'])
+  #d = psana.Detector('FEE-SPEC0')
   for run in ds.runs():
+    d = run.Detector('feespec')
     for nevt, evt in enumerate(run.events()):
-      f = d.get(evt)
-      if f:
+      f = d.raw.hproj(evt)
+      if f is not None:
         good += 1
         events.append(1)
       else:
         bad += 1
         events.append(0)
         continue
-      dta = f.hproj().astype(float)
+      dta = f.astype(float)#.hproj().astype(float)
       maxes.append(np.max(dta))
       #if np.max(dta) > 5e5: continue
       # ^If there are noisy spectometer shots (sawtooth pattern on spectrum) then
