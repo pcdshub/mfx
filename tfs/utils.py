@@ -13,8 +13,8 @@ NA = pt.core.constants.avogadro_number  # Avogadro's Constant
 # Prefocus energy range. Should probably be in a file under data
 # format: (E_min, E_max): (xrt_lens_idx, lens_radius)
 MFX_prefocus_energy_range = {
-    (0, 7000): (None, None),
-    (7000, 10000): (2, 750),
+    (0, 5000): (None, None),
+    (5000, 10000): (2, 750),
     (10000, 12000): (1, 428),
     (12000, 16000): (0, 333)
 }

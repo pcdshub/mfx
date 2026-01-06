@@ -190,7 +190,7 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_09.remove()
         self.tfs_10.remove()
 
-    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], avoid_forbidden=True, enable_prefocus=True, **kwargs):
+    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], avoid_forbidden=False, enable_prefocus=True, **kwargs):
         """
         Calculate the best lens array to hit the nominal sample point
 
