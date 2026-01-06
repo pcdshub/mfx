@@ -1,0 +1,3 @@
+[submodule "dev/DropletOnDemand"]
+	path = dev/DropletOnDemand
+	url = git@github.com:joshc-slac/DropletOnDemand.git

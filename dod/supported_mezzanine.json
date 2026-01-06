@@ -1,0 +1,246 @@
+{
+    "header": {
+        "Time": "3/18/2024 8:01:26 AM",
+        "Status": {
+            "Status": "Idle",
+            "StatusCode": 200
+        },
+        "LastID": 1579463888163,
+        "ErrorCode": 0,
+        "ErrorMessage": "NA",
+        "Result": {}
+    },
+    "endpoints": [
+        {
+            "API": "/DoD/Connect?ClientName={value}",
+            "payload": "Accepted"
+        },
+        {
+            "API": "/DoD/Disconnect",
+            "payload": "Accepted"
+        },
+        {
+            "API": "/DoD/get/Status",
+            "payload": {
+                "Position": {
+                    "X": 0,
+                    "Y": 0,
+                    "Z": 500
+                },
+                "LastProbe": "",
+                "Humidity": 10,
+                "Temperature": 228,
+                "BathTemp": -99
+            }
+        },
+        {
+            "API": "/DoD/get/PositionNames",
+            "payload": [
+                "Probe (96WP-1nozzle_mailin)",
+                "Target (Test)",
+                "Home",
+                "CameraStation",
+                "WasteStation1",
+                "WashStation1",
+                "WashStation1Up",
+                "WashTray1Up",
+                "WashTray1",
+                "Eppi1Nozzle1Up",
+                "Eppi2Nozzle1Up",
+                "Eppi3Nozzle1Up",
+                "Eppi4Nozzle1Up",
+                "DabStationUp",
+                "DabStation",
+                "WetDabStation",
+                "Eppi3Nozzle1",
+                "Eppi2Nozzle1",
+                "Eppi4Nozzle1",
+                "Eppi1Nozzle1",
+                "InteractionPoint",
+                "dummy",
+                "IP_up",
+                "Sample_up",
+                "2N_1E_up",
+                "2N_2E_up",
+                "2N_3E_up",
+                "2N_4E_up",
+                "3N_1E_up",
+                "3N_2E_up",
+                "3N_3E_up",
+                "3N_4E_up",
+                "4N_E1_up",
+                "yag",
+                "AgB",
+                "4N_4E_up",
+                "4N_3E_up",
+                "4N_2E_up",
+                "4N_1E_up",
+                "Nozzle 4 IP"
+            ]
+        },
+        {
+            "API": "/DoD/get/CurrentPosition",
+            "payload": {
+                "CurrentPosition": 0,
+                "Position": [
+                    "0",
+                    "Probe (96WP-1nozzle_mailin)",
+                    "185991",
+                    "93302",
+                    "24000",
+                    "25000",
+                    "25000",
+                    "5000"
+                ],
+                "PositionReal": {
+                    "X": 0,
+                    "Y": 0,
+                    "Z": 500
+                }
+            }
+        },
+        {
+            "API": "/DoD/get/TaskNames",
+            "payload": [
+                "14_DayWashProcedure",
+                "AirEx",
+                "AirGapTakeProbe_25ul",
+                "AutoDropDetection",
+                "AutoDropDetectionDropVolume",
+                "AutoDropDetection_1x",
+                "AutoDropDetection_Dropvol",
+                "BeginIf10Probes",
+                "BeginIf2Probes",
+                "BeginIf3Probes",
+                "BeginIf5Probes",
+                "BeginLoop",
+                "Dab",
+                "Dab_wet",
+                "Dip 1x",
+                "DipWashStation1",
+                "DipWashStation3x_AutoDrop",
+                "DrySystem",
+                "EndIf",
+                "EndLoop",
+                "FlushWashStation1ManuallyStop",
+                "GiveBackProbe_15ul",
+                "GiveBackProbe_5ul",
+                "GoToProbe",
+                "GotoProbe and up 1mm",
+                "HeadCameraLight_OFF",
+                "HeadCameraLight_ON",
+                "InsertNozzle",
+                "Mailin_TakeProbe_60ul",
+                "Mailin_TakeProbe_airgapped_60ul",
+                "Message_SampleReady",
+                "Mix&Take_40uL",
+                "Mix&Take_40uLOnceDip",
+                "Mix&Take_HighViscosity",
+                "MorningWashProcedure",
+                "MoveHome",
+                "MoveToCameraStation",
+                "MoveToEppi1Nozzle1",
+                "MoveToInteractionPoint",
+                "MoveToTray1",
+                "MoveToWasteStation1",
+                "NozzleRemovalWash",
+                "OpenHeadCamWindow",
+                "OpenNozzleSetup",
+                "OpenSnapWindow",
+                "PreSpot250drops",
+                "PreSpot500drops",
+                "ProbeUptake",
+                "Pulse HV",
+                "Pulse regular",
+                "QC",
+                "Resuspend_InPlace",
+                "Resuspend_InPlace_10uL",
+                "ScanFieldsOnly",
+                "ScanSpotArea",
+                "SpotProbeRun",
+                "TakeProbe10ul",
+                "TakeProbe10ul_1ulps",
+                "TakeProbe15ul",
+                "TakeProbe2ul_1ulps",
+                "TakeProbe3ul_1ulps",
+                "TakeProbe4ul_1ulps",
+                "TakeProbe5ul_1ulps",
+                "TakeProbe8ul_1ulps",
+                "TakeProbe_19ul",
+                "TakeProbe_40ul",
+                "TakeProbe_4ul",
+                "TakeProbe_5ul",
+                "TakeProbe_6ul",
+                "TakeProbe_7ul",
+                "TakeProbe_8ul",
+                "TargetPosition",
+                "Test_colliding_droplet",
+                "Test_colliding_droplet_2nozzles",
+                "Test_colliding_droplet_spot_2droplets",
+                "Test_colliding_droplet_washingtray",
+                "Test_dropping_conditions_preparation",
+                "Test_dropping_conditions_preparation_flush_Epi3",
+                "Test_dropping_conditions_preparation_no_flush",
+                "Ultimate_Wash_Sequence",
+                "Wait1sec",
+                "Wait2sec",
+                "Wait3sec",
+                "Wait5sec",
+                "Wait8sec",
+                "WashFlush_150s",
+                "WashFlush_Light",
+                "WashFlush_Light_Narrow",
+                "WashFlush_Medium",
+                "WashFlush_Medium_Narrow",
+                "WashFlush_Piezo_Pump_only",
+                "WashFlush_Piezo_only",
+                "WashFlush_Strong",
+                "WashFlush_Strong_Narrow",
+                "Wash_Flush100ul_10ulps_US",
+                "Wash_Flush200ul_10ulps_US",
+                "Wash_Flush500ul_10ulps_US",
+                "Washflush_E1",
+                "Washflush_Well",
+                "X459_Swap_Sample_Clean",
+                "sciCleanEppi1",
+                "sciCleanWashTray1",
+                "take60_camera",
+                "take60_dip_camera",
+                "\u00a7PrimeTask1",
+                "\u00a7PrimeTask2"
+            ]
+        },
+        {
+            "API": "/DoD/do/Move?PositionName={value}",
+            "payload": "Accepted",
+            "args": {
+                "PositionName": " "
+            },
+            "_comment": "/DoD/do/Move?PositionName={value}"
+        },
+        {
+            "API": "/DoD/do/MoveX?X={value}",
+            "payload": "Accepted",
+            "args": {
+                "X": "300"
+            },
+            "_comment": "/DoD/do/MoveX?X={value}"
+        },
+        {
+            "API": "/DoD/do/ExecuteTask?TaskName={value}",
+            "payload": "Accepted",
+            "args": {
+                "TaskName": "Home"
+            },
+            "_comment": "/DoD/do/ExecuteTask?TaskName={value}"
+        },
+        {
+            "API": "/DoD/AutoDrop",
+            "payload": "Accepted"
+        },
+        {
+            "API": "/DoD/do/InteractionPoint",
+            "payload": "Rejected"
+        }
+    ]
+}

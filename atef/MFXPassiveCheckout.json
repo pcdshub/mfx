@@ -1,0 +1,1151 @@
+{
+  "version": 0,
+  "root": {
+    "name": "MFX Passive Checkout",
+    "description": "Checkout for the MFX Beamline",
+    "tags": null,
+    "configs": [
+      {
+        "ConfigurationGroup": {
+          "name": "IPMs",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "IPM Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_dia_ipm",
+                  "mfx_dg2_ipm",
+                  "mfx_dg1_ipm"
+                ],
+                "by_attr": {
+                  "diode.state.motor.error_severity": [],
+                  "diode.x_motor.error_severity": [],
+                  "target.motor.error_severity": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "IPM Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Slits",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Slit Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_dg1_slits",
+                  "mfx_dg2_downstream_slits",
+                  "mfx_dg2_midstream_slits",
+                  "mfx_dg2_upstream_slits"
+                ],
+                "by_attr": {
+                  "blade_bottom.disabled": [],
+                  "blade_bottom.high_limit_switch": [],
+                  "blade_bottom.low_limit_switch": [],
+                  "blade_bottom.motor_is_moving": [],
+                  "blade_north.disabled": [],
+                  "blade_north.high_limit_switch": [],
+                  "blade_north.low_limit_switch": [],
+                  "blade_north.motor_is_moving": [],
+                  "blade_south.disabled": [],
+                  "blade_south.high_limit_switch": [],
+                  "blade_south.low_limit_switch": [],
+                  "blade_south.motor_is_moving": [],
+                  "blade_top.disabled": [],
+                  "blade_top.high_limit_switch": [],
+                  "blade_top.low_limit_switch": [],
+                  "blade_top.motor_is_moving": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Slit Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Fee Slits Position",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "sl1l0"
+                ],
+                "by_attr": {
+                  "xwidth.readback": [],
+                  "xwidth.setpoint": [],
+                  "ywidth.readback": [],
+                  "ywidth.setpoint": []
+                },
+                "shared": [
+                  {
+                    "Equals": {
+                      "name": "FEE Slits Position",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 2.5,
+                      "rtol": null,
+                      "atol": 0.01
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "TFS",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "TFS IOC Alive",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_tfs"
+                ],
+                "by_attr": {
+                  "interlock.ioc_alive": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "TFS IOC Alive",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "TFS Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_tfs"
+                ],
+                "by_attr": {
+                  "interlock.bypass": [],
+                  "interlock.bypass_energy": [],
+                  "interlock.faulted": [],
+                  "interlock.lens_required_fault": [],
+                  "interlock.min_fault": [],
+                  "interlock.state_fault": [],
+                  "interlock.table_fault": [],
+                  "interlock.violated_fault": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "TFS Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Reference Laser",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "REF State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_reflaser"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "REF State",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        2
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "REF Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_reflaser"
+                ],
+                "by_attr": {
+                  "motor.disabled": [],
+                  "motor.error_severity": [],
+                  "motor.motor_is_moving": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "REF Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Attenuator",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "ATT Status",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_attenuator"
+                ],
+                "by_attr": {
+                  "filter1.status": [],
+                  "filter10.status": [],
+                  "filter11.status": [],
+                  "filter2.status": [],
+                  "filter3.status": [],
+                  "filter4.status": [],
+                  "filter5.status": [],
+                  "filter6.status": [],
+                  "filter7.status": [],
+                  "filter8.status": [],
+                  "filter9.status": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "ATT Status",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "ATT State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_attenuator"
+                ],
+                "by_attr": {
+                  "filter1.state": [],
+                  "filter10.state": [],
+                  "filter11.state": [],
+                  "filter2.state": [],
+                  "filter3.state": [],
+                  "filter4.state": [],
+                  "filter5.state": [],
+                  "filter6.state": [],
+                  "filter7.state": [],
+                  "filter8.state": [],
+                  "filter9.state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "ATT State",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1,
+                        2
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "ATT Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_attenuator"
+                ],
+                "by_attr": {
+                  "filter1.stuck": [],
+                  "filter10.stuck": [],
+                  "filter11.stuck": [],
+                  "filter3.stuck": [],
+                  "filter4.stuck": [],
+                  "filter6.stuck": [],
+                  "filter9.stuck": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "ATT Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Cameras",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "Camera Capture Rate",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "MFX:ALV:01:ArrayRate_RBV": [],
+                  "MFX:ALV:02:ArrayRate_RBV": [],
+                  "MFX:DG1:P6740:ArrayRate_RBV": [],
+                  "MFX:DG2:P6740:ArrayRate_RBV": [],
+                  "MFX:GDE:01:ArrayRate_RBV": [],
+                  "MFX:GIGE:01:ArrayRate_RBV": [],
+                  "MFX:GIGE:02:ArrayRate_RBV": [],
+                  "MFX:GIGE:03:ArrayRate_RBV": [],
+                  "MFX:GIGE:04:ArrayRate_RBV": [],
+                  "MFX:GIGE:05:ArrayRate_RBV": [],
+                  "MFX:GIGE:06:ArrayRate_RBV": [],
+                  "MFX:GIGE:07:ArrayRate_RBV": [],
+                  "MFX:GIGE:08:ArrayRate_RBV": [],
+                  "MFX:GIGE:DIA:YAG:ArrayRate_RBV": [],
+                  "MFX:GIGE:LBL:01:ArrayRate_RBV": [],
+                  "MFX:GIGE:LBL:02:ArrayRate_RBV": [],
+                  "MFX:GIGE:LBL:03:ArrayRate_RBV": [],
+                  "MFX:GIGE:RR1:ArrayRate_RBV": []
+                },
+                "shared": [
+                  {
+                    "Greater": {
+                      "name": "Camera Capture Rate",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Vaccum",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Gate Valves",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mfx_mxt_valve",
+                  "mfx_dvd_valve",
+                  "mfx_dia_valve_02",
+                  "mfx_dia_valve_01",
+                  "mfx_dg1_valve_2",
+                  "mfx_dg1_valve_1",
+                  "mxt_valve_1",
+                  "mxt_valve_2",
+                  "xrt_mxt_valve",
+                  "xrt_dvd_valve"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Gate Valves",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        "OUT"
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
+                "name": "Vaccum Levels",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "HXX:MXT:GCC:02:PMON": [],
+                  "HXX:MXT:GCC:03:PMON": [],
+                  "HXX:MXT:GCC:05:PMON": [],
+                  "HXX:MXT:GCC:06:PMON": [],
+                  "HXX:UM6:GCC:01:PMON": [],
+                  "HXX:UM6:GCC:02:PMON": [],
+                  "MFX:DG1:GCC:01:PRESS": [],
+                  "MFX:DG2:GCC:01:PRESS": [],
+                  "MFX:DIA:GCC:01:PRESS": [],
+                  "MFX:DVD:GCC:02:PRESS": [],
+                  "MFX:DVD:GCC:04:PRESS": [],
+                  "MFX:MON:GCC:01:PRESS": [],
+                  "MFX:SB2:GCC:01:PRESS": [],
+                  "MFX:TFS:GCC:01:PRESS": []
+                },
+                "shared": [
+                  {
+                    "LessOrEqual": {
+                      "name": "Vaccum Levels",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 5e-08
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
+                "name": "Ion Pumps",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "HXX:MXT:PIP:01:STATEMON": [],
+                  "HXX:MXT:PIP:02:STATEMON": [],
+                  "HXX:MXT:PIP:03:STATEMON": [],
+                  "HXX:MXT:PIP:04:STATEMON": [],
+                  "HXX:MXT:PIP:05:STATEMON": [],
+                  "HXX:MXT:PIP:06:STATEMON": [],
+                  "HXX:MXT:PIP:08:STATEMON": [],
+                  "HXX:UM6:PIP:01:STATEMON": [],
+                  "HXX:UM6:PIP:02:STATEMON": [],
+                  "MFX:DG1:PIP:01:STATEMON": [],
+                  "MFX:DG2:PIP:01:STATEMON": [],
+                  "MFX:DIA:PIP:01:STATEMON": [],
+                  "MFX:DVD:PIP:01:STATEMON": [],
+                  "MFX:DVD:PIP:02:STATEMON": [],
+                  "MFX:DVD:PIP:03:STATEMON": [],
+                  "MFX:DVD:PIP:04:STATEMON": [],
+                  "MFX:MON:PIP:01:STATEMON": [],
+                  "MFX:SB2:PIP:01:STATEMON": [],
+                  "MFX:TFS:PIP:01:STATEMON": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Ion Pumps Status",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Mirrors",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Mirror Coatings",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mr1l4_homs",
+                  "mr2l0_homs"
+                ],
+                "by_attr": {
+                  "coating.state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Always Flag Mirror Coatings",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 1,
+                      "if_disconnected": 2,
+                      "values": [],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "ConfigurationGroup": {
+                "name": "Mirror Positions",
+                "description": null,
+                "tags": null,
+                "configs": [
+                  {
+                    "DeviceConfiguration": {
+                      "name": "Mirrors Inserted",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l4_homs"
+                      ],
+                      "by_attr": {
+                        "insertion.state": []
+                      },
+                      "shared": [
+                        {
+                          "AnyValue": {
+                            "name": "Mirrors Inserted",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "values": [
+                              2
+                            ],
+                            "values_dynamic": []
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "Mirrors Removed",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l3_homs"
+                      ],
+                      "by_attr": {
+                        "insertion.state": []
+                      },
+                      "shared": [
+                        {
+                          "AnyValue": {
+                            "name": "Mirrors Removed",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "values": [
+                              1
+                            ],
+                            "values_dynamic": []
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "DeviceConfiguration": {
+                      "name": "MR1L4 Pitch",
+                      "description": null,
+                      "tags": null,
+                      "devices": [
+                        "mr1l4_homs"
+                      ],
+                      "by_attr": {
+                        "pitch.user_readback": [],
+                        "pitch.user_setpoint": []
+                      },
+                      "shared": [
+                        {
+                          "Less": {
+                            "name": "Mirror Pitch to MFX",
+                            "description": null,
+                            "invert": false,
+                            "reduce_period": null,
+                            "reduce_method": "average",
+                            "string": null,
+                            "severity_on_failure": 2,
+                            "if_disconnected": 2,
+                            "value_dynamic": null,
+                            "value": -500.0
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "values": {},
+                "mode": "all"
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Mirror Errors",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "mr1l3_homs",
+                  "mr1l4_homs",
+                  "mr2l0_homs"
+                ],
+                "by_attr": {
+                  "bender.high_limit_switch": [],
+                  "bender.low_limit_switch": [],
+                  "bender.motor_is_moving": [],
+                  "bender.plc.err_bool": [],
+                  "bender.plc.status": [],
+                  "coating.busy": [],
+                  "coating.error": [],
+                  "coating.error_message": [],
+                  "pitch.high_limit_switch": [],
+                  "pitch.low_limit_switch": [],
+                  "pitch.motor_is_moving": [],
+                  "pitch.plc.err_bool": [],
+                  "pitch.plc.status": [],
+                  "x_dwn.high_limit_switch": [],
+                  "x_dwn.low_limit_switch": [],
+                  "x_dwn.motor_is_moving": [],
+                  "x_up.high_limit_switch": [],
+                  "x_up.low_limit_switch": [],
+                  "x_up.motor_is_moving": [],
+                  "y_dwn.high_limit_switch": [],
+                  "y_dwn.low_limit_switch": [],
+                  "y_dwn.motor_is_moving": [],
+                  "y_dwn.plc.err_bool": [],
+                  "y_dwn.plc.status": [],
+                  "y_up.high_limit_switch": [],
+                  "y_up.low_limit_switch": [],
+                  "y_up.motor_is_moving": [],
+                  "y_up.plc.err_bool": [],
+                  "y_up.plc.status": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Mirror Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0,
+                        ""
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Spectrometer",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Spectrometer Position",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "hxx_von_hamos_y"
+                ],
+                "by_attr": {
+                  "user_readback": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Always Flag Spectrometer Position",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 1,
+                      "if_disconnected": 2,
+                      "values": [],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "DeviceConfiguration": {
+                "name": "Spectrometer Errors ",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "hxx_von_hamos_y"
+                ],
+                "by_attr": {
+                  "disabled": [],
+                  "high_limit_switch": [],
+                  "low_limit_switch": [],
+                  "motor_done_move": [],
+                  "motor_is_moving": [],
+                  "plc.cmd_err_reset": [],
+                  "plc.status": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Spectrometer Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "YAGs",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "YAGs",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "HXX:HXM:PIM": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "YAG Out",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        3
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Pulse Picker",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "EVR Event Code",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "XRT:EVR:R48:TRIG1:TEC": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "EVR Event Code",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        197
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
+                "name": "PP Errors",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "MFX:DIA:MMS:07:LD": [],
+                  "MFX:DIA:MMS:07:MV": [],
+                  "MFX:DIA:MMS:07:SE": [],
+                  "MFX:DIA:MMS:07:UD": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "PP Errors",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        0
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "PVConfiguration": {
+                "name": "PP Fan",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "MFX:DIA:MMS:07:I4_L": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "PP Fan ON",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        1
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Stopper",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Stopper State",
+                "description": null,
+                "tags": null,
+                "devices": [
+                  "hxd_dg2_stopper"
+                ],
+                "by_attr": {
+                  "state": []
+                },
+                "shared": [
+                  {
+                    "AnyValue": {
+                      "name": "Check Value is IN",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "values": [
+                        "IN"
+                      ],
+                      "values_dynamic": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Detector",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "DeviceConfiguration": {
+                "name": "Detector Motion Errors",
+                "description": null,
+                "tags": null,
+                "devices": [],
+                "by_attr": {},
+                "shared": []
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      },
+      {
+        "ConfigurationGroup": {
+          "name": "Accelerator",
+          "description": null,
+          "tags": null,
+          "configs": [
+            {
+              "PVConfiguration": {
+                "name": "FEE Gas Detector Energy",
+                "description": null,
+                "tags": null,
+                "by_pv": {
+                  "GDET:FEE1:241:ENRC": [],
+                  "GDET:FEE1:242:ENRC": [],
+                  "GDET:FEE1:361:ENRC": [],
+                  "GDET:FEE1:362:ENRC": []
+                },
+                "shared": [
+                  {
+                    "Greater": {
+                      "name": "FEE Energy Greater than 0.2",
+                      "description": null,
+                      "invert": false,
+                      "reduce_period": null,
+                      "reduce_method": "average",
+                      "string": null,
+                      "severity_on_failure": 2,
+                      "if_disconnected": 2,
+                      "value_dynamic": null,
+                      "value": 0.2
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "values": {},
+          "mode": "all"
+        }
+      }
+    ],
+    "values": {},
+    "mode": "all"
+  }
+}

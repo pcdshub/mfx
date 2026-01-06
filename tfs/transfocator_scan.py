@@ -136,6 +136,76 @@ class transfocator_aligner(gigE_camera_accessor):
         plt.show()
         plt.ioff()
         #plt.xlabel('Transfocator Z-Position')
+############################ JB edits
+
+    def twoD_gaussian_fixed_angle(xy, amplitude, xo, yo, sigma_x, sigma_y, offset):
+        x, y = xy
+        theta = 0  # Fixed angle in radians could optimize on tnis
+        a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
+        b = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
+        c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
+        g = offset + amplitude * np.exp(- (a*((x - xo)**2) + 2*b*(x - xo)*(y - yo) + c*((y - yo)**2)))
+        return g.ravel()
+
+    def fit_2d_gaussian_fixed_angle(image):
+        x = np.arange(image.shape[1])
+        y = np.arange(image.shape[0])
+        x, y = np.meshgrid(x, y)
+        initial_guess = (image.max(), image.shape[1]//2, image.shape[0]//2, 10, 10, np.min(image))
+        try:
+            popt, _ = curve_fit(twoD_gaussian_fixed_angle, (x, y), image.ravel(), p0=initial_guess)
+            return popt  # amplitude, xo, yo, sigma_x, sigma_y, offset
+        except RuntimeError:
+            print("Fit failed.")
+            return None
+
+    def scan_transfocator_jb(self, transfocator_motor, positions, image_sec):
+        pos_list = []
+        fwhm_x_list = []
+        fwhm_y_list = []
+
+        fig, ax = plt.subplots(2, 1, sharex=True)
+        fig.suptitle('2D Gaussian FWHM Scatter per Image')
+        ax[0].set_ylabel('FWHM_x')
+        ax[1].set_ylabel('FWHM_y')
+        ax[1].set_xlabel('Transfocator Z-position')
+        plt.ion()
+
+        for idx, pos in enumerate(positions):
+            transfocator_motor.umv(pos)
+            timeout = time.time() + image_sec
+            img_count = 0
+            collect = True
+
+            while collect:
+                img = self.get_image_roi() 
+                fit_result = fit_2d_gaussian_fixed_angle(img)
+                if fit_result is not None:
+                    _, _, _, sigma_x, sigma_y, _ = fit_result
+                    pos_list.append(pos)
+                    fwhm_x_list.append(sigma_x)
+                    fwhm_y_list.append(sigma_y)
+                else:
+                    pos_list.append(pos)
+                    fwhm_x_list.append(0)
+                    fwhm_y_list.append(0)
+                img_count += 1
+                if time.time() > timeout or img_count >= 20:
+                    collect = False
+
+            # Live update plot
+            ax[0].scatter(pos_list[-img_count:], fwhm_x_list[-img_count:], color='red')
+            ax[1].scatter(pos_list[-img_count:], fwhm_y_list[-img_count:], color='blue')
+            for a in ax:
+                a.relim()
+                a.autoscale_view()
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            plt.pause(0.1)
+
+        plt.ioff()
+        plt.show()
+
     def fit_scan(self,x,y):
         maxi = np.percentile(y,95)
         mean_ind = np.argmin(y-maxi/2)
@@ -150,4 +220,9 @@ class transfocator_aligner(gigE_camera_accessor):
         return popt 
 def gaussian(x, amplitude, mean, stddev):
 	return amplitude * np.exp(-((x - mean) / 4 / stddev)**2)
+
+
+############################ JB edits
+
+
 
