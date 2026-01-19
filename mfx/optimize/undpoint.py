@@ -285,14 +285,27 @@ class SafeUndPointAbs2D(UndPointAbs2D):
     Absolute undulator pointing with safe segmented moves (both axes per step).
     """
 
+    def __init__(
+        self,
+        prefix: str,
+        *,
+        name: str,
+        max_step: Optional[float] = 50.0,
+        sleep_between: float = 2.0,
+        **kwargs,
+    ):
+        self._max_step = max_step
+        self._sleep_between = sleep_between
+        super().__init__(prefix, name=name, **kwargs)
+
     @validate_call
     def move(
         self,
         position: Union[tuple[float, float], float],
         y_abs: Optional[float] = None,
         wait: bool = True,
-        max_step: Optional[float] = 50.0,
-        sleep_between: float = 2.0,
+        max_step: Optional[float] = None,
+        sleep_between: Optional[float] = None,
         timeout: Optional[float] = None,
         moved_cb: Optional[Callable] = None,
     ):
@@ -303,6 +316,12 @@ class SafeUndPointAbs2D(UndPointAbs2D):
         each segment clamped to max_step in magnitude. Otherwise, perform a
         single absolute move via the base class.
         """
+        # use instance defaults if not provided
+        if max_step is None:
+            max_step = self._max_step
+        if sleep_between is None:
+            sleep_between = self._sleep_between
+
         target_abs = coerce_input_to_tuple(position, y_abs)
         dx_total, dy_total = self.get_delta_from_abs(target_abs)
 
@@ -358,9 +377,11 @@ class SafeUndPointAbs2DMFX(SafeUndPointAbs2D):
         prefix: str = "MFX:USER:MCC:UND",
         *,
         name: str = "mfx_undp_safe",
+        max_step: Optional[float] = 50.0,
+        sleep_between: float = 2.0,
         **kwargs,
     ):
-        super().__init__(prefix, name=name, **kwargs)
+        super().__init__(prefix, name=name, max_step=max_step, sleep_between=sleep_between, **kwargs)
 
 class UndPointDelta2DSim(UndPointDelta2D):
     """
