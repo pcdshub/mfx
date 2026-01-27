@@ -1117,7 +1117,7 @@ class BashUtilities:
 
         logger.info("AMI launched")
 
-    def coyote_gui(self, debug: bool = False):
+    def coyote_gui(self, cfg: str = 'coyote', debug: bool = False):
         """
         Launch Coyote GUI with current experiment configuration.
 
@@ -1139,9 +1139,9 @@ class BashUtilities:
         logger.info("Launching Coyote GUI")
 
         cmd = (
-            "source pcds_conda; "
-            "cd /cds/group/pcds/epics-dev/zlentz/bsmtraj; "
-            "python -m bsmtraj.gui coyote"
+            f"source pcds_conda; "
+            f"cd /cds/group/pcds/epics-dev/zlentz/bsmtraj; "
+            f"python -m bsmtraj.gui {cfg}"
         )
 
         logger.warning(cmd)
