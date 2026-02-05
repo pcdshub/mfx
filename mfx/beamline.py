@@ -230,35 +230,46 @@ with safe_load('add laser motor groups'):
     from pcdsdevices.device_types import Newport
     from pcdsdevices.device_types import DelayNewport
     from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
-    from mfx.db import mfx_lxt_fast1
+    from mfx.db import mfx_lxt_fast1, mfx_lxt_fast2
+
+    # James -should this now be set to mfx_lxt_fast2?
     lxt_fast=mfx_lxt_fast1
 
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
     # this is the timetool compensationn stage. You might want this one
+
     class las():
         #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
         # initialize motors here for tab completion if wanted
         with safe_load('add more laser motors'):
-            lasmot2 = Newport('MFX:LAS:MMN:02', name='lasmot2') # give descriptions later
+            lasmot2 = Newport('MFX:LAS:MMN:02', name='lasmot2')   # give descriptions later
             lasmot3 = Newport('MFX:LAS:MMN:03', name='lasmot3')
             lasmot4 = Newport('MFX:LAS:MMN:04', name='lasmot4')
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
-            lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')
-            lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
-            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            #lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')     # check w/James
+            #lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
+            #lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
             #lens_g = Newport('MFX:LAS:MMN:12', name='lens_g')
+            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')
+            lens_f = Newport('MFX:LAS:MMN:13', name='lens_f')
+            mirlens_v = Newport('MFX:HRA:MMN:25', name='mirlens_v')
+            mirlens_h = Newport('MFX:HRA:MMN:26', name='mirlens_h')
+            mirlens_f = Newport('MFX:HRA:MMN:27', name='mirlens_f')
 
         with safe_load('Fast delay encoders'):
-            lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast2_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=mfx_lxt_fast2)
 
         # timing virtual motors for x-ray laser delay adjustment
         lxt = lxt # virtual motor that moves the laser timing system phase shifter
         txt = txt
         lxt_ttc = lxt_ttc
         lxt_fast1 = mfx_lxt_fast1
+        lxt_fast2 = mfx_lxt_fast2
 
 def mfx_reload(module_name):
     import importlib
