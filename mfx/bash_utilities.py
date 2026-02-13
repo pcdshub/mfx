@@ -680,7 +680,7 @@ class BashUtilities:
 
         logger.info("DAQ stop initiated")
 
-    def lecroy(self, res: str = '2560x1440'):
+    def lecroy(self, res: str = '2560x1440', num: int = 1):
         """
         Open LeCroy oscilloscope remote desktop.
 
@@ -739,8 +739,10 @@ class BashUtilities:
         cmd = (
             f"xfreerdp -g {res} "
             f"-u lecroyuser -p pcds "
-            f"scope-ics-mfx-lecroy01"
+            f"scope-ics-mfx-lecroy0{num}"
         )
+
+        logger.warning(cmd)
 
         subprocess.Popen(
             cmd,
@@ -750,6 +752,41 @@ class BashUtilities:
         )
 
         logger.info("LeCroy RDP session launched")
+
+    def mirrors(self):
+        """
+        Open Mirror GUI.
+
+        Launches Matt's Dev Branch Mirror GUI.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Mirror GUI:
+        - Matt's Dev Branch Mirror GUI
+        - Used for mirror alignment and diagnostics
+        """
+        logger.info("Opening Mirror GUI")
+
+        cmd = ("~seaberg/screens/homs_overview/launcher.sh")
+
+        logger.warning(cmd)
+
+        subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+
+        logger.info("Mirror GUI launched")
 
     def grabber(self):
         """
