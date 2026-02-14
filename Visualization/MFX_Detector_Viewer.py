@@ -820,7 +820,7 @@ class PSANALiveAnalysis(QtWidgets.QMainWindow):
             ds = DataSource(
                 exp=self.experiment_edit.text(),
                 run=self.run_number_spin.value(),
-                live=True
+                live=False
             )
             
             myrun = next(ds.runs())
