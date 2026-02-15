@@ -31,6 +31,7 @@ class Timing:
         Initialize Timing control system.
         """
         from pcdsdevices.device import ObjectComponent as OCpt
+        from pcdsdevices.lxe import LaserTiming
         from pcdsdevices.pseudopos import SyncAxis
         from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
         from mfx.db import mfx_txt
@@ -42,9 +43,9 @@ class Timing:
         self.lxt_fast2 = mfx_lxt_fast2
 
         self.lxt_fast1_enc = UsDigitalUsbEncoder(
-            'MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=self.mfx_lxt_fast1)
+            'MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
         self.lxt_fast2_enc = UsDigitalUsbEncoder(
-            'MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=self.mfx_lxt_fast2)
+            'MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=mfx_lxt_fast2)
 
         class LXTTTC(SyncAxis):
             lxt = OCpt(self.lxt)
@@ -149,10 +150,8 @@ class Timing:
         else:
             logger.error('Please enter daq 1 or 2.')
 
-        if pv == self.lxt_ttc or pv == self.lxt_fast1 or pv == self.lxt_fast2:
-            original_time = pv.get()[0][0]
-        else:
-            original_time = pv.get()[0]
+        # original_time = pv.get()[0] if pv in [self.lxt, self.txt] else pv.get()[0][0]
+        original_time = pv()
 
         run_number = get_run(station=station) + 1
         logger.info(f"Run Number {run_number} Running {sample}......{quote()['quote']}")
