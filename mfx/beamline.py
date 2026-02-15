@@ -256,6 +256,10 @@ with safe_load('add laser motor groups'):
             mirlens_v = Newport('MFX:HRA:MMN:25', name='mirlens_v')
             mirlens_h = Newport('MFX:HRA:MMN:26', name='mirlens_h')
             mirlens_f = Newport('MFX:HRA:MMN:27', name='mirlens_f')
+            oap_f = Newport('MFX:HRA:MMN:28', name='oap_f')
+            oap_v = Newport('MFX:HRA:MMN:29', name='oap_v')
+            oap_h = Newport('MFX:HRA:MMN:30', name='oap_h')
+            focus_track = Newport('MFX:HRA:MMN:31', name='focus_track')
 
         with safe_load('Fast delay encoders'):
             lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
