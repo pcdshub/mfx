@@ -188,13 +188,14 @@ class Timing:
 
         pp.close()
         post(
-            sample=sample,
+            sample=pv,
             tag=tag,
             run_number=run_number,
             post=record,
             inspire=inspire,
             daq_num=daq_num,
             add_note=(
+                f'Scaning {pv}, '
                 f'Time range:{start}-{end}s, '
                 f'steps:{steps} @ {events_per_step} events per step'
                 ))
