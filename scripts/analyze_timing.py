@@ -7,13 +7,15 @@ import os
 import sys
 import argparse
 import pickle
-from pathlib import Path
 import h5py
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 from psana import DataSource
+from scipy.optimize import curve_fit
+from scipy import special
+from pathlib import Path
+from tqdm import tqdm
 
 
 logging.basicConfig()
@@ -46,7 +48,7 @@ def proxy_jump(
             f"ssh -Yt psana '"
             f"source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing.py "
-            f"-f {facility} -t proxy -e {exp} -r {run}'"
+            f"-f {facility} -t output -e {exp} -r {run}'"
             ]
     else:
         logging.error(f"Facility not found: {facility}. Program Exit.")
@@ -68,7 +70,7 @@ def get_scan_motor(run):
 def custom_erf(x, a, sigma, mu, b):
             return a * special.erf((x - mu) / (np.sqrt(2) * sigma)) + b
 
-def fit_irfs1(x_data, y_data):
+def fit_irfs1(x_data, y_data, run_number, t_stage):
     # Convert to numpy arrays
     x_data = np.asarray(x_data, dtype=float)
     y_data = np.asarray(y_data, dtype=float)
@@ -267,8 +269,8 @@ def output(
     plt.grid(True)
     plt.show()
 
-    fit_irfs1(binned['t_position'], binned['normalized_laser_x_ray'])
-
+    # fit_irfs1(binned['t_position'], binned['normalized_laser_x_ray'])
+    fit_irfs1(binned['t_position'], binned['normalized_laser'], run_number, t_stage)
 
 def parse_args(args):
     """Parse command line parameters
