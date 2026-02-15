@@ -170,17 +170,17 @@ class Timing:
             daq.disconnect()
 
         elif daq_num == 2:
-            pv_motor = OnePVMotor(pv, name="pv")
-            pv_motor.setpoint.kind = "hinted"
+            # pv_motor = OnePVMotor(pv, name="pv")
+            # pv_motor.setpoint.kind = "hinted"
             daq.configure(
-                motors=[pv_motor],
+                motors=[pv],
                 group_mask=0x1,
                 events=events_per_step,
                 record=record)
 
             RE(bp.scan(
                 [daq],
-                pv_motor,
+                pv,
                 start,
                 end,
                 steps))
@@ -221,8 +221,8 @@ class Timing:
                 user=user,
                 facility=facility,
                 exp=exp,
-                run=run_number)
-
+                run=run_number,
+                daq_num=daq_num)
 
     def output(
         self,
@@ -230,9 +230,6 @@ class Timing:
         facility: str = 'S3DF',
         exp: str = None,
         run: str = None,
-        energy: float = None,
-        step: float = None,
-        num: int = None,
         daq_num: int = 2):
         """
         Analysis and output for timing scan data.
