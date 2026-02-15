@@ -680,7 +680,7 @@ class BashUtilities:
 
         logger.info("DAQ stop initiated")
 
-    def lecroy(self, res: str = '2560x1440'):
+    def lecroy(self, res: str = '2560x1440', num: int = 1):
         """
         Open LeCroy oscilloscope remote desktop.
 
@@ -739,8 +739,10 @@ class BashUtilities:
         cmd = (
             f"xfreerdp -g {res} "
             f"-u lecroyuser -p pcds "
-            f"scope-ics-mfx-lecroy01"
+            f"scope-ics-mfx-lecroy0{num}"
         )
+
+        logger.warning(cmd)
 
         subprocess.Popen(
             cmd,
@@ -750,6 +752,41 @@ class BashUtilities:
         )
 
         logger.info("LeCroy RDP session launched")
+
+    def mirrors(self):
+        """
+        Open Mirror GUI.
+
+        Launches Matt's Dev Branch Mirror GUI.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Mirror GUI:
+        - Matt's Dev Branch Mirror GUI
+        - Used for mirror alignment and diagnostics
+        """
+        logger.info("Opening Mirror GUI")
+
+        cmd = ("~seaberg/screens/homs_overview/launcher.sh")
+
+        logger.warning(cmd)
+
+        subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+
+        logger.info("Mirror GUI launched")
 
     def grabber(self):
         """
@@ -1117,6 +1154,52 @@ class BashUtilities:
 
         logger.info("AMI launched")
 
+    def coyote_gui(self, cfg: str = 'coyote', debug: bool = False):
+        """
+        Launch Coyote GUI with current experiment configuration.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        GUI configuration File:
+        - Location: /cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_assembly/coyote.toml
+
+        Chip config folder:
+        - Location: /cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_chip
+
+        """
+
+        # Launch GUI
+        logger.info("Launching Coyote GUI")
+
+        cmd = (
+            f"source pcds_conda; "
+            f"cd /cds/group/pcds/epics-dev/zlentz/bsmtraj; "
+            f"python -m bsmtraj.gui {cfg}"
+        )
+
+        logger.warning(cmd)
+        logger.warning(
+            'GUI configuration File: '
+            '/cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_assembly/coyote.toml')
+        logger.warning(
+            'Chip config folder: '
+            '/cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_chip')
+
+        if debug:
+            os.system(cmd)
+
+        else:
+            subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT
+            )
+        logger.info("Coyote GUI launched successfully")
 
 # Convenience instance for direct import
 bs = BashUtilities()
@@ -1193,7 +1276,6 @@ def focus_scan(camera: str, record: bool = False, daq_num: int = 2):
 def startami(ami_num: int = 1, daq_num: int = 1):
     """Start AMI. See BashUtilities.startami()."""
     bs.startami(ami_num=ami_num, daq_num=daq_num)
-
 
 # Module initialization
 logger.info("Bash utilities loaded and ready")
