@@ -170,6 +170,7 @@ def output(
     x_ray_diode_sum = []
     x = []
 
+    # Load QADC and timing info from XTC file and plot as funciton of time
     for run_number in run_numbers:
         logger.info(f'Processing run {run_number} for experiment {experiment}...')
         ds = DataSource(exp=experiment, run=int(run_number), xdetectors=['jungfrau'])
@@ -220,7 +221,6 @@ def output(
         #'tt': tt
     }
 
-
     df = pd.DataFrame(data)
 
     df['normalized_laser'] = df['qadc1_sum'] # / df['qadc0_sum']
@@ -255,7 +255,10 @@ def output(
 
     # --- Bin and plot ---
     n_bins = 100
-    df_clean['t_bin'] = pd.cut(df_clean['t_position'], bins=n_bins)
+    if t_stage == 'lxt_ttc' or t_stage == 'mfx_lxt_fast1' or t_stage == 'mfx_lxt_fast2':
+        df_clean['t_bin'] = pd.cut(df_clean['t_position'].astype(float), bins=n_bins)
+    else:
+        df_clean['t_bin'] = pd.cut(df_clean['t_position'], bins=n_bins)
 
     binned = df_clean.groupby('t_bin').agg({
         't_position': 'mean',
@@ -269,7 +272,7 @@ def output(
     plt.grid(True)
     plt.show()
 
-    # fit_irfs1(binned['t_position'], binned['normalized_laser_x_ray'])
+    # Now fit
     fit_irfs1(binned['t_position'], binned['normalized_laser'], run_number, t_stage)
 
 def parse_args(args):
