@@ -170,8 +170,6 @@ class Timing:
             daq.disconnect()
 
         elif daq_num == 2:
-            # pv_motor = OnePVMotor(pv, name="pv")
-            # pv_motor.setpoint.kind = "hinted"
             daq.configure(
                 motors=[pv],
                 group_mask=0x1,
@@ -205,8 +203,8 @@ class Timing:
 
         exp = str(get_exp())
         logger.warning(
-                f"timing.output(user='user', facility='s3df', run_type='scan', "
-                f"exp='{exp}', run={run_number}")
+                f"timing.output(user='user', facility='s3df', "
+                f"exp='{exp}', run={run_number}, daq_num={daq_num})")
 
         logger.info(f'Setting {pv} back to original time: {original_time}')
         pv(original_time)
