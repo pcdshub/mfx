@@ -186,8 +186,8 @@ def output(
                 diode_val_0 = diode_0.raw.value(evt)
                 diode_val_1 = diode_1.raw.value(evt)
                 if diode_val_0 is not None and diode_val_1 is not None:
-                    tmp0 = np.sum(diode_val_0[qadc0_low:qadc0_high])
-                    tmp1 = np.sum(diode_val_1[qadc1_low:qadc1_high])
+                    tmp0 = np.sum(np.abs(diode_val_0[qadc0_low:qadc0_high]))
+                    tmp1 = np.sum(np.abs(diode_val_1[qadc1_low:qadc1_high]))
 
                     qadc0_cropped.append(tmp0)
                     qadc1_cropped.append(tmp1)
