@@ -148,8 +148,8 @@ def output(
     """
     qadc0_low = 10
     qadc0_high = 50
-    qadc1_low = 75
-    qadc1_high = 100
+    qadc1_low = 93
+    qadc1_high = 104
 
     # diode_0 = run.Detector('qadc_ch0')
     # diode_1 = run.Detector('qadc_ch1')
