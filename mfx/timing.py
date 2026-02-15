@@ -235,9 +235,9 @@ class Timing:
         num: int = None,
         daq_num: int = 2):
         """
-        Analysis and output for notch scan data.
+        Analysis and output for timing scan data.
 
-        Provides methods to analyze energy calibration data and
+        Provides methods to analyze timing calibration data and
         generate plots on computing facilities.
 
         Methods
@@ -283,8 +283,6 @@ class Timing:
         NotchScan.series : Data collection
         """
         from mfx.macros import get_exp, get_run
-        from mfx.cctbx import cctbx
-        cctbx = cctbx()
 
         if daq_num == 2:
             station=0
@@ -310,9 +308,9 @@ class Timing:
 
         proc = [
             f"ssh -Yt {user}@s3dflogin '"
-            f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
-            f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}'"
+            f"source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh && "
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing.py "
+            f"-f {facility} -t proxy -e {exp} -r {run}'"
             ]
 
         logger.info(proc)
