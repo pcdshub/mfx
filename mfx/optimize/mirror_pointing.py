@@ -43,8 +43,9 @@ def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", w
         devices = init_devices(force=True)
         mirror = devices["mr1l4_homs"].pitch
 
-    yag = YagWithCentroid(diagnostic, num_frames=num_frames, name=f"{instrument}_yag")
+    yag = YagWithCentroid(diagnostic, name=f"{instrument}_yag")
     yag.image1.kind = "omitted"
+    yag.num_frames = num_frames
 
     pv = "MR1L4:PITCH:MFX:Coating1" if instrument == "mfx" else "MR1L4:PITCH:MEC:Coating1"
     nominal = caget(pv)
