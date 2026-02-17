@@ -1,6 +1,6 @@
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
-from bluesky.callbacks import LiveFit
+from bluesky.callbacks import LiveFit, LiveFitPlot
 from lmfit.models import LinearModel
 import bluesky.plans as bp
 import bluesky.plan_stubs as bps
@@ -14,10 +14,12 @@ def optimize_mirror_pointing(mirror, yag, nominal, goal, window_size=5.0, num_po
 
     lf_x = LiveFit(LinearModel(), f"{yag.name}_centroid_x", {"x": mirror.name})
     lf_y = LiveFit(LinearModel(), f"{yag.name}_centroid_y", {"x": mirror.name})
+    lfp_x = LiveFitPlot(lf_x, color="r")
+    lfp_y = LiveFitPlot(lf_y, color="b")
 
     start = nominal - window_size
     stop = nominal + window_size
-    RE(bp.scan([yag], mirror, start, stop, num_points), [lf_x, lf_y])
+    RE(bp.scan([yag], mirror, start, stop, num_points), [lfp_x, lfp_y])
 
     solution_x = (goal_x - lf_x.result.params["intercept"].value) / lf_x.result.params["slope"].value
     solution_y = (goal_y - lf_y.result.params["intercept"].value) / lf_y.result.params["slope"].value
