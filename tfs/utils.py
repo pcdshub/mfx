@@ -16,7 +16,7 @@ MFX_prefocus_energy_range = {
     (0, 5000): (None, None),
     (5000, 10000): (2, 750),
     (10000, 12000): (1, 428),
-    (12000, 16000): (0, 333)
+    (12000, 22000): (0, 333)
 }
 
 
@@ -27,7 +27,7 @@ def focal_length(radius, energy,N=1):
     if N!=1:
         logger.error('N does not equal 1!')
     focal_length = calc.be_lens_calcs.calc_focal_length_for_single_lens(energy*1E-3,radius*1E-6)
-    
+
     return focal_length
 
 
