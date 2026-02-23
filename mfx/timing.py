@@ -2,6 +2,9 @@
 import os
 import sys
 import logging
+import random
+import numpy as np
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,46 @@ class Timing:
 
         self.lxt_ttc = LXTTTC('', name='lxt_ttc')
 
+    def clustered_toward_center(
+            self,
+            start: float,
+            end: float,
+            steps: int,
+            power: float = 2.0,
+            plot : bool = False
+            ) -> list:
+        """
+        n points in [y, z], spaced denser near the center.
+        power > 1 increases clustering toward center.
+        """
+        c = (start + end) / 2.0
+        r = (end - start) / 2.0
+
+        t = np.linspace(-1.0, 1.0, steps)          # uniform in parameter space
+        u = np.sign(t) * (np.abs(t) ** power)  # compress near 0 -> denser near center
+
+        x = c + r * u
+        if plot:
+            xs = np.sort(x)
+            dx = np.diff(xs)
+
+            fig, ax = plt.subplots(2, 1, figsize=(7, 4), constrained_layout=True)
+
+            # points on a line
+            ax[0].plot(xs, np.zeros_like(xs), "o")
+            ax[0].set_yticks([])
+            ax[0].set_xlim(start, end)
+            ax[0].set_title("Points (denser near center)")
+
+            # spacing between adjacent points
+            ax[1].plot(dx, "-o")
+            ax[1].set_title("Adjacent spacing (sorted)")
+            ax[1].set_xlabel("Interval index")
+            ax[1].set_ylabel("Δx")
+
+            plt.show()
+        return x.tolist()
+
     def scan(
             self,
             start: float,
@@ -71,7 +114,13 @@ class Timing:
             inspire: bool = False,
             record: bool = True,
             daq_num: int = 2,
-            pv: str = None):
+            pv: str = None,
+            randomize: bool = False,
+            cluster: bool = False,
+            delay: bool = False,
+            duration: float = 300.0,
+            sweep_time: float = 5.0
+            ):
         """Perform Timing scan.
 
         Parameters:
@@ -107,6 +156,24 @@ class Timing:
 
             pv (str):
                 PV type Please enter lxt, txt, lxt_ttc, lxt_fast1, or lxt_fast2
+
+            randomize (bool):
+                Whether to randomize the order of the scan points. Default: False.
+
+            cluster (bool):
+                Cluster points toward center and mark them on the plot. Default: False.
+
+            delay (bool):
+                Whether to perform a delay scan with the specified
+                duration and sweep time instead of a step scan. Default: False.
+
+            duration (float):
+                Total duration of the delay scan in seconds.
+                Required if delay is True.
+
+            sweep_time (float):
+                Time to spend at each delay point during the delay scan in seconds.
+                Required if delay is True.
 
         """
         from ophyd import EpicsSignal
@@ -150,7 +217,6 @@ class Timing:
         else:
             logger.error('Please enter daq 1 or 2.')
 
-        # original_time = pv.get()[0] if pv in [self.lxt, self.txt] else pv.get()[0][0]
         original_time = pv()
 
         run_number = get_run(station=station) + 1
@@ -176,19 +242,35 @@ class Timing:
                 events=events_per_step,
                 record=record)
 
-            RE(bp.scan(
-                [daq],
-                pv,
-                start,
-                end,
-                steps))
+            if cluster:
+                points = self.clustered_toward_center(start, end, steps, power=2.0, plot=True)
+            else:
+                points = list(range(start, end + 1))
+
+            if randomize:
+                random.shuffle(points)
+
+            if cluster or randomize:
+                logger.info(f"Scan points: clustered {cluster} randomize {randomize}")
+                RE(bp.list_scan([daq], pv, points))
+
+            elif delay:
+                logger.info(
+                    f"Scan points: delay {delay} for duration "
+                    f"{duration} with sweep time {sweep_time}")
+                RE(
+                    bp.delay_scan(
+                        [daq], pv, [start, end], sweep_time=sweep_time, duration=duration))
+
+            else:
+                RE(bp.scan([daq], pv, start, end, steps))
 
         else:
             logger.error('Please enter daq 1 or 2.')
 
         pp.close()
         post(
-            sample=pv,
+            sample=sample,
             tag=tag,
             run_number=run_number,
             post=record,
