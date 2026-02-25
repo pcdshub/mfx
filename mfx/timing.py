@@ -62,7 +62,7 @@ class Timing:
 
         self.lxt_ttc = LXTTTC('', name='lxt_ttc')
 
-    def clustered_points(y, z, n, power=2.0, center=None, plot=False):
+    def clustered_points(self,y, z, n, power=2.0, center=None, plot=False):
         """
         n points in [y, z], spaced denser near `center`.
         power > 1 increases clustering strength.
@@ -129,6 +129,7 @@ class Timing:
             pv: str = None,
             randomize: bool = False,
             cluster: bool = False,
+            center: float = None,
             delay: bool = False,
             duration: float = 300.0,
             sweep_time: float = 5.0
@@ -174,6 +175,9 @@ class Timing:
 
             cluster (bool):
                 Cluster points toward center and mark them on the plot. Default: False.
+
+            center (float):
+                Center point for clustering. If None, uses midpoint of start and end. Default: None.
 
             delay (bool):
                 Whether to perform a delay scan with the specified
@@ -255,7 +259,7 @@ class Timing:
                 record=record)
 
             if cluster:
-                points = self.clustered_toward_center(start, end, steps, power=2.0, plot=True)
+                points = self.clustered_points(start, end, steps, power=2.0, plot=True)
             else:
                 points = list(np.linspace(start, end, steps))
 
