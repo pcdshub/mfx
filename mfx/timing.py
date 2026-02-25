@@ -62,44 +62,56 @@ class Timing:
 
         self.lxt_ttc = LXTTTC('', name='lxt_ttc')
 
-    def clustered_toward_center(
-            self,
-            start: float,
-            end: float,
-            steps: int,
-            power: float = 2.0,
-            plot : bool = False
-            ) -> list:
+    def clustered_points(y, z, n, power=2.0, center=None, plot=False):
         """
-        n points in [y, z], spaced denser near the center.
-        power > 1 increases clustering toward center.
+        n points in [y, z], spaced denser near `center`.
+        power > 1 increases clustering strength.
+
+        center: float in [y, z]. If None, uses midpoint.
         """
-        c = (start + end) / 2.0
-        r = (end - start) / 2.0
+        y, z = float(y), float(z)
+        if y > z:
+            y, z = z, y
 
-        t = np.linspace(-1.0, 1.0, steps)          # uniform in parameter space
-        u = np.sign(t) * (np.abs(t) ** power)  # compress near 0 -> denser near center
+        c = (y + z) / 2.0 if center is None else float(center)
+        if not (y <= c <= z):
+            raise ValueError("center must be within [y, z]")
 
-        x = c + r * u
+        # map [y,z] -> [-1,1] with 0 at the desired center
+        left = c - y
+        right = z - c
+        scale = max(left, right) if max(left, right) > 0 else 1.0
+
+        a = -left / scale
+        b =  right / scale
+
+        t = np.linspace(a, b, n)                 # uniform in parameter space
+        u = np.sign(t) * (np.abs(t) ** power)    # compress toward 0 => denser near center
+        x = c + scale * u
+
+        # keep within bounds (handles asymmetric ranges cleanly)
+        x = np.clip(x, y, z)
+
         if plot:
             xs = np.sort(x)
             dx = np.diff(xs)
 
             fig, ax = plt.subplots(2, 1, figsize=(7, 4), constrained_layout=True)
 
-            # points on a line
             ax[0].plot(xs, np.zeros_like(xs), "o")
+            ax[0].axvline(c, color="r", linestyle="--", label="center")
             ax[0].set_yticks([])
-            ax[0].set_xlim(start, end)
-            ax[0].set_title("Points (denser near center)")
+            ax[0].set_xlim(y, z)
+            ax[0].set_title("Points (denser near chosen center)")
+            ax[0].legend()
 
-            # spacing between adjacent points
             ax[1].plot(dx, "-o")
             ax[1].set_title("Adjacent spacing (sorted)")
             ax[1].set_xlabel("Interval index")
             ax[1].set_ylabel("Δx")
 
             plt.show()
+
         return x.tolist()
 
     def scan(
