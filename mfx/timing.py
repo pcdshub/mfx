@@ -257,7 +257,7 @@ class Timing:
             if cluster:
                 points = self.clustered_toward_center(start, end, steps, power=2.0, plot=True)
             else:
-                points = list(range(start, end + 1))
+                points = list(np.linspace(start, end, steps))
 
             if randomize:
                 random.shuffle(points)
