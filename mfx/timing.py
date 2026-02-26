@@ -127,6 +127,7 @@ class Timing:
             record: bool = True,
             daq_num: int = 2,
             pv: str = None,
+            analysis: bool = True,
             randomize: bool = False,
             cluster: bool = False,
             center: float = None,
@@ -169,6 +170,9 @@ class Timing:
 
             pv (str):
                 PV type Please enter lxt, txt, lxt_ttc, lxt_fast1, or lxt_fast2
+
+            analysis (bool):
+                Whether to perform analysis and output after the scan. Default: True.
 
             randomize (bool):
                 Whether to randomize the order of the scan points. Default: False.
@@ -259,7 +263,8 @@ class Timing:
                 record=record)
 
             if cluster:
-                points = self.clustered_points(start, end, steps, power=2.0, plot=True)
+                points = self.clustered_points(
+                    start, end, steps, power=2.0, center=center,plot=True)
             else:
                 points = list(np.linspace(start, end, steps))
 
@@ -296,6 +301,9 @@ class Timing:
                 f'Scaning {pv}, '
                 f'Time range:{start}-{end}s, '
                 f'steps:{steps} @ {events_per_step} events per step'
+                f'{" with clustering at center " + str(center) if cluster else ""}'
+                f'{" with randomization" if randomize else ""}'
+                f'{" with delay scan" if delay else ""}'
                 ))
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
@@ -308,18 +316,19 @@ class Timing:
         logger.info(f'Setting {pv} back to original time: {original_time}')
         pv(original_time)
 
-        logger.warning(f"Scan completed. Would you like to analyze the output?")
-        answer = input("(y/n)? ")
+        if analysis:
+            logger.warning(f"Scan completed. Would you like to analyze the output?")
+            answer = input("(y/n)? ")
 
-        if answer.lower() == "y":
-            facility = input("Enter facility (s3df or nersc) to continue: ")
-            user = input("Enter username to continue: ")
-            self.output(
-                user=user,
-                facility=facility,
-                exp=exp,
-                run=run_number,
-                daq_num=daq_num)
+            if answer.lower() == "y":
+                facility = input("Enter facility (s3df or nersc) to continue: ")
+                user = input("Enter username to continue: ")
+                self.output(
+                    user=user,
+                    facility=facility,
+                    exp=exp,
+                    run=run_number,
+                    daq_num=daq_num)
 
     def output(
         self,
