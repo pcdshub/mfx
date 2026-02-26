@@ -62,7 +62,7 @@ class Timing:
 
         self.lxt_ttc = LXTTTC('', name='lxt_ttc')
 
-    def clustered_points(self,y, z, n, power=2.0, center=None, plot=False):
+    def clustered_points(self, y, z, n, power=2.0, center=None, plot=False):
         """
         n points in [y, z], spaced denser near `center`.
         power > 1 increases clustering strength.
@@ -77,20 +77,16 @@ class Timing:
         if not (y <= c <= z):
             raise ValueError("center must be within [y, z]")
 
-        # map [y,z] -> [-1,1] with 0 at the desired center
+        # Create symmetric parameter space around center
         left = c - y
         right = z - c
-        scale = max(left, right) if max(left, right) > 0 else 1.0
 
-        a = -left / scale
-        b =  right / scale
+        # Generate points in [-1, 1] parameter space
+        t = np.linspace(-1.0, 1.0, n)
+        u = np.sign(t) * (np.abs(t) ** power)
 
-        t = np.linspace(a, b, n)                 # uniform in parameter space
-        u = np.sign(t) * (np.abs(t) ** power)    # compress toward 0 => denser near center
-        x = c + scale * u
-
-        # keep within bounds (handles asymmetric ranges cleanly)
-        x = np.clip(x, y, z)
+        # Map to [y, z] with asymmetric scaling
+        x = np.where(u < 0, c + left * u, c + right * u)
 
         if plot:
             xs = np.sort(x)
