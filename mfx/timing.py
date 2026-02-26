@@ -37,6 +37,7 @@ class Timing:
         from pcdsdevices.lxe import LaserTiming
         from pcdsdevices.pseudopos import SyncAxis
         from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
+        from mfx.devices import LaserShutter
         from mfx.db import mfx_txt
         from mfx.db import mfx_lxt_fast1, mfx_lxt_fast2
 
@@ -61,6 +62,28 @@ class Timing:
             sync_limits = (-10e-6, 10e-6)
 
         self.lxt_ttc = LXTTTC('', name='lxt_ttc')
+
+        # Initialize shutter objects with hardware PVs
+        self.shutter1 = LaserShutter(
+            'MFX:USR:ao1:6',
+            name='shutter1'
+        )
+        self.shutter2 = LaserShutter(
+            'MFX:USR:ao1:8',
+            name='shutter2'
+        )
+        self.shutter3 = LaserShutter(
+            'MFX:USR:ao1:2',
+            name='shutter3'
+        )
+        self.shutter4 = LaserShutter(
+            'MFX:USR:ao1:3',
+            name='shutter4'
+        )
+        self.shutter5 = LaserShutter(
+            'MFX:USR:ao1:4',
+            name='shutter5'
+        )
 
     def clustered_points(self, y, z, n, power=2.0, center=None, plot=False):
         """
@@ -123,6 +146,7 @@ class Timing:
             record: bool = True,
             daq_num: int = 2,
             pv: str = None,
+            laser: int = None,
             analysis: bool = True,
             randomize: bool = False,
             cluster: bool = False,
@@ -166,6 +190,9 @@ class Timing:
 
             pv (str):
                 PV type Please enter lxt, txt, lxt_ttc, lxt_fast1, or lxt_fast2
+
+            laser (int):
+                Specify which laser shutter to open (1 - 5). Default None
 
             analysis (bool):
                 Whether to perform analysis and output after the scan. Default: True.
@@ -222,6 +249,20 @@ class Timing:
             pp.open()
         if picker=='flip':
             pp.flipflop()
+
+        if laser is not None:
+            if laser == 1:
+                self.shutter1('OUT')
+            elif laser == 2:
+                self.shutter2('OUT')
+            elif laser == 3:
+                self.shutter3('OUT')
+            elif laser == 4:
+                self.shutter4('OUT')
+            elif laser == 5:
+                self.shutter5('OUT')
+            else:
+                logger.error('Please enter a valid laser shutter number (1-5).')
 
         if tag is None:
             tag = sample
@@ -286,6 +327,12 @@ class Timing:
             logger.error('Please enter daq 1 or 2.')
 
         pp.close()
+        status = []
+        for shutter in (self.shutter1, self.shutter2, self.shutter3, self.shutter4, self.shutter5):
+            status.append(shutter.state.get())
+            if laser is not None:
+                shutter('IN')
+
         post(
             sample=sample,
             tag=tag,
@@ -297,6 +344,11 @@ class Timing:
                 f'Scaning {pv}, '
                 f'Time range:{start}-{end}s, '
                 f'steps:{steps} @ {events_per_step} events per step'
+                f'shutter 1 state: {status[0]}, '
+                f'shutter 2 state: {status[1]}, '
+                f'shutter 3 state: {status[2]}, '
+                f'shutter 4 state: {status[3]}, '
+                f'shutter 5 state: {status[4]}, '
                 f'{" with clustering at center " + str(center) if cluster else ""}'
                 f'{" with randomization" if randomize else ""}'
                 f'{" with delay scan" if delay else ""}'
