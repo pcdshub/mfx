@@ -332,6 +332,10 @@ def mfx_reload(module_name):
         from mfx.xrt_spec import XRTspec
         xrtspec = XRTspec()
 
+    if module_name == 'mfx.timing':
+        from mfx.timing import Timing
+        timing = Timing()
+
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
     from mfx.db import mfx_attenuator as att
