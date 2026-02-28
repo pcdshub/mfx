@@ -85,6 +85,34 @@ class Timing:
             name='shutter5'
         )
 
+    def shutter_status(self):
+        """
+        Return the status of all laser shutters.
+        """
+        status = []
+        for shutter in (self.shutter1, self.shutter2, self.shutter3, self.shutter4, self.shutter5):
+            status.append(shutter.state.get())
+            if laser is not None:
+                shutter('IN')
+
+        return status
+
+    def check(self):
+        """
+        Check that all timing devices are responsive.
+        """
+        print(f"Device {self.lxt}: {self.lxt.position}")
+
+        for device in (self.txt, self.lxt_fast1, self.lxt_fast2):
+            print(f"Device {device}: {device.position[0]} s")
+
+        print('shutter1:', self.shutter1.state.get())
+        print('shutter2:', self.shutter2.state.get())
+        print('shutter3:', self.shutter3.state.get())
+        print('shutter4:', self.shutter4.state.get())
+        print('shutter5:', self.shutter5.state.get())
+
+
     def clustered_points(self, y, z, n, power=2.0, center=None, plot=False):
         """
         n points in [y, z], spaced denser near `center`.
@@ -327,11 +355,7 @@ class Timing:
             logger.error('Please enter daq 1 or 2.')
 
         pp.close()
-        status = []
-        for shutter in (self.shutter1, self.shutter2, self.shutter3, self.shutter4, self.shutter5):
-            status.append(shutter.state.get())
-            if laser is not None:
-                shutter('IN')
+        status = self.shutter_status()
 
         post(
             sample=sample,
@@ -342,7 +366,7 @@ class Timing:
             daq_num=daq_num,
             add_note=(
                 f'Scaning {pv}, '
-                f'Time range:{start}-{end}s, '
+                f'Time range:{start} to {end}s, '
                 f'steps:{steps} @ {events_per_step} events per step'
                 f'shutter 1 state: {status[0]}, '
                 f'shutter 2 state: {status[1]}, '
