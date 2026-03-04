@@ -4,15 +4,23 @@ To test with sim, ipython -i mfx/optimize/blop_scans.py
 Or python -m mfx.optimize.blop_scans for a default sim run-through
 """
 from __future__ import annotations
+from typing import Optional
 
+from blop import DOF, Agent, Objective
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
-from blop import DOF, Objective, Agent
 from databroker import Broker
 from matplotlib import pyplot as plt
 from pandas import DataFrame
 
-from mfx.optimize.mirror_hw import MIRROR_NOMINAL, DG1_WAVE8_XPOS, DG2_WAVE8_XPOS, init_devices, sim_devices
+from .beam import Diagnostics, validate_w_lowercase_args
+from .beamline_hw import (
+    DG1_WAVE8_XPOS,
+    DG2_WAVE8_XPOS,
+    MIRROR_NOMINAL,
+    init_devices,
+    sim_devices,
+)
 
 bluesky_objs: dict[str, object] = {}
 re_setup_info = {
@@ -85,12 +93,12 @@ def clean_re(re: RunEngine, bec: BestEffortCallback):
         bec.enable_plots()
         re_setup_info["bec_starting_state"] = None
 
-
+@validate_w_lowercase_args
 def get_blop_agent(
-    wave8: str = "dg1",
+    wave8: Diagnostics = "dg1",
     mirror_nominal: float = MIRROR_NOMINAL,
     search_delta: float = 5,
-    wave8_xpos: float | None = None,
+    wave8_xpos: Optional[float] = None,
     wave8_max_value: float = 10,
     setup_re: bool = True,
 ) -> Agent:
@@ -153,7 +161,7 @@ def get_blop_agent(
         # Data validity
         Objective(
             name=df_name,
-            trust_domain=(-1 * wave8_max_value, wave8_max_value),
+            constraint=(-1 * wave8_max_value, wave8_max_value),
         ),
     ]
     detectors = [devices[wave8_name].xpos]
@@ -174,13 +182,13 @@ def get_blop_agent(
     return Agent(
         dofs=dofs,
         objectives=objectives,
-        dets=detectors,         # blop =0.7.0
-        # detectors=detectors,  # blop >0.7.0
+        #dets=detectors,         # blop =0.7.0
+        detectors=detectors,  # blop >0.7.0
         digestion=digestion,
         verbose=True,
         db=bluesky_objs["broker"],
         tolerate_acquisition_errors=False,
-        # enforce_all_objectives_valid=True,  # blop >0.7.0
+        enforce_all_objectives_valid=True,  # blop >0.7.0
         train_every=1,
     )
 
@@ -215,6 +223,7 @@ def run_sim_test() -> Agent:
     print(f"pitch is at {init_devices()['mr1l4_homs'].pitch.position}")
     print("Generating plots")
     agent.plot_objectives()
+    plt.show(block=True)
     return agent
 
 

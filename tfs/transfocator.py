@@ -1,5 +1,8 @@
 import math
 import logging
+from pathlib import Path
+import json
+from matplotlib import pyplot as plt
 
 from pcdsdevices.device_types import IMS
 from ophyd import (Device, EpicsSignalRO, Component as Cpt,
@@ -10,7 +13,7 @@ from tfs.lens import LensConnect, LensTripLimits
 from tfs.lens import MFXLens as Lens
 from tfs.offline_calculator import TFS_Calculator
 from functools import wraps
-from tfs.utils import estimate_beam_fwhm, focal_length
+from tfs.utils import estimate_beam_fwhm, focal_length, MFX_prefocus_energy_range
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +130,7 @@ class MFXTransfocator(TransfocatorBase):
     # Translation
     translation = FormattedComponent(IMS, "MFX:TFS:MMS:21")
 
-    def __init__(self, prefix, *, nominal_sample=399.88103, **kwargs):
+    def __init__(self, prefix, *, nominal_sample=400.37, **kwargs):
         self.nominal_sample = nominal_sample
         super().__init__(prefix, **kwargs)
 
@@ -154,7 +157,7 @@ class MFXTransfocator(TransfocatorBase):
         return [lens for lens in self.lenses if 'TFS' in lens.prefix]
 
     @property
-    def current_focus(self):
+    def current_focus(self, energy_eV=None):
         """
         The distance from the focus of the Transfocator to nominal_sample
 
@@ -162,6 +165,8 @@ class MFXTransfocator(TransfocatorBase):
         ----
         If no lenses are inserted this will retun NaN
         """
+        energy = energy_eV or self.beam_energy.get()
+        logger.warning(f"TFS {energy=} eV")
         # Find inserted lenses
         inserted = [lens for lens in self.lenses if lens.inserted]
         # Check that we have any inserted lenses at all
@@ -169,7 +174,8 @@ class MFXTransfocator(TransfocatorBase):
             logger.warning("No lenses are currently inserted")
             return math.nan
         # Calculate the image from this set of lenses
-        return LensConnect(*inserted).image(0.0) - self.nominal_sample
+        return LensConnect(*inserted).image(0.0, energy) - self.nominal_sample
+
     def remove_all(self):
         """
         Removes all tfs lenses.
@@ -184,7 +190,17 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_09.remove()
         self.tfs_10.remove()
 
-    def find_best_combo(self, target=None, energy=None, show=True, **kwargs):
+    def find_best_combo(
+            self,
+            target=None,
+            energy_eV=None,
+            n=4,
+            z_obj=0,
+            show=True,
+            exclusions=[],
+            avoid_forbidden=False,
+            enable_prefocus=True,
+            **kwargs):
         """
         Calculate the best lens array to hit the nominal sample point
 
@@ -192,31 +208,160 @@ class MFXTransfocator(TransfocatorBase):
         ----------
         target : float, optional
             The target image of the lens array. By default this is
-            `nominal_sample`
+            `nominal_sample i.e. 400.37`
+
+        energy_eV : int, optional
+            Select the energy in eV.
+            Default uses the beam energy given by acr which is usually wrong
+
+        n : int, optional
+            The maximum number of lenses in a valid combination. This saves
+            time by avoiding calculating the focal plane of combinations with a
+            large number of lenses, default n=4
+
+        z_obj : float, optional
+            The source point of the beam, default halfway through range at 150.0
 
         show : bool, optional
             Print a table of the of the calculated lens combination
+
+        exclusions : list, optional
+            Select your lenses to excluclde from tfs lenes #2-10 as list recommend [8,10]
+
+        avoid_forbidden : bool, optional
+            Avoids forbidden TFS configurations. True by default
+
+        enable_prefocus : bool, optional
+            Allows the solver to use the prefocusing lenses in the XRT. Default is True since
+            the prefocusing lenses are usually required to hit the target plane at MFX.
+            Setting this to False will force the solver to find a solution using only
+            the TFS lenses.
+
+        kwargs:
+            Passed to :meth:`.Calculator.find_solution`
+        """
+        if 'energy' in kwargs:
+            raise ValueError('energy is no longer the correct input variable. Please use energy_eV. Thank Fred.')
+
+        energy = energy_eV or self.beam_energy.get()
+        try:
+            assert energy > 1000
+        except AssertionError:
+            logging.warning(f"please double-check that {energy} is in eV, not keV.")
+        target = target or self.nominal_sample
+        exclusions = [x - 1 for x in exclusions]
+        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses, exclusions=exclusions)
+        combo, diff = calc.find_solution(target, energy, n, z_obj, avoid_forbidden=avoid_forbidden,enable_prefocus=enable_prefocus, **kwargs)
+        if combo:
+            print(combo)
+            combo.show_info()
+            logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
+            radius = combo.tfs_radius
+            logger.info(f'Given Energy: {energy} eV')
+            logger.info(f'Given Sample Position: {target} mm')
+            logger.info(f'Calculated Radius: {round(radius, 2)} um')
+            estimate_beam_fwhm(radius=radius, energy=energy)
+            focal = focal_length(radius=radius, energy=energy)
+            if avoid_forbidden:
+                logger.info("TFS combo is by default allowed")
+            else:
+                logger.error("TFS combo may be forbidden. Please check")
+
+            logger.info(f'Calculated Focal Length: {focal} m\n')
+
+        else:
+            logger.error("Unable to find a valid solution for target")
+        return combo
+
+
+    def try_combo(
+            self,
+            target=400.37,
+            energy=None,
+            show=True,
+            prefocus = None,
+            tfs = [],
+            **kwargs):
+        """
+        Calculates the focus based on the lens combo you select
+
+        Parameters
+        ----------
+        target : float, optional
+            The target image of the lens array. By default this is
+            `nominal_sample i.e. 399.88`
+
+        energy : int, optional
+            Select the energy in eV.
+            Default uses the beam energy given by acr which is usually wrong
+
+        show : bool, optional
+            Print a table of the of the calculated lens combination
+
+        prefocus : int, optional
+            Select either 333, 428, or 750 um radius lens
+
+        tfs : list, optional
+            Select your lens combination from tfs lenes #2-10 as list i.e. [2,6,8,10]
 
         kwargs:
             Passed to :meth:`.Calculator.find_solution`
         """
         energy = energy or self.beam_energy.get()
         target = target or self.nominal_sample
-        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
-        combo, diff = calc.find_solution(target, energy, **kwargs)
+
+        for e_range, lens in MFX_prefocus_energy_range.items():
+            if energy >= e_range[0] and energy < e_range[1]:
+                prefocus_rec = lens[1]
+
+        if prefocus_rec != prefocus:
+            logging.error(
+                f'{prefocus_rec} um prefocusing lens is reccommended for {energy} eV '
+                f'You are not using the recommended prefocusing lens.')
+
+        if prefocus == 750:
+            prefocus_idx = 2
+        elif prefocus == 428:
+            prefocus_idx = 1
+        elif prefocus == 333:
+            prefocus_idx = 0
+        elif prefocus is None:
+            prefocus_idx = None
+        else:
+            logging.error(
+                'No proper prefocusing lens selected. '
+                'Select either 333, 428, or 750 um radius lens (as int)')
+
+        if prefocus_idx is None:
+            tfs_combo = []
+        else:
+            tfs_combo = [self.xrt_lenses[prefocus_idx]]
+
+        for lens in tfs:
+            tfs_combo.append(self.tfs_lenses[int(lens) - 2])
+
+        combo = LensConnect(*tfs_combo)
+
         if combo:
             combo.show_info()
-            logger.info(f'Difference to desired focus position: {round(diff*1000, 2)} mm')
             radius = combo.tfs_radius
+            logger.info(f'Given Energy: {energy} eV')
+            logger.info(f'Given Sample Position: {target} mm')
             logger.info(f'Calculated Radius: {round(radius, 2)} um')
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
+            calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
+            if prefocus_idx is not None:
+                forbidden = calc.check_forbidden(prefocus_idx, energy, radius)
+                log_level = logger.error if forbidden else logger.info
+                log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
 
             logger.info(f'Calculated Focal Length: {focal} um\n')
 
         else:
             logger.error("Unable to find a valid solution for target")
         return combo
+
 
     def set(self, value, **kwargs):
         """
@@ -278,6 +423,279 @@ class MFXTransfocator(TransfocatorBase):
         if wait:
             status_wait(status, timeout=timeout)
         return status
+
+
+    def plan_energy_schedule(self, low_eV, high_eV, step_eV=10.0, *, target=None,
+                             n=4, z_obj=0.0, show=False):
+        """
+        Plan a schedule of lens insert/remove actions and stage offsets
+        over an energy interval without moving hardware.
+
+        Parameters
+        ----------
+        low_eV : float
+            Starting energy in eV.
+        high_eV : float
+            Ending energy in eV.
+        step_eV : float, optional
+            Energy increment in eV (default 10 eV).
+        target : float, optional
+            Desired focal plane (defaults to nominal sample).
+        n : int, optional
+            Max number of TFS lenses in combo (passed to solver).
+        z_obj : float, optional
+            Source point in solver.
+        show : bool, optional
+            If True, print combo info for each energy.
+
+        Returns
+        -------
+        list of dict
+            For each energy step, returns an entry with keys:
+              - 'energy_eV': energy value in eV
+              - 'lenses': list of lens prefixes in the planned combo
+              - 'actions': {'insert': [...], 'remove': [...]} compared to previous step
+              - 'image_target_delta': signed difference (image - target)
+              - 'stage_offset_mm': signed offset in mm to place focus at target
+        """
+        if step_eV is None or step_eV == 0:
+            raise ValueError("step_eV must be non-zero")
+
+        tgt = target or self.nominal_sample
+        # Energy sequence inclusive of high_eV
+        num_steps = int((high_eV - low_eV) // step_eV)
+        energies = [low_eV + i * step_eV for i in range(num_steps + 1)]
+        if energies[-1] < high_eV:
+            energies.append(high_eV)
+
+        calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
+        schedule = []
+        prev_lenses = set()
+
+        for energy in energies:
+            combo, _diff_abs, pre_focus_lens = calc.find_solution(tgt, energy, n=n, z_obj=z_obj)
+            if combo is None:
+                schedule.append({
+                    'energy_eV': energy,
+                    'lenses': [],
+                    'actions': {'insert': [], 'remove': []},
+                    'image_target_delta': None,
+                    'stage_offset_mm': None,
+                })
+                continue
+
+            if show:
+                combo.show_info()
+
+            # Determine planned lenses as prefixes for readability
+            lens_list = [lens.prefix for lens in combo.lenses]
+            lens_set = set(lens_list)
+
+            # Signed difference between image and target
+            image_pos = combo.image(z_obj, energy)
+            delta = image_pos - tgt
+            stage_offset_mm = delta * 1000.0 # convert from meters to mm
+
+            # Actions relative to previous step
+            to_insert = sorted(list(lens_set - prev_lenses))
+            to_remove = sorted(list(prev_lenses - lens_set))
+
+            schedule.append({
+                'energy_eV': energy,
+                'lenses': lens_list,
+                'actions': {'insert': to_insert, 'remove': to_remove},
+                'image_target_delta': delta,
+                'stage_offset_mm': stage_offset_mm,
+            })
+
+            prev_lenses = lens_set
+
+        return schedule
+
+    def plot_focus_track(self, json_file_path):
+        # Load the data from the JSON file
+        with open(json_file_path, 'r') as f:
+            data = json.load(f)
+
+        # Extract energy, z_position, and inserted_lenses values
+        energies = [entry['energy'] for entry in data]
+        z_positions = [entry['z_position'] for entry in data]
+        inserted_lenses = [entry['inserted_lenses'] for entry in data]
+
+        # Create the plot
+        plt.figure(figsize=(12, 8))
+        plt.plot(energies, z_positions, marker='o', linestyle='-', color='b')
+
+        # Add labels and title
+        plt.title('Z Position vs Energy')
+        plt.xlabel('Energy (eV)')
+        plt.ylabel('Z Position (units)')
+
+        # Variable to keep track of the last inserted lenses shown
+        last_displayed_lenses = None
+
+        # Annotate only the first occurrence of each unique set of inserted_lenses
+        for energy, z_position, lenses in zip(energies, z_positions, inserted_lenses):
+            # Convert list of lenses to a tuple for easier comparison
+            lenses_tuple = tuple(lenses)
+
+            if lenses_tuple != last_displayed_lenses:
+                plt.annotate(', '.join(lenses),
+                            (energy, z_position),
+                            textcoords="offset points",
+                            xytext=(0, 10),
+                            ha='center',
+                            fontsize=8,
+                            color='red',
+                            arrowprops=dict(arrowstyle='->', color='red', lw=0.5))
+                last_displayed_lenses = lenses_tuple  # Update the last_displayed_lenses
+        plt.grid(True)
+        plt.show()
+
+    def get_stage_limits(self, margin_mm):
+        stage = self.translation
+        z_high_mm = stage.high_limit
+        z_low_mm = stage.low_limit
+        z_max_mm = z_high_mm - margin_mm
+        z_min_mm = z_low_mm + margin_mm
+        print(f"Stage limits: low={z_low_mm:.3f} mm, high={z_high_mm:.3f} mm, margin={margin_mm:.3f} mm")
+        return z_min_mm, z_max_mm
+
+    def mv_stage_to_pos(self, z_mm):
+        stage = self.translation
+        print(f"Moving stage to position: z={z_mm:.3f}mm")
+        stage.mv(z_mm)
+        print(f"Stage moved to position: z={z_mm:.3f}mm")
+        return z_mm
+
+    def set_reference_combo(self, energy_eV, show=False, **kwargs):
+        """
+        kwargs:
+            Passed to :meth:`.Calculator.find_solution`
+        """
+        combo = self.find_best_combo(energy_eV=energy_eV, show=show,  **kwargs)
+        ref_focal_length_um = focal_length(combo.tfs_radius, energy=energy_eV)
+        print(f"Reference energy: {energy_eV:.2f} eV, reference focal length: {ref_focal_length_um:.3f} um")
+        return combo, ref_focal_length_um
+
+    def get_z_stage_target(self, energy_eV, combo, ref_focal_length_um, ref_z_stage_mm):
+        focal_length_um = focal_length(combo.tfs_radius, energy=energy_eV)
+        z_stage_target_mm = ref_z_stage_mm - (focal_length_um - ref_focal_length_um) * 1000
+        print(f"Energy {energy_eV:.2f} eV: computed focal length = {focal_length_um:.3f} um, target z = {z_stage_target_mm:.3f} mm.")
+        return z_stage_target_mm
+
+    def mv_stage_to_target_pos(self, energy_eV, combo, target_z_mm, track_record):
+        stage = self.translation
+        print(f"Moving stage to {target_z_mm:.3f} mm.")
+        stage.mv(target_z_mm)
+        track_record.append({
+            "energy": energy_eV,
+            "inserted_lenses": [lens.prefix for lens in combo.lenses],
+            "z_position": target_z_mm
+        })
+
+    def track_focus(self, energies, *, margin_mm=10.0, show=False,
+                    ref_focal_length_um=None, ref_z_stage_mm=None,
+                    display=True, shrinking_rate=4, enable_prefocus=True,
+                    lens_beam_energy_offset=0.0, **kwargs):
+        """
+        Keep the focal length fixed over a provided list of energies by
+        compensating with the translation stage. Lenses are NOT actuated.
+
+        Workflow:
+        - Move stage to high limit minus a small margin.
+        - Compute initial lens combo and reference focal length.
+        - For each next energy, compute focal length for the current combo and
+          move the stage to compensate.
+        - If the move would exceed the stage low limit, return to the top
+          position and recompute the lens combo at that energy, then continue.
+
+        kwargs:
+            Passed to :meth:`.Calculator.find_solution`
+        """
+        if len(energies) == 0:
+            print("No energies provided.")
+            return None
+        # cast energies to float to avoid json serialization issues
+        energies = [float(energy) for energy in energies]
+
+        enable_prefocus_save = enable_prefocus
+
+        min_z_stage_mm, max_z_stage_mm = self.get_stage_limits(margin_mm)
+
+        ref_zs_mm = self.mv_stage_to_pos(max_z_stage_mm)
+        combo, ref_fl_um = self.set_reference_combo(energies[0], show=show, **kwargs)
+        if ref_focal_length_um is None:
+            ref_focal_length_um = ref_fl_um
+        if ref_z_stage_mm is None:
+            ref_z_stage_mm = ref_zs_mm
+
+        track_record = []
+
+        for energy in energies:
+            enable_prefocus = enable_prefocus_save
+            target_z_stage_mm = self.get_z_stage_target(
+                energy, combo, ref_focal_length_um, ref_z_stage_mm
+            )
+            if min_z_stage_mm < target_z_stage_mm <= max_z_stage_mm:
+                self.mv_stage_to_target_pos(
+                    energy, combo, target_z_stage_mm, track_record
+                )
+            else:
+                found_combo = False
+                prefocus_fallback = True
+                while prefocus_fallback:
+                    shrinking_max_z_stage_mm = max_z_stage_mm
+                    while shrinking_max_z_stage_mm > min_z_stage_mm:
+                        self.mv_stage_to_pos(shrinking_max_z_stage_mm)
+                        combo = self.find_best_combo(
+                            energy_eV=energy, show=show, enable_prefocus=enable_prefocus, **kwargs
+                        )
+                        if combo:
+                            new_target_z_stage_mm = self.get_z_stage_target(
+                                energy, combo, ref_focal_length_um, ref_z_stage_mm
+                            )
+                            if min_z_stage_mm < new_target_z_stage_mm <= max_z_stage_mm:
+                                self.mv_stage_to_target_pos(
+                                    energy, combo, new_target_z_stage_mm, track_record
+                                )
+                                found_combo = True
+                                # check compatibility with lens_beam_energy
+                                if 'DIA' in combo.lenses[0].prefix:
+                                    prefocus_lens_radius = combo.lenses[0].radius
+                                    lens_beam_energy = energy + lens_beam_energy_offset
+                                    #str(os.popen("caget MFX:LENS:BEAM:ENERGY | awk '{print $2}'").read().strip())
+                                    radius = combo.tfs_radius
+                                    from tfs.offline_calculator import TFS_Calculator as TFSCalc
+                                    calc = TFSCalc(combo.lenses)
+                                    forbidden = calc.check_forbidden(prefocus_lens_radius,
+                                                         lens_beam_energy,
+                                                         radius)
+                                    if forbidden:
+                                        found_combo = False
+                                if found_combo:
+                                    break
+                        shrinking_max_z_stage_mm -= shrinking_rate*margin_mm
+                    if found_combo:
+                        break
+                    else:
+                        print("Stage out of travel. Cannot compensate further...")
+                        if enable_prefocus:
+                            print("Disabling prefocus for this energy.")
+                            enable_prefocus = False
+                        else:
+                            prefocus_fallback = False
+
+        print(f"Tracking complete. Final energy: {track_record[-1]['energy']:.2f} eV, stage position: {track_record[-1]['z_position']:.3f} mm.")
+        print(f"Lenses currently inserted: {track_record[-1]['inserted_lenses']}")
+
+        save_path = Path.home() / "track_focus_results.json"
+        with open(save_path, "w") as f:
+            json.dump(track_record, f, indent=4)
+        print(f"Tracking results saved to {save_path}")
+        if display:
+            self.plot_focus_track(save_path)
+        return track_record
 
 
 class Transfocator(MFXTransfocator):

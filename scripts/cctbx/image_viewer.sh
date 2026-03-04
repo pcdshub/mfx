@@ -17,35 +17,36 @@ case $facility in
   NERSC)
     mfx_dir="/pscratch/sd/c/cctbx/${exp}"
     mfx3="/global/common/software/lcls/mfx"
-    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh
     ;;
 esac
 
 dirpath="${mfx_dir}/common/results/${run}"
 runpath="${mfx_dir}/common/results/averages/${run}"
 
-if [ -z "${group}" ] || [ "${group}" == "None" ]; then
-  # No arguments provided, open the newest file
-  group=$(ls -t ${dirpath} | head -n 1)
-  echo "no trial-rungroup provided so using the newest"
-else
-  # Arguments provided, use the first one as the file to open
-  echo "path provided"
-fi
-
 if [[ ! -d ${runpath} ]]; then
     echo "Run not averaged yet. It is faster with the GUI but would you like to average locally? (y/n) "
     read yn
 
-    case $yn in 
+    case $yn in
       y)
-        sbatch --wait ${mfx3}/scripts/cctbx/average.sh ${exp} ${facility} ${run}
+        sbatch --wait ${mfx3}/scripts/cctbx/average.sh ${exp} ${facility} ${run} ${group}
         ;;
       n)
         echo ERROR: Run not averaged yet. Please stop and Average from the GUI
         exit 1 # terminate and indicate error
         ;;
     esac
+fi
+
+if [ -z "${group}" ] || [ "${group}" == "None" ]; then
+  # No arguments provided, open the newest file
+  group=$(ls -t ${runpath} | head -n 1)
+  echo "no trial-rungroup provided so using the newest"
+else
+  # Arguments provided, use the first one as the file to open
+  echo "path provided"
 fi
 
 out="${runpath}/${group}/out"
@@ -61,7 +62,7 @@ case $type in
     echo "Would you like to make a new mask? (y/n) "
     read yn
 
-    case $yn in 
+    case $yn in
       y)
         echo ok, we shall proceed with mask making
         echo ${mfx3}/scripts/cctbx/mask.py -e $exp -r $run -f $facility -g $group

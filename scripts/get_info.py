@@ -127,7 +127,7 @@ def get_info(argv):
     else:
         daq_base = hutch.lower()
         instrument = hutch.upper()
-        nstations = 1
+        nstations = 5
         if args.station:
             station = int(args.station)
         else:

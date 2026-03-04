@@ -2,9 +2,11 @@ logs
 
 # Ignore generated database file
 mfx/db.txt
+alt_conf.yml
 
 # Ignore changed presets
 presets/
+presets.bak/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

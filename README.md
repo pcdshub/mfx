@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # MFX Docs Guide
 
 The documentation is available on [github pages](https://pcdshub.github.io/mfx/) and a mirror is served from [S3DF pages](https://s3df.slac.stanford.edu/data/lcls/mfx/). 
@@ -42,3 +43,11 @@ mkdocs serve
 Open  http://127.0.0.1:8000/ in your browser and you should see the MFX docs homepage. As you edit `mkdocs.yml` or files in the `docs` directory, the server should automatically load and build the changes in your browser.
 
 Once your satisfied with the documents, you can push the changes to the MFX `documentation` branch. The build process is trigger when changes are pushed to the `documentation branch` so you should be able to see them after a few minutes. 
+=======
+# mfx
+Repository for MFX specific code
+
+# Documentation
+
+The documentation is available on [github pages](https://pcdshub.github.io/mfx/) and on [S3DF pages](https://s3df.slac.stanford.edu/data/lcls/mfx/). 
+>>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
