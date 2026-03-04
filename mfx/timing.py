@@ -85,23 +85,11 @@ class Timing:
             name='shutter5'
         )
 
-    def shutter_status(self):
-        """
-        Return the status of all laser shutters.
-        """
-        status = []
-        for shutter in (self.shutter1, self.shutter2, self.shutter3, self.shutter4, self.shutter5):
-            status.append(shutter.state.get())
-            if laser is not None:
-                shutter('IN')
-
-        return status
-
     def check(self):
         """
         Check that all timing devices are responsive.
         """
-        print(f"Device {self.lxt}: {self.lxt.position}")
+        print(f"Device {self.lxt}: {self.lxt.position} s")
 
         for device in (self.txt, self.lxt_fast1, self.lxt_fast2):
             print(f"Device {device}: {device.position[0]} s")
@@ -355,28 +343,46 @@ class Timing:
             logger.error('Please enter daq 1 or 2.')
 
         pp.close()
-        status = self.shutter_status()
+        # Stop acquisition
+        logger.info("Stopping acquisition...")
+        daq.control.setState("configured")
+        while daq.control.getState() != "configured":
+            sleep(0.01)
 
-        post(
-            sample=sample,
-            tag=tag,
-            run_number=run_number,
-            post=record,
-            inspire=inspire,
-            daq_num=daq_num,
-            add_note=(
-                f'Scaning {pv}, '
-                f'Time range:{start} to {end}s, '
-                f'steps:{steps} @ {events_per_step} events per step'
-                f'shutter 1 state: {status[0]}, '
-                f'shutter 2 state: {status[1]}, '
-                f'shutter 3 state: {status[2]}, '
-                f'shutter 4 state: {status[3]}, '
-                f'shutter 5 state: {status[4]}, '
-                f'{" with clustering at center " + str(center) if cluster else ""}'
-                f'{" with randomization" if randomize else ""}'
-                f'{" with delay scan" if delay else ""}'
-                ))
+        try:
+            daq.control.setRecord(False)
+            daq.control.setState("running")
+            logger.debug("DAQ returned to running/non-recording state")
+        except Exception as e:
+            logger.warning(f"DAQ cleanup warning: {e}")
+
+        status = []
+        for shutter in (self.shutter1, self.shutter2, self.shutter3, self.shutter4, self.shutter5):
+            status.append(shutter.state.get())
+            if laser is not None:
+                shutter('IN')
+
+        if record:
+            post(
+                sample=sample,
+                tag=tag,
+                run_number=run_number,
+                post=record,
+                inspire=inspire,
+                daq_num=daq_num,
+                add_note=(
+                    f'Scaning {pv}, '
+                    f'Time range:{start} to {end}s, '
+                    f'steps:{steps} @ {events_per_step} events per step'
+                    f'shutter 1 state: {status[0]}, '
+                    f'shutter 2 state: {status[1]}, '
+                    f'shutter 3 state: {status[2]}, '
+                    f'shutter 4 state: {status[3]}, '
+                    f'shutter 5 state: {status[4]}, '
+                    f'{" with clustering at center " + str(center) if cluster else ""}'
+                    f'{" with randomization" if randomize else ""}'
+                    f'{" with delay scan" if delay else ""}'
+                    ))
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
 
