@@ -11,22 +11,121 @@ logger = logging.getLogger(__name__)
 
 class Timing:
     """
+    Timing calibration and control system for MFX beamline laser synchronization.
+
+    The Timing class provides comprehensive control of laser timing motors and
+    performs timing calibration scans to synchronize laser pulses with X-ray
+    pulses at the MFX (Macromolecular Femtosecond Crystallography) beamline.
+    It manages multiple timing systems including fast delay stages and
+    time-tool correlation.
 
     Attributes
     ----------
+    lxt : LaserTiming
+        Main laser timing motor control (LAS:FS45).
+    txt : object
+        MFX text-based timing control from device database.
+    lxt_fast1 : object
+        Fast laser timing stage 1 from device database.
+    lxt_fast2 : object
+        Fast laser timing stage 2 from device database.
+    lxt_fast1_enc : UsDigitalUsbEncoder
+        USB encoder for fast timing stage 1 (MFX:USDUSB4:01:CH2).
+        Provides position feedback linked to lxt_fast1 axis.
+    lxt_fast2_enc : UsDigitalUsbEncoder
+        USB encoder for fast timing stage 2 (MFX:USDUSB4:01:CH1).
+        Provides position feedback linked to lxt_fast2 axis.
+    LXTTTC : SyncAxis
+        Synchronized axis combining laser timing (lxt) and time-tool
+        correlation (txt) for coordinated motion.
 
     Methods
     -------
+    series(pv, start, end, steps, events_per_step, **kwargs)
+        Execute timing calibration scan series across delay range.
+    output(user, facility, exp, run, daq_num)
+        Analyze and visualize timing scan data from computing facility.
 
     Notes
     -----
+    Timing System Overview:
+    - **LXT (Laser Timing)**: Controls laser arrival time relative to X-ray pulses
+    - **TXT (Time Tool)**: Provides real-time timing diagnostics
+    - **Fast Stages**: High-resolution delay stages for sub-picosecond control
+    - **USB Encoders**: Provide accurate position feedback for fast stages
+
+    The timing calibration process involves:
+    1. Scanning laser delay over specified range
+    2. Collecting detector events at each delay point
+    3. Analyzing correlation between laser and X-ray signals
+    4. Determining optimal timing offset for synchronization
+
+    Typical timing precision: ~10 femtoseconds (1e-14 seconds)
+    Typical scan range: -1 to +1 picoseconds around zero delay
+
+    The class integrates with:
+    - LCLS DAQ system for data acquisition
+    - eLog for run documentation
+    - S3DF/NERSC computing facilities for analysis
+    - Laser shutter control system (5 independent shutters)
 
     Examples
     --------
+    Initialize timing system and perform calibration scan:
+
+    >>> from mfx.macros import Timing
+    >>> timing = Timing()
+
+    >>> # Check current positions
+    >>> print(f"LXT position: {timing.lxt.position}")
+    >>> print(f"Fast stage 1: {timing.lxt_fast1.position}")
+
+    >>> # Perform timing scan on fast stage 1
+    >>> timing.series(
+    ...     pv=timing.lxt_fast1,
+    ...     start=-500e-15,  # -500 femtoseconds
+    ...     end=500e-15,     # +500 femtoseconds
+    ...     steps=25,
+    ...     events_per_step=1000,
+    ...     sample='lysozyme',
+    ...     tag='timing_cal',
+    ...     record=True,
+    ...     daq_num=2
+    ... )
+
+    >>> # Analyze the results
+    >>> timing.output(
+    ...     user='myuser',
+    ...     facility='S3DF',
+    ...     exp='mfxls1234',
+    ...     run='150'
+    ... )
+
+    >>> # Perform clustered scan for fine calibration
+    >>> timing.series(
+    ...     pv=timing.lxt_fast1,
+    ...     start=-200e-15,
+    ...     end=200e-15,
+    ...     steps=40,
+    ...     events_per_step=500,
+    ...     cluster=True,
+    ...     center=0.0,
+    ...     randomize=True,
+    ...     sample='lysozyme',
+    ...     daq_num=2
+    ... )
 
     See Also
     --------
+    pcdsdevices.lxe.LaserTiming : Laser timing motor control
+    pcdsdevices.pseudopos.SyncAxis : Synchronized multi-axis control
+    pcdsdevices.usb_encoder.UsDigitalUsbEncoder : Position encoder interface
+    mfx.devices.LaserShutter : Laser shutter control
 
+    References
+    ----------
+    .. [1] LCLS MFX Beamline Documentation
+       https://confluence.slac.stanford.edu/display/PCDS/MFX
     """
 
     def __init__(self):
