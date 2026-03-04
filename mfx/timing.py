@@ -171,69 +171,112 @@ class Timing:
             duration: float = 300.0,
             sweep_time: float = 5.0
             ):
-        """Perform Timing scan.
+        """
+        Execute timing calibration scan series.
 
-        Parameters:
-            start (float):
-                Time Point (in s) to start the scan at.
+        Performs a systematic scan of timing delays to calibrate laser-X-ray
+        synchronization by stepping through time delays and collecting events
+        at each position.
 
-            end (float):
-                Time Point (in s) to end the scan at.
+        Parameters
+        ----------
+        pv : object
+            Process variable (timing motor) to scan. Should have callable
+            interface for setting position.
+        start : float
+            Starting time delay value in seconds.
+        end : float
+            Ending time delay value in seconds.
+        steps : int
+            Number of delay steps in the scan.
+        events_per_step : int
+            Number of DAQ events to collect at each step.
+        sample : str, optional
+            Sample name for data logging, by default None.
+        tag : str, optional
+            Additional tag for run identification, by default None.
+        run_number : int, optional
+            Specific run number to assign. If None, auto-increments,
+            by default None.
+        record : bool, optional
+            Whether to record data to eLog and database, by default True.
+        inspire : bool, optional
+            Enable inspire mode for data collection, by default False.
+        daq_num : int, optional
+            DAQ station number (1 or 2), by default 2.
+        cluster : bool, optional
+            Whether to cluster scan points around center position,
+            by default False.
+        center : float, optional
+            Center position for clustered scanning. Required if cluster=True,
+            by default None.
+        randomize : bool, optional
+            Randomize order of scan positions, by default False.
+        delay : bool, optional
+            Include additional delay scan, by default False.
+        analysis : bool, optional
+            Prompt for automatic analysis after scan completion,
+            by default True.
 
-            steps (int):
-                Number of steps in scan.
+        Returns
+        -------
+        None
+            Executes scan and optionally triggers analysis.
 
-            events_per_step (int):
-                Number of events per step. Optional. Default: 240.
+        Raises
+        ------
+        ValueError
+            If cluster=True but center is None.
+            If daq_num is not 1 or 2.
 
-            sample: str, optional
-                Sample Name
+        Notes
+        -----
+        Scan Procedure:
+        1. Records initial laser shutter states (shutters 1-5)
+        2. Generates scan positions (linear, clustered, or randomized)
+        3. For each position:
+            - Moves timing motor to target delay
+            - Collects specified number of events
+            - Records shutter states
+        4. Returns motor to original position
+        5. Posts scan metadata to eLog if record=True
+        6. Optionally launches analysis pipeline
 
-            tag: str, optional
-                Run group tag
+        The scan records all shutter states and motor positions for each
+        step to enable post-processing and correlation analysis.
 
-            picker: str, optional
-                If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+        Clustering mode concentrates scan points around a center position
+        for higher resolution characterization of timing features.
 
-            inspire: bool, optional
-                Set false by default because it makes Sandra sad. Set True to inspire
+        Examples
+        --------
+        >>> timing = Timing()
+        >>> # Linear scan
+        >>> timing.series(
+        ...     pv=timing.lxt_fast1,
+        ...     start=-1e-12,
+        ...     end=1e-12,
+        ...     steps=20,
+        ...     events_per_step=1000,
+        ...     sample='water',
+        ...     daq_num=2
+        ... )
 
-            record (bool):
-                whether to record the scan or not. Optional. Default: False.
+        >>> # Clustered scan around zero delay
+        >>> timing.series(
+        ...     pv=timing.lxt_fast1,
+        ...     start=-2e-12,
+        ...     end=2e-12,
+        ...     steps=30,
+        ...     events_per_step=500,
+        ...     cluster=True,
+        ...     center=0.0,
+        ...     randomize=True
+        ... )
 
-            daq_num: int, optional
-                Switch between daq 1 and 2. Default 2
-
-            pv (str):
-                PV type Please enter lxt, txt, lxt_ttc, lxt_fast1, or lxt_fast2
-
-            laser (int):
-                Specify which laser shutter to open (1 - 5). Default None
-
-            analysis (bool):
-                Whether to perform analysis and output after the scan. Default: True.
-
-            randomize (bool):
-                Whether to randomize the order of the scan points. Default: False.
-
-            cluster (bool):
-                Cluster points toward center and mark them on the plot. Default: False.
-
-            center (float):
-                Center point for clustering. If None, uses midpoint of start and end. Default: None.
-
-            delay (bool):
-                Whether to perform a delay scan with the specified
-                duration and sweep time instead of a step scan. Default: False.
-
-            duration (float):
-                Total duration of the delay scan in seconds.
-                Required if delay is True.
-
-            sweep_time (float):
-                Time to spend at each delay point during the delay scan in seconds.
-                Required if delay is True.
-
+        See Also
+        --------
+        output : Analyze timing scan data
         """
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
@@ -418,50 +461,66 @@ class Timing:
         """
         Analysis and output for timing scan data.
 
-        Provides methods to analyze timing calibration data and
-        generate plots on computing facilities.
+        Provides methods to analyze timing calibration data and generate plots
+        on computing facilities (S3DF or NERSC).
 
-        Methods
+        Parameters
+        ----------
+        user : str
+            Username for remote computing facility authentication.
+        facility : str, optional
+            Computing facility to use for analysis, by default 'S3DF'.
+            Options: 'S3DF' or 'NERSC'.
+        exp : str, optional
+            Experiment name/ID. If None, retrieves from current DAQ station,
+            by default None.
+        run : str, optional
+            Run number to analyze. If None, retrieves from current DAQ station,
+            by default None.
+        daq_num : int, optional
+            DAQ station number (1 or 2), by default 2.
+            Station 0 corresponds to daq_num=2, station 1 to daq_num=1.
+
+        Returns
         -------
-        series(user, facility, exp, run, energy, step, num)
-            Analyze energy scan series data
+        None
+            Executes remote analysis script and displays results.
+
+        Raises
+        ------
+        ValueError
+            If daq_num is not 1 or 2.
 
         Notes
         -----
         Analysis Process:
-        1. Retrieve data from DAQ files
-        2. Extract detector intensities vs. energy
-        3. Identify absorption edge
-        4. Compare to reference energy
-        5. Calculate energy offset
+        1. Retrieve data from DAQ files on remote facility
+        2. Extract detector intensities vs. time
+        3. Identify timing correlation peaks
+        4. Compare to reference timing
+        5. Calculate timing offset
         6. Generate calibration plots
 
-        Output Products:
-        - Energy vs. intensity plots
-        - Edge position determination
-        - Calibration offset value
-        - Statistical uncertainties
+        For NERSC facility, requires valid sshproxy token. The method will
+        prompt for token renewal if needed.
 
-        Computing Facilities:
-        - S3DF: Interactive analysis
-        - NERSC: Batch processing
+        The analysis script path is:
+        /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing.py
 
         Examples
         --------
-        >>> output = NotchOutput()
-        >>> output.series(
+        >>> timing = Timing()
+        >>> timing.output(
         ...     user='myuser',
         ...     facility='S3DF',
         ...     exp='mfxls1234',
-        ...     run=100,
-        ...     energy=7112,
-        ...     step=5,
-        ...     num=20
+        ...     run='100',
+        ...     daq_num=2
         ... )
 
         See Also
         --------
-        NotchScan.series : Data collection
+        series : Perform timing scan series data collection
         """
         from mfx.macros import get_exp, get_run
 
