@@ -183,6 +183,10 @@ with safe_load('EXAFS_Builder'):
 with safe_load('energy_control'):
     from mfx.energy_control import *
 
+with safe_load('Timing'):
+    from mfx.timing import *
+    timing = Timing()
+
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
@@ -262,8 +266,10 @@ with safe_load('add laser motor groups'):
             focus_track = Newport('MFX:HRA:MMN:31', name='focus_track')
 
         with safe_load('Fast delay encoders'):
-            lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
-            lxt_fast2_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=mfx_lxt_fast2)
+            lxt_fast1_enc = UsDigitalUsbEncoder(
+                'MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast2_enc = UsDigitalUsbEncoder(
+                'MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=mfx_lxt_fast2)
 
     # timing virtual motors for x-ray laser delay adjustment
     lxt = lxt # virtual motor that moves the laser timing system phase shifter
@@ -325,6 +331,10 @@ def mfx_reload(module_name):
     if module_name == 'mfx.xrt_spec':
         from mfx.xrt_spec import XRTspec
         xrtspec = XRTspec()
+
+    if module_name == 'mfx.timing':
+        from mfx.timing import Timing
+        timing = Timing()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):

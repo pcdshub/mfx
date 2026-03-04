@@ -15,7 +15,8 @@ case $facility in
     mfx3="/sdf/group/lcls/ds/tools/mfx"
     # source /sdf/group/lcls/ds/tools/cctbx/setup.sh #psana1
     #source /sdf/group/lcls/ds/tools/cctbx-psana2/build/conda_setpaths.sh #psana2
-    source /sdf/home/f/fpoitevi/lcls2/setup_env.sh #temporary dev
+    # source /sdf/home/f/fpoitevi/lcls2/setup_env.sh #temporary dev
+    source /sdf/group/lcls/ds/tools/cctbx/setup.sh #psana2
     ;;
 
   NERSC)
