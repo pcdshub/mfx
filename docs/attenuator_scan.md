@@ -1,1 +1,0 @@
-::: mfx.attenuator_scan
