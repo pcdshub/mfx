@@ -1,0 +1,12 @@
+# Jekyll config for GitHub Pages
+# In Jekyll 3, exclude replaces the default list, so we keep defaults and add experiments.
+# experiments/ has symlinks to beamline paths (/cds/home/opr/...) that don't exist on CI.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - experiments
