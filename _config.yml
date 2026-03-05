@@ -16,3 +16,4 @@ exclude:
   - experiments
   - dev
   - mfx/roadrunner.sh
+  - scripts/awr
