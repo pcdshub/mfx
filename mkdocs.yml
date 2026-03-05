@@ -88,8 +88,6 @@ nav:
       - scripts/cctbx/mask.md
     - Door Watcher:
       - scripts/door_watcher/door_watcher.md
-    - Jungfrau:
-      - scripts/jungfrau/take_pedestal.md
   - Tfs:
     - tfs/lens.md
     - tfs/offline_calculator.md
