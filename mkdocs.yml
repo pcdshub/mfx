@@ -96,15 +96,11 @@ nav:
     - tfs/transfocator.md
     - tfs/transfocator_scan.md
     - tfs/utils.md
-watch:
-- /home/djr/scripts/mfx
 plugins:
 - search
 - mkdocstrings:
     handlers:
       python:
-        paths:
-        - /home/djr/scripts/mfx
         options:
           docstring_style: numpy
           show_source: true

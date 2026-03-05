@@ -61,7 +61,7 @@ def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str]) -> boo
     return False
 
 
-def clean_docs_folder(docs_path: Path, preserve_files: Set[str] = None, backup: bool = True):
+def clean_docs_folder(docs_path: Path, preserve_files: Set[str] = None, backup: bool = False):
     """Remove all .md files from docs folder."""
     if preserve_files is None:
         preserve_files = {'index.md'}
@@ -195,14 +195,12 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
         'site_author': 'JTB',
         'copyright': '© 2025 LCLS',
         'nav': nav,
-        'watch': [str(repo_path)],
         'plugins': [
             'search',
             {
                 'mkdocstrings': {
                     'handlers': {
                         'python': {
-                            'paths': [str(repo_path)],
                             'options': {
                                 'docstring_style': 'numpy',
                                 'show_source': True,
@@ -337,7 +335,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate MFX documentation')
     parser.add_argument('--repo-path', default='.', help='Repository root path')
     parser.add_argument('--docs-path', default='docs', help='Docs folder path')
-    parser.add_argument('--no-backup', action='store_true', help='Skip backups')
+    parser.add_argument('--backup', action='store_true', help='Create backups')
     parser.add_argument('--show-ignored', action='store_true',
                        help='Show gitignore patterns being used')
     parser.add_argument('--exclude', nargs='*', help='Additional directories to exclude')
@@ -348,7 +346,7 @@ if __name__ == '__main__':
     generate_docs(
         repo_path=args.repo_path,
         docs_path=args.docs_path,
-        backup=not args.no_backup,
+        backup=args.backup,
         show_ignored=args.show_ignored,
         exclude_dirs=exclude_dirs
     )

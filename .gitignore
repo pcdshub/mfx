@@ -106,13 +106,8 @@ ENV/
 
 # mkdocs documentation
 /site
-docs/dod
-docs/mfx
-docs/scripts
-docs/tfs
 docs_backup/
 mkdocs.yml.bak
-generate_mkdocs.md
 
 # mypy
 .mypy_cache/
