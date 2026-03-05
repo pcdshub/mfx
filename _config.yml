@@ -15,4 +15,4 @@ exclude:
   - vendor/ruby/
   - experiments
   - dev
-  - roadrunner.sh
+  - mfx/roadrunner.sh
