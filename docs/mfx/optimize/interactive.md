@@ -1,0 +1,3 @@
+# Interactive
+
+::: mfx.optimize.interactive
