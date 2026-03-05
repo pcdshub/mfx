@@ -322,17 +322,78 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
         MkDocs configuration dictionary
     """
     config = {
-        'site_name': repo_path.name,
+        'site_name': f'{repo_path.name.upper()} Documentation',
+        'site_description': f'API documentation for {repo_path.name}',
+        'site_author': 'LCLS MFX Team',
+        'repo_url': f'https://github.com/pcdshub/{repo_path.name}',
+        'repo_name': f'pcdshub/{repo_path.name}',
+        'copyright': '© 2025 LCLS',
+
         'theme': {
             'name': 'material',
+            'logo': 'media/logo_2.png',
+            'favicon': 'media/logo.png',
+            'palette': [
+                {
+                    'scheme': 'slate',
+                    'primary': 'orange',
+                    'accent': 'deep orange',
+                    'toggle': {
+                        'icon': 'material/brightness-4',
+                        'name': 'Switch to light mode'
+                    }
+                },
+                {
+                    'scheme': 'default',
+                    'primary': 'orange',
+                    'accent': 'deep orange',
+                    'toggle': {
+                        'icon': 'material/brightness-7',
+                        'name': 'Switch to dark mode'
+                    }
+                }
+            ],
+            'font': {
+                'text': 'Roboto',
+                'code': 'Roboto Mono'
+            },
             'features': [
                 'navigation.tabs',
+                'navigation.tabs.sticky',
                 'navigation.sections',
                 'navigation.expand',
+                'navigation.path',
+                'navigation.indexes',
+                'navigation.top',
+                'navigation.tracking',
                 'search.suggest',
                 'search.highlight',
-            ]
+                'search.share',
+                'toc.follow',
+                'toc.integrate',
+                'content.code.copy',
+                'content.code.annotate',
+                'content.tabs.link',
+            ],
+            'icon': {
+                'repo': 'fontawesome/brands/github',
+                'admonition': {
+                    'note': 'octicons/tag-16',
+                    'abstract': 'octicons/checklist-16',
+                    'info': 'octicons/info-16',
+                    'tip': 'octicons/flame-16',
+                    'success': 'octicons/check-16',
+                    'question': 'octicons/question-16',
+                    'warning': 'octicons/alert-16',
+                    'failure': 'octicons/x-circle-16',
+                    'danger': 'octicons/zap-16',
+                    'bug': 'octicons/bug-16',
+                    'example': 'octicons/beaker-16',
+                    'quote': 'octicons/quote-16',
+                }
+            }
         },
+
         'plugins': [
             'search',
             {
@@ -340,14 +401,98 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
                     'handlers': {
                         'python': {
                             'options': {
+                                'docstring_style': 'numpy',
                                 'show_source': True,
                                 'show_root_heading': True,
+                                'show_root_full_path': False,
+                                'show_root_toc_entry': True,
+                                'show_object_full_path': False,
+                                'show_category_heading': True,
+                                'show_symbol_type_heading': True,
+                                'show_symbol_type_toc': True,
+                                'members_order': 'alphabetical',
+                                'group_by_category': True,
+                                'show_if_no_docstring': True,
+                                'show_signature': True,
+                                'show_signature_annotations': True,
+                                'separate_signature': True,
+                                'line_length': 80,
+                                'merge_init_into_class': True,
+                                'docstring_section_style': 'table',
+                                'heading_level': 2,
                             }
                         }
                     }
                 }
-            }
+            },
+            'offline'
         ],
+
+        'markdown_extensions': [
+            'abbr',
+            'admonition',
+            'attr_list',
+            'def_list',
+            'footnotes',
+            'md_in_html',
+            'tables',
+            'toc',
+            {
+                'pymdownx.arithmatex': {
+                    'generic': True
+                }
+            },
+            'pymdownx.betterem',
+            'pymdownx.caret',
+            'pymdownx.mark',
+            'pymdownx.tilde',
+            'pymdownx.critic',
+            'pymdownx.details',
+            'pymdownx.emoji',
+            {
+                'pymdownx.highlight': {
+                    'anchor_linenums': True,
+                    'line_spans': '__span',
+                    'pygments_lang_class': True
+                }
+            },
+            'pymdownx.inlinehilite',
+            'pymdownx.keys',
+            'pymdownx.smartsymbols',
+            'pymdownx.snippets',
+            {
+                'pymdownx.superfences': {
+                    'custom_fences': [
+                        {
+                            'name': 'mermaid',
+                            'class': 'mermaid',
+                            'format': '!!python/name:pymdownx.superfences.fence_code_format'
+                        }
+                    ]
+                }
+            },
+            {
+                'pymdownx.tabbed': {
+                    'alternate_style': True
+                }
+            },
+            'pymdownx.tasklist'
+        ],
+
+        'extra': {
+            'social': [
+                {
+                    'icon': 'fontawesome/brands/github',
+                    'link': f'https://github.com/pcdshub/{repo_path.name}'
+                }
+            ],
+            'generator': False
+        },
+
+        'extra_css': [
+            'stylesheets/extra.css'
+        ],
+
         'nav': [
             {'Home': 'index.md'},
             *nav_structure
@@ -355,6 +500,117 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
     }
     return config
 
+
+def create_extra_css(docs_path: Path) -> None:
+    """
+    Create extra CSS file for custom styling.
+
+    Parameters
+    ----------
+    docs_path : Path
+        Documentation folder path
+    """
+    css_dir = docs_path / 'stylesheets'
+    css_dir.mkdir(parents=True, exist_ok=True)
+
+    css_content = """
+/* Custom styling for MFX documentation */
+
+:root {
+    --md-primary-fg-color: #FF6F00;
+    --md-primary-fg-color--light: #FF8F00;
+    --md-primary-fg-color--dark: #E65100;
+}
+
+/* Code block styling */
+.highlight {
+    border-radius: 0.5rem;
+    margin: 1em 0;
+}
+
+/* Improve table styling */
+.md-typeset table:not([class]) {
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+    background-color: var(--md-primary-fg-color);
+    color: white;
+    font-weight: bold;
+}
+
+/* Docstring styling */
+.doc-contents {
+    padding-left: 1.5rem;
+}
+
+.doc-md-description {
+    margin-top: 0.5rem;
+}
+
+/* Parameter tables */
+.field-list {
+    margin: 1rem 0;
+}
+
+.field-list dt {
+    font-weight: bold;
+    color: var(--md-primary-fg-color);
+}
+
+/* Section headings */
+.doc-heading {
+    border-bottom: 2px solid var(--md-primary-fg-color);
+    padding-bottom: 0.5rem;
+    margin-top: 2rem;
+}
+
+/* Signature styling */
+.doc-object-name {
+    color: var(--md-primary-fg-color);
+    font-weight: bold;
+}
+
+/* Admonition improvements */
+.admonition {
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Navigation improvements */
+.md-nav__item--active > .md-nav__link {
+    font-weight: bold;
+}
+
+/* Code annotations */
+.md-annotation {
+    border-radius: 0.25rem;
+}
+
+/* Improve spacing for nested lists */
+.md-typeset ul ul,
+.md-typeset ol ol {
+    margin-left: 1rem;
+}
+
+/* Better code inline styling */
+.md-typeset code {
+    border-radius: 0.25rem;
+    padding: 0.15rem 0.3rem;
+}
+
+/* Keyboard keys styling */
+.md-typeset kbd {
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 0 1px rgba(0,0,0,0.2);
+}
+"""
+
+    css_file = css_dir / 'extra.css'
+    css_file.write_text(css_content)
+    print(f"  ✓ Created custom CSS: stylesheets/extra.css")
 
 def find_python_files(
     repo_path: Path,
@@ -497,6 +753,9 @@ def generate_docs(
     print(f"  ✓ Created: {created_count}")
     print(f"  ↻ Updated: {updated_count}")
     print(f"  ⊘ Skipped (unchanged): {skipped_count}")
+
+    print(f"\n🎨 Creating custom styling...")
+    create_extra_css(docs)
 
     print(f"\n🗂️  Organizing module structure...")
     structure = organize_by_module_structure(python_files, repo)
