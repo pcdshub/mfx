@@ -12,3 +12,4 @@ exclude:
   - vendor/ruby/
   - experiments
   - dev
+  - roadrunner.sh
