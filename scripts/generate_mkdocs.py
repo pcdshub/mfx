@@ -1,22 +1,36 @@
 #!/usr/bin/env python3
 """
-Script to:
-1. Clean only outdated .md files from docs/ folder (except index.md)
-2. Find all .py files in the repo (respecting .gitignore)
-3. Generate .md files only if they don't exist or content changed
-4. Generate mkdocs.yml with all files organized by module structure
+Script to generate MFX documentation.
+
+This script:
+1. Cleans outdated .md files from docs/ folder (except index.md)
+2. Finds all .py files in the repo (respecting .gitignore)
+3. Generates .md files only if they don't exist or content changed
+4. Generates mkdocs.yml with all files organized by module structure
 """
 
 import yaml
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 import shutil
 import fnmatch
 import argparse
 
 
 def parse_gitignore(repo_path: Path) -> Set[str]:
-    """Parse .gitignore file and return set of patterns to ignore."""
+    """
+    Parse .gitignore file and return set of patterns to ignore.
+
+    Parameters
+    ----------
+    repo_path : Path
+        Path to repository root
+
+    Returns
+    -------
+    Set[str]
+        Set of gitignore patterns
+    """
     gitignore_path = repo_path / '.gitignore'
     patterns = set()
 
@@ -32,8 +46,31 @@ def parse_gitignore(repo_path: Path) -> Set[str]:
     return patterns
 
 
-def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str], exclude_dirs: Set[str] = None) -> bool:
-    """Check if a path should be ignored based on gitignore patterns and exclusions."""
+def is_ignored(
+    path: Path,
+    repo_path: Path,
+    gitignore_patterns: Set[str],
+    exclude_dirs: Optional[Set[str]] = None
+) -> bool:
+    """
+    Check if path should be ignored based on gitignore and exclusions.
+
+    Parameters
+    ----------
+    path : Path
+        Path to check
+    repo_path : Path
+        Repository root path
+    gitignore_patterns : Set[str]
+        Set of gitignore patterns
+    exclude_dirs : Optional[Set[str]], optional
+        Additional directories to exclude, by default None
+
+    Returns
+    -------
+    bool
+        True if path should be ignored, False otherwise
+    """
     try:
         relative = path.relative_to(repo_path)
     except ValueError:
@@ -68,8 +105,26 @@ def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str], exclud
     return False
 
 
-def clean_docs_folder(docs_path: Path, valid_md_files: Set[Path], preserve_files: Set[str] = None, backup: bool = False):
-    """Remove only orphaned .md files from docs folder."""
+def clean_docs_folder(
+    docs_path: Path,
+    valid_md_files: Set[Path],
+    preserve_files: Optional[Set[str]] = None,
+    backup: bool = False
+) -> None:
+    """
+    Remove only orphaned .md files from docs folder.
+
+    Parameters
+    ----------
+    docs_path : Path
+        Path to docs folder
+    valid_md_files : Set[Path]
+        Set of valid markdown file paths
+    preserve_files : Optional[Set[str]], optional
+        Files to preserve from deletion, by default None
+    backup : bool, optional
+        Whether to create backup before cleaning, by default False
+    """
     if preserve_files is None:
         preserve_files = {'index.md'}
 
@@ -96,7 +151,8 @@ def clean_docs_folder(docs_path: Path, valid_md_files: Set[Path], preserve_files
         if md_file not in valid_md_files:
             md_file.unlink()
             removed_count += 1
-            print(f"  🗑️  Removed orphaned: {md_file.relative_to(docs_path)}")
+            print(f"  🗑️  Removed orphaned: "
+                  f"{md_file.relative_to(docs_path)}")
 
     # Remove empty directories (except preserved ones)
     for item in list(docs_path.rglob('*')):
@@ -112,8 +168,21 @@ def clean_docs_folder(docs_path: Path, valid_md_files: Set[Path], preserve_files
 
 
 def create_md_file(md_path: Path, module_path: str) -> bool:
-    """Create a markdown file with mkdocstrings notation only if needed.
-    Returns True if file was created/updated, False if unchanged."""
+    """
+    Create markdown file with mkdocstrings notation only if needed.
+
+    Parameters
+    ----------
+    md_path : Path
+        Path where markdown file should be created
+    module_path : str
+        Python module path (e.g., 'package.module.file')
+
+    Returns
+    -------
+    bool
+        True if file was created/updated, False if unchanged
+    """
     title = module_path.split('.')[-1].replace('_', ' ').title()
     content = f"""# {title}
 
@@ -132,8 +201,25 @@ def create_md_file(md_path: Path, module_path: str) -> bool:
     return True
 
 
-def organize_by_module_structure(python_files: List[Path], repo_path: Path) -> Dict:
-    """Organize Python files by their module structure."""
+def organize_by_module_structure(
+    python_files: List[Path],
+    repo_path: Path
+) -> Dict:
+    """
+    Organize Python files by their module structure.
+
+    Parameters
+    ----------
+    python_files : List[Path]
+        List of Python file paths
+    repo_path : Path
+        Repository root path
+
+    Returns
+    -------
+    Dict
+        Nested dictionary representing module structure
+    """
     structure = {}
     for py_file in python_files:
         relative = py_file.relative_to(repo_path)
@@ -148,8 +234,28 @@ def organize_by_module_structure(python_files: List[Path], repo_path: Path) -> D
     return structure
 
 
-def build_nav_from_structure(structure: Dict, max_depth: int = 10, current_depth: int = 0) -> List:
-    """Build mkdocs nav structure from module structure."""
+def build_nav_from_structure(
+    structure: Dict,
+    max_depth: int = 10,
+    current_depth: int = 0
+) -> List:
+    """
+    Build mkdocs nav structure from module structure.
+
+    Parameters
+    ----------
+    structure : Dict
+        Nested dictionary representing module structure
+    max_depth : int, optional
+        Maximum depth to traverse, by default 10
+    current_depth : int, optional
+        Current traversal depth, by default 0
+
+    Returns
+    -------
+    List
+        Navigation structure for mkdocs
+    """
     if current_depth >= max_depth:
         return []
 
@@ -166,7 +272,11 @@ def build_nav_from_structure(structure: Dict, max_depth: int = 10, current_depth
     nav.extend(files)
 
     for dir_name, dir_structure in sorted(dirs.items()):
-        subnav = build_nav_from_structure(dir_structure, max_depth, current_depth + 1)
+        subnav = build_nav_from_structure(
+            dir_structure,
+            max_depth,
+            current_depth + 1
+        )
         if subnav:
             nav.append({dir_name.replace('_', ' ').title(): subnav})
 
@@ -174,7 +284,21 @@ def build_nav_from_structure(structure: Dict, max_depth: int = 10, current_depth
 
 
 def get_module_path(py_file: Path, repo_path: Path) -> str:
-    """Convert file path to Python module path."""
+    """
+    Convert file path to Python module path.
+
+    Parameters
+    ----------
+    py_file : Path
+        Python file path
+    repo_path : Path
+        Repository root path
+
+    Returns
+    -------
+    str
+        Python module path (e.g., 'package.module.file')
+    """
     relative = py_file.relative_to(repo_path)
     parts = list(relative.parts)
     parts[-1] = parts[-1].replace('.py', '')
@@ -182,7 +306,21 @@ def get_module_path(py_file: Path, repo_path: Path) -> str:
 
 
 def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
-    """Create mkdocs configuration."""
+    """
+    Create mkdocs configuration dictionary.
+
+    Parameters
+    ----------
+    nav_structure : List
+        Navigation structure
+    repo_path : Path
+        Repository root path
+
+    Returns
+    -------
+    Dict
+        MkDocs configuration dictionary
+    """
     config = {
         'site_name': repo_path.name,
         'theme': {
@@ -218,23 +356,67 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
     return config
 
 
-def find_python_files(repo_path: Path, gitignore_patterns: Set[str], exclude_dirs: Set[str] = None) -> List[Path]:
-    """Find all Python files in repository, respecting .gitignore and exclusions."""
+def find_python_files(
+    repo_path: Path,
+    gitignore_patterns: Set[str],
+    exclude_dirs: Optional[Set[str]] = None
+) -> List[Path]:
+    """
+    Find all Python files in repository, respecting .gitignore and exclusions.
+
+    Parameters
+    ----------
+    repo_path : Path
+        Repository root path
+    gitignore_patterns : Set[str]
+        Set of gitignore patterns
+    exclude_dirs : Optional[Set[str]], optional
+        Additional directories to exclude, by default None
+
+    Returns
+    -------
+    List[Path]
+        Sorted list of Python file paths
+    """
     python_files = []
     for py_file in repo_path.rglob('*.py'):
-        if not is_ignored(py_file, repo_path, gitignore_patterns, exclude_dirs):
+        if not is_ignored(py_file, repo_path, gitignore_patterns,
+                          exclude_dirs):
             python_files.append(py_file)
     return sorted(python_files)
 
 
-def generate_docs(repo_path: str = '.', docs_path: str = 'docs', backup: bool = False,
-                  show_ignored: bool = False, exclude_dirs: Set[str] = None):
-    """Main documentation generation function."""
+def generate_docs(
+    repo_path: str = '.',
+    docs_path: str = 'docs',
+    backup: bool = False,
+    show_ignored: bool = False,
+    exclude_dirs: Optional[Set[str]] = None
+) -> None:
+    """
+    Main documentation generation function.
+
+    Parameters
+    ----------
+    repo_path : str, optional
+        Repository root path, by default '.'
+    docs_path : str, optional
+        Documentation folder path, by default 'docs'
+    backup : bool, optional
+        Whether to create backups, by default False
+    show_ignored : bool, optional
+        Whether to show gitignore patterns, by default False
+    exclude_dirs : Optional[Set[str]], optional
+        Additional directories to exclude, by default None
+    """
     repo = Path(repo_path).resolve()
-    docs = Path(docs_path) if Path(docs_path).is_absolute() else repo / docs_path
+    docs = (Path(docs_path) if Path(docs_path).is_absolute()
+            else repo / docs_path)
 
     # Always exclude these directories
-    base_exclude_dirs = {'.git', '__pycache__', 'docs', 'dev', 'experiments', 'jungfrau'}
+    base_exclude_dirs = {
+        '.git', '__pycache__', 'docs', 'dev', 'experiments', 'jungfrau'
+    }
 
     # Merge with additional exclusions if provided
     if exclude_dirs:
@@ -321,8 +503,13 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs', backup: bool = 
     mkdocs_path = repo / 'mkdocs.yml'
 
     # Only backup and update if config changed
-    new_config_yaml = yaml.dump(config, default_flow_style=False, sort_keys=False,
-                                allow_unicode=True, width=1000)
+    new_config_yaml = yaml.dump(
+        config,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=1000
+    )
 
     should_update = True
     if mkdocs_path.exists():
@@ -351,13 +538,34 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs', backup: bool = 
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Generate MFX documentation')
-    parser.add_argument('--repo-path', default='.', help='Repository root path')
-    parser.add_argument('--docs-path', default='docs', help='Docs folder path')
-    parser.add_argument('--backup', action='store_true', help='Create backups')
-    parser.add_argument('--show-ignored', action='store_true',
-                       help='Show gitignore patterns being used')
-    parser.add_argument('--exclude', nargs='*', help='Additional directories to exclude')
+    parser = argparse.ArgumentParser(
+        description='Generate MFX documentation'
+    )
+    parser.add_argument(
+        '--repo-path',
+        default='.',
+        help='Repository root path'
+    )
+    parser.add_argument(
+        '--docs-path',
+        default='docs',
+        help='Docs folder path'
+    )
+    parser.add_argument(
+        '--backup',
+        action='store_true',
+        help='Create backups'
+    )
+    parser.add_argument(
+        '--show-ignored',
+        action='store_true',
+        help='Show gitignore patterns being used'
+    )
+    parser.add_argument(
+        '--exclude',
+        nargs='*',
+        help='Additional directories to exclude'
+    )
     args = parser.parse_args()
 
     exclude_dirs = set(args.exclude) if args.exclude else None
