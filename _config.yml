@@ -1,0 +1,14 @@
+# Jekyll config for GitHub Pages
+# safe: true makes Jekyll ignore symlinks (so mfx/ and scripts/ can stay in the build).
+# experiments/ and dev/ still excluded (many symlinks to beamline paths).
+safe: true
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - experiments
+  - dev

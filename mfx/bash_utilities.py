@@ -169,6 +169,18 @@ class BashUtilities:
                 setting_lines[11] = expected_user
                 change = True
 
+<<<<<<< HEAD
+    def takepeds(self):
+        """
+        Run takepeds. 
+
+
+        """
+        import os
+        import logging
+        logging.info("Taking Pedestals")
+        os.system(f"/reg/g/pcds/engineering_tools/latest-released/scripts/takepeds")
+=======
             # Write updates if needed
             if change:
                 # Update main settings
@@ -178,6 +190,7 @@ class BashUtilities:
                     encoding="UTF-8"
                 ) as f:
                     f.writelines(setting_lines)
+>>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
 
                 # Update backup
                 with open(
@@ -187,6 +200,26 @@ class BashUtilities:
                 ) as f:
                     f.writelines(setting_lines)
 
+<<<<<<< HEAD
+    def makepeds(self, username, run_number=None, onshift=False):
+        """
+        Run makepeds
+
+        Parameters
+        ----------
+        username: 
+            Unix username
+
+        run_number: int, optional
+            Run number. Automatically detects run number if not given.
+
+        onshift: bool
+            define if on or off shift
+
+        """
+        import os
+        import logging
+=======
                 logger.info("Settings updated successfully")
             else:
                 logger.info("Settings already current")
@@ -422,6 +455,7 @@ class BashUtilities:
         --------
         takepeds : Acquire pedestal data
         """
+>>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         from mfx.db import daq
         from mfx.macros import get_run
 
@@ -475,6 +509,17 @@ class BashUtilities:
             try:
                 from psdaq.control.DaqControl import DaqControl
 
+<<<<<<< HEAD
+    def restartdaq(self):
+        """
+        Run restart the DAQ. 
+
+
+        """
+        import subprocess
+        import logging
+        logging.info("Restarting the DAQ")
+=======
                 daq.control = DaqControl(
                     host=daq.control.host,
                     platform=daq.control.platform,
@@ -595,6 +640,7 @@ class BashUtilities:
             cmd = "/reg/g/pcds/engineering_tools/mfx/scripts/restartdaq"
 
         logger.info(f"Executing: {cmd}")
+>>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         subprocess.Popen(
             cmd,
             shell=True,

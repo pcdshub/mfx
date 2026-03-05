@@ -209,9 +209,51 @@ def attenuator_scan(
     logger.info(f"DAQ: {daq_num}, Use DAQ: {use_daq}")
     logger.info("="*60 + "\n")
 
+<<<<<<< HEAD
+    record: bool, optional
+        set True to record
+
+    transmissions: list of floats, optional
+        list of transmissions to run through. default [0.01,0.02,0.03]
+
+    use_daq: bool, optional
+        Whether to include the DAQ or not. Default: True. If False can run the
+        scans while using the DAQ elsewhere.
+
+    **kwargs - Additional optional keyword arguments
+        events: int
+            Provided for backwards compatibility. When using the DAQ, if this
+            keyword argument is passed, and `duration` is not, it will be used
+            as the number of events. It is ignored when not using the DAQ.
+
+    Operations
+    ----------
+
+    """
+    from time import sleep
+    from mfx.db import att, pp
+
+    if use_daq:
+        from mfx.db import daq
+
+        # daq.end_run()
+        # daq.disconnect()
+
+    evts = kwargs.get("events")
+    if duration is None:
+        if use_daq:
+            duration = evts if evts else 240
+        else:
+            duration = 3
+            if evts is not None:
+                print("`events` parameter ignored when not using DAQ! Use `duration`!")
+
+    try:
+=======
     # Operate pulse picker
     if picker == 'open':
         logger.info("Opening pulse picker")
+>>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         pp.open()
     elif picker == 'flip':
         logger.info("Setting pulse picker to flip-flop mode")
@@ -245,6 +287,10 @@ def attenuator_scan(
                 logger.info("Configuring LCLS-I DAQ...")
                 daq.configure(record=record)
                 sleep(3)
+<<<<<<< HEAD
+                daq.begin(events=duration, record=record,
+                          wait=True, use_l3t=False)
+=======
 
         # Scan through transmissions
         logger.info(
@@ -273,6 +319,7 @@ def attenuator_scan(
                     wait=True,
                     use_l3t=False
                 )
+>>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
             else:
                 logger.info(
                     f"    Waiting {duration}s at this transmission..."
