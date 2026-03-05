@@ -1,6 +1,6 @@
 # Jekyll config for GitHub Pages
 # In Jekyll 3, exclude replaces the default list, so we keep defaults and add experiments.
-# experiments/ and dev/ have symlinks to beamline paths (/cds/...) that don't exist on CI.
+# experiments/, dev/, and mfx/roadrunner.sh have symlinks that don't resolve on CI.
 exclude:
   - Gemfile
   - Gemfile.lock
@@ -11,3 +11,4 @@ exclude:
   - vendor/ruby/
   - experiments
   - dev
+  - mfx/roadrunner.sh
