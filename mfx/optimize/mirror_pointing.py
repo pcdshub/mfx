@@ -69,8 +69,7 @@ def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", w
 
     start = nominal - window
     stop = nominal + window
-    RE(bp.scan([yag], mirror, start, stop, num_points), [lfp_x, lfp_y])
-
+    RE(bp.scan([yag], mirror, start, stop, num_points, stage=False), [lfp_x, lfp_y])
     solution_x = (goal_x - lf_x.result.params["intercept"].value) / lf_x.result.params["slope"].value
     solution_y = (goal_y - lf_y.result.params["intercept"].value) / lf_y.result.params["slope"].value
 
