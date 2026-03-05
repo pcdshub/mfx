@@ -380,6 +380,10 @@ def find_python_files(
     """
     python_files = []
     for py_file in repo_path.rglob('*.py'):
+        # Skip __init__.py files
+        if py_file.name == '__init__.py':
+            continue
+
         if not is_ignored(py_file, repo_path, gitignore_patterns,
                           exclude_dirs):
             python_files.append(py_file)
