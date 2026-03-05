@@ -945,14 +945,8 @@ class cctbx:
         facility: str = "NERSC",
         exp: str  = '',
         debug: bool = False,
-<<<<<<< HEAD
-    ):
-        """
-        Launch CCTBX XFEL GUI.
-=======
         ):
         """Launch CCTBX XFEL GUI.
->>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
 
         Parameters
         ----------
