@@ -2,7 +2,7 @@
 # safe: true makes Jekyll ignore symlinks (so mfx/ and scripts/ can stay in the build).
 # experiments/ and dev/ still excluded (many symlinks to beamline paths).
 safe: true
-theme: jekyll-theme-primer
+remote_theme: pages-themes/primer@v0.6.0
 plugins:
   - jekyll-github-metadata
 exclude:
