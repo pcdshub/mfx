@@ -1,3 +1,0 @@
-# Cctbx
-
-::: mfx.cctbx

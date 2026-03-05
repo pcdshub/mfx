@@ -1,3 +1,0 @@
-# Timing
-
-::: mfx.timing

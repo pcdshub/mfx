@@ -1,3 +1,0 @@
-# Mask
-
-::: scripts.cctbx.mask

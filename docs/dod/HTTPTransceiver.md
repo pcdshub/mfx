@@ -1,3 +1,0 @@
-# Httptransceiver
-
-::: dod.HTTPTransceiver

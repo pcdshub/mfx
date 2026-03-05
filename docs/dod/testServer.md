@@ -1,3 +1,0 @@
-# Testserver
-
-::: dod.testServer

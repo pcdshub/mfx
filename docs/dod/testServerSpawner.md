@@ -1,3 +1,0 @@
-# Testserverspawner
-
-::: dod.testServerSpawner

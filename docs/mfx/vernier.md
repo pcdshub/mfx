@@ -1,3 +1,0 @@
-# Vernier
-
-::: mfx.vernier

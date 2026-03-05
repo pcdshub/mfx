@@ -1,3 +1,0 @@
-# Codi
-
-::: dod.codi

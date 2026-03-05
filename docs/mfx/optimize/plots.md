@@ -1,3 +1,0 @@
-# Plots
-
-::: mfx.optimize.plots

@@ -1,3 +1,0 @@
-# Autorun
-
-::: mfx.autorun

@@ -1,3 +1,0 @@
-# Testjsonfilehandler
-
-::: dod.TestJsonFileHandler

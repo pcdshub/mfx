@@ -1,3 +1,0 @@
-# Undpoint
-
-::: mfx.optimize.undpoint

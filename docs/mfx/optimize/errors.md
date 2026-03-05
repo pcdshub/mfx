@@ -1,3 +1,0 @@
-# Errors
-
-::: mfx.optimize.errors

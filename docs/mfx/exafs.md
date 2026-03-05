@@ -1,3 +1,0 @@
-# Exafs
-
-::: mfx.exafs

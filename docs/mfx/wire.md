@@ -1,3 +1,0 @@
-# Wire
-
-::: mfx.wire

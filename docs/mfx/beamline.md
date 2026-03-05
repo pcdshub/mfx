@@ -1,3 +1,0 @@
-# Beamline
-
-::: mfx.beamline

@@ -1,3 +1,0 @@
-# Transfocator
-
-::: tfs.transfocator

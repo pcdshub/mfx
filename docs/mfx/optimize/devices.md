@@ -1,3 +1,0 @@
-# Devices
-
-::: mfx.optimize.devices

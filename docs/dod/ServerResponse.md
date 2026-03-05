@@ -1,3 +1,0 @@
-# Serverresponse
-
-::: dod.ServerResponse

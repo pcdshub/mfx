@@ -1,3 +1,0 @@
-# Debug
-
-::: mfx.debug

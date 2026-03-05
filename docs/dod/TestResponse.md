@@ -1,3 +1,0 @@
-# Testresponse
-
-::: dod.TestResponse

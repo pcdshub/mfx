@@ -1,3 +1,0 @@
-# Timetool
-
-::: mfx.timetool
