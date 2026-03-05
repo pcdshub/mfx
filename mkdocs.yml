@@ -1,139 +1,113 @@
-site_name: MFX Docs
-repo_url: https://github.com/pcdshub/mfx
-site_author: JTB
-copyright: © 2025 LCLS
-nav:
-- Home: index.md
-- API Reference:
-  - generate_mkdocs.md
-  - Dod:
-    - dod/DropsDriver.md
-    - dod/HTTPTransceiver.md
-    - dod/JsonFileHandler.md
-    - dod/ServerResponse.md
-    - dod/SupporEndsHandler.md
-    - dod/TestJsonFileHandler.md
-    - dod/TestResponse.md
-    - dod/codi.md
-    - dod/common.md
-    - dod/dod.md
-    - dod/mfxDOD_old.md
-    - dod/mfx_dod_old.md
-    - dod/testServer.md
-    - dod/testServerSpawner.md
-  - Mfx:
-    - mfx/attenuator_scan.md
-    - mfx/autorun.md
-    - mfx/bash_utilities.md
-    - mfx/beamline.md
-    - mfx/cctbx.md
-    - mfx/dccm.md
-    - mfx/debug.md
-    - mfx/delay_scan.md
-    - mfx/devices.md
-    - mfx/energy_control.md
-    - mfx/exafs.md
-    - mfx/find.md
-    - mfx/junk.md
-    - mfx/macros.md
-    - mfx/mfx_timing.md
-    - mfx/notch_scan.md
-    - mfx/om.md
-    - mfx/scan.md
-    - mfx/timetool.md
-    - mfx/timing.md
-    - mfx/vernier.md
-    - mfx/vonhamos.md
-    - mfx/wire.md
-    - mfx/xas.md
-    - mfx/xlj_fast.md
-    - mfx/xrt_spec.md
-    - mfx/yano.md
-    - Optimize:
-      - mfx/optimize/beam.md
-      - mfx/optimize/beam_status.md
-      - mfx/optimize/beamline_hw.md
-      - mfx/optimize/blop_scans.md
-      - mfx/optimize/constraints.md
-      - mfx/optimize/devices.md
-      - mfx/optimize/errors.md
-      - mfx/optimize/interactive.md
-      - mfx/optimize/mirror_pointing.md
-      - mfx/optimize/plots.md
-      - mfx/optimize/type_checking.md
-      - mfx/optimize/undpoint.md
-      - mfx/optimize/user_select.md
-      - mfx/optimize/utils.md
-      - mfx/optimize/vernier_calibration.md
-      - mfx/optimize/xopt_scans.md
-    - Plans:
-      - mfx/plans/serp_seq_scan.md
-  - Scripts:
-    - scripts/analyze_timing.md
-    - scripts/conf_edit.md
-    - scripts/detector_image.md
-    - scripts/focus_scan.md
-    - scripts/get_info.md
-    - Auto Idle:
-      - scripts/auto_idle/idler.md
-    - Cctbx:
-      - scripts/cctbx/average.md
-      - scripts/cctbx/cctbx_start.md
-      - scripts/cctbx/energy_calib_output.md
-      - scripts/cctbx/fee_calib.md
-      - scripts/cctbx/fee_spec.md
-      - scripts/cctbx/fee_summed.md
-      - scripts/cctbx/geom_refine.md
-      - scripts/cctbx/image_viewer.md
-      - scripts/cctbx/mask.md
-    - Door Watcher:
-      - scripts/door_watcher/door_watcher.md
-  - Tfs:
-    - tfs/lens.md
-    - tfs/offline_calculator.md
-    - tfs/sim_transfocator.md
-    - tfs/tfs_plots.md
-    - tfs/transfocator.md
-    - tfs/transfocator_scan.md
-    - tfs/utils.md
+site_name: mfx
+theme:
+  name: material
+  features:
+  - navigation.tabs
+  - navigation.sections
+  - navigation.expand
+  - search.suggest
+  - search.highlight
 plugins:
 - search
 - mkdocstrings:
     handlers:
       python:
         options:
-          docstring_style: numpy
           show_source: true
           show_root_heading: true
-          show_root_full_path: false
-- offline
-markdown_extensions:
-- pymdownx.highlight:
-    anchor_linenums: true
-- pymdownx.inlinehilite
-- pymdownx.snippets
-- admonition
-- pymdownx.arithmatex:
-    generic: true
-- footnotes
-- pymdownx.details
-- pymdownx.superfences
-- pymdownx.mark
-- attr_list
-theme:
-  name: material
-  logo: media/logo_2.png
-  favicon: media/logo.png
-  palette:
-  - scheme: default
-    primary: orange
-    accent: deep orange
-    toggle:
-      icon: material/weather-night
-      name: Switch to dark mode
-  - scheme: slate
-    primary: deep orange
-    accent: orange
-    toggle:
-      icon: material/weather-sunny
-      name: Switch to light mode
+nav:
+- Home: index.md
+- Dod:
+  - dod/DropsDriver.md
+  - dod/HTTPTransceiver.md
+  - dod/JsonFileHandler.md
+  - dod/ServerResponse.md
+  - dod/SupporEndsHandler.md
+  - dod/TestJsonFileHandler.md
+  - dod/TestResponse.md
+  - dod/codi.md
+  - dod/common.md
+  - dod/dod.md
+  - dod/mfxDOD_old.md
+  - dod/mfx_dod_old.md
+  - dod/testServer.md
+  - dod/testServerSpawner.md
+- Mfx:
+  - mfx/__init__.md
+  - mfx/attenuator_scan.md
+  - mfx/autorun.md
+  - mfx/bash_utilities.md
+  - mfx/beamline.md
+  - mfx/cctbx.md
+  - mfx/dccm.md
+  - mfx/debug.md
+  - mfx/delay_scan.md
+  - mfx/devices.md
+  - mfx/energy_control.md
+  - mfx/exafs.md
+  - mfx/find.md
+  - mfx/junk.md
+  - mfx/macros.md
+  - mfx/mfx_timing.md
+  - mfx/notch_scan.md
+  - mfx/om.md
+  - mfx/scan.md
+  - mfx/timetool.md
+  - mfx/timing.md
+  - mfx/vernier.md
+  - mfx/vonhamos.md
+  - mfx/wire.md
+  - mfx/xas.md
+  - mfx/xlj_fast.md
+  - mfx/xrt_spec.md
+  - mfx/yano.md
+  - Optimize:
+    - mfx/optimize/__init__.md
+    - mfx/optimize/beam.md
+    - mfx/optimize/beam_status.md
+    - mfx/optimize/beamline_hw.md
+    - mfx/optimize/blop_scans.md
+    - mfx/optimize/constraints.md
+    - mfx/optimize/devices.md
+    - mfx/optimize/errors.md
+    - mfx/optimize/interactive.md
+    - mfx/optimize/mirror_pointing.md
+    - mfx/optimize/plots.md
+    - mfx/optimize/type_checking.md
+    - mfx/optimize/undpoint.md
+    - mfx/optimize/user_select.md
+    - mfx/optimize/utils.md
+    - mfx/optimize/vernier_calibration.md
+    - mfx/optimize/xopt_scans.md
+  - Plans:
+    - mfx/plans/__init__.md
+    - mfx/plans/serp_seq_scan.md
+- Scripts:
+  - scripts/analyze_timing.md
+  - scripts/conf_edit.md
+  - scripts/detector_image.md
+  - scripts/focus_scan.md
+  - scripts/generate_mkdocs.md
+  - scripts/get_info.md
+  - Auto Idle:
+    - scripts/auto_idle/idler.md
+  - Cctbx:
+    - scripts/cctbx/average.md
+    - scripts/cctbx/cctbx_start.md
+    - scripts/cctbx/energy_calib_output.md
+    - scripts/cctbx/fee_calib.md
+    - scripts/cctbx/fee_spec.md
+    - scripts/cctbx/fee_summed.md
+    - scripts/cctbx/geom_refine.md
+    - scripts/cctbx/image_viewer.md
+    - scripts/cctbx/mask.md
+  - Door Watcher:
+    - scripts/door_watcher/door_watcher.md
+- Tfs:
+  - tfs/lens.md
+  - tfs/offline_calculator.md
+  - tfs/sim_transfocator.md
+  - tfs/tfs_plots.md
+  - tfs/transfocator.md
+  - tfs/transfocator_scan.md
+  - tfs/utils.md

@@ -233,6 +233,15 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs', backup: bool = 
     repo = Path(repo_path).resolve()
     docs = Path(docs_path) if Path(docs_path).is_absolute() else repo / docs_path
 
+    # Always exclude these directories
+    base_exclude_dirs = {'.git', '__pycache__', 'docs', 'dev', 'experiments', 'jungfrau'}
+
+    # Merge with additional exclusions if provided
+    if exclude_dirs:
+        exclude_dirs = base_exclude_dirs | exclude_dirs
+    else:
+        exclude_dirs = base_exclude_dirs
+
     print("=" * 70)
     print("📚 MFX Documentation Generator")
     print("=" * 70)
@@ -246,10 +255,9 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs', backup: bool = 
         for pattern in sorted(gitignore_patterns):
             print(f"  - {pattern}")
 
-    if exclude_dirs:
-        print(f"\n🚫 Additional exclusions:")
-        for excl in sorted(exclude_dirs):
-            print(f"  - {excl}")
+    print(f"\n🚫 Excluded directories:")
+    for excl in sorted(exclude_dirs):
+        print(f"  - {excl}")
 
     print("\n🐍 Finding Python files...")
     python_files = find_python_files(repo, gitignore_patterns, exclude_dirs)
