@@ -99,9 +99,9 @@ def find_python_files(repo_path: Path, gitignore_patterns: Set[str] = None,
         gitignore_patterns = parse_gitignore(repo_path)
 
     if exclude_dirs is None:
-        exclude_dirs = {'.git', '__pycache__', 'docs', 'dev'}
+        exclude_dirs = {'.git', '__pycache__', 'docs', 'dev', 'experiments'}
     else:
-        exclude_dirs = exclude_dirs | {'.git', '__pycache__', 'docs', 'dev'}
+        exclude_dirs = exclude_dirs | {'.git', '__pycache__', 'docs', 'dev', 'experiments'}
 
     python_files = []
 
@@ -271,7 +271,7 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs',
     else:
         print("⚠️  No .gitignore found")
 
-    default_exclusions = {'.git', '__pycache__', 'docs', 'dev'}
+    default_exclusions = {'.git', '__pycache__', 'docs', 'dev', 'experiments'}
     all_exclusions = default_exclusions | (exclude_dirs if exclude_dirs else set())
     print(f"🚫 Excluding directories: {', '.join(sorted(all_exclusions))}")
 
