@@ -23,42 +23,6 @@ class cctbx:
     S3DF (SLAC) and NERSC (Berkeley) computing facilities. Supports
     hit finding, indexing, integration, and geometry refinement.
 
-<<<<<<< HEAD
-    def geom_refine(
-        self,
-        user: str,
-        group: str,
-        level: int = None,
-        facility: str = "NERSC",
-        exp: str = ''):
-        """
-        Launch CCTBX XFEL GUI.
-
-        Parameters
-        ----------
-        user: str
-            Username for computer account at facility.
-
-        group: str
-            The trial and rungroup number in the format 000_rg005.
-            Default is newest trial_rungroup
-
-        level: int
-            The level of geometry refinement.
-            0 = whole detector and 1 = individual detector panels.
-            Default is to systematically do both.
-
-        facility: str
-            Default: "NERSC". Options: "S3DF, NERSC".
-
-        exp: str
-            Experiment number in format 'mfxp1047723'.
-            If none selected default is the current experiment.
-
-        debug: bool
-            Default: False.
-
-=======
     Attributes
     ----------
     experiment : str
@@ -155,7 +119,6 @@ class cctbx:
     """
 
     def __init__(self, experiment: Optional[str] = None):
->>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         """
         Initialize CCTBX interface.
 
@@ -180,40 +143,8 @@ class cctbx:
         Auto-detect experiment:
         >>> cctbx_obj = cctbx()
 
-<<<<<<< HEAD
-            if token.lower() == "n":
-                self.sshproxy(user)
-
-        os.system(proc[0])
-
-
-    def average(
-        self,
-        user: str,
-        run: int,
-        facility: str = "NERSC",
-        exp: str = '',
-        debug: bool = False):
-        """
-        Launch CCTBX XFEL GUI.
-
-        Parameters
-        ----------
-        user: str
-            Username for computer account at facility.
-        run: int
-            Enter -r for the run number
-        facility: str
-            Default: "NERSC". Options: "S3DF, NERSC".
-        exp: str
-            Experiment number in format 'mfxp1047723'.
-            If none selected default is the current experiment.
-        debug: bool
-            Default: False.
-=======
         Specify experiment:
         >>> cctbx_obj = cctbx(experiment='mfxls1234')
->>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         """
         if experiment is None:
             from mfx.macros import get_exp
@@ -223,69 +154,7 @@ class cctbx:
             self.experiment = experiment
             logger.info(f"Using specified experiment: {self.experiment}")
 
-<<<<<<< HEAD
-        proc = [
-            f"ssh -Yt {user}@s3dflogin "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/average.py "
-            f"-e {experiment} -f {facility} -d {str(debug)} -r {run}"
-            ]
-
-        logging.info(proc)
-
-        if facility == 'NERSC':
-            logging.warning(f"Have you renewed your token with sshproxy today?")
-            token = input("(y/n)? ")
-
-            if token.lower() == "n":
-                self.sshproxy(user)
-
-        if debug:
-            os.system(proc[0])
-        else:
-            subprocess.Popen(
-                proc, shell=True,
-                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
-
-    def image_viewer(
-        self,
-        user: str,
-        run: int,
-        image_type: str,
-        group: str = None,
-        facility: str = "NERSC",
-        exp: str = '',
-        debug: bool = False):
-        """
-        Launch CCTBX XFEL GUI.
-
-        Parameters
-        ----------
-        user: str
-            username for computer account at facility.
-
-        run: int
-            Enter -r for the run number
-
-        image_type: str
-            Enter -t for type of image view
-
-        group: str
-            The trial and rungroup number in the format 000_rg005.
-            Default is newest trial_rungroup
-
-        facility: str
-            Default: "NERSC". Options: "S3DF, NERSC".
-
-        exp: str
-            Experiment number in format 'mfxp1047723'.
-            If none selected default is the current experiment.
-
-        debug: bool
-            Default: False.
-=======
     def sshproxy(self, user: str):
->>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         """
         Renew SSH proxy for NERSC access.
 
@@ -330,18 +199,6 @@ class cctbx:
         Keep OTP device (phone) accessible during beam time.
         Renew proxy before starting overnight processing jobs.
 
-<<<<<<< HEAD
-        """
-        Launch sshproxy check for getting NERSC token if needed
-
-        Parameters
-        ----------
-        user: str
-            Username for computer account at facility.
-
-        debug: bool
-                Default: False.
-=======
         Examples
         --------
         Renew proxy:
@@ -355,7 +212,6 @@ class cctbx:
         --------
         indexing : Uses SSH proxy for NERSC access
         merge : Uses SSH proxy for NERSC access
->>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
         """
         logger.info(f"Renewing SSH proxy for NERSC user: {user}")
         logger.info("You will be prompted for:")
