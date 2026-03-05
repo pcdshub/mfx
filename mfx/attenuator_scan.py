@@ -245,10 +245,6 @@ def attenuator_scan(
                 logger.info("Configuring LCLS-I DAQ...")
                 daq.configure(record=record)
                 sleep(3)
-<<<<<<< HEAD
-                daq.begin(events=duration, record=record,
-                          wait=True, use_l3t=False)
-=======
 
         # Scan through transmissions
         logger.info(
@@ -277,7 +273,6 @@ def attenuator_scan(
                     wait=True,
                     use_l3t=False
                 )
->>>>>>> 91ff2e2303b44c05a355cf66fd73da3938e68c26
             else:
                 logger.info(
                     f"    Waiting {duration}s at this transmission..."
