@@ -10,7 +10,7 @@ from mfx.optimize.devices import YagWithCentroid
 from mfx.optimize.beamline_hw import init_devices
 
 
-def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", window=5.0, num_frames=10, num_points=10, sim=False):
+def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", window=5.0, num_frames=10, num_points=10, sim=False, mec_goal=(296, 228)):
     """
     Scan the MR1L4 mirror pitch and fit beam centroid to find the optimal position.
 
@@ -30,6 +30,8 @@ def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", w
         Number of scan points across the window.
     sim : bool
         If True, use a simulated mirror instead of real hardware.
+    mec_goal : tuple[int, int]
+        Hardcoded centroid goal (x, y) to use when instrument == "mec".
 
     Returns
     -------
@@ -49,7 +51,11 @@ def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", w
 
     pv = "MR1L4:PITCH:MFX:Coating1" if instrument == "mfx" else "MR1L4:PITCH:MEC:Coating1"
     nominal = caget(pv)
-    goal = yag.coords.standard_two_corners_target()
+
+    if instrument == "mec":
+        goal = mec_goal
+    else:
+        goal = yag.coords.standard_two_corners_target()
 
     RE = RunEngine({})
     RE.subscribe(BestEffortCallback())
