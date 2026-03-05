@@ -148,7 +148,7 @@ class Beam:
         self,
         on_diagnostic: Diagnostics = "dg1",
         xopt_obj: Optional[Xopt] = None,
-        threshold_sigma: float = 2.0,
+        threshold_sigma: float = 10.0,
     ) -> bool:
         """
         Predict centroid from current undp_x, undp_y using latest calibration.

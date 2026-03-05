@@ -54,7 +54,7 @@ def optimize_mirror_pointing(instrument="mfx", diagnostic="MFX:GIGE:DG1:YAG:", w
         yag.image1.configuration_attrs = []
         yag.image1.stage_sigs.clear()
 
-    pv = "MR1L4:PITCH:MFX:Coating1" if instrument == "mfx" else "MR1L4:PITCH:MEC:Coating1"
+    pv = "MR1L4:PITCH:MFX:Coating1" if instrument == "mfx" else "MR1L4:PITCH:MEC:Coating2"
     nominal = caget(pv)
 
     # mec's markers are not global and can't be read from mfx, we're using marker positions from a recent ecperiment
