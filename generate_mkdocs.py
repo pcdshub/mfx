@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Script to:
-1. Clean all .md files from docs/ folder (except index.md)
+1. Clean only outdated .md files from docs/ folder (except index.md)
 2. Find all .py files in the repo (respecting .gitignore)
-3. Generate .md files with mkdocstrings notation
+3. Generate .md files only if they don't exist or content changed
 4. Generate mkdocs.yml with all files organized by module structure
 """
 
@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Dict, Set
 import shutil
 import fnmatch
+import argparse
 
 
 def parse_gitignore(repo_path: Path) -> Set[str]:
@@ -31,8 +32,8 @@ def parse_gitignore(repo_path: Path) -> Set[str]:
     return patterns
 
 
-def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str]) -> bool:
-    """Check if a path should be ignored based on gitignore patterns."""
+def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str], exclude_dirs: Set[str] = None) -> bool:
+    """Check if a path should be ignored based on gitignore patterns and exclusions."""
     try:
         relative = path.relative_to(repo_path)
     except ValueError:
@@ -40,6 +41,12 @@ def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str]) -> boo
 
     path_str = str(relative).replace('\\', '/')
     parts = relative.parts
+
+    # Check exclude_dirs first
+    if exclude_dirs:
+        for part in parts:
+            if part in exclude_dirs:
+                return True
 
     for pattern in gitignore_patterns:
         pattern = pattern.lstrip('/')
@@ -61,8 +68,8 @@ def is_ignored(path: Path, repo_path: Path, gitignore_patterns: Set[str]) -> boo
     return False
 
 
-def clean_docs_folder(docs_path: Path, preserve_files: Set[str] = None, backup: bool = False):
-    """Remove all .md files from docs folder."""
+def clean_docs_folder(docs_path: Path, valid_md_files: Set[Path], preserve_files: Set[str] = None, backup: bool = False):
+    """Remove only orphaned .md files from docs folder."""
     if preserve_files is None:
         preserve_files = {'index.md'}
 
@@ -81,64 +88,48 @@ def clean_docs_folder(docs_path: Path, preserve_files: Set[str] = None, backup: 
 
     removed_count = 0
     for md_file in docs_path.rglob('*.md'):
-        if md_file.name not in preserve_files:
+        # Skip if it's a preserved file
+        if md_file.name in preserve_files:
+            continue
+
+        # Remove if it's not in the valid files set
+        if md_file not in valid_md_files:
             md_file.unlink()
             removed_count += 1
+            print(f"  🗑️  Removed orphaned: {md_file.relative_to(docs_path)}")
 
-    for item in docs_path.iterdir():
+    # Remove empty directories (except preserved ones)
+    for item in list(docs_path.rglob('*')):
         if item.is_dir() and item.name not in preserve_dirs:
-            shutil.rmtree(item)
+            try:
+                if not any(item.iterdir()):
+                    item.rmdir()
+            except OSError:
+                pass
 
-    print(f"🗑️  Removed {removed_count} .md files from docs/")
-
-
-def find_python_files(repo_path: Path, gitignore_patterns: Set[str] = None,
-                     exclude_dirs: Set[str] = None) -> List[Path]:
-    """Find all Python files in the repository, respecting .gitignore."""
-    if gitignore_patterns is None:
-        gitignore_patterns = parse_gitignore(repo_path)
-
-    if exclude_dirs is None:
-        exclude_dirs = {
-            '.git', '__pycache__', 'docs', 'dev', 'experiments', 'jungfrau'}
-    else:
-        exclude_dirs = exclude_dirs | {
-            '.git', '__pycache__', 'docs', 'dev', 'experiments', 'jungfrau'}
-
-    python_files = []
-
-    for py_file in repo_path.rglob('*.py'):
-        if py_file.name == '__init__.py':
-            continue
-
-        if any(part in exclude_dirs or part.startswith('.')
-               for part in py_file.relative_to(repo_path).parts[:-1]):
-            continue
-
-        if is_ignored(py_file, repo_path, gitignore_patterns):
-            continue
-
-        python_files.append(py_file)
-
-    return sorted(python_files)
+    if removed_count > 0:
+        print(f"🗑️  Removed {removed_count} orphaned .md files from docs/")
 
 
-def get_module_path(py_file: Path, repo_path: Path) -> str:
-    """Convert Python file path to module path."""
-    relative = py_file.relative_to(repo_path)
-    module_path = str(relative.with_suffix('')).replace('/', '.').replace('\\', '.')
-    return module_path
-
-
-def create_md_file(md_path: Path, module_path: str):
-    """Create a markdown file with mkdocstrings notation."""
+def create_md_file(md_path: Path, module_path: str) -> bool:
+    """Create a markdown file with mkdocstrings notation only if needed.
+    Returns True if file was created/updated, False if unchanged."""
     title = module_path.split('.')[-1].replace('_', ' ').title()
     content = f"""# {title}
 
 ::: {module_path}
 """
+
+    # Check if file exists and has same content
+    if md_path.exists():
+        existing_content = md_path.read_text()
+        if existing_content == content:
+            return False  # No change needed
+
+    # Create or update file
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(content)
+    return True
 
 
 def organize_by_module_structure(python_files: List[Path], repo_path: Path) -> Dict:
@@ -174,27 +165,36 @@ def build_nav_from_structure(structure: Dict, max_depth: int = 10, current_depth
 
     nav.extend(files)
 
-    for dir_name, dir_contents in dirs.items():
-        sub_nav = build_nav_from_structure(dir_contents, max_depth, current_depth + 1)
-        if sub_nav:
-            display_name = dir_name.replace('_', ' ').title()
-            nav.append({display_name: sub_nav})
+    for dir_name, dir_structure in sorted(dirs.items()):
+        subnav = build_nav_from_structure(dir_structure, max_depth, current_depth + 1)
+        if subnav:
+            nav.append({dir_name.replace('_', ' ').title(): subnav})
 
     return nav
 
 
-def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
-    """Create complete mkdocs.yml configuration."""
-    nav = [{'Home': 'index.md'}]
-    if nav_structure:
-        nav.append({'API Reference': nav_structure})
+def get_module_path(py_file: Path, repo_path: Path) -> str:
+    """Convert file path to Python module path."""
+    relative = py_file.relative_to(repo_path)
+    parts = list(relative.parts)
+    parts[-1] = parts[-1].replace('.py', '')
+    return '.'.join(parts)
 
-    return {
-        'site_name': 'MFX Docs',
-        'repo_url': 'https://github.com/pcdshub/mfx',
-        'site_author': 'JTB',
-        'copyright': '© 2025 LCLS',
-        'nav': nav,
+
+def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
+    """Create mkdocs configuration."""
+    config = {
+        'site_name': repo_path.name,
+        'theme': {
+            'name': 'material',
+            'features': [
+                'navigation.tabs',
+                'navigation.sections',
+                'navigation.expand',
+                'search.suggest',
+                'search.highlight',
+            ]
+        },
         'plugins': [
             'search',
             {
@@ -202,103 +202,107 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
                     'handlers': {
                         'python': {
                             'options': {
-                                'docstring_style': 'numpy',
                                 'show_source': True,
                                 'show_root_heading': True,
-                                'show_root_full_path': False,
                             }
                         }
                     }
                 }
-            },
-            'offline'
+            }
         ],
-        'markdown_extensions': [
-            {'pymdownx.highlight': {'anchor_linenums': True}},
-            'pymdownx.inlinehilite',
-            'pymdownx.snippets',
-            'admonition',
-            {'pymdownx.arithmatex': {'generic': True}},
-            'footnotes',
-            'pymdownx.details',
-            'pymdownx.superfences',
-            'pymdownx.mark',
-            'attr_list'
-        ],
-        'theme': {
-            'name': 'material',
-            'logo': 'media/logo_2.png',
-            'favicon': 'media/logo.png',
-            'palette': [
-                {
-                    'scheme': 'default',
-                    'primary': 'orange',
-                    'accent': 'deep orange',
-                    'toggle': {'icon': 'material/weather-night', 'name': 'Switch to dark mode'}
-                },
-                {
-                    'scheme': 'slate',
-                    'primary': 'deep orange',
-                    'accent': 'orange',
-                    'toggle': {'icon': 'material/weather-sunny', 'name': 'Switch to light mode'}
-                }
-            ]
-        }
+        'nav': [
+            {'Home': 'index.md'},
+            *nav_structure
+        ]
     }
+    return config
 
 
-def generate_docs(repo_path: str = '.', docs_path: str = 'docs',
-                 preserve_files: Set[str] = None, backup: bool = True,
-                 show_ignored: bool = False, exclude_dirs: Set[str] = None):
-    """Main function to generate complete documentation."""
+def find_python_files(repo_path: Path, gitignore_patterns: Set[str], exclude_dirs: Set[str] = None) -> List[Path]:
+    """Find all Python files in repository, respecting .gitignore and exclusions."""
+    python_files = []
+    for py_file in repo_path.rglob('*.py'):
+        if not is_ignored(py_file, repo_path, gitignore_patterns, exclude_dirs):
+            python_files.append(py_file)
+    return sorted(python_files)
+
+
+def generate_docs(repo_path: str = '.', docs_path: str = 'docs', backup: bool = False,
+                  show_ignored: bool = False, exclude_dirs: Set[str] = None):
+    """Main documentation generation function."""
     repo = Path(repo_path).resolve()
-    docs = repo / docs_path
+    docs = Path(docs_path) if Path(docs_path).is_absolute() else repo / docs_path
 
     print("=" * 70)
-    print("MFX Documentation Generator")
+    print("📚 MFX Documentation Generator")
     print("=" * 70)
-    print(f"\n📁 Repository: {repo}")
-    print(f"📁 Docs folder: {docs}\n")
 
-    print("🔍 Parsing .gitignore...")
+    print("\n🔍 Parsing .gitignore...")
     gitignore_patterns = parse_gitignore(repo)
-    if gitignore_patterns:
-        print(f"✓ Found {len(gitignore_patterns)} gitignore patterns")
-        if show_ignored:
-            print("  Patterns:")
-            for pattern in sorted(gitignore_patterns):
-                print(f"    - {pattern}")
-    else:
-        print("⚠️  No .gitignore found")
+    print(f"  Found {len(gitignore_patterns)} ignore patterns")
 
-    default_exclusions = {
-        '.git', '__pycache__', 'docs', 'dev', 'experiments', 'jungfrau'}
-    all_exclusions = default_exclusions | (exclude_dirs if exclude_dirs else set())
-    print(f"🚫 Excluding directories: {', '.join(sorted(all_exclusions))}")
+    if show_ignored:
+        print("\n📋 Gitignore patterns:")
+        for pattern in sorted(gitignore_patterns):
+            print(f"  - {pattern}")
 
-    print()
-    clean_docs_folder(docs, preserve_files=preserve_files, backup=backup)
+    if exclude_dirs:
+        print(f"\n🚫 Additional exclusions:")
+        for excl in sorted(exclude_dirs):
+            print(f"  - {excl}")
 
-    print(f"\n🔍 Searching for Python files (respecting .gitignore and exclusions)...")
+    print("\n🐍 Finding Python files...")
     python_files = find_python_files(repo, gitignore_patterns, exclude_dirs)
-    print(f"✓ Found {len(python_files)} Python files\n")
 
     if not python_files:
         print("⚠️  No Python files found!")
         return
 
-    print(f"📝 Creating markdown files...")
-    for i, py_file in enumerate(python_files):
+    print(f"  Found {len(python_files)} Python files")
+
+    # Calculate which .md files should exist
+    valid_md_files = set()
+    for py_file in python_files:
+        relative = py_file.relative_to(repo)
+        md_path = docs / relative.with_suffix('.md')
+        valid_md_files.add(md_path)
+
+    print(f"\n🧹 Cleaning orphaned files...")
+    clean_docs_folder(docs, valid_md_files, backup=backup)
+
+    print(f"\n📝 Creating/updating markdown files...")
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+
+    for py_file in python_files:
         module_path = get_module_path(py_file, repo)
         relative = py_file.relative_to(repo)
         md_path = docs / relative.with_suffix('.md')
-        create_md_file(md_path, module_path)
-        if i < 5:
-            print(f"  ✓ {relative.with_suffix('.md')} -> ::: {module_path}")
 
-    if len(python_files) > 5:
-        print(f"  ... and {len(python_files) - 5} more files")
-    print(f"\n✓ Created {len(python_files)} markdown files")
+        existed_before = md_path.exists()
+        was_modified = create_md_file(md_path, module_path)
+
+        if was_modified:
+            if not existed_before:
+                created_count += 1
+                action = "✓ Created"
+            else:
+                updated_count += 1
+                action = "↻ Updated"
+
+            if created_count + updated_count <= 5:
+                print(f"  {action}: {relative.with_suffix('.md')}")
+        else:
+            skipped_count += 1
+
+    if created_count + updated_count > 5:
+        print(f"  ... and {created_count + updated_count - 5} more files")
+
+    print(f"\n📊 Summary:")
+    print(f"  ✓ Created: {created_count}")
+    print(f"  ↻ Updated: {updated_count}")
+    print(f"  ⊘ Skipped (unchanged): {skipped_count}")
 
     print(f"\n🗂️  Organizing module structure...")
     structure = organize_by_module_structure(python_files, repo)
@@ -308,15 +312,26 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs',
     config = create_mkdocs_config(nav_structure, repo)
     mkdocs_path = repo / 'mkdocs.yml'
 
+    # Only backup and update if config changed
+    new_config_yaml = yaml.dump(config, default_flow_style=False, sort_keys=False,
+                                allow_unicode=True, width=1000)
+
+    should_update = True
     if mkdocs_path.exists():
-        shutil.copy2(mkdocs_path, mkdocs_path.with_suffix('.yml.bak'))
-        print(f"  📦 Backed up existing mkdocs.yml")
+        existing_config = mkdocs_path.read_text()
+        if existing_config == new_config_yaml:
+            should_update = False
+            print(f"  ⊘ mkdocs.yml unchanged")
 
-    with open(mkdocs_path, 'w') as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False,
-                 allow_unicode=True, width=1000)
+    if should_update:
+        if mkdocs_path.exists() and backup:
+            shutil.copy2(mkdocs_path, mkdocs_path.with_suffix('.yml.bak'))
+            print(f"  📦 Backed up existing mkdocs.yml")
 
-    print(f"  ✓ Created {mkdocs_path}")
+        with open(mkdocs_path, 'w') as f:
+            f.write(new_config_yaml)
+        print(f"  ✓ Updated mkdocs.yml")
+
     print("\n" + "=" * 70)
     print("✅ Documentation generated successfully!")
     print("=" * 70)
@@ -324,14 +339,10 @@ def generate_docs(repo_path: str = '.', docs_path: str = 'docs',
     print(f"  1. Create/update docs/index.md")
     print(f"  2. Run: mkdocs serve")
     print(f"  3. Visit: http://127.0.0.1:8000")
-    print(f"\nNote: mkdocstrings needs to find your modules.")
-    print(f"      The 'paths' setting has been added to mkdocs.yml")
-    print(f"      pointing to: {repo}")
     print("=" * 70 + "\n")
 
 
 if __name__ == '__main__':
-    import argparse
     parser = argparse.ArgumentParser(description='Generate MFX documentation')
     parser.add_argument('--repo-path', default='.', help='Repository root path')
     parser.add_argument('--docs-path', default='docs', help='Docs folder path')
