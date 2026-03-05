@@ -1,0 +1,3 @@
+# Beam
+
+::: mfx.optimize.beam
