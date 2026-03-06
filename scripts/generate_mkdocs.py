@@ -495,6 +495,7 @@ def create_mkdocs_config(nav_structure: List, repo_path: Path) -> Dict:
 
         'nav': [
             {'Home': 'index.md'},
+            {'Code Summary': 'code_summary.md'},
             *nav_structure
         ]
     }

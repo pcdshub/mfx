@@ -125,6 +125,7 @@ extra_css:
 - stylesheets/extra.css
 nav:
 - Home: index.md
+- Code Summary: code_summary.md
 - Dod:
   - dod/DropsDriver.md
   - dod/HTTPTransceiver.md
@@ -192,6 +193,7 @@ nav:
   - scripts/conf_edit.md
   - scripts/detector_image.md
   - scripts/focus_scan.md
+  - scripts/generate_code_summary.md
   - scripts/generate_mkdocs.md
   - scripts/get_info.md
   - Auto Idle:
