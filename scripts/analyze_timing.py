@@ -70,67 +70,165 @@ def get_scan_motor(run):
 def custom_erf(x, a, sigma, mu, b):
             return a * special.erf((x - mu) / (np.sqrt(2) * sigma)) + b
 
-def fit_irfs1(x_data, y_data, run_number, t_stage):
-    # Convert to numpy arrays
+# def fit_irfs1(x_data, y_data, run_number, t_stage):
+#     # Convert to numpy arrays
+#     x_data = np.asarray(x_data, dtype=float)
+#     y_data = np.asarray(y_data, dtype=float)
+
+#     # Remove NaNs and infs
+#     mask = np.isfinite(x_data) & np.isfinite(y_data)
+#     x_data = x_data[mask]
+#     y_data = y_data[mask]
+
+#     # Safety check
+#     if len(x_data) < 5:
+#         raise ValueError("Not enough valid points after removing NaNs/Infs")
+
+#     # Normalize safely
+#     ymax = np.max(y_data)
+#     if ymax != 0:
+#         y_data = y_data / ymax
+#     else:
+#         raise ValueError("y_data max is zero — cannot normalize")
+
+#     # Initial guesses
+#     a_initial = np.max(y_data) - np.min(y_data)
+#     mu_initial = -1e-12
+#     sigma_initial = (x_data.max() - x_data.min()) / 100
+#     b_initial = np.min(y_data)
+
+#     p0 = (a_initial, sigma_initial, mu_initial, b_initial)
+
+#     # Fit
+#     popt, pcov = curve_fit(custom_erf, x_data, y_data, p0=p0)
+
+#     # Generate fit
+#     y_fit = custom_erf(x_data, *popt)
+
+#     # Sort for plotting
+#     order = np.argsort(x_data)
+#     x_sorted = x_data[order]
+#     y_fit_sorted = y_fit[order]
+
+#     # Plot
+#     plt.figure(figsize=(5, 3))
+#     plt.scatter(x_data, y_data, s=15, label='Data')
+#     plt.plot(
+#         x_sorted,
+#         y_fit_sorted,
+#         label=f'Fitted irf, width = {popt[1] * 2.355 * 1e15:.2f} fs'
+#     )
+#     plt.xlabel('X')
+#     plt.ylabel('Y')
+#     plt.title(f'Sigmoid Fit for run {run_number} scanning {t_stage}')
+#     plt.legend()
+#     plt.grid()
+#     plt.show()
+
+#     # Print results
+#     logger.info("Fitted Parameters:")
+#     logger.info(f'width = {popt[1] * 2.355}')
+#     logger.info(f'offset [ps] = {popt[2] * 1e12}')
+
+#     return popt, x_data, y_data, y_fit
+
+def fit_irfs1(x_data, y_data, run_number=None, t_stage=None):
+
+    def custom_erf(x, a, sigma, mu, b):
+        return a * special.erf((x - mu) / (np.sqrt(2) * sigma)) + b
+
+    # --- Convert & clean ---
     x_data = np.asarray(x_data, dtype=float)
     y_data = np.asarray(y_data, dtype=float)
 
-    # Remove NaNs and infs
     mask = np.isfinite(x_data) & np.isfinite(y_data)
     x_data = x_data[mask]
     y_data = y_data[mask]
 
-    # Safety check
-    if len(x_data) < 5:
-        raise ValueError("Not enough valid points after removing NaNs/Infs")
+    if len(x_data) < 8:
+        raise ValueError("Not enough valid data points.")
 
-    # Normalize safely
-    ymax = np.max(y_data)
-    if ymax != 0:
-        y_data = y_data / ymax
-    else:
-        raise ValueError("y_data max is zero — cannot normalize")
+    # --- Sort ---
+    order = np.argsort(x_data)
+    x_data = x_data[order]
+    y_data = y_data[order]
 
-    # Initial guesses
-    a_initial = np.max(y_data) - np.min(y_data)
-    mu_initial = -1e-12
-    sigma_initial = (x_data.max() - x_data.min()) / 100
-    b_initial = np.min(y_data)
+    # --- Light smoothing to suppress noise (optional but helps a lot) ---
+    from scipy.ndimage import gaussian_filter1d
+    y_smooth = gaussian_filter1d(y_data, sigma=2)
 
-    p0 = (a_initial, sigma_initial, mu_initial, b_initial)
+    # --- Normalize robustly (avoid max spikes) ---
+    y_min = np.percentile(y_smooth, 5)
+    y_max = np.percentile(y_smooth, 95)
 
-    # Fit
-    popt, pcov = curve_fit(custom_erf, x_data, y_data, p0=p0)
+    if y_max - y_min == 0:
+        raise ValueError("Data has no dynamic range.")
 
-    # Generate fit
+    y_norm = (y_data - y_min) / (y_max - y_min)
+
+    # --- Automatic edge detection for mu guess ---
+    dydx = np.gradient(y_smooth, x_data)
+    mu_initial = x_data[np.argmax(np.abs(dydx))]
+
+    # --- Better sigma guess ---
+    x_span = x_data.max() - x_data.min()
+    sigma_initial = x_span / 20
+
+    # --- Amplitude & offset ---
+    a_initial = 0.5
+    b_initial = 0.5
+
+    p0 = [a_initial, sigma_initial, mu_initial, b_initial]
+
+    # --- Bounds (critical for stability) ---
+    bounds = (
+        [-2,  x_span/1000, x_data.min(), -1],   # lower
+        [ 2,  x_span,      x_data.max(),  2]    # upper
+    )
+
+    try:
+        popt, pcov = curve_fit(
+            custom_erf,
+            x_data,
+            y_norm,
+            p0=p0,
+            bounds=bounds,
+            maxfev=20000
+        )
+    except RuntimeError:
+        raise RuntimeError("Fit failed to converge.")
+
     y_fit = custom_erf(x_data, *popt)
 
-    # Sort for plotting
-    order = np.argsort(x_data)
-    x_sorted = x_data[order]
-    y_fit_sorted = y_fit[order]
-
-    # Plot
+    # --- Plot ---
     plt.figure(figsize=(5, 3))
-    plt.scatter(x_data, y_data, s=15, label='Data')
+    plt.scatter(x_data, y_norm, s=15, label='Data')
     plt.plot(
-        x_sorted,
-        y_fit_sorted,
-        label=f'Fitted irf, width = {popt[1] * 2.355 * 1e15:.2f} fs'
+        x_data,
+        y_fit,
+        label=f'Fitted IRF, FWHM = {abs(popt[1])*2.355:.4f} fs or units'
     )
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title(f'Sigmoid Fit for run {run_number} scanning {t_stage}')
+    plt.xlabel('Delay')
+    plt.ylabel('Normalized Signal')
+
+    title = "Sigmoid Fit"
+    if run_number is not None:
+        title += f" | Run {run_number}"
+    if t_stage is not None:
+        title += f" | {t_stage}"
+
+    plt.title(title)
     plt.legend()
     plt.grid()
+    plt.tight_layout()
     plt.show()
 
-    # Print results
-    logger.info("Fitted Parameters:")
-    logger.info(f'width = {popt[1] * 2.355}')
-    logger.info(f'offset [ps] = {popt[2] * 1e12}')
+    print("\nFitted Parameters:")
+    print(f"FWHM [fs]  = {abs(popt[1])*2.355:.2f}")
+    print(f"Center [ps]= {popt[2]:.4f}")
+    print(f"Amplitude  = {popt[0]:.3f}")
 
-    return popt, x_data, y_data, y_fit
+    return popt, x_data, y_norm, y_fit
 
 def output(
         facility: str = "S3DF",
@@ -148,8 +246,8 @@ def output(
     """
     qadc0_low = 10
     qadc0_high = 50
-    qadc1_low = 93
-    qadc1_high = 104
+    qadc1_low = 74
+    qadc1_high = 130
 
     # diode_0 = run.Detector('qadc_ch0')
     # diode_1 = run.Detector('qadc_ch1')
@@ -168,112 +266,126 @@ def output(
     qadc1_cropped = []
     time_mot = []
     x_ray_diode_sum = []
+    dg3_sum = []
     x = []
-
-    # Load QADC and timing info from XTC file and plot as funciton of time
+    
+    # want to pick up the scanned motor automatically
+    def get_scan_motor(run):
+        tmp = run.scaninfo
+        ignore = {'step_value', 'step_docstring'}
+    
+        mot_name = next(k[0] for k in tmp if k[1] == 'raw' and k[0] not in ignore)
+        print(f'Scanning motor found as: {mot_name}')
+        return mot_name
+    
+    
     for run_number in run_numbers:
         logger.info(f'Processing run {run_number} for experiment {experiment}...')
         ds = DataSource(exp=experiment, run=int(run_number), xdetectors=['jungfrau'])
+    
         for run in ds.runs():
             diode_0 = run.Detector('qadc_ch0')
             diode_1 = run.Detector('qadc_ch1')
-
-            t_stage = get_scan_motor(run) #'lxt', 'lxt_ttc", 'mfx_lxt_fast1' ect..
-
+            dg3_cam = run.Detector('alvium_dg3')  # camera
+            
+            t_stage = get_scan_motor(run)
+            tmptmp = run.Detector(t_stage)
+            ipm = run.Detector('MfxDg2BmMon')
+    
             evts=0
+    
             for i_evt, evt in enumerate(run.events()):
                 evts+=1
+    
                 diode_val_0 = diode_0.raw.value(evt)
                 diode_val_1 = diode_1.raw.value(evt)
+    
                 if diode_val_0 is not None and diode_val_1 is not None:
+    
                     tmp0 = np.sum(np.abs(diode_val_0[qadc0_low:qadc0_high]))
                     tmp1 = np.sum(np.abs(diode_val_1[qadc1_low:qadc1_high]))
-
+    
                     qadc0_cropped.append(tmp0)
                     qadc1_cropped.append(tmp1)
-
-                    # tmptmp = run.Detector('mfx_lxt_fast1')
-                    # tmptmp = run.Detector('lxt')
-                    # tmptmp = run.Detector('lxt_fast')
-                    # tmptmp = run.Detector('lxt_ttc_set')
-
-                    tmptmp = run.Detector(t_stage)
+    
                     time_mot.append(tmptmp(evt))
-                    # x.append(time_mot)
-                    ipm= run.Detector('MfxDg2BmMon')
                     x_ray_diode_sum.append(ipm.raw.totalIntensityJoules(evt))
-                    # timing = run.Detector('timing')
-
-    qadc0_cropped = np.array(qadc0_cropped)
-    qadc1_cropped = np.array(qadc1_cropped)
-
-    # Calculate the sums for each event
-    qadc0_sum_per_event = qadc0_cropped
-    qadc1_sum_per_event = qadc1_cropped
-
-
-    data = {
-        # 't_position': t_position.squeeze(),
-        't_position': time_mot,
-        'qadc0_sum': qadc0_sum_per_event,
-        'qadc1_sum': qadc1_sum_per_event,
-        'x_ray_diode_sum': x_ray_diode_sum
-        #'tt': tt
-    }
-
-    df = pd.DataFrame(data)
-
-    df['normalized_laser'] = df['qadc1_sum'] # / df['qadc0_sum']
-    df['normalized_laser_x_ray'] = df['normalized_laser']/df['x_ray_diode_sum']
-
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
-
-    # Left plot
-    axes[0].scatter(df['t_position'], df['normalized_laser'], s=0.1)
-    axes[0].set_title(f'Run: {run_number}, scanning: {t_stage}')
-    axes[0].set_xlabel('time (ps?)')
-    axes[0].set_ylabel('normalized laser')
-
-    # Right plot
-    axes[1].scatter(df['t_position'], df['normalized_laser_x_ray'], s=0.1)
-    axes[1].set_title('Normalized laser × X-ray')
-    axes[1].set_xlabel('time (ps?)')
-
-    plt.tight_layout()
-    plt.show()
-
-    # Remove outliers and bin data
-    diode_repsonse = 'normalized_laser' # could use normalized_laser_x_ray if X-ray normalization look sensible
-    # --- Remove outliers using IQR on normalized_laser ---
-    Q1 = df['normalized_laser'].quantile(0.25)
-    Q3 = df['normalized_laser'].quantile(0.75)
-    IQR = Q3 - Q1
-
-    # Keep only points within 1.5 * IQR
-    df_clean = df[(df['normalized_laser'] >= Q1 - 1.5 * IQR) &
-                (df['normalized_laser'] <= Q3 + 1.5 * IQR)]
-
-    # --- Bin and plot ---
-    n_bins = 100
-    if t_stage == 'lxt_ttc' or t_stage == 'mfx_lxt_fast1' or t_stage == 'mfx_lxt_fast2':
-        df_clean['t_bin'] = pd.cut(df_clean['t_position'].astype(float), bins=n_bins)
-    else:
-        df_clean['t_bin'] = pd.cut(df_clean['t_position'], bins=n_bins)
-
-    binned = df_clean.groupby('t_bin').agg({
-        't_position': 'mean',
-        'normalized_laser': 'mean'
-    })
-
-    plt.scatter(binned['t_position'], binned['normalized_laser'], color='royalblue', s=40)
-    plt.xlabel('t_position')
-    plt.ylabel('normalized_laser')
-    plt.title('Binned Scatter (Outliers Removed)')
-    plt.grid(True)
-    plt.show()
-
-    # Now fit
-    fit_irfs1(binned['t_position'], binned['normalized_laser'], run_number, t_stage)
+    
+                    # --- camera read with try ---
+                    try:
+                        img = dg3_cam.raw.value(evt)
+                        if img is not None:
+                            img_sum = np.sum(img)
+                        else:
+                            img_sum = np.nan
+                    except Exception:
+                        img_sum = np.nan
+    
+                    dg3_sum.append(img_sum)
+    
+    
+        qadc0_cropped = np.array(qadc0_cropped)
+        qadc1_cropped = np.array(qadc1_cropped)
+    
+        data = {
+            't_position': time_mot,
+            'qadc0_sum': qadc0_cropped,
+            'qadc1_sum': qadc1_cropped,
+            'x_ray_diode_sum': x_ray_diode_sum,
+            'dg3_sum': dg3_sum
+        }
+    
+        df = pd.DataFrame(data)
+    
+        df['normalized_laser'] = df['qadc1_sum']
+        df['normalized_laser_dg3'] = df['dg3_sum']
+    
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
+    
+        axes[0].scatter(df['t_position'], df['normalized_laser'], s=0.1)
+        axes[0].set_title(f'Run: {run_number}, scanning: {t_stage}')
+        axes[0].set_xlabel('time (ps?)')
+        axes[0].set_ylabel('normalized laser')
+    
+        axes[1].scatter(df['t_position'], df['normalized_laser_dg3'], s=0.1)
+        axes[1].set_title('DG3')
+        axes[1].set_xlabel('time (ps?)')
+    
+        plt.tight_layout()
+        plt.show()
+    
+        # Remove outliers and bin data
+        diode_repsonse = 'normalized_laser_dg3' # could use normalized_laser_x_ray if X-ray normalization look sensible
+        # --- Remove outliers using IQR on normalized_laser ---
+        Q1 = df[diode_repsonse].quantile(0.25)
+        Q3 = df[diode_repsonse].quantile(0.75)
+        IQR = Q3 - Q1
+    
+        # Keep only points within 1.5 * IQR
+        df_clean = df[(df[diode_repsonse] >= Q1 - 1.5 * IQR) &
+                    (df[diode_repsonse] <= Q3 + 1.5 * IQR)]
+    
+        # --- Bin and plot ---
+        n_bins = 100
+        if t_stage == 'lxt_ttc' or t_stage == 'mfx_lxt_fast1' or t_stage == 'mfx_lxt_fast2':
+            df_clean['t_bin'] = pd.cut(df_clean['t_position'].astype(float), bins=n_bins)
+        else:
+            df_clean['t_bin'] = pd.cut(df_clean['t_position'], bins=n_bins)
+    
+        binned = df_clean.groupby('t_bin').agg({
+            't_position': 'mean',
+             diode_repsonse: 'mean'
+        })
+    
+        plt.scatter(binned['t_position'], binned[diode_repsonse], color='royalblue', s=40)
+        plt.xlabel('t_position')
+        plt.ylabel('normalized_laser')
+        plt.title('Binned Scatter (Outliers Removed)')
+        plt.grid(True)
+        plt.show()
+    
+        # Now fit
+        fit_irfs1(binned['t_position'], binned[diode_repsonse], run_number, t_stage)
 
 def parse_args(args):
     """Parse command line parameters
