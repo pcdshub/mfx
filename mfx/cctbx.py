@@ -8,6 +8,8 @@ S3DF and NERSC computing facilities.
 
 import os
 import logging
+import subprocess
+import sys
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
@@ -216,7 +218,11 @@ class cctbx:
         logger.info("  1. NERSC password")
         logger.info("  2. One-time password (OTP) from authenticator")
 
-        cmd = "sshproxy.sh"
+        cmd = (
+            f"ssh -Yt {user}@s3dflogin "
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy.sh "
+            f"-c cctbx -u {user}"
+        )
         logger.info(f"Executing: {cmd}")
 
         result = os.system(cmd)
@@ -931,6 +937,84 @@ class cctbx:
             logger.info("Use refined.expt for subsequent processing")
         else:
             logger.error(f"Refinement submission failed (code {result})")
+
+
+    def xfel_gui(
+        self,
+        user: str,
+        facility: str = "NERSC",
+        exp: str  = '',
+        debug: bool = False,
+        ):
+        """Launch CCTBX XFEL GUI.
+
+        Parameters
+        ----------
+        user: str
+            Username for computer account at facility.
+
+        facility: str
+            Default: "NERSC". Options: "S3DF, NERSC".
+
+        exp: str
+            Experiment number in format 'mfxp1047723'.
+            If none selected default is the current experiment.
+
+        debug: bool
+            Default: False.
+        """
+        if exp != '':
+            experiment = exp
+        else:
+            experiment = self.experiment
+
+        facility = facility.upper()
+
+        cmd = (
+            f"ssh -Yt {user}@s3dflogin "
+            f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
+            f"{user} {experiment} {facility} 1 {str(debug)} "
+            )
+
+        logging.info(cmd)
+
+        if facility == 'NERSC':
+            logging.warning(f"Have you renewed your token with sshproxy today?")
+            token = input("(y/n)? ")
+
+            if token.lower() == "n":
+                self.sshproxy(user)
+
+        if debug:
+            os.system(cmd)
+        else:
+            subprocess.Popen(
+                cmd, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+    def notch_check(self, user, runs=[]):
+        if len(runs) > 0:
+            run_list = []
+            for run in runs:
+                run_list.append(f'{experiment}:{run}')
+            logging.info(f'Selected runs: {run_list}')
+            runlist = ' '
+            runlist = runlist.join(run_list)
+            logging.info(f'Selected runs: {runlist}')
+        else:
+            logging.warning(f'No selected runs. Program will exit.')
+            sys.exit()
+
+        proc = [
+            f'ssh -YAC {user}@s3dflogin '
+            f'/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx_notch_check.sh "{self.runlist}"'
+            ]
+
+        logging.info(proc)
+
+        subprocess.Popen(
+            proc, shell=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
 # Convenience module-level instance

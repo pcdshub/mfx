@@ -17,7 +17,8 @@ case $facility in
   NERSC)
     mfx_dir="/pscratch/sd/c/cctbx/${exp}"
     mfx3="/global/common/software/lcls/mfx"
-    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh
     ;;
 esac
 
@@ -28,7 +29,7 @@ if [[ ! -d ${runpath} ]]; then
     echo "Run not averaged yet. It is faster with the GUI but would you like to average locally? (y/n) "
     read yn
 
-    case $yn in 
+    case $yn in
       y)
         sbatch --wait ${mfx3}/scripts/cctbx/average.sh ${exp} ${facility} ${run} ${group}
         ;;
@@ -61,7 +62,7 @@ case $type in
     echo "Would you like to make a new mask? (y/n) "
     read yn
 
-    case $yn in 
+    case $yn in
       y)
         echo ok, we shall proceed with mask making
         echo ${mfx3}/scripts/cctbx/mask.py -e $exp -r $run -f $facility -g $group

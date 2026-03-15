@@ -23,7 +23,8 @@ case $facility in
 
       2)
         mfx_dir="/global/common/software/lcls/mfx"
-        source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+        # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+        source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh
         ;;
     esac
     ;;

@@ -123,6 +123,8 @@ class Yano:
         self.put_energy = EnergyPut()
         self.tfs = Transfocator("MFX:LENS", name='MFX Transfocator')
         self.delay = None
+        self.direction = None
+        self._eng = None
 
         # Initialize shutter objects with hardware PVs
         self.opo_shutter = LaserShutter(
@@ -147,7 +149,7 @@ class Yano:
         self.evo = Trigger('MFX:LAS:EVR:01:TRIG5', name='evo_trigger')
 
         # Laser timing parameters
-        self.opo_time_zero = 671740  # nanoseconds
+        self.opo_time_zero = 671725  # nanoseconds
 
         # Event code definitions for delay control
         self.opo_ec_short = 212     # Shortest delay
@@ -333,8 +335,8 @@ class Yano:
         """
 
 
-        from mfx.mfx_timing import MFX_Timing
-        mfx_timing = MFX_Timing()
+        from mfx.mfx_timing import MFXTiming
+        mfx_timing = MFXTiming()
 
         logger = logging.getLogger(__name__)
 
@@ -503,6 +505,44 @@ class Yano:
             elog.post(msg=post_msg, tags=tag, run=(run_number))
         return post_msg
 
+    def track_focus(self, energy):
+        """
+        Move TFS to track focus during SPREAD scan
+
+        Parameters
+        ----------
+        energy: float
+            Photon energy in eV. Used to calculate TFS Z position.
+            Must be between 6500-6600 eV or 7050-7150 eV.
+        """
+        from mfx.db import mr1l4_homs
+        from mfx.optimize.undpoint import UndPointAbs2DMFX
+        und_abs=UndPointAbs2DMFX()
+
+        if energy >= 7050 and energy <= 7150:
+            z_position = -1.35 * energy + 9702
+            # mirror_pitch = -1.35 * energy + 9702
+        elif energy >= 6500 and energy <= 6600:
+            z_position = -2.3036 * energy + 15300
+            mirror_pitch = -0.0476 * energy - 243.34
+            und_x = 3.8649 * energy - 25101
+        else:
+            logger.error(
+                'Energy is outside the 6500-6600 eV and 7050-7150 eV range.')
+            sys.exit()
+        if z_position >= 0 and z_position <= 299:
+            logger.info(
+                f"Moving TFS to {z_position:.3f} mm, "
+                f"Mirror Pitch to {mirror_pitch} mrad, "
+                f"Undulator X to {und_x} um.")
+            mr1l4_homs.pitch.move(mirror_pitch)
+            und_abs((und_x, -440))
+            self.tfs.translation.umv(z_position)
+        else:
+            logger.error(
+                f"Calcualted TFS Z={z_position:.3f}mm. "
+                f"This is outside the 0-299mm range. ")
+            sleep(3)
 
     def _begin(self, events=None, duration=300,
               record=False, use_l3t=None, controls=None,
@@ -665,6 +705,7 @@ class Yano:
         run_length,
         step_time,
         brewster=0,
+        bs=None,
         spread_type='vernier',
         debug=False):
         """Perform Vernier scan.
@@ -688,6 +729,10 @@ class Yano:
             brewster (int, optional):
                 Weights the bottom division of sequence twice.
                 i.e. 2 weights the bottom half. Default is 0.
+
+            bs: float, optional
+                bs (brewster simplified) adds a dwell time (s) at highest and lowest energies during
+                SPREAD scan. For example bs=10 means spend 10s + 'step_time' at extreme energies.
 
             spread_type: str, optional
                 SPREAD type either 'vernier' or 'k'
@@ -716,7 +761,7 @@ class Yano:
 
         up = list(range(
             energy_scan_start_eV,
-            energy_scan_end_eV,
+            energy_scan_end_eV + energy_scan_steps,
             energy_scan_steps))
 
         down = list(range(
@@ -738,34 +783,56 @@ class Yano:
                 logger.error("Insufficient run_length for one complete cycle. Exiting.")
                 sys.exit()
 
-        # Determine starting direction and position based on current_energy
-        if current_energy < energy_scan_start_eV:
-            # Below range - start at energy_scan_start_eV and go up
-            logger.info(f"Current energy ({current_energy} eV) is below scan range. "
-                       f"Starting at {energy_scan_start_eV} eV (going up).")
-            start_going_up = True
-            start_energy = energy_scan_start_eV
-        elif current_energy > energy_scan_end_eV:
-            # Above range - start at energy_scan_end_eV and go down
-            logger.info(f"Current energy ({current_energy} eV) is above scan range. "
-                       f"Starting at {energy_scan_end_eV} eV (going down).")
-            start_going_up = False
-            start_energy = energy_scan_end_eV - energy_scan_steps
+        if self.direction is None:
+            # Determine starting direction and position based on current_energy
+            if current_energy < energy_scan_start_eV:
+                # Below range - start at energy_scan_start_eV and go up
+                logger.info(f"Current energy ({current_energy} eV) is below scan range. "
+                        f"Starting at {energy_scan_start_eV} eV (going up).")
+                start_going_up = True
+                start_energy = energy_scan_start_eV
+            elif current_energy > energy_scan_end_eV:
+                # Above range - start at energy_scan_end_eV and go down
+                logger.info(f"Current energy ({current_energy} eV) is above scan range. "
+                        f"Starting at {energy_scan_end_eV} eV (going down).")
+                start_going_up = False
+                start_energy = energy_scan_end_eV - energy_scan_steps
+            else:
+                # Determine which end is closer to decide direction
+                distance_to_start = abs(current_energy - energy_scan_start_eV)
+                distance_to_end = abs(current_energy - energy_scan_end_eV)
+                start_going_up = distance_to_start <= distance_to_end
         else:
-            # Within range - find closest energy point and determine direction
-            all_energies = sorted(set(up + down))
-            # Find the closest energy in the scan sequence
-            closest_energy = min(all_energies, key=lambda x: abs(x - current_energy))
-            start_energy = closest_energy
+            # Determine starting direction and position based on current_energy
+            if self.direction == 'up':
+                # Below range - start at energy_scan_start_eV and go up
+                logger.warning(f'{self.direction} direction forced by user.')
+                logger.info(f"Current energy ({current_energy} eV) is below scan range. "
+                        f"Starting at {energy_scan_start_eV} eV (going up).")
+                start_going_up = True
+                start_energy = energy_scan_start_eV
+            elif self.direction == 'down':
+                # Above range - start at energy_scan_end_eV and go down
+                logger.warning(f'{self.direction} direction forced by user.')
+                logger.info(f"Current energy ({current_energy} eV) is above scan range. "
+                        f"Starting at {energy_scan_end_eV} eV (going down).")
+                start_going_up = False
+                start_energy = energy_scan_end_eV - energy_scan_steps
+            else:
+                # Determine which end is closer to decide direction
+                distance_to_start = abs(current_energy - energy_scan_start_eV)
+                distance_to_end = abs(current_energy - energy_scan_end_eV)
+                start_going_up = distance_to_start <= distance_to_end
 
-            # Determine which end is closer to decide direction
-            distance_to_start = abs(current_energy - energy_scan_start_eV)
-            distance_to_end = abs(current_energy - energy_scan_end_eV)
-            start_going_up = distance_to_start <= distance_to_end
+        # Within range - find closest energy point and determine direction
+        all_energies = sorted(set(up + down))
+        # Find the closest energy in the scan sequence
+        closest_energy = min(all_energies, key=lambda x: abs(x - current_energy))
+        start_energy = closest_energy
 
-            direction = "up" if start_going_up else "down"
-            logger.info(f"Current energy ({current_energy} eV) is within scan range. "
-                       f"Starting at {start_energy} eV and going {direction}.")
+        direction = "up" if start_going_up else "down"
+        logger.info(f"Current energy ({current_energy} eV) is within scan range. "
+                f"Starting at {start_energy} eV and going {direction}.")
 
         # Build the single cycle pattern based on starting direction
         if start_going_up:
@@ -854,6 +921,7 @@ class Yano:
         spread_type=None,
         step_time=None,
         brewster=0,
+        bs=None,
         debug=False):
         """
         Perform a single run of the experiment
@@ -895,7 +963,7 @@ class Yano:
             Requested laser delay in nanoseconds.
 
         track_focus : bool, optional
-            Enable focus tracking during spread scan (default: False)
+            If True, move TFS to track focus during SPREAD scan. Default is False.
 
         rep: int, optional
             Set repitition rate only 120, 60, 30 Hz are currently available.
@@ -917,6 +985,10 @@ class Yano:
         brewster: int, optional
             weights the bottom division of SPREAD sequence twice.
             ie 2 weights the bottom half.
+
+        bs: float, optional
+            bs (brewster simplified) adds a dwell time (s) at highest and lowest energies during
+            SPREAD scan. For example bs=10 means spend 10s + 'step_time' at extreme energies.
 
         debug: bool, optional
             If True, plot the generated energy sequence for SPREAD. Default is False.
@@ -944,7 +1016,8 @@ class Yano:
         elif fiber == 3:
             self.fiber_3()
         else:
-            logger.warning("No proper fiber number set so defaulting to ``configure_shutters`` settings.")
+            logger.warning(
+                "No proper fiber number set so defaulting to ``configure_shutters`` settings.")
 
         if free_space is not None:
             if free_space == True or str(
@@ -973,8 +1046,10 @@ class Yano:
         if daq_num == 1:
             for i in range(runs):
                 run_number = get_run(station=1) + 1
-                logger.info(f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
-                status = self._begin(duration = run_length, record = record, wait = True, end_run = True)
+                logger.info(
+                    f"Run Number {get_run(station=1) + 1} Running {sample}......{quote()['quote']}")
+                status = self._begin(
+                    duration = run_length, record = record, wait = True, end_run = True)
                 if status is False:
                     pp.close()
                     self.post(
@@ -985,7 +1060,8 @@ class Yano:
                         inspire=inspire,
                         daq_num=daq_num,
                         add_note='Run ended prematurely. Probably sample delivery problem')
-                    self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                    self.configure_shutters(
+                        fiber1=False, fiber2=False, fiber3=False, free_space=False)
                     logger.warning("[*] Stopping Run and exiting???...")
                     sleep(5)
                     daq.stop()
@@ -1004,7 +1080,8 @@ class Yano:
                     sleep(daq_delay)
                 except KeyboardInterrupt:
                     pp.close()
-                    self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
+                    self.configure_shutters(
+                        fiber1=False, fiber2=False, fiber3=False, free_space=False)
                     logger.warning("[*] Stopping Run and exiting???...")
                     sleep(5)
                     daq.disconnect()
@@ -1072,54 +1149,28 @@ class Yano:
                         )
                         energy_seq = self.generate_energy_seq(
                             spread[0], spread[1], spread[2],
-                            run_length, step_time, brewster,
+                            run_length, step_time, brewster, bs,
                             spread_type=spread_type, debug=False)
 
-                        if brewster > 0:
-                            if spread_type.lower() == 'vernier':
-                                energy = self.get_energy.vernier()
-                            elif spread_type.lower() == 'k':
-                                energy = self.get_energy.k()
-                            else:
-                                logger.error('Please enter spread type of vernier or k only')
-                                sys.exit()
-                            try:
-                                if debug and i==0:
-                                    self.plot_scan_profile(
-                                        energy_seq,
-                                        step_time,
-                                        title="Generated Energy Scan Sequence",
-                                        highlight_cycles=True,
-                                        figsize=(14, 7))
-                                    answer = input("Continue? (Y/n): ")
-                                    if answer.lower() == "n":
-                                        sys.exit("User aborted")
-                            except ValueError:
-                                logger.error(
-                                    f"{energy} not found in the sequence. "
-                                    f"Starting with first energy")
+                        try:
+                            if debug and i==0:
+                                self.plot_scan_profile(
+                                    energy_seq,
+                                    step_time,
+                                    title="Generated Energy Scan Sequence",
+                                    highlight_cycles=True,
+                                    figsize=(14, 7))
+                                answer = input("Continue? (Y/n): ")
+                                if answer.lower() == "n":
+                                    sys.exit("User aborted")
+                        except ValueError:
+                            logger.error(
+                                f"{energy} not found in the sequence. "
+                                f"Starting with first energy")
 
                         for eng in energy_seq:
                             if track_focus:
-                                # Move Z stage
-                                z_position = - (27 / 20) * eng + 9702
-                                if z_position >=0 or z_position <=299:
-                                    logger.info(f"Moving TFS to {z_position:.3f} mm")
-                                    self.tfs.translation.umv(z_position)
-                                    while self.tfs.translation.moving:
-                                        sleep(0.1)
-                                else:
-                                    logger.error(
-                                        f"Calcualted TFS Z={z_position:.3f}mm. "
-                                        f"This is outside the 0-299mm range. "
-                                        f"Would you like to proceed without track_focus?")
-                                    answer = input("(Y/n): ")
-                                    if answer.lower() == "y":
-                                        track_focus = False
-                                    else:
-                                        logger.warning(f"Exiting...")
-                                        sys.exit()
-
+                                self.track_focus(eng)
                             if spread_type.lower() == 'vernier':
                                 self.put_energy.vernier(eng)
                             elif spread_type.lower() == 'k':
@@ -1127,8 +1178,16 @@ class Yano:
                             else:
                                 logger.error('Please enter spread type of vernier or k only')
                                 sys.exit()
+                            if bs is not None:
+                                if eng == spread[0] or eng == spread[1]:
+                                    sleep(bs)
                             sleep(step_time)
-
+                            if self._eng is not None:
+                                if eng > self._eng:
+                                    self.direction = 'up'
+                                elif eng < self._eng:
+                                    self.direction = 'down'
+                            self._eng = eng
                     else:
                         spread_comment = None
                         while time() < end_time:

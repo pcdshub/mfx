@@ -21,7 +21,8 @@ case $facility in
 
   NERSC)
     mfx_dir="/pscratch/sd/c/cctbx/${exp}"
-    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh
     ;;
 esac
 

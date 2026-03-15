@@ -15,14 +15,16 @@ case $facility in
     mfx3="/sdf/group/lcls/ds/tools/mfx"
     # source /sdf/group/lcls/ds/tools/cctbx/setup.sh #psana1
     #source /sdf/group/lcls/ds/tools/cctbx-psana2/build/conda_setpaths.sh #psana2
-    source /sdf/home/f/fpoitevi/lcls2/setup_env.sh #temporary dev
+    # source /sdf/home/f/fpoitevi/lcls2/setup_env.sh #temporary dev
+    source /sdf/group/lcls/ds/tools/cctbx/setup.sh #psana2
     ;;
 
   NERSC)
     mfx_dir="/global/common/software/lcls/mfx"
     mfx3="/global/common/software/lcls/mfx"
     # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh #psana1
-    source /pscratch/sd/c/cctbx/psana2/alcc-recipes/cctbx/activate.sh
+    # source /pscratch/sd/c/cctbx/psana2/alcc-recipes/cctbx/activate.sh
+    source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh #psana2
     ;;
 esac
 

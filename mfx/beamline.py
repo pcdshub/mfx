@@ -183,19 +183,23 @@ with safe_load('EXAFS_Builder'):
 with safe_load('energy_control'):
     from mfx.energy_control import *
 
+with safe_load('Timing'):
+    from mfx.timing import *
+    timing = Timing()
+
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
     from pcdsdevices.device import Component as Cpt
     from pcdsdevices.epics_motor import Newport
 
-    # Hack the LXE class to make it work with Newports
-    class LXE(LaserEnergyPositioner):
-        motor = Cpt(Newport, "")
+    # # Hack the LXE class to make it work with Newports
+    # class LXE(LaserEnergyPositioner):
+    #     motor = Cpt(Newport, "")
 
     lxe_calib_file = (f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib")
     try:
-        lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
+        lxe = Newport("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
     except OSError:
         print(f"Could not load file: {lxe_calib_file}")
         raise FileNotFoundError
@@ -230,35 +234,49 @@ with safe_load('add laser motor groups'):
     from pcdsdevices.device_types import Newport
     from pcdsdevices.device_types import DelayNewport
     from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
-    from mfx.db import mfx_lxt_fast1
-    lxt_fast=mfx_lxt_fast1
+    from mfx.db import mfx_lxt_fast1, mfx_lxt_fast2
 
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
     # this is the timetool compensationn stage. You might want this one
+
     class las():
         #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
         # initialize motors here for tab completion if wanted
         with safe_load('add more laser motors'):
-            lasmot2 = Newport('MFX:LAS:MMN:02', name='lasmot2') # give descriptions later
+            lasmot2 = Newport('MFX:LAS:MMN:02', name='lasmot2')   # give descriptions later
             lasmot3 = Newport('MFX:LAS:MMN:03', name='lasmot3')
             lasmot4 = Newport('MFX:LAS:MMN:04', name='lasmot4')
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
-            lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')
-            lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
-            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            #lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')     # check w/James
+            #lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
+            #lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
             #lens_g = Newport('MFX:LAS:MMN:12', name='lens_g')
+            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')
+            lens_f = Newport('MFX:LAS:MMN:13', name='lens_f')
+            mirlens_v = Newport('MFX:HRA:MMN:25', name='mirlens_v')
+            mirlens_h = Newport('MFX:HRA:MMN:26', name='mirlens_h')
+            mirlens_f = Newport('MFX:HRA:MMN:27', name='mirlens_f')
+            oap_f = Newport('MFX:HRA:MMN:28', name='oap_f')
+            oap_v = Newport('MFX:HRA:MMN:29', name='oap_v')
+            oap_h = Newport('MFX:HRA:MMN:30', name='oap_h')
+            focus_track = Newport('MFX:HRA:MMN:31', name='focus_track')
 
         with safe_load('Fast delay encoders'):
-            lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast1_enc = UsDigitalUsbEncoder(
+                'MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast2_enc = UsDigitalUsbEncoder(
+                'MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=mfx_lxt_fast2)
 
-        # timing virtual motors for x-ray laser delay adjustment
-        lxt = lxt # virtual motor that moves the laser timing system phase shifter
-        txt = txt
-        lxt_ttc = lxt_ttc
-        lxt_fast1 = mfx_lxt_fast1
+    # timing virtual motors for x-ray laser delay adjustment
+    lxt = lxt # virtual motor that moves the laser timing system phase shifter
+    txt = txt
+    lxt_ttc = lxt_ttc
+    lxt_fast1 = mfx_lxt_fast1
+    lxt_fast2 = mfx_lxt_fast2
 
 def mfx_reload(module_name):
     import importlib
@@ -313,6 +331,10 @@ def mfx_reload(module_name):
     if module_name == 'mfx.xrt_spec':
         from mfx.xrt_spec import XRTspec
         xrtspec = XRTspec()
+
+    if module_name == 'mfx.timing':
+        from mfx.timing import Timing
+        timing = Timing()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):

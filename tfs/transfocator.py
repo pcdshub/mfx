@@ -190,7 +190,17 @@ class MFXTransfocator(TransfocatorBase):
         self.tfs_09.remove()
         self.tfs_10.remove()
 
-    def find_best_combo(self, target=None, energy_eV=None, n=4, z_obj=0, show=True, exclusions=[], avoid_forbidden=True, enable_prefocus=True, **kwargs):
+    def find_best_combo(
+            self,
+            target=None,
+            energy_eV=None,
+            n=4,
+            z_obj=0,
+            show=True,
+            exclusions=[],
+            avoid_forbidden=False,
+            enable_prefocus=True,
+            **kwargs):
         """
         Calculate the best lens array to hit the nominal sample point
 
@@ -220,6 +230,12 @@ class MFXTransfocator(TransfocatorBase):
 
         avoid_forbidden : bool, optional
             Avoids forbidden TFS configurations. True by default
+
+        enable_prefocus : bool, optional
+            Allows the solver to use the prefocusing lenses in the XRT. Default is True since
+            the prefocusing lenses are usually required to hit the target plane at MFX.
+            Setting this to False will force the solver to find a solution using only
+            the TFS lenses.
 
         kwargs:
             Passed to :meth:`.Calculator.find_solution`
@@ -258,7 +274,14 @@ class MFXTransfocator(TransfocatorBase):
         return combo
 
 
-    def try_combo(self, target=400.37, energy=None, show=True, prefocus = None, tfs = [], **kwargs):
+    def try_combo(
+            self,
+            target=400.37,
+            energy=None,
+            show=True,
+            prefocus = None,
+            tfs = [],
+            **kwargs):
         """
         Calculates the focus based on the lens combo you select
 
@@ -268,7 +291,7 @@ class MFXTransfocator(TransfocatorBase):
             The target image of the lens array. By default this is
             `nominal_sample i.e. 399.88`
 
-        energy : int, optional 
+        energy : int, optional
             Select the energy in eV.
             Default uses the beam energy given by acr which is usually wrong
 
@@ -328,9 +351,10 @@ class MFXTransfocator(TransfocatorBase):
             estimate_beam_fwhm(radius=radius, energy=energy)
             focal = focal_length(radius=radius, energy=energy)
             calc = TFS_Calculator(tfs_lenses=self.tfs_lenses, prefocus_lenses=self.xrt_lenses)
-            forbidden = calc.check_forbidden(prefocus_idx, energy, radius)
-            log_level = logger.error if forbidden else logger.info
-            log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
+            if prefocus_idx is not None:
+                forbidden = calc.check_forbidden(prefocus_idx, energy, radius)
+                log_level = logger.error if forbidden else logger.info
+                log_level(f"TFS Configuration is {'Forbidden' if forbidden else 'Allowed'}")
 
             logger.info(f'Calculated Focal Length: {focal} um\n')
 
@@ -487,26 +511,26 @@ class MFXTransfocator(TransfocatorBase):
             prev_lenses = lens_set
 
         return schedule
-    
+
     def plot_focus_track(self, json_file_path):
         # Load the data from the JSON file
         with open(json_file_path, 'r') as f:
             data = json.load(f)
-        
+
         # Extract energy, z_position, and inserted_lenses values
         energies = [entry['energy'] for entry in data]
         z_positions = [entry['z_position'] for entry in data]
         inserted_lenses = [entry['inserted_lenses'] for entry in data]
-        
+
         # Create the plot
         plt.figure(figsize=(12, 8))
         plt.plot(energies, z_positions, marker='o', linestyle='-', color='b')
-        
+
         # Add labels and title
         plt.title('Z Position vs Energy')
         plt.xlabel('Energy (eV)')
         plt.ylabel('Z Position (units)')
-        
+
         # Variable to keep track of the last inserted lenses shown
         last_displayed_lenses = None
 
@@ -514,14 +538,14 @@ class MFXTransfocator(TransfocatorBase):
         for energy, z_position, lenses in zip(energies, z_positions, inserted_lenses):
             # Convert list of lenses to a tuple for easier comparison
             lenses_tuple = tuple(lenses)
-            
+
             if lenses_tuple != last_displayed_lenses:
-                plt.annotate(', '.join(lenses), 
-                            (energy, z_position), 
-                            textcoords="offset points", 
-                            xytext=(0, 10), 
-                            ha='center', 
-                            fontsize=8, 
+                plt.annotate(', '.join(lenses),
+                            (energy, z_position),
+                            textcoords="offset points",
+                            xytext=(0, 10),
+                            ha='center',
+                            fontsize=8,
                             color='red',
                             arrowprops=dict(arrowstyle='->', color='red', lw=0.5))
                 last_displayed_lenses = lenses_tuple  # Update the last_displayed_lenses
@@ -571,7 +595,7 @@ class MFXTransfocator(TransfocatorBase):
         })
 
     def track_focus(self, energies, *, margin_mm=10.0, show=False,
-                    ref_focal_length_um=None, ref_z_stage_mm=None, 
+                    ref_focal_length_um=None, ref_z_stage_mm=None,
                     display=True, shrinking_rate=4, enable_prefocus=True,
                     lens_beam_energy_offset=0.0, **kwargs):
         """
@@ -664,7 +688,7 @@ class MFXTransfocator(TransfocatorBase):
 
         print(f"Tracking complete. Final energy: {track_record[-1]['energy']:.2f} eV, stage position: {track_record[-1]['z_position']:.3f} mm.")
         print(f"Lenses currently inserted: {track_record[-1]['inserted_lenses']}")
-        
+
         save_path = Path.home() / "track_focus_results.json"
         with open(save_path, "w") as f:
             json.dump(track_record, f, indent=4)

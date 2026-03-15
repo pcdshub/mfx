@@ -180,7 +180,7 @@ class Debug:
         logger.info(f"{'='*60}\n")
 
         os.system(
-            f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/awr {hutch}")
+            f"/cds/group/pcds/pyps/apps/hutch-python/mfx/scripts/awr.sh {hutch}")
 
     def motor_check(self):
         """
