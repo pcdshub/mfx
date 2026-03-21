@@ -9,7 +9,7 @@ import logging
 import sys
 import tty
 import termios
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional, Callable
 
 from ophyd import Component as Cpt
 from ophyd.signal import EpicsSignal
@@ -208,6 +208,55 @@ class XLJController:
 
         logger.info(f"XLJ Controller initialized: {mode} mode")
 
+    def _axis_to_jet_getter(self, motor) -> Optional[Callable[[], float]]:
+        """
+        Map a motor to the corresponding xlj.jet.<axis> getter.
+        Assumes translation axes are named like xlj_x, xlj_y, xlj_z
+        (or contain ':JET:X' etc). Adjust if your naming differs.
+        """
+        name = motor.name.lower()
+
+        # Most robust: check suffixes in motor name
+        if name.endswith('_x') or name.endswith(':x') or 'jet:x' in name:
+            return self.xlj.jet.x
+        if name.endswith('_y') or name.endswith(':y') or 'jet:y' in name:
+            return self.xlj.jet.y
+        if name.endswith('_z') or name.endswith(':z') or 'jet:z' in name:
+            return self.xlj.jet.z
+
+        return None  # rotations etc
+
+    def ensure_synced_before_move(self, motor, decimals: int = 2):
+        """
+        OG behavior: compare jet readback to fast motor readback.
+        If mismatch, log error and resync motor to jet position.
+        """
+        if not hasattr(self, "xlj") or self.xlj is None:
+            return
+
+        jet_getter = self._axis_to_jet_getter(motor)
+        if jet_getter is None:
+            return  # only applies to X/Y/Z
+
+        try:
+            jet_pos = float(jet_getter())
+            mot_pos = float(motor())
+        except Exception:
+            logger.debug("Could not read positions for sync check", exc_info=True)
+            return
+
+        if round(jet_pos, decimals) != round(mot_pos, decimals):
+            logger.error(
+                "Position mismatch before move: %s=%.4f, %s=%.4f",
+                "xlj.jet", jet_pos, motor.name, mot_pos
+            )
+            # Resync to jet position (OG behavior)
+            try:
+                motor.umv(jet_pos)
+            except Exception:
+                logger.error("Failed to resync %s to jet position", motor.name)
+                logger.debug("", exc_info=True)
+
     def _setup_translation_keys(self):
         """Setup key mappings for translation mode (X, Y, Z)."""
         if self.orientation == 'horizontal':
@@ -343,22 +392,25 @@ class XLJController:
         print("  q : Quit")
         print("="*60)
 
-    def print_status(self):
-        """Display current motor positions and step size."""
-        print("\n" + "-"*60)
-        print(f"Step size: {self.scale:.6f}")
-
-        for i, motor in enumerate(self.motors):
+    def format_status_line(self) -> str:
+        # Similar spirit to OG: concise, consistent formatting
+        parts = [f"step={self.scale:.4f}"]
+        for m in self.motors:
             try:
-                pos = motor.position
-                name = self.motor_names[i] if i < len(
-                    self.motor_names
-                ) else motor.name
-                print(f"{name:8s}: {pos:10.4f}")
-            except Exception as e:
-                print(f"{motor.name}: Error reading position ({e})")
+                parts.append(f"{m.name}:{m.wm():.4f}")
+            except Exception:
+                # fallback if wm() not available
+                parts.append(f"{m.name}:{float(m()):.4f}")
+        return "  ".join(parts)
 
-        print("-"*60)
+    def print_status_line(self, in_place: bool = True):
+        line = self.format_status_line()
+        if in_place:
+            # overwrite current line
+            sys.stdout.write("\r" + line + " " * 10)
+            sys.stdout.flush()
+        else:
+            print(line)
 
     def update_scale(self, factor: float):
         """
@@ -373,86 +425,147 @@ class XLJController:
         logger.info(f"Step size: {self.scale:.6f}")
         print(f"Step size: {self.scale:.6f}")
 
-    def execute_move(self, motor, direction: int):
+    def execute_move(self, axis: str, direction: int):
         """
-        Execute relative motor move.
-
-        Parameters
-        ----------
-        motor
-            Motor object to move
-        direction : int
-            Direction multiplier: +1 or -1
+        Execute a relative move for the motor identified by `axis`
+        (x,y,z,rx,ry,rz) with OG-style X/Y/Z sync check + resync.
         """
-        movement = self.scale * direction
+        axis = axis.lower()
 
+        # Find motor corresponding to axis token
+        motor = None
+        for m in self.motors:
+            mname = (getattr(m, "name", "") or "").lower()
+            if mname == axis or mname.endswith(f"_{axis}"):
+                motor = m
+                break
+
+        if motor is None:
+            logger.error("No motor found for axis '%s'", axis)
+            return
+
+        delta = self.scale * direction
+
+        # OG-style sync check/resync for translation axes only
+        if axis in ("x", "y", "z"):
+            try:
+                xlj = getattr(self, "xlj", None)
+                jet = getattr(xlj, "jet", None) if xlj is not None else None
+                jet_getter = getattr(jet, axis, None) if jet is not None else None
+
+                if jet_getter is not None:
+                    jet_pos = float(jet_getter())
+                    mot_pos = float(motor())
+
+                    if round(jet_pos, 2) != round(mot_pos, 2):
+                        logger.error(f"xlj.jet.{axis} = {jet_pos}, {motor.name} = {mot_pos}")
+                        motor.umv(jet_pos)
+            except Exception as exc:
+                logger.error("Error in position sync check for %s: %s", motor.name, exc)
+                logger.debug("", exc_info=True)
+
+        # Do relative move (quiet like OG when possible)
         try:
-            motor.mvr(movement)
-            logger.debug(f"Moved {motor.name} by {movement:.6f}")
-        except Exception as e:
-            logger.error(f"Error moving {motor.name}: {e}")
-            print(f"Error: {e}")
+            if hasattr(motor, "umvr"):
+                motor.umvr(delta, log=False, newline=False)
+            elif hasattr(motor, "mvr"):
+                motor.mvr(delta)
+            else:
+                raise AttributeError(f"{motor.name} has no umvr/mvr method")
+        except Exception as exc:
+            logger.error("Error moving %s: %s", getattr(motor, "name", motor), exc)
+            logger.debug("", exc_info=True)
+            print(f"\nError: {exc}")
+
 
     def run(self):
         """
-        Run interactive control loop.
-
-        Captures keyboard input and controls motors until
-        user quits with 'q'.
+        Interactive control loop with OG-style one-line status output.
+        - Status line updates in-place using ESC[2K + \\r
+        - Press 'h' prints the full help (your print_help) and returns to status line
+        - Unknown keys print help (like OG)
         """
-        # Print initial status
-        self.print_help()
-        self.print_status()
+        def motor_pos(m):
+            try:
+                if hasattr(m, "wm"):
+                    return float(m.wm())
+                if callable(m):
+                    return float(m())
+                return float(m.position)
+            except Exception:
+                return None
 
-        # Save terminal settings
+        def status_line():
+            # OG-ish formatting: fixed decimals unless extremely small
+            template = "{name}: {pos:.4f}" if self.scale >= 1e-4 else "{name}: {pos:.4e}"
+            parts = []
+            for m in self.motors:
+                name = getattr(m, "name", "motor")
+                pos = motor_pos(m)
+                if pos is None:
+                    parts.append(f"{name}: ERR")
+                else:
+                    parts.append(template.format(name=name, pos=pos))
+            parts.append(f"scale: {self.scale}")
+            return ", ".join(parts)
+
+        def show_status():
+            sys.stdout.write("\x1b[2K\r" + status_line())
+            sys.stdout.flush()
+
+        # Start
+        self.print_help()
+        print()  # newline so status line has a clean row
+
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
 
         try:
-            # Set terminal to raw mode for character capture
-            tty.setraw(sys.stdin.fileno())
+            tty.setraw(fd)
 
             while True:
-                # Read one character/sequence
+                show_status()
+
+                # Read 1 char or escape sequence
                 char = sys.stdin.read(1)
+                if char == "\x1b":
+                    char += sys.stdin.read(2)      # e.g. \x1b[A
+                    if char == "\x1b[1":
+                        char += sys.stdin.read(3)  # e.g. \x1b[1;2A
 
-                # Handle escape sequences (arrow keys)
-                if char == '\x1b':
-                    char += sys.stdin.read(2)  # Read rest of sequence
-                    # Check for shift modifier
-                    if char == '\x1b[1':
-                        char += sys.stdin.read(3)  # Read full shift sequence
-
-                # Process input
-                if char == 'q':
+                # Quit
+                if char == "q":
+                    print()
                     break
 
-                elif char == 'h':
+                # Help
+                if char == "h":
+                    print()          # don't overwrite status line
                     self.print_help()
-                    self.print_status()
+                    continue
 
-                elif char in self.move_keys:
-                    # Execute motor move
+                # Move
+                if char in self.move_map:
                     axis, direction = self.move_map[char]
-                    motor_idx = self.motor_names.index(axis.upper())
-                    self.execute_move(self.motors[motor_idx], direction)
+                    self.execute_move(axis, direction)
+                    continue
 
-                elif char in self.scale_keys:
-                    # Adjust step size
-                    if char in (KEYS['plus'], KEYS['equal'],
-                                KEYS['shift_right']):
-                        self.update_scale(2.0)
-                    elif char in (KEYS['minus'], KEYS['under'],
-                                  KEYS['shift_left']):
-                        self.update_scale(0.5)
+                # Scale
+                if char in (KEYS["plus"], KEYS["equal"], KEYS["shift_right"]):
+                    self.update_scale(2.0)
+                    continue
+                if char in (KEYS["minus"], KEYS["under"], KEYS["shift_left"]):
+                    self.update_scale(0.5)
+                    continue
 
-                else:
-                    print(f"Unknown key. Press 'h' for help.")
+                # Unknown: OG behavior = complain/show usage
+                print()
+                self.print_help()
 
         finally:
-            # Restore terminal settings
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            print("\nControl loop exited")
+            # leave cursor on a new line
+            print()
 
 
 # High-level control functions
