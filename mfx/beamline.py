@@ -254,9 +254,9 @@ with safe_load('add laser motor groups'):
             #lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
             #lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
             #lens_g = Newport('MFX:LAS:MMN:12', name='lens_g')
-            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
-            lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')
-            lens_f = Newport('MFX:LAS:MMN:13', name='lens_f')
+            lens_h = Newport('MFX:LAS:MMN:09', name='lens_h') #changed Apr 4
+            lens_v = Newport('MFX:LAS:MMN:10', name='lens_v') #same
+            lens_f = Newport('MFX:LAS:MMN:11', name='lens_f') #same
             mirlens_v = Newport('MFX:HRA:MMN:25', name='mirlens_v')
             mirlens_h = Newport('MFX:HRA:MMN:26', name='mirlens_h')
             mirlens_f = Newport('MFX:HRA:MMN:27', name='mirlens_f')
