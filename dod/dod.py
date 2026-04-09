@@ -1,5 +1,5 @@
 class DoD: 
-    def __init__(self, modules = 'None', ip = "172.21.72.187", port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json'
+    def __init__(self, modules = 'None', ip = "172.21.39.172", port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json'
 ):
         """
         Class definition of the DoD robot
@@ -15,7 +15,7 @@ class DoD:
         from dod.ServerResponse import ServerResponse
 
         import time
-
+        
         # Create object 
         # pytest encourages this pattern, apologies.
         # ip = "172.21.72.187" #"172.21.148.101"
@@ -48,6 +48,12 @@ class DoD:
         # load configs and launch web server
         json_handler.reload_endpoints()
 
+
+        # Set parameters for reconneting function
+        self.ip = ip
+        self.port = port
+        self.supported_json = supported_json
+    
         # Flag that can be used later on for safety aborts during task execution
         self.safety_abort = False
         if modules == 'codi': 
@@ -137,8 +143,29 @@ class DoD:
 
     #     if verbose == True: 
     #         return r
+    def reconnect(self, reload = False, verbose = False): 
+        """
+        Attempts to reconnect the robot after timeout of 
+        
+        Parameters
+        reload : boolean
+            Defines whether the reload flag on the json is True or False
+        verbose : boolean
+           Defines whether the function returns the full output, or only the results
+        ----------
+        Returns: 
+            False
+        """
+        # Initializing the robot client that is used for communication
+        self.client = myClient(ip=self.ip, port=self.port, supported_json=self.supported_json, reload=reload)
+        # create config parser handler
+        json_handler = JsonFileHandler(self.supported_json)
+        # load configs and launch web server
+        json_handler.reload_endpoints()
 
+        return False
 
+    
     def get_status(self, verbose = False):
         """
         returns the robot state
