@@ -115,7 +115,7 @@ with safe_load('Droplet_on_Demand_Colliding_Droplets'):
 
 with safe_load('Droplet_on_Demand'):
     from dod.dod import *
-    dod = DoD(modules = 'codi')
+    dod = DoD(ip = "172.21.39.172")
 
 with safe_load('Debugging Scripts'):
     from mfx.debug import *
