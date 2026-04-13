@@ -156,6 +156,10 @@ class DoD:
         Returns: 
             False
         """
+        from dod.DropsDriver import myClient
+        from dod.JsonFileHandler import JsonFileHandler
+        from dod.ServerResponse import ServerResponse
+
         # Initializing the robot client that is used for communication
         self.client = myClient(ip=self.ip, port=self.port, supported_json=self.supported_json, reload=reload)
         # create config parser handler
@@ -165,6 +169,26 @@ class DoD:
 
         return False
 
+    
+    def check_connetion(self, verbose = False): 
+        """
+        Attempts to reconnect the robot after timeout of 
+        
+        Parameters
+        verbose : boolean
+           Defines whether the function returns the full output, or only the results
+        ----------
+        Returns: 
+            False
+        """        
+
+        try: 
+            self.get_status()
+        except: 
+            self.reconnect()
+            
+        return False
+    
     
     def get_status(self, verbose = False):
         """
