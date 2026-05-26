@@ -227,3 +227,12 @@ class FakeYagCamera(YagCamera):
 
     image1 = Cpt(FakeLCLSImagePlugin, "IMAGE1:")
     coords = Cpt(FakeCoords, "")
+
+
+class FakeYagWithCentroid(YagWithCentroid):
+    """
+    Fake YagWithCentroid for testing — no EPICS connections.
+    """
+
+    image1 = Cpt(FakeLCLSImagePlugin, "IMAGE1:")
+    coords = Cpt(FakeCoords, "")

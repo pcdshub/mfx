@@ -1,6 +1,6 @@
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
-import bluesky.plans as bp
+from bluesky.preprocessors import run_wrapper
 import bluesky.plan_stubs as bps
 import numpy as np
 
@@ -35,6 +35,7 @@ def optimize_undulator_pointing(
         from mfx.optimize.beamline_hw import sim_devices
         devs = sim_devices()
         und = devs["und_abs"]
+        yag = devs[f"mfx_{diagnostic}_yag"]
     else:
         devs = init_devices(force=True)
         if safe:
@@ -43,17 +44,13 @@ def optimize_undulator_pointing(
                 raise NameError("safe=True but und_abs_safe is not defined in globals().")
         else:
             und = devs["und_abs"]
+        yag = YagWithCentroid(config["pv"], name=f"mfx_{diagnostic}_yag")
 
-    # UnitConversionDerivedSignal.set() uses exact equality by default.
-    # Unit conversion (um <-> mm) introduces ~1e-13 um floating-point error
-    # for some values (e.g. -350 um), causing the set() completion thread to
-    # spin forever. A sub-nm tolerance switches the comparison to np.allclose.
-    und.xpos.tolerance = 1e-6
-    und.ypos.tolerance = 1e-6
-
-    yag = YagWithCentroid(config["pv"], name=f"mfx_{diagnostic}_yag")
     yag.image1.kind = "omitted"
     yag.num_frames = num_frames
+
+    # Keep the scan table clean: delta_xy internals are not useful readback.
+    und.delta_xy.kind = "omitted"
 
     goal_x, goal_y = yag.coords.standard_two_corners_target()
 
@@ -70,15 +67,17 @@ def optimize_undulator_pointing(
             scan_data["cx"].append(d[f"{yag.name}_centroid_x"])
             scan_data["cy"].append(d[f"{yag.name}_centroid_y"])
 
-    RE(
-        bp.grid_scan(
-            [yag],
-            und.xpos, *config["x"], grid_points,
-            und.ypos, *config["y"], grid_points,
-            snake_axes=True,
-        ),
-        collect,
-    )
+    x_vals = np.linspace(*config["x"], grid_points)
+    y_vals = np.linspace(*config["y"], grid_points)
+
+    def grid_plan():
+        for i, x in enumerate(x_vals):
+            row = y_vals if i % 2 == 0 else y_vals[::-1]
+            for y in row:
+                yield from bps.mv(und, (x, y))
+                yield from bps.trigger_and_read([und, yag])
+
+    RE(run_wrapper(grid_plan()), collect)
 
     cx_arr = np.array(scan_data["cx"])
     cy_arr = np.array(scan_data["cy"])
@@ -104,7 +103,7 @@ def optimize_undulator_pointing(
 
     print(f"Solution: undp_x={sol[0]:.2f}, undp_y={sol[1]:.2f}")
 
-    RE(bps.mv(und.xpos, sol[0], und.ypos, sol[1]))
+    und.move((sol[0], sol[1]), wait=True)
     print(f"Moved undulator to ({sol[0]:.2f}, {sol[1]:.2f})")
 
     return (sol[0], sol[1])
