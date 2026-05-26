@@ -73,9 +73,20 @@ def optimize_undulator_pointing(
         collect,
     )
 
-    A = np.column_stack([np.ones(len(scan_data["ux"])), scan_data["ux"], scan_data["uy"]])
-    cx = np.linalg.lstsq(A, scan_data["cx"], rcond=None)[0]
-    cy = np.linalg.lstsq(A, scan_data["cy"], rcond=None)[0]
+    cx_arr = np.array(scan_data["cx"])
+    cy_arr = np.array(scan_data["cy"])
+    ux_arr = np.array(scan_data["ux"])
+    uy_arr = np.array(scan_data["uy"])
+
+    valid = ~(np.isnan(cx_arr) | np.isnan(cy_arr))
+    if valid.sum() < 3:
+        raise RuntimeError(
+            f"Too few valid centroid readings ({valid.sum()}) to fit a model — beam may be off camera for most of the scan range."
+        )
+
+    A = np.column_stack([np.ones(valid.sum()), ux_arr[valid], uy_arr[valid]])
+    cx = np.linalg.lstsq(A, cx_arr[valid], rcond=None)[0]
+    cy = np.linalg.lstsq(A, cy_arr[valid], rcond=None)[0]
 
     print(f"centroid_x = {cx[0]:.2f} + {cx[1]:.4f}*ux + {cx[2]:.4f}*uy")
     print(f"centroid_y = {cy[0]:.2f} + {cy[1]:.4f}*ux + {cy[2]:.4f}*uy")
