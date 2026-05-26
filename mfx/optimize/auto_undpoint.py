@@ -44,6 +44,13 @@ def optimize_undulator_pointing(
         else:
             und = devs["und_abs"]
 
+    # UnitConversionDerivedSignal.set() uses exact equality by default.
+    # Unit conversion (um <-> mm) introduces ~1e-13 um floating-point error
+    # for some values (e.g. -350 um), causing the set() completion thread to
+    # spin forever. A sub-nm tolerance switches the comparison to np.allclose.
+    und.xpos.tolerance = 1e-6
+    und.ypos.tolerance = 1e-6
+
     yag = YagWithCentroid(config["pv"], name=f"mfx_{diagnostic}_yag")
     yag.image1.kind = "omitted"
     yag.num_frames = num_frames
