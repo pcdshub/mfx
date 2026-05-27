@@ -9,15 +9,17 @@ from mfx.optimize.beamline_hw import init_devices
 
 
 UNDULATOR_CONFIG = {
-    "xcs1": {"x": (0, 200), "y": (-450, -200), "pv": "XCS:GIGE:YAG1:"},
+    "xcs1": {"x": (0, 200),    "y": (-450, -200), "pv": "XCS:GIGE:YAG1:"},
     "dg1":  {"x": (-100, 150), "y": (-750, -350), "pv": "MFX:GIGE:DG1:YAG:"},
-    "dg2":  {"x": None, "y": None, "pv": "MFX:GIGE:DG2:YAG:"},
+    "dg2":  {"x": (-100, 150), "y": (-750, -350), "pv": "MFX:GIGE:DG2:YAG:"},
 }
 
 
 def optimize_undulator_pointing(
     diagnostic="dg1",
+    mode="lscan",
     grid_points=5,
+    window=20.0,
     num_frames=10,
     sim=False,
     safe=False,
@@ -28,8 +30,6 @@ def optimize_undulator_pointing(
         )
 
     config = UNDULATOR_CONFIG[diagnostic]
-    if config["x"] is None or config["y"] is None:
-        raise ValueError(f"Undulator ranges for '{diagnostic}' have not been determined yet.")
 
     if sim:
         from mfx.optimize.beamline_hw import sim_devices
@@ -48,8 +48,6 @@ def optimize_undulator_pointing(
 
     yag.image1.kind = "omitted"
     yag.num_frames = num_frames
-
-    # Keep the scan table clean: delta_xy internals are not useful readback.
     und.delta_xy.kind = "omitted"
 
     goal_x, goal_y = yag.coords.standard_two_corners_target()
@@ -67,17 +65,34 @@ def optimize_undulator_pointing(
             scan_data["cx"].append(d[f"{yag.name}_centroid_x"])
             scan_data["cy"].append(d[f"{yag.name}_centroid_y"])
 
-    x_vals = np.linspace(*config["x"], grid_points)
-    y_vals = np.linspace(*config["y"], grid_points)
+    if mode == "lscan":
+        cur_x, cur_y = und.position
 
-    def grid_plan():
-        for i, x in enumerate(x_vals):
-            row = y_vals if i % 2 == 0 else y_vals[::-1]
-            for y in row:
-                yield from bps.mv(und, (x, y))
+        def scan_plan():
+            for x in np.linspace(cur_x - window, cur_x + window, grid_points):
+                yield from bps.mv(und, (x, cur_y))
+                yield from bps.trigger_and_read([und, yag])
+            for y in np.linspace(cur_y - window, cur_y + window, grid_points):
+                yield from bps.mv(und, (cur_x, y))
                 yield from bps.trigger_and_read([und, yag])
 
-    RE(run_wrapper(grid_plan()), collect)
+    elif mode == "grid":
+        if config["x"] is None or config["y"] is None:
+            raise ValueError(f"Undulator ranges for '{diagnostic}' have not been determined yet.")
+        x_vals = np.linspace(*config["x"], grid_points)
+        y_vals = np.linspace(*config["y"], grid_points)
+
+        def scan_plan():
+            for i, x in enumerate(x_vals):
+                row = y_vals if i % 2 == 0 else y_vals[::-1]
+                for y in row:
+                    yield from bps.mv(und, (x, y))
+                    yield from bps.trigger_and_read([und, yag])
+
+    else:
+        raise ValueError(f"Unknown mode '{mode}', expected 'lscan' or 'grid'")
+
+    RE(run_wrapper(scan_plan()), collect)
 
     cx_arr = np.array(scan_data["cx"])
     cy_arr = np.array(scan_data["cy"])
