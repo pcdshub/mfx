@@ -11,6 +11,8 @@ from ophyd.areadetector.plugins import ImagePlugin
 from ophyd.device import Component as Cpt
 from ophyd.device import Device
 from ophyd.signal import AttributeSignal, EpicsSignalRO, Signal
+from ophyd.status import Status
+from lcls_tools.common.image.fit import ImageProjectionFit
 
 
 class Marker(Device):
@@ -106,6 +108,29 @@ class YagCamera(Device):
     image1 = Cpt(LCLSImagePlugin, "IMAGE1:")
     coords = Cpt(CamViewerCoords, "")
 
+class YagWithCentroid(YagCamera):
+    centroid_x = Cpt(Signal, value=0.0, kind="hinted")
+    centroid_y = Cpt(Signal, value=0.0, kind="hinted")
+    num_frames = 10
+
+    def trigger(self):
+        images = []
+        for _ in range(self.num_frames):
+            status = super().trigger()
+            status.wait()
+            images.append(self.image1.shaped_image.get())
+
+        try:
+            centroid = ImageProjectionFit().fit_image(np.mean(images, axis=0)).centroid
+            self.centroid_x.set(centroid[0])
+            self.centroid_y.set(centroid[1])
+        except Exception:
+            self.centroid_x.set(float("nan"))
+            self.centroid_y.set(float("nan"))
+
+        done = Status()
+        done.set_finished()
+        return done
 
 class FakeMarker(Marker):
     """
@@ -198,6 +223,15 @@ def fake_yag_image(
 class FakeYagCamera(YagCamera):
     """
     Fake YagCamera for testing.
+    """
+
+    image1 = Cpt(FakeLCLSImagePlugin, "IMAGE1:")
+    coords = Cpt(FakeCoords, "")
+
+
+class FakeYagWithCentroid(YagWithCentroid):
+    """
+    Fake YagWithCentroid for testing — no EPICS connections.
     """
 
     image1 = Cpt(FakeLCLSImagePlugin, "IMAGE1:")
