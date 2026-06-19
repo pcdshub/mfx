@@ -123,11 +123,7 @@ with safe_load('Debugging Scripts'):
 
 with safe_load('XLJ'):
     from pcdsdevices.jet import BeckhoffJet
-    from pcdsdevices.epics_motor import SmarAct    
     xlj = BeckhoffJet('MFX:LJH', name='xlj')
-    #sa_x = SmarAct('MFX:CHAPMAN:saX', name='sa_x')
-    #sa_y = SmarAct('MFX:CHAPMAN:saY', name='sa_y')
-    #sa_z = SmarAct('MFX:CHAPMAN:saZ', name='sa_z')
 
 with safe_load('XLJ_Fast'):
     from mfx.xlj_fast import *
@@ -350,7 +346,7 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_dia_pim as yag0
     from mfx.db import mfx_dg1_pim as yag1
     from mfx.db import mfx_dg2_pim as yag2
-    #from mfx.db import at1l0 as fat1
+    from mfx.db import at1l0 as fat1
     from mfx.db import at2l0 as fat2
     from mfx.db import mec_yag0_mfx as mec_yag0
     from mfx.db import mfx_dia_ipm as ipm0
@@ -359,8 +355,8 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_pulsepicker as pp
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
-    from mfx.db import um6_pim as xrt_yag1
-    #from mfx.db import hx2_slits as xpp_s1
+    from mfx.db import um6_pim as xcs_yag1
+    from mfx.db import hx2_slits as xpp_s1
     from mfx.db import mfx_von_hamos_6crystal as vh
     import numpy as np
     from importlib import reload
