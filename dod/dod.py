@@ -82,19 +82,23 @@ class DoD:
         self.timing_delay_nozzle_2 = self.timing_Xray - self.timing_nozzle_2 - self.timing_delay_sciPulse - self.timing_delay_reaction
 
 
-    def stop_task(self, verbose = True):
+    def stop_task(self, reconnect = False, verbose = True):
         """
         Stop task while running
         ** ISSUES **
         -  When stop task  is called, the Robot stays in "BUSY" Status.
         Parameters
         ----------
+        reconnect : boolean
+           Defines whether the function attempts to reconnect to the middleware before
         verbose : boolean
             Defines whether the function returns the full output, or only the results
         Returns: 
         r : 
             status readback when aborted
         """
+        if reconnect == True:
+            self.reconnect() 
         r = self.client.connect("Test")
         self.safety_abort = False
         r = self.client.stop_task()
@@ -103,10 +107,12 @@ class DoD:
             return r
 
 
-    def clear_abort(self, verbose = True):
+    def clear_abort(self, reconnect = False, verbose = True):
         """
         clear abort flag
         Parameters
+        reconnect : boolean
+           Defines whether the function attempts to reconnect to the middleware before
         verbose : boolean
            Defines whether the function returns the full output, or only the results
         ----------
@@ -115,6 +121,8 @@ class DoD:
             status readback after error cleared
         '''
         """
+        if reconnect == True:
+            self.reconnect() 
         r = self.client.connect("Test")
         r = self.client.get_status()
         self.safety_abort = False
@@ -190,11 +198,13 @@ class DoD:
         return False
     
     
-    def get_status(self, verbose = False):
+    def get_status(self, reconnect = False, verbose = False):
         """
         returns the robot state
         
         Parameters
+        reconnect : boolean
+           Defines whether the function attempts to reconnect to the middleware before
         verbose : boolean
            Defines whether the function returns the full output, or only the results
         ----------
@@ -202,6 +212,9 @@ class DoD:
         r : dict
             different states of the robot
         """
+        if reconnect == True:
+            self.reconnect() 
+        
         rr = self.client.connect("Test")
         r = self.client.get_status()
         # expected_keys = [
@@ -220,12 +233,18 @@ class DoD:
             return r.RESULTS
     
 
-    def busy_wait(self, timeout):
+    def busy_wait(self, timeout, reconnect = False):
         '''
             Busy wait untill timeout value is reached,
             timeout : sec
-            returns true if timeout occured
+                returns true if timeout occured
+            reconnect : boolean
+                Defines whether the function attempts to reconnect to the middleware before
+        
         '''
+        if reconnect == True:
+            self.reconnect() 
+        
         import time
         start = time.time()
         r = self.client.get_status()
