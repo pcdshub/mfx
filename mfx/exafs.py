@@ -1665,6 +1665,325 @@ class Exafs:
 
         self._finalize_scan(energy_start, k_energy_start, crystal_angle_offset)
 
+    # ==================== K-Primary XAS Scan ====================
+
+    def k_xas_scan(self, start_eV, end_eV, element='Fe',
+                   k_step_eV=None, k_move_mode='pause',
+                   dccm_window_eV=2.0, dccm_step_eV=1.0,
+                   dccm_offsets=None, dwell_time=1.0,
+                   record=False, picker=None,
+                   track_feespec=False, flux_threshold=None,
+                   crystal_angle_offset=0.0,
+                   sample='?', simulate=False, runs=1):
+        """
+        K-primary XAS scan: undulator K is the primary scan axis,
+        DCCM steps within a small window around each K position.
+
+        Designed for commissioning undulator motion and evaluating
+        data quality during K transit. No vernier requests are made.
+
+        Parameters
+        ----------
+        start_eV : float
+            Starting energy in eV
+        end_eV : float
+            Ending energy in eV
+        element : str, optional
+            Element symbol (default: 'Fe')
+        k_step_eV : float or None, optional
+            K step size in eV. Defaults to 2*dccm_window_eV (seamless tiling)
+        k_move_mode : str, optional
+            'pause': Pause DAQ, move K, wait, resume DAQ (default)
+            'concurrent': Request K non-blocking, immediately step DCCM
+        dccm_window_eV : float, optional
+            DCCM scans ±this around K center (default: 2.0)
+        dccm_step_eV : float, optional
+            DCCM step size within window (default: 1.0)
+        dccm_offsets : list or None, optional
+            Explicit list of DCCM offsets in eV relative to K center.
+            If provided, overrides dccm_window_eV and dccm_step_eV.
+        dwell_time : float, optional
+            Collection time per DCCM point in seconds (default: 1.0)
+        record : bool, optional
+            Enable DAQ recording (default: False)
+        picker : str or None, optional
+            Pulse picker mode: 'open', 'flip', or None
+        track_feespec : bool, optional
+            Track FEE spectrometer at each K move (default: False)
+        flux_threshold : float or None, optional
+            Minimum beam flux in mJ (default: None)
+        crystal_angle_offset : float, optional
+            FEE spectrometer crystal angle offset in degrees (default: 0.0)
+        sample : str, optional
+            Sample name (default: '?')
+        simulate : bool, optional
+            Run in simulation mode (default: False)
+        runs : int, optional
+            Number of scan repetitions (default: 1)
+
+        Returns
+        -------
+        list of dict
+            Summary of each collection point:
+            [{'k_target_eV': float, 'dccm_energy_eV': float,
+              'dccm_offset_eV': float, 'k_move_mode': str,
+              'run_index': int, 'point_index': int}, ...]
+        """
+        self.simulate = simulate
+
+        # === Parameter defaults and validation ===
+        if k_step_eV is None:
+            k_step_eV = 2 * dccm_window_eV
+
+        if k_move_mode not in ('pause', 'concurrent'):
+            raise ValueError(f"k_move_mode must be 'pause' or 'concurrent', got '{k_move_mode}'")
+
+        if dccm_offsets is None:
+            dccm_offsets = list(np.arange(
+                -dccm_window_eV, dccm_window_eV + dccm_step_eV / 2, dccm_step_eV
+            ))
+
+        # Compute K positions
+        k_positions_eV = list(np.arange(start_eV, end_eV + k_step_eV / 2, k_step_eV))
+
+        # Total points
+        total_points = len(k_positions_eV) * len(dccm_offsets) * runs
+
+        # === Print scan configuration ===
+        print("\n" + "=" * 60)
+        print("K-PRIMARY XAS SCAN (k_xas_scan)")
+        print("=" * 60)
+        print(f"  Element:         {element}")
+        print(f"  Energy range:    {start_eV:.1f} - {end_eV:.1f} eV")
+        print(f"  K step:          {k_step_eV:.1f} eV")
+        print(f"  K positions:     {len(k_positions_eV)} ({k_positions_eV[0]:.1f} to {k_positions_eV[-1]:.1f} eV)")
+        print(f"  K move mode:     {k_move_mode}")
+        print(f"  DCCM offsets:    {dccm_offsets} eV")
+        print(f"  DCCM points/K:   {len(dccm_offsets)}")
+        print(f"  Dwell time:      {dwell_time:.2f} s")
+        print(f"  Runs:            {runs}")
+        print(f"  Total points:    {total_points}")
+        print(f"  Record:          {record}")
+        print(f"  Picker:          {picker}")
+        print(f"  Track FEE spec:  {track_feespec}")
+        print(f"  Flux threshold:  {flux_threshold}")
+        print(f"  Simulate:        {simulate}")
+        print(f"  Sample:          {sample}")
+        est_time = total_points * dwell_time
+        if k_move_mode == 'pause':
+            est_time += len(k_positions_eV) * runs * 4  # ~4s per K move
+        print(f"  Est. time:       {est_time:.0f}s ({est_time/60:.1f} min)")
+        print("=" * 60 + "\n")
+
+        # === Store initial positions ===
+        if simulate:
+            energy_start = 7.0  # dummy for sim
+            k_energy_start = start_eV
+        else:
+            energy_start = self.dccm.energy_with_vernier.energy()
+            k_energy_start = self.acr_energy_k.get().setpoint
+
+        # === Summary collector ===
+        summary = []
+        point_index = 0
+
+        # === Main scan loop ===
+        try:
+            for run_idx in range(runs):
+                self.logger.warning(f"Starting run {run_idx + 1}/{runs}")
+
+                # Setup DAQ
+                run_number, daq_success = self._setup_daq_and_start_recording(
+                    sample, picker, False, record, run_idx
+                )
+                if not daq_success:
+                    self.logger.error("DAQ setup failed, aborting")
+                    break
+
+                for k_idx, k_target_eV in enumerate(k_positions_eV):
+                    k_target_keV = k_target_eV / 1000.0
+
+                    self.logger.warning(
+                        f"K position {k_idx + 1}/{len(k_positions_eV)}: "
+                        f"{k_target_eV:.1f} eV [{k_move_mode}]"
+                    )
+
+                    if k_move_mode == 'pause':
+                        self._k_xas_move_pause(
+                            k_target_eV, k_target_keV,
+                            track_feespec, crystal_angle_offset
+                        )
+                    elif k_move_mode == 'concurrent':
+                        self._k_xas_move_concurrent(
+                            k_target_eV, k_target_keV,
+                            track_feespec, crystal_angle_offset
+                        )
+
+                    # Step DCCM through offsets
+                    for offset in dccm_offsets:
+                        dccm_energy_eV = k_target_eV + offset
+                        dccm_energy_keV = dccm_energy_eV / 1000.0
+
+                        self.logger.info(
+                            f"  DCCM: {dccm_energy_eV:.1f} eV "
+                            f"(offset {offset:+.1f})"
+                        )
+
+                        # Move DCCM (crystal only, no vernier)
+                        if simulate:
+                            self.sim.fast_motor1.mv(dccm_energy_keV)
+                        else:
+                            self.dccm.energy.move(dccm_energy_keV, wait=True)
+
+                        # Check beam
+                        if flux_threshold:
+                            self.check_beam_status(flux_threshold)
+
+                        # Collect
+                        self._wait(dwell_time)
+
+                        # Record summary
+                        summary.append({
+                            'k_target_eV': k_target_eV,
+                            'dccm_energy_eV': dccm_energy_eV,
+                            'dccm_offset_eV': offset,
+                            'k_move_mode': k_move_mode,
+                            'run_index': run_idx,
+                            'point_index': point_index,
+                        })
+                        point_index += 1
+
+                # End of run — stop DAQ
+                if not simulate:
+                    from mfx.db import daq
+                    daq.control.setState("configured")
+                    while daq.control.getState() != "configured":
+                        sleep(0.01)
+                    daq.control.setRecord(False)
+
+                if runs > 1 and run_idx < runs - 1:
+                    self.logger.info("Inter-run delay (5s)")
+                    sleep(5)
+
+        except KeyboardInterrupt:
+            self.logger.warning("Scan aborted by user (Ctrl+C)")
+            if not simulate:
+                from mfx.db import daq, pp
+                try:
+                    daq.control.setState("configured")
+                    daq.control.setRecord(False)
+                    pp.close()
+                except Exception:
+                    pass
+
+        # === Return to initial positions ===
+        self.logger.info("Returning to initial positions")
+        if simulate:
+            self.sim.fast_motor1.mv(energy_start)
+            self.sim.slow_motor1.mv(k_energy_start)
+        else:
+            self.dccm.energy.move(energy_start, wait=True)
+            if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                self.acr_energy_k.move(k_energy_start)
+            if track_feespec:
+                self.xrtspec.move_feespec_energy(
+                    energy_start, crystal_angle_offset=crystal_angle_offset)
+
+        # === Print summary ===
+        print("\n" + "=" * 60)
+        print("SCAN COMPLETE")
+        print("=" * 60)
+        print(f"  Total points collected: {len(summary)}")
+        print(f"  K positions visited:    {len(k_positions_eV) * min(runs, run_idx + 1)}")
+        print(f"  K move mode:            {k_move_mode}")
+        if summary:
+            print(f"  Energy range covered:   "
+                  f"{min(s['dccm_energy_eV'] for s in summary):.1f} - "
+                  f"{max(s['dccm_energy_eV'] for s in summary):.1f} eV")
+        print("=" * 60 + "\n")
+
+        return summary
+
+    def _k_xas_move_pause(self, k_target_eV, k_target_keV,
+                          track_feespec, crystal_angle_offset):
+        """
+        Move K in 'pause' mode: pause DAQ, move K, wait, resume.
+
+        Parameters
+        ----------
+        k_target_eV : float
+            Target K energy in eV
+        k_target_keV : float
+            Target K energy in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+        """
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_target_eV)
+            self.k_energy = k_target_eV
+            return
+
+        from mfx.db import daq
+
+        # Pause DAQ
+        if daq.control.getState() == "running":
+            daq.control.setState("paused")
+            while daq.control.getState() != "paused":
+                sleep(0.01)
+            sleep(0.5)
+
+        # Move FEE spec before K
+        if track_feespec:
+            self.xrtspec.move_feespec_energy(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Move K (blocking)
+        self.acr_energy_k.move(k_target_eV)
+        self.k_energy = k_target_eV
+
+        # Verify FEE spec
+        if track_feespec:
+            self.xrtspec.check_feespec_crystal_angle(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Resume DAQ
+        if daq.control.getState() == "paused":
+            daq.control.setState("running")
+            while daq.control.getState() != "running":
+                sleep(0.01)
+
+    def _k_xas_move_concurrent(self, k_target_eV, k_target_keV,
+                               track_feespec, crystal_angle_offset):
+        """
+        Move K in 'concurrent' mode: request K non-blocking, don't wait.
+
+        Parameters
+        ----------
+        k_target_eV : float
+            Target K energy in eV
+        k_target_keV : float
+            Target K energy in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+        """
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_target_eV)
+            self.k_energy = k_target_eV
+            return
+
+        # Move FEE spec (fast, do before K)
+        if track_feespec:
+            self.xrtspec.move_feespec_energy(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Request K move — non-blocking (don't wait for completion)
+        self.acr_energy_k.move(k_target_eV, wait=False)
+        self.k_energy = k_target_eV
+
 
 class EXAFSEnergyRangeBuilder:
     """
