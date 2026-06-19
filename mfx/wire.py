@@ -318,18 +318,29 @@ class Wire:
             import sys
             sys.exit("Invalid motor selection")
 
+        # Validate motor selection
+        if pv is None:
+            logger.error("Must specify pv='x' or pv='y' or custom pv")
+            import sys
+            sys.exit("No motor specified")
+
+        if pv not in ['x', 'y']:
+            logger.warning("pv not 'x' or 'y'. using custom PV: {pv}")
+
         # Validate DAQ number
         if daq_num not in [1, 2]:
             logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
             raise ValueError("Invalid daq_num")
 
         # Select motor PV
-        if pv == 'x':
+        if pv.lower() == 'x':
             pv = self.x_pv
             axis_name = 'X'
-        else:
+        elif pv.lower() == 'y':
             pv = self.y_pv
             axis_name = 'Y'
+        else:
+            pv = axis_name= pv.upper()
 
         logger.info(
             f"Starting {axis_name}-axis wire scan: "
