@@ -152,7 +152,9 @@ class Wire:
             record: bool = False,
             daq_num: int = 2,
             pv: str = None,
+            camera: str = 'alvium_dg3',
             analysis: bool = True):
+
         """
         Perform wire scan across beam.
 
@@ -189,6 +191,8 @@ class Wire:
             DAQ version: 1 (LCLS-I) or 2 (LCLS-II) (default: 2)
         pv : str or None, required
             Motor to scan: 'x' or 'y'
+        camera : str, optional
+            Detector name for timing analysis camera (default: 'alvium_dg3')
         analysis : bool, optional
             Prompt for automatic analysis after scan completion,
             by default True.
@@ -298,6 +302,16 @@ class Wire:
         ...     num_steps=41,
         ...     pv='x',
         ...     picker='open',
+        ...     record=True
+        ... )
+        
+        Scan with non-default camera:
+        >>> wire.scan(
+        ...     start=-2.0,
+        ...     end=2.0,
+        ...     num_steps=41,
+        ...     pv='x',
+        ...     camera='t_zero_alvium',
         ...     record=True
         ... )
 
@@ -470,4 +484,5 @@ class Wire:
                     facility=facility,
                     exp=exp,
                     run=run_number,
-                    daq_num=daq_num)
+                    daq_num=daq_num,
+                    camera=camera)

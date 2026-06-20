@@ -268,8 +268,10 @@ class Timing:
             center: float = None,
             delay: bool = False,
             duration: float = 300.0,
-            sweep_time: float = 5.0
+            sweep_time: float = 5.0,
+            camera: str = 'alvium_dg3'
             ):
+
         """
         Execute timing calibration scan series.
 
@@ -313,6 +315,9 @@ class Timing:
             Randomize order of scan positions, by default False.
         delay : bool, optional
             Include additional delay scan, by default False.
+        camera : str, optional
+            Detector name passed to the analysis script (default: 'alvium_dg3').
+            Corresponds to the camera detector used during the scan.
         analysis : bool, optional
             Prompt for automatic analysis after scan completion,
             by default True.
@@ -548,7 +553,8 @@ class Timing:
                     facility=facility,
                     exp=exp,
                     run=run_number,
-                    daq_num=daq_num)
+                    daq_num=daq_num,
+                    camera=camera)
 
     def output(
         self,
@@ -556,7 +562,8 @@ class Timing:
         facility: str = 'S3DF',
         exp: str = None,
         run: str = None,
-        daq_num: int = 2):
+        daq_num: int = 2,
+        camera: str = 'alvium_dg3'):
         """
         Analysis and output for timing scan data.
 
@@ -579,6 +586,9 @@ class Timing:
         daq_num : int, optional
             DAQ station number (1 or 2), by default 2.
             Station 0 corresponds to daq_num=2, station 1 to daq_num=1.
+        camera : str, optional
+            Detector name for the camera used in analysis (default: 'alvium_dg3').
+            Passed as -c argument to the remote analysis script.
 
         Returns
         -------
@@ -604,7 +614,7 @@ class Timing:
         prompt for token renewal if needed.
 
         The analysis script path is:
-        /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing.py
+        /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing_v2.py
 
         Examples
         --------
@@ -616,7 +626,16 @@ class Timing:
         ...     run='100',
         ...     daq_num=2
         ... )
-
+        
+        >>> timing.output(
+        ...     user='myuser',
+        ...     facility='S3DF',
+        ...     exp='mfxls1234',
+        ...     run='100',
+        ...     daq_num=2, 
+        ...     camera='t_zero_alvium'
+        ... )
+        
         See Also
         --------
         series : Perform timing scan series data collection
@@ -648,8 +667,8 @@ class Timing:
         proc = [
             f"ssh -Yt {user}@s3dflogin '"
             f"source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh && "
-            f"python /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing.py "
-            f"-f {facility} -t proxy -e {exp} -r {run}'"
+            f"python /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing_v2.py "
+            f"-f {facility} -t proxy -e {exp} -r {run} -c {camera}'"
             ]
 
         logger.info(proc)
