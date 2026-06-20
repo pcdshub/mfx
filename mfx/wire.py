@@ -120,16 +120,23 @@ class Wire:
     output : Analyze scan results
     """
 
-    def __init__(self):
+    def __init__(
+            self,
+            x_pv: str = 'MFX:LJH:JET:X',
+            y_pv: str = 'MFX:LJH:JET:Y'):
         """
         Initialize Wire scanner controller.
-
-        Sets up motor PV connections for X and Y axes.
+        Parameters
+        ----------
+        x_pv : str, optional
+            EPICS PV for X motor (default: 'MFX:LJH:JET:X')
+        y_pv : str, optional
+            EPICS PV for Y motor (default: 'MFX:LJH:JET:Y')
         """
-        # self.x_pv = 'MFX:USR:MMN:41'
+        # self.x_pv = 'MFX:USR:MMN:41' #DoT motors
         # self.y_pv = 'MFX:USR:MMN:42'
-        self.x_pv = 'MFX:LJH:JET:X'
-        self.y_pv = 'MFX:LJH:JET:Y'
+        self.x_pv = x_pv
+        self.y_pv = y_pv
         logger.info("Wire scanner initialized")
 
     def scan(
