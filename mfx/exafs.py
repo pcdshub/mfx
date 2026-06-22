@@ -12,15 +12,28 @@ import json
 import logging
 from time import sleep, time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ophyd import EpicsSignalRO
-from pcdsdevices.beam_stats import BeamEnergyRequestACRWait
+try:
+    from ophyd import EpicsSignalRO
+    from pcdsdevices.beam_stats import BeamEnergyRequestACRWait
+    from tfs.sim_transfocator import make_tfs_sim
+    from tfs.transfocator import Transfocator
+    _HW_AVAILABLE = True
+except ImportError:
+    _HW_AVAILABLE = False
 
-from tfs.sim_transfocator import make_tfs_sim
-from tfs.transfocator import Transfocator
+
+class _SimMotor:
+    """Minimal simulated motor for offline testing."""
+    def __init__(self):
+        self.position = 0.0
+
+    def mv(self, value):
+        self.position = float(value)
 
 
 class Exafs:
@@ -61,35 +74,48 @@ class Exafs:
         Vernier device controller
     """
 
-    ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
+    if _HW_AVAILABLE:
+        ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
 
-    acr_energy_v = BeamEnergyRequestACRWait(
-        name='acr_energy', prefix='MFX', acr_status_suffix='AO805'
-    )
-    acr_energy_k = BeamEnergyRequestACRWait(
-        name='acr_energy', prefix='MFX', acr_status_suffix='AO805', pv_index=2
-    )
+        acr_energy_v = BeamEnergyRequestACRWait(
+            name='acr_energy', prefix='MFX', acr_status_suffix='AO805'
+        )
+        acr_energy_k = BeamEnergyRequestACRWait(
+            name='acr_energy', prefix='MFX', acr_status_suffix='AO805', pv_index=2
+        )
 
-    def __init__(self):
+    def __init__(self, simulate=False):
         """
         Initialize EXAFS controller.
 
-        Creates logger, initializes DCCM and Vernier controllers,
-        sets up energy range builder, and configures simulation mode.
+        Parameters
+        ----------
+        simulate : bool, optional
+            If True, skip all hardware connections and use mock motors.
+            Allows fully offline instantiation for testing. (default: False)
         """
-        from mfx.dccm import DCCM
-        from hutch_python import sim
-        from mfx.xrt_spec import XRTspec
-        self.xrtspec = XRTspec()
         self.logger = logging.getLogger(__name__)
-        self.dccm = DCCM(name='DCCM')
+        self.simulate = simulate
         self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
-        self.simulate = False
-        self.sim = sim.get_hw()
         self.tfs = None
         self.k_energy = None
         self.vernier_offset = None
         self.vernier_device = None
+
+        if simulate:
+            self.dccm = None
+            self.xrtspec = None
+            self.sim = SimpleNamespace(
+                fast_motor1=_SimMotor(),
+                slow_motor1=_SimMotor(),
+            )
+        else:
+            from mfx.dccm import DCCM
+            from hutch_python import sim
+            from mfx.xrt_spec import XRTspec
+            self.xrtspec = XRTspec()
+            self.dccm = DCCM(name='DCCM')
+            self.sim = sim.get_hw()
 
     # ==================== Core Motion Methods ====================
 
@@ -1667,8 +1693,8 @@ class Exafs:
 
     # ==================== K-Primary XAS Scan ====================
 
-    def k_xas_scan(self, start_eV, end_eV, element='Fe',
-                   k_step_eV=None, k_move_mode='pause',
+    def k_xas_scan(self, start_eV=None, end_eV=None, element='Fe',
+                   k_step_eV=None, k_positions=None, k_move_mode='pause',
                    dccm_window_eV=2.0, dccm_step_eV=1.0,
                    dccm_offsets=None, dwell_time=1.0,
                    record=False, picker=None,
@@ -1684,14 +1710,19 @@ class Exafs:
 
         Parameters
         ----------
-        start_eV : float
-            Starting energy in eV
-        end_eV : float
-            Ending energy in eV
+        start_eV : float or None, optional
+            Starting energy in eV (ignored if k_positions provided)
+        end_eV : float or None, optional
+            Ending energy in eV (ignored if k_positions provided)
         element : str, optional
             Element symbol (default: 'Fe')
         k_step_eV : float or None, optional
-            K step size in eV. Defaults to 2*dccm_window_eV (seamless tiling)
+            K step size in eV. Defaults to 2*dccm_window_eV (seamless tiling).
+            Ignored if k_positions provided.
+        k_positions : array_like or None, optional
+            Explicit list of K energies in eV. If provided, overrides
+            start_eV/end_eV/k_step_eV. Rounded to 0.1 eV, deduplicated,
+            and sorted ascending.
         k_move_mode : str, optional
             'pause': Pause DAQ, move K, wait, resume DAQ (default)
             'concurrent': Request K non-blocking, immediately step DCCM
@@ -1745,28 +1776,28 @@ class Exafs:
 
         Examples
         --------
-        Fe K-edge commissioning (7100-7150 eV), simulation:
+        Mode 1 — K at every point (undulator moves at each energy):
 
-        >>> summary = exafs.k_xas_scan(7100, 7150, element='Fe',
-        ...     dccm_window_eV=2.0, dccm_step_eV=1.0, simulate=True)
+        >>> roi_scan = [7095, 7098, 7101, 7104, 7106.3, 7106.6, ...]
+        >>> summary = exafs.k_xas_scan(k_positions=roi_scan,
+        ...     dccm_offsets=[0.0], dwell_time=1.0,
+        ...     track_feespec=True, simulate=True)
 
-        Same scan with concurrent K moves and FEE tracking:
+        Mode 2 — DCCM probes window around each K position:
 
-        >>> summary = exafs.k_xas_scan(7100, 7150, element='Fe',
-        ...     k_move_mode='concurrent', track_feespec=True,
-        ...     record=True, sample='FeO_film')
+        >>> summary = exafs.k_xas_scan(start_eV=7095, end_eV=7195,
+        ...     k_step_eV=4.0, dccm_window_eV=2.0, dccm_step_eV=1.0,
+        ...     track_feespec=True, simulate=True)
 
-        Custom DCCM offsets (asymmetric window):
+        Concurrent K moves (collect during transit):
 
-        >>> summary = exafs.k_xas_scan(7100, 7150, element='Fe',
-        ...     dccm_offsets=[-1.0, 0.0, 0.5, 1.0, 2.0])
+        >>> summary = exafs.k_xas_scan(start_eV=7095, end_eV=7195,
+        ...     k_step_eV=1.0, dccm_offsets=[0.0],
+        ...     k_move_mode='concurrent', simulate=True)
         """
         self.simulate = simulate
 
         # === Parameter defaults and validation ===
-        if k_step_eV is None:
-            k_step_eV = 2 * dccm_window_eV
-
         if k_move_mode not in ('pause', 'concurrent'):
             raise ValueError(f"k_move_mode must be 'pause' or 'concurrent', got '{k_move_mode}'")
 
@@ -1777,10 +1808,17 @@ class Exafs:
             dccm_offsets = sorted(set(dccm_offsets))
 
         # Compute K positions
-        k_positions_eV = np.round(
-            np.arange(start_eV, end_eV + k_step_eV / 2, k_step_eV), 1
-        )
-        k_positions_eV = sorted(set(k_positions_eV.tolist()))
+        if k_positions is not None:
+            k_positions_eV = sorted(set(np.round(k_positions, 1).tolist()))
+        else:
+            if start_eV is None or end_eV is None:
+                raise ValueError("Must provide either k_positions or both start_eV and end_eV")
+            if k_step_eV is None:
+                k_step_eV = 2 * dccm_window_eV
+            k_positions_eV = np.round(
+                np.arange(start_eV, end_eV + k_step_eV / 2, k_step_eV), 1
+            )
+            k_positions_eV = sorted(set(k_positions_eV.tolist()))
 
         # Total points
         total_points = len(k_positions_eV) * len(dccm_offsets) * runs
@@ -1790,8 +1828,11 @@ class Exafs:
         print("K-PRIMARY XAS SCAN (k_xas_scan)")
         print("=" * 60)
         print(f"  Element:         {element}")
-        print(f"  Energy range:    {start_eV:.1f} - {end_eV:.1f} eV")
-        print(f"  K step:          {k_step_eV:.1f} eV")
+        print(f"  Energy range:    {k_positions_eV[0]:.1f} - {k_positions_eV[-1]:.1f} eV")
+        if k_step_eV is not None:
+            print(f"  K step:          {k_step_eV:.1f} eV")
+        else:
+            print(f"  K step:          custom ({len(k_positions_eV)} positions)")
         print(f"  K positions:     {len(k_positions_eV)} ({k_positions_eV[0]:.1f} to {k_positions_eV[-1]:.1f} eV)")
         print(f"  K move mode:     {k_move_mode}")
         print(f"  DCCM offsets:    {dccm_offsets} eV")
@@ -1814,7 +1855,7 @@ class Exafs:
         # === Store initial positions ===
         if simulate:
             energy_start = 7.0  # dummy for sim
-            k_energy_start = start_eV
+            k_energy_start = k_positions_eV[0]
         else:
             energy_start = self.dccm.energy_with_vernier.energy()
             k_energy_start = self.acr_energy_k.get().setpoint
