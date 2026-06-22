@@ -1728,6 +1728,38 @@ class Exafs:
             [{'k_target_eV': float, 'dccm_energy_eV': float,
               'dccm_offset_eV': float, 'k_move_mode': str,
               'run_index': int, 'point_index': int}, ...]
+
+        Notes
+        -----
+        K positions are computed as arange(start_eV, end_eV, k_step_eV).
+        Default k_step_eV = 2*dccm_window_eV gives seamless energy tiling
+        with no gaps between successive DCCM windows.
+
+        Uses dccm.energy (crystal-only) — no vernier requests are issued.
+        This is required for experiments where the vernier PV is rejected
+        by the accelerator.
+
+        In 'concurrent' mode, early DCCM points at each K position are
+        collected while the undulator is still settling. This allows
+        evaluating data quality during transit vs. after settling.
+
+        Examples
+        --------
+        Fe K-edge commissioning (7100-7150 eV), simulation:
+
+        >>> summary = exafs.k_xas_scan(7100, 7150, element='Fe',
+        ...     dccm_window_eV=2.0, dccm_step_eV=1.0, simulate=True)
+
+        Same scan with concurrent K moves and FEE tracking:
+
+        >>> summary = exafs.k_xas_scan(7100, 7150, element='Fe',
+        ...     k_move_mode='concurrent', track_feespec=True,
+        ...     record=True, sample='FeO_film')
+
+        Custom DCCM offsets (asymmetric window):
+
+        >>> summary = exafs.k_xas_scan(7100, 7150, element='Fe',
+        ...     dccm_offsets=[-1.0, 0.0, 0.5, 1.0, 2.0])
         """
         self.simulate = simulate
 
@@ -1739,12 +1771,16 @@ class Exafs:
             raise ValueError(f"k_move_mode must be 'pause' or 'concurrent', got '{k_move_mode}'")
 
         if dccm_offsets is None:
-            dccm_offsets = list(np.arange(
+            dccm_offsets = np.round(np.arange(
                 -dccm_window_eV, dccm_window_eV + dccm_step_eV / 2, dccm_step_eV
-            ))
+            ), 1).tolist()
+            dccm_offsets = sorted(set(dccm_offsets))
 
         # Compute K positions
-        k_positions_eV = list(np.arange(start_eV, end_eV + k_step_eV / 2, k_step_eV))
+        k_positions_eV = np.round(
+            np.arange(start_eV, end_eV + k_step_eV / 2, k_step_eV), 1
+        )
+        k_positions_eV = sorted(set(k_positions_eV.tolist()))
 
         # Total points
         total_points = len(k_positions_eV) * len(dccm_offsets) * runs
@@ -1919,6 +1955,13 @@ class Exafs:
             Track FEE spectrometer
         crystal_angle_offset : float
             FEE crystal angle offset in degrees
+
+        Notes
+        -----
+        Sequence: pause DAQ → move FEE spec (optional) → move K
+        (blocking) → verify FEE → resume DAQ. Data collection stops
+        during K transit. Typical K move takes 2-5 s depending on
+        step size.
         """
         if self.simulate:
             self.sim.slow_motor1.mv(k_target_eV)
@@ -1969,6 +2012,13 @@ class Exafs:
             Track FEE spectrometer
         crystal_angle_offset : float
             FEE crystal angle offset in degrees
+
+        Notes
+        -----
+        Issues acr_energy_k.move(wait=False) so data collection can
+        continue while the undulator settles. Early DCCM points in the
+        subsequent offset loop will be collected during K transit — useful
+        for evaluating whether in-transit data is scientifically usable.
         """
         if self.simulate:
             self.sim.slow_motor1.mv(k_target_eV)
@@ -2155,7 +2205,7 @@ class EXAFSEnergyRangeBuilder:
         )
 
         K_values = np.arange(min_K_value, max_K_value + K_spacing, K_spacing)
-        energy_K_range = [self.K_to_eV(K) for K in K_values]
+        energy_K_range = np.array([self.K_to_eV(K) for K in K_values])
 
         energy_in_edge = np.arange(
             preedge_end + edge_eV_increment, np.min(energy_K_range), edge_eV_increment
@@ -2174,6 +2224,11 @@ class EXAFSEnergyRangeBuilder:
         time_range = np.concatenate((
             time_before_edge_arr, time_in_preedge_arr, time_in_edge_arr, time_EXAFS
         ))
+
+        # Round to 0.1 eV, remove duplicates, sort ascending
+        energy_range = np.round(energy_range, 1)
+        energy_range, unique_idx = np.unique(energy_range, return_index=True)
+        time_range = time_range[unique_idx]
 
         # Store for plotting
         if start_ev >= preedge_end:
