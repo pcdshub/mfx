@@ -1696,7 +1696,7 @@ class Exafs:
     def k_xas_scan(self, start_eV=None, end_eV=None, element='Fe',
                    k_step_eV=None, k_positions=None, k_move_mode='pause',
                    dccm_window_eV=2.0, dccm_step_eV=1.0,
-                   dccm_offsets=None, dwell_time=1.0,
+                   dccm_offsets=None, dwell_time=3.0,
                    record=False, picker=None,
                    track_feespec=False, flux_threshold=None,
                    crystal_angle_offset=0.0,
@@ -1734,7 +1734,7 @@ class Exafs:
             Explicit list of DCCM offsets in eV relative to K center.
             If provided, overrides dccm_window_eV and dccm_step_eV.
         dwell_time : float, optional
-            Collection time per DCCM point in seconds (default: 1.0)
+            Collection time per DCCM point in seconds (default: 3.0)
         record : bool, optional
             Enable DAQ recording (default: False)
         picker : str or None, optional
