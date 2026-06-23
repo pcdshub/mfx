@@ -135,6 +135,17 @@ with safe_load('XLJ_Fast'):
     xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
 
+with safe_load('Wolter_mirror_motion'):
+    from pcdsdevices.epics_motor import IMS
+    wolter_x = IMS("MFX:USR:MMS:22", name="wolter_x")
+    wolter_y = IMS("MFX:USR:MMS:20", name="wolter_y")
+    wolter_z = IMS("MFX:USR:MMS:21", name="wolter_z")
+    wolter_rx = IMS("MFX:USR:MMS:17", name="wolter_rx")
+    wolter_ry = IMS("MFX:USR:MMS:19", name="wolter_ry")
+    wolter_rz = IMS("MFX:USR:MMS:18", name="wolter_rz")
+    
+
+
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
     dccm = DCCM(name='DCCM')
