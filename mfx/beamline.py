@@ -109,6 +109,11 @@ with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = Yano()
 
+with safe_load('tape_drive_motors'):
+    from pcdsdevices.device_types import Newport
+    tapedrive_x = Newport('MFX:USR:MMN:42', name='tapedrive_x')   # give descriptions later
+    tapedrive_y = Newport('MFX:USR:MMN:41', name='tapedrive_y')
+
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *
     codi = CoDI()
@@ -143,8 +148,6 @@ with safe_load('Wolter_mirror_motion'):
     wolter_rx = IMS("MFX:USR:MMS:17", name="wolter_rx")
     wolter_ry = IMS("MFX:USR:MMS:19", name="wolter_ry")
     wolter_rz = IMS("MFX:USR:MMS:18", name="wolter_rz")
-    
-
 
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
@@ -177,7 +180,7 @@ with safe_load('Get_Info'):
 
 with safe_load('Wire_Scan'):
     from mfx.wire import *
-    wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
+    wire = Wire(x_pv = 'MFX:USR:MMN:41', y_pv = 'MFX:USR:MMN:42')
 
 with safe_load('EXAFS'):
     from mfx.exafs import *
@@ -327,10 +330,10 @@ def mfx_reload(module_name):
         from mfx.find import Find
         find = Find()
 
-    if module_name == 'mfx.wire':
-        from mfx.wire import Wire
-        wire = Wire()
-
+    if module_name == 'mfx.wire': #This is double trouble
+        from mfx.wire import *
+        wire = Wire(x_pv = 'MFX:USR:MMN:41', y_pv = 'MFX:USR:MMN:42')
+   
     if module_name == 'mfx.debug':
         from mfx.debug import Debug
         debug = Debug()
