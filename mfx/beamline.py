@@ -180,7 +180,7 @@ with safe_load('Get_Info'):
 
 with safe_load('Wire_Scan'):
     from mfx.wire import *
-    wire = Wire(x_pv = 'MFX:USR:MMN:41', y_pv = 'MFX:USR:MMN:42')
+    wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
 
 with safe_load('EXAFS'):
     from mfx.exafs import *
@@ -332,7 +332,7 @@ def mfx_reload(module_name):
 
     if module_name == 'mfx.wire': #This is double trouble
         from mfx.wire import Wire
-        wire = Wire(x_pv = 'MFX:USR:MMN:41', y_pv = 'MFX:USR:MMN:42')
+        wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
    
     if module_name == 'mfx.debug':
         from mfx.debug import Debug
