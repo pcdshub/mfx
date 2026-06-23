@@ -331,7 +331,7 @@ def mfx_reload(module_name):
         find = Find()
 
     if module_name == 'mfx.wire': #This is double trouble
-        from mfx.wire import *
+        from mfx.wire import Wire
         wire = Wire(x_pv = 'MFX:USR:MMN:41', y_pv = 'MFX:USR:MMN:42')
    
     if module_name == 'mfx.debug':
