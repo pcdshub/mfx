@@ -289,14 +289,6 @@ def output(
     qadc1_low = 74
     qadc1_high = 130
 
-    # diode_0 = run.Detector('qadc_ch0')
-    # diode_1 = run.Detector('qadc_ch1')
-
-    # plt.plot(diode_0[qadc0_low:qadc0_high],label='qadc0')
-    # plt.plot(diode_1[qadc1_low:qadc1_high],label='qadc1')
-    # plt.legend()
-
-    # Load all QADC data from XTC and save in a df
     experiment = exp
     run_numbers = [run]
 
@@ -314,24 +306,6 @@ def output(
         )
         save_outputs = False
 
-    all_counts = []
-    evts = 0
-    qadc0_cropped = []
-    qadc1_cropped = []
-    time_mot = []
-    x_ray_diode_sum = []
-    dg3_sum = []
-    x = []
-
-    # want to pick up the scanned motor automatically
-    def get_scan_motor(run):
-        tmp = run.scaninfo
-        ignore = {"step_value", "step_docstring"}
-
-        mot_name = next(k[0] for k in tmp if k[1] == "raw" and k[0] not in ignore)
-        print(f"Scanning motor found as: {mot_name}")
-        return mot_name
-
     for run_number in run_numbers:
         logger.info(f"Processing run {run_number} for experiment {experiment}...")
         ds = DataSource(exp=experiment, run=int(run_number), xdetectors=["jungfrau"])
@@ -339,162 +313,188 @@ def output(
         for run in ds.runs():
             diode_0 = run.Detector("qadc_ch0")
             diode_1 = run.Detector("qadc_ch1")
-            dg3_cam = run.Detector(camera)  # camera
+            dg3_cam = run.Detector(camera)
 
             t_stage = get_scan_motor(run)
             tmptmp = run.Detector(t_stage)
             ipm = run.Detector("MfxDg2BmMon")
 
             evts = 0
+            qadc0_cropped = []
+            qadc1_cropped = []
+            time_mot = []
+            x_ray_diode_sum = []
+            dg3_sum = []
 
             for i_evt, evt in enumerate(run.events()):
                 evts += 1
 
+                # Always collect stage position, IPM, and camera — independent of QADC
+                time_mot.append(tmptmp(evt))
+                x_ray_diode_sum.append(ipm.raw.totalIntensityJoules(evt))
+
+                try:
+                    img = dg3_cam.raw.value(evt)
+                    img_sum = np.sum(img) if img is not None else np.nan
+                except Exception:
+                    img_sum = np.nan
+                dg3_sum.append(img_sum)
+
+                # QADC — append nan when absent so all lists stay aligned
                 diode_val_0 = diode_0.raw.value(evt)
                 diode_val_1 = diode_1.raw.value(evt)
-
                 if diode_val_0 is not None and diode_val_1 is not None:
                     tmp0 = np.sum(np.abs(diode_val_0[qadc0_low:qadc0_high]))
                     tmp1 = np.sum(np.abs(diode_val_1[qadc1_low:qadc1_high]))
+                else:
+                    tmp0 = np.nan
+                    tmp1 = np.nan
+                qadc0_cropped.append(tmp0)
+                qadc1_cropped.append(tmp1)
 
-                    qadc0_cropped.append(tmp0)
-                    qadc1_cropped.append(tmp1)
+            qadc0_cropped = np.array(qadc0_cropped)
+            qadc1_cropped = np.array(qadc1_cropped)
 
-                    time_mot.append(tmptmp(evt))
-                    x_ray_diode_sum.append(ipm.raw.totalIntensityJoules(evt))
+            # Determine whether usable QADC data exists
+            qadc_available = bool(np.any(np.isfinite(qadc0_cropped)))
+            if not qadc_available:
+                logger.warning(
+                    "No QADC data found in this run. QADC plots and fit will be skipped."
+                )
 
-                    # --- camera read with try ---
-                    try:
-                        img = dg3_cam.raw.value(evt)
-                        if img is not None:
-                            img_sum = np.sum(img)
-                        else:
-                            img_sum = np.nan
-                    except Exception:
-                        img_sum = np.nan
-
-                    dg3_sum.append(img_sum)
-
-        qadc0_cropped = np.array(qadc0_cropped)
-        qadc1_cropped = np.array(qadc1_cropped)
-
-        data = {
-            "t_position": time_mot,
-            "qadc0_sum": qadc0_cropped,
-            "qadc1_sum": qadc1_cropped,
-            "x_ray_diode_sum": x_ray_diode_sum,
-            "dg3_sum": dg3_sum,
-        }
-
-        df = pd.DataFrame(data)
-
-        df["normalized_laser"] = df["qadc1_sum"]
-        df["normalized_laser_dg3"] = df["dg3_sum"]
-
-        fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
-
-        axes[0].scatter(df["t_position"], df["normalized_laser"], s=0.1)
-        axes[0].set_title(f"Run: {run_number}, scanning: {t_stage}")
-        axes[0].set_xlabel(t_stage)
-        axes[0].set_ylabel("normalized laser")
-
-        axes[1].scatter(df["t_position"], df["normalized_laser_dg3"], s=0.1)
-        axes[1].set_title(f"{camera}")
-        axes[1].set_xlabel(t_stage)
-
-        plt.tight_layout()
-        if save_outputs:
-            fig.savefig(
-                run_dir / f"scatter_raw_{camera}.png", dpi=150, bbox_inches="tight"
-            )
-            logger.info(
-                f"Raw scatter plot saved to {run_dir / f'scatter_raw_{camera}.png'}"
-            )
-        try:
-            plt.show()
-        except Exception as e:
-            logger.warning(f"Could not display plot: {e}")
-
-        # Remove outliers and bin data
-        diode_repsonse = "normalized_laser_dg3"  # could use normalized_laser_x_ray if X-ray normalization look sensible
-        # --- Remove outliers using IQR on normalized_laser ---
-        Q1 = df[diode_repsonse].quantile(0.25)
-        Q3 = df[diode_repsonse].quantile(0.75)
-        IQR = Q3 - Q1
-
-        # Keep only points within 1.5 * IQR
-        df_clean = df[
-            (df[diode_repsonse] >= Q1 - 1.5 * IQR)
-            & (df[diode_repsonse] <= Q3 + 1.5 * IQR)
-        ]
-
-        # --- Save cleaned data as CSV ---
-        if save_outputs:
-            csv_path = run_dir / f"data_{camera}.csv"
-            df_clean.to_csv(csv_path, index=False)
-            logger.info(f"Cleaned data saved to {csv_path}")
-
-        # --- Bin and plot ---
-        n_bins = 100
-        if (
-            t_stage == "lxt_ttc"
-            or t_stage == "mfx_lxt_fast1"
-            or t_stage == "mfx_lxt_fast2"
-        ):
-            df_clean["t_bin"] = pd.cut(
-                df_clean["t_position"].astype(float), bins=n_bins
-            )
-        else:
-            df_clean["t_bin"] = pd.cut(df_clean["t_position"], bins=n_bins)
-
-        binned = df_clean.groupby("t_bin").agg(
-            {"t_position": "mean", diode_repsonse: "mean"}
-        )
-
-        plt.figure(figsize=(6, 4))
-        plt.scatter(
-            binned["t_position"], binned[diode_repsonse], color="royalblue", s=40
-        )
-        plt.xlabel(t_stage)
-        plt.ylabel("normalized_laser")
-        plt.title("Binned Scatter (Outliers Removed)")
-        plt.grid(True)
-        plt.tight_layout()
-        if save_outputs:
-            plt.savefig(
-                run_dir / f"scatter_binned_{camera}.png", dpi=150, bbox_inches="tight"
-            )
-            logger.info(
-                f"Binned scatter plot saved to {run_dir / f'scatter_binned_{camera}.png'}"
-            )
-        try:
-            plt.show()
-        except Exception as e:
-            logger.warning(f"Could not display plot: {e}")
-
-        # Now fit
-        popt, _, _, _ = fit_irfs1(
-            binned["t_position"],
-            binned[diode_repsonse],
-            run_number,
-            t_stage,
-            save_path=(run_dir / f"fit_{camera}.png") if save_outputs else None,
-        )
-
-        # --- Save fit parameters as JSON ---
-        if save_outputs:
-            fit_params = {
-                "run": run_number,
-                "camera": camera,
-                "t_stage": t_stage,
-                "FWHM": float(abs(popt[1]) * 2.355),
-                "center": float(popt[2]),
-                "amplitude": float(popt[0]),
+            data = {
+                "t_position": time_mot,
+                "qadc0_sum": qadc0_cropped,
+                "qadc1_sum": qadc1_cropped,
+                "x_ray_diode_sum": x_ray_diode_sum,
+                "dg3_sum": dg3_sum,
             }
-            json_path = run_dir / f"fit_params_{camera}.json"
-            with open(json_path, "w") as f:
-                json.dump(fit_params, f, indent=2)
-            logger.info(f"Fit parameters saved to {json_path}")
+
+            df = pd.DataFrame(data)
+            df["normalized_laser"] = df["qadc1_sum"]
+            df["normalized_laser_dg3"] = df["dg3_sum"]
+
+            # --- Raw scatter: combined figure, one subplot per signal ---
+            fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
+
+            if qadc_available:
+                axes[0].scatter(df["t_position"], df["normalized_laser"], s=0.1)
+            else:
+                axes[0].text(
+                    0.5,
+                    0.5,
+                    "QADC not available",
+                    ha="center",
+                    va="center",
+                    transform=axes[0].transAxes,
+                    fontsize=12,
+                )
+            axes[0].set_title(f"QADC Ch1 | Run {run_number} | {t_stage}")
+            axes[0].set_xlabel(t_stage)
+            axes[0].set_ylabel("QADC Ch1 signal (arb. units)")
+
+            axes[1].scatter(df["t_position"], df["normalized_laser_dg3"], s=0.1)
+            axes[1].set_title(f"Camera: {camera} | Run {run_number} | {t_stage}")
+            axes[1].set_xlabel(t_stage)
+            axes[1].set_ylabel("Camera image sum (arb. units)")
+
+            plt.tight_layout()
+            if save_outputs:
+                fig.savefig(
+                    run_dir / f"scatter_raw_{camera}.png", dpi=150, bbox_inches="tight"
+                )
+                logger.info(
+                    f"Raw scatter plot saved to {run_dir / f'scatter_raw_{camera}.png'}"
+                )
+            try:
+                plt.show()
+            except Exception as e:
+                logger.warning(f"Could not display plot: {e}")
+
+            # --- Per-signal pipeline: outlier removal → bin → fit → save ---
+            signals_to_process = [(camera, "normalized_laser_dg3")]
+            if qadc_available:
+                signals_to_process.append(("qadc", "normalized_laser"))
+
+            for sig_label, sig_col in signals_to_process:
+                logger.info(f"Processing signal: {sig_label} ({sig_col})")
+
+                # Outlier removal using IQR
+                Q1 = df[sig_col].quantile(0.25)
+                Q3 = df[sig_col].quantile(0.75)
+                IQR = Q3 - Q1
+                df_clean = df[
+                    (df[sig_col] >= Q1 - 1.5 * IQR) & (df[sig_col] <= Q3 + 1.5 * IQR)
+                ].copy()
+
+                if save_outputs:
+                    csv_path = run_dir / f"data_{sig_label}.csv"
+                    df_clean.to_csv(csv_path, index=False)
+                    logger.info(f"Cleaned data saved to {csv_path}")
+
+                # Bin
+                n_bins = 100
+                if t_stage in ("lxt_ttc", "mfx_lxt_fast1", "mfx_lxt_fast2"):
+                    df_clean["t_bin"] = pd.cut(
+                        df_clean["t_position"].astype(float), bins=n_bins
+                    )
+                else:
+                    df_clean["t_bin"] = pd.cut(df_clean["t_position"], bins=n_bins)
+
+                binned = df_clean.groupby("t_bin").agg(
+                    {"t_position": "mean", sig_col: "mean"}
+                )
+
+                plt.figure(figsize=(6, 4))
+                plt.scatter(
+                    binned["t_position"], binned[sig_col], color="royalblue", s=40
+                )
+                plt.xlabel(t_stage)
+                plt.ylabel(sig_col)
+                plt.title(
+                    f"Binned Scatter (Outliers Removed) | {sig_label} | Run {run_number}"
+                )
+                plt.grid(True)
+                plt.tight_layout()
+                if save_outputs:
+                    plt.savefig(
+                        run_dir / f"scatter_binned_{sig_label}.png",
+                        dpi=150,
+                        bbox_inches="tight",
+                    )
+                    logger.info(
+                        f"Binned scatter plot saved to "
+                        f"{run_dir / f'scatter_binned_{sig_label}.png'}"
+                    )
+                try:
+                    plt.show()
+                except Exception as e:
+                    logger.warning(f"Could not display plot: {e}")
+
+                # Fit
+                popt, _, _, _ = fit_irfs1(
+                    binned["t_position"],
+                    binned[sig_col],
+                    run_number,
+                    t_stage,
+                    save_path=(run_dir / f"fit_{sig_label}.png")
+                    if save_outputs
+                    else None,
+                )
+
+                if save_outputs:
+                    fit_params = {
+                        "run": run_number,
+                        "signal": sig_label,
+                        "t_stage": t_stage,
+                        "FWHM": float(abs(popt[1]) * 2.355),
+                        "center": float(popt[2]),
+                        "amplitude": float(popt[0]),
+                    }
+                    json_path = run_dir / f"fit_params_{sig_label}.json"
+                    with open(json_path, "w") as f:
+                        json.dump(fit_params, f, indent=2)
+                    logger.info(f"Fit parameters saved to {json_path}")
 
 
 def parse_args(args):
