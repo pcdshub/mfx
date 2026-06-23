@@ -323,7 +323,8 @@ class Wire:
         """
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
-        from mfx.db import RE, pp, daq
+        from mfx.db import RE, daq
+        from mfx.db import mfx_pulsepicker as pp
         from mfx.autorun import quote, post
         from mfx.macros import get_exp, get_run
 
