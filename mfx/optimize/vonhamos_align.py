@@ -136,34 +136,50 @@ def optimize_focus(x_motor, ami, span=2.0, steps=11):
             'positions': positions.tolist(), 'rms': rms_vals}
 
 
-def align_one_crystal(crystal, ami):
+def align_one_crystal(crystal, ami, interactive=True):
     """find_signal -> align_yaw -> optimize_focus, then park rot where it
-    started. Returns a result dict, or None if no signal could be found."""
+    started. Returns a result dict, or None if no signal could be found.
+
+    When interactive, pause after the auto-align so you can fine-tune the
+    motors by hand (from a motor GUI or a second session), then press Enter.
+    Whatever positions the motors are at when you continue are what gets saved."""
     print(f"\n── {crystal.name}  goal_x={ami.goal_x:.1f} ──")
     park = crystal.rot.position
 
     if ami.centroid() is None and not find_signal(crystal.rot, ami):
         return None
 
-    yaw         = align_yaw(crystal.rot, ami)
-    focus       = optimize_focus(crystal.x, ami)
-    aligned_rot = crystal.rot.position
-    crystal.rot.move(park)
+    yaw   = align_yaw(crystal.rot, ami)
+    focus = optimize_focus(crystal.x, ami)
 
     if not yaw['converged']:
         print(f"  ! yaw did not converge: {yaw['reason']}")
     if not focus['converged']:
         print(f"  ! focus did not converge: {focus['reason']}")
 
-    return {'rot': aligned_rot, 'x': focus['best_x'], 'yaw': yaw, 'focus': focus}
+    if interactive:
+        c = ami.centroid()
+        cx = c[0] if c else float('nan')
+        print(f"  auto: rot={crystal.rot.position:.3f}°  x={crystal.x.position:.3f}mm  "
+              f"cx={cx:.1f} (goal {ami.goal_x:.1f})  rms={ami.rms():.2f}")
+        input(f"  fine-tune {crystal.name}, then press Enter to save and continue…")
+
+    aligned_rot = crystal.rot.position
+    aligned_x   = crystal.x.position
+    print(f"  saved: rot={aligned_rot:.3f}°  x={aligned_x:.3f}mm")
+    crystal.rot.move(park)
+
+    return {'rot': aligned_rot, 'x': aligned_x, 'yaw': yaw, 'focus': focus}
 
 
-def align_all_crystals(spectrometer, ami):
-    """Align c1..c6 one at a time, then restore each to its saved position."""
+def align_all_crystals(spectrometer, ami, interactive=True):
+    """Align c1..c6 one at a time, then restore each to its saved position.
+    When interactive, pause after each crystal so you can fine-tune it by hand
+    before its position is saved."""
     saved = {}
     for i in range(1, 7):
         crystal = getattr(spectrometer, f"c{i}")
-        result  = align_one_crystal(crystal, ami)
+        result  = align_one_crystal(crystal, ami, interactive=interactive)
         if result:
             saved[f"c{i}"] = result
 
