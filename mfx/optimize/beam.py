@@ -148,7 +148,7 @@ class Beam:
         self,
         on_diagnostic: Diagnostics = "dg1",
         xopt_obj: Optional[Xopt] = None,
-        threshold_sigma: float = 2.0,
+        threshold_sigma: float = 10.0,
     ) -> bool:
         """
         Predict centroid from current undp_x, undp_y using latest calibration.
@@ -492,7 +492,7 @@ class Beam:
                 try:
                     old_path_plot = xopt._cached_path_plot
                 except AttributeError:
-                    ...
+                    path_plot = None
                 else:
                     print("Generating new path plot from cached settings")
                     path_plot = UpdatingDeviceCentroidPathPlot(
@@ -500,8 +500,20 @@ class Beam:
                         goal=old_path_plot.goal,
                         constraints=old_path_plot.constraints,
                     )
+
+                if path_plot is not None:
+                    goal = path_plot.goal
+                else:
+                    goal = select_goal(
+                        device_type=using_device,
+                        location=on_diagnostic,
+                        goal=with_goal,
+                        goal_2d=with_goal_2d,
+                        use_2d_markers=use_2d_markers,
+                    )
             else:
                 print("Loading Xopt object.")
+                dump_file = None
                 if save_run:
                     now = datetime.datetime.now()
                     formatted_string = now.strftime("%y-%m-%d-%H:%M:%S")

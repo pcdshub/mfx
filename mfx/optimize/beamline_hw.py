@@ -12,7 +12,7 @@ from pcdsdevices.pv_positioner import OnePVMotor
 from pcdsdevices.ipm import Wave8
 
 from .constraints import constraint_data
-from .devices import FakeLCLSImagePlugin, FakeYagCamera, YagCamera
+from .devices import FakeLCLSImagePlugin, FakeYagCamera, FakeYagWithCentroid, YagCamera
 from .undpoint import UndPointAbs2DMFX, UndPointAbs2DSim
 
 HAPPI_NAMES = (
@@ -168,9 +168,9 @@ def sim_devices() -> dict[str, Device]:
             name="mfx_dg2_wave8_sum",
         ),
     )
-    devices["mfx_dg1_yag"] = FakeYagCamera("", name="mfx_dg1_yag")
-    devices["mfx_dg2_yag"] = FakeYagCamera("", name="mfx_dg2_yag")
-    devices["xcs_yag1"] = FakeYagCamera("", name="xcs_yag1")
+    devices["mfx_dg1_yag"] = FakeYagWithCentroid("", name="mfx_dg1_yag")
+    devices["mfx_dg2_yag"] = FakeYagWithCentroid("", name="mfx_dg2_yag")
+    devices["xcs_yag1"] = FakeYagWithCentroid("", name="xcs_yag1")
     devices["mfx_ip_yag"] = FakeYagCamera("", name="mfx_ip_yag")
 
     def update_fake_dg1_yag(cam: FakeLCLSImagePlugin):
