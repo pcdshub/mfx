@@ -950,7 +950,7 @@ class Yano:
             delay time between runs. Default is 5 second but increase is the DAQ is being slow.
 
         picker: str, optional
-            If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+            If 'open' it opens mfx_pulsepicker before run starts. If 'flip' it flipflops before run starts
 
         fiber: int, optional
             Number of laser fibers. Default is -1. See ``configure_shutters`` for more
@@ -1002,7 +1002,7 @@ class Yano:
 
         For alternative laser configurations either use ``configure_shutters`` to set parameters
         """
-        from mfx.db import daq, pp
+        from mfx.db import daq, mfx_pulsepicker
         from mfx.autorun import quote
         from mfx.macros import get_run, get_exp
 
@@ -1036,9 +1036,9 @@ class Yano:
         if sample.lower()=='water' or sample.lower()=='h2o':
             inspire=True
         if picker=='open':
-            pp.open()
+            mfx_pulsepicker.open()
         if picker=='flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         if tag is None:
             tag = sample
@@ -1051,7 +1051,7 @@ class Yano:
                 status = self._begin(
                     duration = run_length, record = record, wait = True, end_run = True)
                 if status is False:
-                    pp.close()
+                    mfx_pulsepicker.close()
                     self.post(
                         sample=sample,
                         tag=tag,
@@ -1079,7 +1079,7 @@ class Yano:
                 try:
                     sleep(daq_delay)
                 except KeyboardInterrupt:
-                    pp.close()
+                    mfx_pulsepicker.close()
                     self.configure_shutters(
                         fiber1=False, fiber2=False, fiber3=False, free_space=False)
                     logger.warning("[*] Stopping Run and exiting???...")
@@ -1090,7 +1090,7 @@ class Yano:
                         logger.warning('Run ended prematurely. Probably sample delivery problem')
                         break
             if status:
-                pp.close()
+                mfx_pulsepicker.close()
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
                 daq.end_run()
                 daq.disconnect()
@@ -1227,7 +1227,7 @@ class Yano:
                     ...
                 daq.control.setRecord(False)
                 daq.control.setState("running")
-                pp.close()
+                mfx_pulsepicker.close()
                 if record:
                     self.post(
                         sample=sample,
@@ -1242,7 +1242,7 @@ class Yano:
                 self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
                 logger.warning('Run ended prematurely. Probably sample delivery problem')
 
-            pp.close()
+            mfx_pulsepicker.close()
             self.configure_shutters(fiber1=False, fiber2=False, fiber3=False, free_space=False)
             daq.control.setState("configured")
             while daq.control.getState() != "configured":

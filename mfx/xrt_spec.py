@@ -581,7 +581,7 @@ class XRTspec:
         .. [1] FEE Spectrometer calibration documentation (MFX beamline wiki)
         .. [2] XRT transmission monitoring procedures
         """
-        from mfx.db import pp
+        from mfx.db import mfx_pulsepicker
         from mfx.autorun import autorun
         from mfx.macros import get_exp, get_run
 
@@ -672,10 +672,10 @@ class XRTspec:
         # Configure pulse picker
         if picker == 'open':
             self.logger.info("Opening pulse picker")
-            pp.open()
+            mfx_pulsepicker.open()
         elif picker == 'flip':
             self.logger.info("Setting pulse picker to flip-flop")
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         # Get starting run number
         run_number = get_run(station=station) + 1

@@ -304,7 +304,7 @@ class Wire:
         ...     picker='open',
         ...     record=True
         ... )
-        
+
         Scan with non-default camera:
         >>> wire.scan(
         ...     start=-2.0,
@@ -324,7 +324,7 @@ class Wire:
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
         from mfx.db import RE, daq
-        from mfx.db import mfx_pulsepicker as pp
+        from mfx.db import mfx_pulsepicker as mfx_pulsepicker
         from mfx.autorun import quote, post
         from mfx.macros import get_exp, get_run
 
@@ -375,10 +375,10 @@ class Wire:
 
         # Configure pulse picker
         if picker == 'open':
-            pp.open()
+            mfx_pulsepicker.open()
             logger.info("Pulse picker: OPEN")
         elif picker == 'flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
             logger.info("Pulse picker: FLIPFLOP")
 
         # Get run number
@@ -441,7 +441,7 @@ class Wire:
             ))
 
         # Close pulse picker
-        pp.close()
+        mfx_pulsepicker.close()
         logger.info("Pulse picker: CLOSED")
 
         # Post to elog

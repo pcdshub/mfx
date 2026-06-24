@@ -486,7 +486,7 @@ class Exafs:
         if self.simulate:
             return run_index + 1, True
 
-        from mfx.db import daq, pp
+        from mfx.db import daq, mfx_pulsepicker
         from mfx.macros import get_run
         from mfx.autorun import quote
         from psdaq.control.DaqControl import DaqControl
@@ -510,9 +510,9 @@ class Exafs:
         self.logger.info(f"Run {run_number}: {sample} - {quote()['quote']}")
 
         if picker == 'open':
-            pp.open()
+            mfx_pulsepicker.open()
         elif picker == 'flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         daq.control.setState("configured")
         while daq.control.getState() != "configured":
@@ -1192,14 +1192,14 @@ class Exafs:
         if self.simulate:
             k_energy = k_energy_start
         else:
-            from mfx.db import daq, pp
+            from mfx.db import daq, mfx_pulsepicker
             k_energy = self.acr_energy_k.get().setpoint
             daq.control.setState("configured")
             while daq.control.getState() != "configured":
                 sleep(0.01)
             daq.control.setRecord(False)
             daq.control.setState("running")
-            pp.close()
+            mfx_pulsepicker.close()
 
         self.logger.info('Returning to initial position')
         self._move_dccm_energy_with_vernier(energy_start)
@@ -1614,7 +1614,7 @@ class Exafs:
                         self.check_beam_status(flux_threshold)
 
                    # Move DCCM
-                    self._move_dccm_energy_with_vernier(energy_keV) 
+                    self._move_dccm_energy_with_vernier(energy_keV)
 
                     # Vernier alignment
                     if tchk == 'single':

@@ -349,7 +349,7 @@ class NotchScan:
         autorun : Data collection at each point
         DCCM : Monochromator control
         """
-        from mfx.db import pp
+        from mfx.db import mfx_pulsepicker
         from mfx.autorun import autorun
         from mfx.macros import get_exp, get_run
 
@@ -399,10 +399,10 @@ class NotchScan:
         # Configure pulse picker
         if picker == 'open':
             logger.info("Opening pulse picker")
-            pp.open()
+            mfx_pulsepicker.open()
         elif picker == 'flip':
             logger.info("Setting pulse picker to flip-flop")
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         # Get starting run number
         run_number = get_run(station=station) + 1
@@ -444,7 +444,7 @@ class NotchScan:
         finally:
             # Close pulse picker
             if picker:
-                pp.close()
+                mfx_pulsepicker.close()
 
         # Scan complete
         logger.info("\n" + "="*60)

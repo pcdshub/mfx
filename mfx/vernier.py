@@ -115,7 +115,7 @@ class Vernier:
                 Run group tag
 
             picker: str, optional
-                If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+                If 'open' it opens mfx_pulsepicker before run starts. If 'flip' it flipflops before run starts
 
             inspire: bool, optional
                 Set false by default because it makes Sandra sad. Set True to inspire
@@ -134,7 +134,7 @@ class Vernier:
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
         try:
-            from mfx.db import RE, pp, daq
+            from mfx.db import RE, mfx_pulsepicker, daq
             from mfx.autorun import quote, post
             from mfx.macros import get_exp, get_run
             import bluesky.plans as bp
@@ -152,9 +152,9 @@ class Vernier:
             sys.exit()
 
         if picker=='open':
-            pp.open()
+            mfx_pulsepicker.open()
         if picker=='flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         if tag is None:
             tag = sample
@@ -202,7 +202,7 @@ class Vernier:
         else:
             logger.error('Please enter daq 1 or 2.')
 
-        pp.close()
+        mfx_pulsepicker.close()
         post(
             sample=sample,
             tag=tag,
@@ -270,7 +270,7 @@ class Vernier:
                 Run group tag/sample name
 
             picker: str, optional
-                If 'open' it opens pp before run starts. If 'flip' it flipflops before run starts
+                If 'open' it opens mfx_pulsepicker before run starts. If 'flip' it flipflops before run starts
 
             inspire: bool, optional
                 Set false by default because it makes Sandra sad. Set True to inspire
@@ -285,15 +285,15 @@ class Vernier:
                 Switch between daq 1 and 2. Default 2
         """
         import os
-        from mfx.db import pp, daq
+        from mfx.db import mfx_pulsepicker, daq
         from mfx.autorun import quote, autorun
         from mfx.macros import get_exp
         from time import sleep
 
         if picker=='open':
-            pp.open()
+            mfx_pulsepicker.open()
         if picker=='flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         if daq_num == 1:
             station = 1

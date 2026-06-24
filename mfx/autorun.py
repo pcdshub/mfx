@@ -375,7 +375,7 @@ def _autorun(
     post : Elog posting function
     ioc_cam_recorder : Camera recording
     """
-    from mfx.db import daq, pp
+    from mfx.db import daq, mfx_pulsepicker
     from mfx.macros import get_run
 
     # Validate DAQ number
@@ -414,10 +414,10 @@ def _autorun(
     # Operate pulse picker
     if picker == 'open':
         logger.info("Opening pulse picker")
-        pp.open()
+        mfx_pulsepicker.open()
     elif picker == 'flip':
         logger.info("Setting pulse picker to flip-flop mode")
-        pp.flipflop()
+        mfx_pulsepicker.flipflop()
     elif picker is None:
         logger.info("Pulse picker unchanged")
 
@@ -439,7 +439,7 @@ def _autorun(
     # Close pulse picker if requested
     if close:
         logger.info("Closing pulse picker")
-        pp.close()
+        mfx_pulsepicker.close()
 
     logger.info("\n" + "="*60)
     logger.info("AUTORUN COMPLETE")
@@ -564,8 +564,8 @@ def _autorun_daq1(sample, tag, run_length, inspire, record,
 
         except KeyboardInterrupt:
             logger.warning("\nRun interrupted by user")
-            from mfx.db import pp
-            pp.close()
+            from mfx.db import mfx_pulsepicker
+            mfx_pulsepicker.close()
             daq.disconnect()
             if record:
                 post(
@@ -610,7 +610,7 @@ def _autorun_daq2(sample, tag, run_length, inspire, record,
     autorun : Main user interface
     _autorun_daq1 : LCLS-I implementation
     """
-    from mfx.db import daq, pp
+    from mfx.db import daq, mfx_pulsepicker
     from mfx.macros import get_run
     from psdaq.control.DaqControl import DaqControl
 
@@ -696,7 +696,7 @@ def _autorun_daq2(sample, tag, run_length, inspire, record,
 
         except KeyboardInterrupt:
             logger.warning("\nRun interrupted by user")
-            pp.close()
+            mfx_pulsepicker.close()
 
             # Cleanup DAQ
             try:

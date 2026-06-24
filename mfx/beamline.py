@@ -333,7 +333,7 @@ def mfx_reload(module_name):
     if module_name == 'mfx.wire': #This is double trouble
         from mfx.wire import Wire
         wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
-   
+
     if module_name == 'mfx.debug':
         from mfx.debug import Debug
         debug = Debug()
@@ -366,7 +366,7 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_dia_ipm as ipm0
     from mfx.db import mfx_dg1_ipm as ipm1
     from mfx.db import mfx_dg2_ipm as ipm2
-    from mfx.db import mfx_pulsepicker as pp
+    from mfx.db import mfx_pulsepicker as mfx_pulsepicker
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
     from mfx.db import um6_pim as xcs_yag1

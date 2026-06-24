@@ -385,7 +385,7 @@ class Timing:
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
         try:
-            from mfx.db import RE, pp, daq
+            from mfx.db import RE, mfx_pulsepicker, daq
             from mfx.autorun import quote, post
             from mfx.macros import get_exp, get_run
             import bluesky.plans as bp
@@ -409,9 +409,9 @@ class Timing:
             sys.exit()
 
         if picker=='open':
-            pp.open()
+            mfx_pulsepicker.open()
         if picker=='flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         if laser is not None:
             if laser == 1:
@@ -489,7 +489,7 @@ class Timing:
         else:
             logger.error('Please enter daq 1 or 2.')
 
-        pp.close()
+        mfx_pulsepicker.close()
         # Stop acquisition
         logger.info("Stopping acquisition...")
         daq.control.setState("configured")
@@ -626,16 +626,16 @@ class Timing:
         ...     run='100',
         ...     daq_num=2
         ... )
-        
+
         >>> timing.output(
         ...     user='myuser',
         ...     facility='S3DF',
         ...     exp='mfxls1234',
         ...     run='100',
-        ...     daq_num=2, 
+        ...     daq_num=2,
         ...     camera='t_zero_alvium'
         ... )
-        
+
         See Also
         --------
         series : Perform timing scan series data collection
