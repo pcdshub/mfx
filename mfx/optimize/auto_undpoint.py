@@ -1,124 +1,90 @@
+"""
+Start from a beam already visible on the YAG. Scan along the diagonal to get the
+slope (px of centroid per um of undulator), then Newton-step the centroid onto
+the goal.
+"""
+import numpy as np
+
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky.preprocessors import run_wrapper
 import bluesky.plan_stubs as bps
-import numpy as np
 
 from mfx.optimize.devices import YagWithCentroid
-from mfx.optimize.beamline_hw import init_devices
+from mfx.optimize.beamline_hw import init_devices, sim_devices
+
+YAG_PV = {"dg1": "MFX:GIGE:DG1:YAG:", "dg2": "MFX:GIGE:DG2:YAG:", "xcs1": "XCS:GIGE:YAG1:"}
 
 
-UNDULATOR_CONFIG = {
-    "xcs1": {"x": (0, 200),    "y": (-450, -200), "pv": "XCS:GIGE:YAG1:"},
-    "dg1":  {"x": (-100, 150), "y": (-750, -350), "pv": "MFX:GIGE:DG1:YAG:"},
-    "dg2":  {"x": (-100, 150), "y": (-750, -350), "pv": "MFX:GIGE:DG2:YAG:"},
-}
+def optimize_undulator_pointing(diagnostic="dg1", probe=20.0, points=5, num_frames=10,
+                                tol=5.0, max_step=50.0, max_iter=5, sim=False):
+    """Align the undulator pointing so the beam centroid reaches the YAG goal marker.
 
+    Parameters
+    ----------
+    diagnostic : str
+        YAG diagnostic to align on; one of "dg1", "dg2", "xcs1".
+    probe : float
+        Half-range of the diagonal calibration scan, in microns.
+    points : int
+        Number of points sampled across the calibration scan.
+    num_frames : int
+        Camera frames averaged per centroid measurement.
+    tol : float
+        Convergence threshold; iteration stops once the centroid is within this
+        many pixels of the goal.
+    max_step : float
+        Maximum magnitude of a single correction, in microns. Bounds the move so
+        an erroneous calibration cannot drive the undulator off target.
+    max_iter : int
+        Maximum number of correction iterations before returning.
+    sim : bool
+        If True, run against simulated devices instead of live hardware.
 
-def optimize_undulator_pointing(
-    diagnostic="dg1",
-    mode="lscan",
-    grid_points=5,
-    window=20.0,
-    num_frames=10,
-    sim=False,
-    safe=False,
-):
-    if diagnostic not in UNDULATOR_CONFIG:
-        raise ValueError(
-            f"Unknown diagnostic '{diagnostic}', expected one of {list(UNDULATOR_CONFIG)}"
-        )
-
-    config = UNDULATOR_CONFIG[diagnostic]
-
+    Returns
+    -------
+    tuple of float
+        The final undulator (x, y) position, in microns.
+    """
     if sim:
-        from mfx.optimize.beamline_hw import sim_devices
         devs = sim_devices()
-        und = devs["und_abs"]
         yag = devs[f"mfx_{diagnostic}_yag"]
     else:
         devs = init_devices(force=True)
-        if safe:
-            und = globals().get("und_abs_safe")
-            if und is None:
-                raise NameError("safe=True but und_abs_safe is not defined in globals().")
-        else:
-            und = devs["und_abs"]
-        yag = YagWithCentroid(config["pv"], name=f"mfx_{diagnostic}_yag")
-
+        yag = YagWithCentroid(YAG_PV[diagnostic], name=f"mfx_{diagnostic}_yag")
+    und = devs["und_abs"]
     yag.image1.kind = "omitted"
     yag.num_frames = num_frames
     und.delta_xy.kind = "omitted"
-
     goal_x, goal_y = yag.coords.standard_two_corners_target()
+
+    # calibrate: diagonal scan, slope = px per um
+    ts, cxs, cys = [], [], []
+
+    def scan():
+        prev = 0.0
+        for t in np.linspace(-probe, probe, points):
+            yield from bps.mv(und.delta_xy, (t - prev, t - prev))
+            prev = t
+            r = yield from bps.trigger_and_read([und, yag])
+            ts.append(t)
+            cxs.append(r[yag.centroid_x.name]["value"])
+            cys.append(r[yag.centroid_y.name]["value"])
+        yield from bps.mv(und.delta_xy, (-prev, -prev))
 
     RE = RunEngine({})
     RE.subscribe(BestEffortCallback())
+    RE(run_wrapper(scan()))
+    calib_x, calib_y = np.polyfit(ts, cxs, 1)[0], np.polyfit(ts, cys, 1)[0]
+    print(f"calib: {calib_x:.3f}, {calib_y:.3f} px/um")
 
-    scan_data = {"ux": [], "uy": [], "cx": [], "cy": []}
-
-    def collect(name, doc):
-        if name == "event":
-            d = doc["data"]
-            scan_data["ux"].append(d[und.xpos.name])
-            scan_data["uy"].append(d[und.ypos.name])
-            scan_data["cx"].append(d[f"{yag.name}_centroid_x"])
-            scan_data["cy"].append(d[f"{yag.name}_centroid_y"])
-
-    if mode == "lscan":
-        cur_x, cur_y = und.position
-
-        def scan_plan():
-            for x in np.linspace(cur_x - window, cur_x + window, grid_points):
-                yield from bps.mv(und, (x, cur_y))
-                yield from bps.trigger_and_read([und, yag])
-            for y in np.linspace(cur_y - window, cur_y + window, grid_points):
-                yield from bps.mv(und, (cur_x, y))
-                yield from bps.trigger_and_read([und, yag])
-
-    elif mode == "grid":
-        if config["x"] is None or config["y"] is None:
-            raise ValueError(f"Undulator ranges for '{diagnostic}' have not been determined yet.")
-        x_vals = np.linspace(*config["x"], grid_points)
-        y_vals = np.linspace(*config["y"], grid_points)
-
-        def scan_plan():
-            for i, x in enumerate(x_vals):
-                row = y_vals if i % 2 == 0 else y_vals[::-1]
-                for y in row:
-                    yield from bps.mv(und, (x, y))
-                    yield from bps.trigger_and_read([und, yag])
-
-    else:
-        raise ValueError(f"Unknown mode '{mode}', expected 'lscan' or 'grid'")
-
-    RE(run_wrapper(scan_plan()), collect)
-
-    cx_arr = np.array(scan_data["cx"])
-    cy_arr = np.array(scan_data["cy"])
-    ux_arr = np.array(scan_data["ux"])
-    uy_arr = np.array(scan_data["uy"])
-
-    valid = ~(np.isnan(cx_arr) | np.isnan(cy_arr))
-    if valid.sum() < 3:
-        raise RuntimeError(
-            f"Too few valid centroid readings ({valid.sum()}) to fit a model — beam may be off camera for most of the scan range."
-        )
-
-    A = np.column_stack([np.ones(valid.sum()), ux_arr[valid], uy_arr[valid]])
-    cx = np.linalg.lstsq(A, cx_arr[valid], rcond=None)[0]
-    cy = np.linalg.lstsq(A, cy_arr[valid], rcond=None)[0]
-
-    print(f"centroid_x = {cx[0]:.2f} + {cx[1]:.4f}*ux + {cx[2]:.4f}*uy")
-    print(f"centroid_y = {cy[0]:.2f} + {cy[1]:.4f}*ux + {cy[2]:.4f}*uy")
-
-    M = np.array([[cx[1], cx[2]], [cy[1], cy[2]]])
-    rhs = np.array([goal_x - cx[0], goal_y - cy[0]])
-    sol = np.linalg.solve(M, rhs)
-
-    print(f"Solution: undp_x={sol[0]:.2f}, undp_y={sol[1]:.2f}")
-
-    und.move((sol[0], sol[1]), wait=True)
-    print(f"Moved undulator to ({sol[0]:.2f}, {sol[1]:.2f})")
-
-    return (sol[0], sol[1])
+    # correct: Newton steps until on goal
+    for i in range(max_iter):
+        yag.trigger()
+        ex, ey = yag.centroid_x.get() - goal_x, yag.centroid_y.get() - goal_y
+        print(f"  iter {i + 1}: err=({ex:.1f}, {ey:.1f})")
+        if abs(ex) < tol and abs(ey) < tol:
+            break
+        und.delta_xy.move((float(np.clip(-ex / calib_x, -max_step, max_step)),
+                           float(np.clip(-ey / calib_y, -max_step, max_step))), wait=True)
+    return tuple(und.position)
