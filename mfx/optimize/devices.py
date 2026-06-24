@@ -122,11 +122,12 @@ class YagWithCentroid(YagCamera):
 
         try:
             centroid = ImageProjectionFit().fit_image(np.mean(images, axis=0)).centroid
-            self.centroid_x.set(centroid[0])
-            self.centroid_y.set(centroid[1])
+            cx, cy = float(centroid[0]), float(centroid[1])
         except Exception:
-            self.centroid_x.set(float("nan"))
-            self.centroid_y.set(float("nan"))
+            cx, cy = float("nan"), float("nan")
+
+        self.centroid_x.put(cx)
+        self.centroid_y.put(cy)
 
         done = Status()
         done.set_finished()
