@@ -1945,11 +1945,11 @@ class Exafs:
         except KeyboardInterrupt:
             self.logger.warning("Scan aborted by user (Ctrl+C)")
             if not simulate:
-                from mfx.db import daq, pp
+                from mfx.db import daq, mfx_pulsepicker
                 try:
                     daq.control.setState("configured")
                     daq.control.setRecord(False)
-                    pp.close()
+                    mfx_pulsepicker.close()
                 except Exception:
                     pass
 

@@ -28,7 +28,7 @@ The primary entry point is `Exafs.long_escan()` in `exafs.py`.
 
 ### 1. DCCM (Double Crystal Channel-cut Monochromator)
 
-**File:** `dccm.py`  
+**File:** `dccm.py`
 **PV Prefix:** `SP1L0:DCCM`
 
 The DCCM uses two matched Si(111) crystals in a channel-cut geometry. Energy selection uses Bragg's Law:
@@ -57,7 +57,7 @@ The `long_escan` uses `energy_with_vernier` mode — each DCCM move automaticall
 
 ### 2. Undulator K Parameter
 
-**Class:** `BeamEnergyRequestACRWait` from `pcdsdevices.beam_stats`  
+**Class:** `BeamEnergyRequestACRWait` from `pcdsdevices.beam_stats`
 **PV Prefix:** `MFX`, **ACR Status Suffix:** `AO805`
 
 The undulator K parameter sets the fundamental harmonic of the free-electron laser. Unlike the DCCM (which moves continuously), the K motor is stepped in large jumps (default: 120 eV) because each K move disrupts the DAQ — the run must be paused, the undulator repositioned, and the run resumed.
@@ -103,7 +103,7 @@ The vernier provides fine energy tuning independent of the DCCM crystals. The of
 
 ### 4. Transfocator (Focus Tracking)
 
-**Library:** `tfs` (external)  
+**Library:** `tfs` (external)
 **PV Prefix:** `MFX:LENS`
 
 The transfocator uses compound refractive lenses (CRLs) to maintain focus as energy changes. Since focal length is energy-dependent, the lens configuration and Z-stage position must track the scan.
@@ -130,8 +130,8 @@ The transfocator uses compound refractive lenses (CRLs) to maintain focus as ene
 
 ### 5. FEE Spectrometer
 
-**File:** `xrt_spec.py`  
-**Class:** `XRTspec`  
+**File:** `xrt_spec.py`
+**Class:** `XRTspec`
 **Hardware:** `HXRSpectrometer("STEP:XRT1")`
 
 The Front-End Enclosure spectrometer monitors photon energy in real-time. Its geometry is calibrated empirically:
@@ -154,7 +154,7 @@ Where E is photon energy in keV. An optional `crystal_angle_offset` allows fine-
 
 ### 6. DAQ (Data Acquisition)
 
-**System:** LCLS-II DAQ (`psdaq.control.DaqControl`)  
+**System:** LCLS-II DAQ (`psdaq.control.DaqControl`)
 **Access:** `from mfx.db import daq`
 
 The DAQ runs continuously during the energy scan. It records events at each energy point with timing determined by the `wait_time` array.
@@ -171,7 +171,7 @@ configured → running → paused → running → ... → configured
 4. At K boundaries: `setState("paused")` → move K → `setState("running")`
 5. End of scan: `setState("configured")` → `setRecord(False)`
 
-**Pulse picker** (`from mfx.db import pp`):
+**Pulse picker** (`from mfx.db import mfx_pulsepicker`):
 - `'open'` — pulse picker fully open
 - `'flip'` — flip-flop mode (alternating shots)
 - Closed on scan completion
@@ -370,7 +370,7 @@ long_escan()
 
 ## Beam Status Monitoring
 
-**Method:** `check_beam_status(flux_threshold)`  
+**Method:** `check_beam_status(flux_threshold)`
 **Source:** `mfx.optimize.beam_status.BeamCheck`
 
 When `flux_threshold` is set (mJ), beam intensity is monitored at every energy point:
