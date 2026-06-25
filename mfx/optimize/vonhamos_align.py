@@ -23,7 +23,9 @@ class AMI:
         self._ctx          = Context('pva')
         self._fresh_events = fresh_events
         self._timeout      = timeout
-        self.goal_x        = float(np.asarray(self._ctx.get(_PV_GOAL, timeout=timeout))[0])
+        goal               = np.asarray(self._ctx.get(_PV_GOAL, timeout=timeout))
+        self.goal_x        = float(goal[0])
+        self.goal_y        = float(goal[1])
 
     def _wait_fresh(self):
         """Block until the heartbeat advances by fresh_events (or timeout)."""
@@ -80,7 +82,10 @@ def find_signal(rot, ami, step=2.0, n_confirm=3):
 
 
 def measure_sensitivity(rot, ami, nudge=0.5):
-    """cx shift (px) per degree of rot. None if the signal is lost."""
+    """cy shift (px) per degree of rot. None if the signal is lost.
+
+    The yaw moves the spot vertically (the detector is rotated 90°, so the streak
+    lays horizontally), so the steered coordinate is cy, not cx."""
     before = ami.centroid()
     if before is None:
         return None
@@ -90,11 +95,11 @@ def measure_sensitivity(rot, ami, nudge=0.5):
     rot.move(p0)
     if after is None:
         return None
-    return (after[0] - before[0]) / nudge
+    return (after[1] - before[1]) / nudge
 
 
 def align_yaw(rot, ami, nudge=0.5, n_iter=15, tol=1.0, max_step=2.0):
-    """Move rot to bring cx onto goal_x. Returns a result dict; check
+    """Move rot to bring cy onto goal_y. Returns a result dict; check
     ['converged'], and ['reason'] when it did not converge."""
     sens = measure_sensitivity(rot, ami, nudge)
     if sens is None:
@@ -106,13 +111,13 @@ def align_yaw(rot, ami, nudge=0.5, n_iter=15, tol=1.0, max_step=2.0):
         c = ami.centroid()
         if c is None:
             return {'converged': False, 'reason': 'signal lost mid-iteration'}
-        err = c[0] - ami.goal_x
-        print(f"  yaw {i+1:2d}: cx={c[0]:.1f}  err={err:+.1f}")
+        err = c[1] - ami.goal_y
+        print(f"  yaw {i+1:2d}: cy={c[1]:.1f}  err={err:+.1f}")
         if abs(err) < tol:
-            return {'converged': True, 'reason': None, 'cx': c[0], 'err': err, 'sens': sens}
+            return {'converged': True, 'reason': None, 'cy': c[1], 'err': err, 'sens': sens}
         rot.move(rot.position + np.clip(-err / sens, -max_step, max_step))
 
-    return {'converged': False, 'reason': 'did not converge', 'cx': c[0], 'err': err, 'sens': sens}
+    return {'converged': False, 'reason': 'did not converge', 'cy': c[1], 'err': err, 'sens': sens}
 
 
 def optimize_focus(x_motor, ami, span=2.0, steps=11):
@@ -143,7 +148,7 @@ def align_one_crystal(crystal, ami, interactive=True):
     When interactive, pause after the auto-align so you can fine-tune the
     motors by hand (from a motor GUI or a second session), then press Enter.
     Whatever positions the motors are at when you continue are what gets saved."""
-    print(f"\n── {crystal.name}  goal_x={ami.goal_x:.1f} ──")
+    print(f"\n── {crystal.name}  goal_y={ami.goal_y:.1f} ──")
     park = crystal.rot.position
 
     if ami.centroid() is None and not find_signal(crystal.rot, ami):
@@ -159,9 +164,9 @@ def align_one_crystal(crystal, ami, interactive=True):
 
     if interactive:
         c = ami.centroid()
-        cx = c[0] if c else float('nan')
+        cy = c[1] if c else float('nan')
         print(f"  auto: rot={crystal.rot.position:.3f}°  x={crystal.x.position:.3f}mm  "
-              f"cx={cx:.1f} (goal {ami.goal_x:.1f})  rms={ami.rms():.2f}")
+              f"cy={cy:.1f} (goal {ami.goal_y:.1f})  rms={ami.rms():.2f}")
         input(f"  fine-tune {crystal.name}, then press Enter to save and continue…")
 
     aligned_rot = crystal.rot.position
