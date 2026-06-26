@@ -1708,7 +1708,8 @@ class Exafs:
                    dccm_window_eV=2.0, dccm_step_eV=1.0,
                    dccm_offsets=None, dwell_time=3.0,
                    record=False, picker=None,
-                   track_feespec=False, flux_threshold=None,
+                   track_feespec=False, track_feespec_cam=False,
+                   flux_threshold=None,
                    crystal_angle_offset=0.0,
                    sample='?', simulate=False, runs=1):
         """
@@ -1751,6 +1752,8 @@ class Exafs:
             Pulse picker mode: 'open', 'flip', or None
         track_feespec : bool, optional
             Track FEE spectrometer at each K move (default: False)
+        track_feespec_cam : bool, optional
+            Track FEE spectrometer camera at each DCCM point (default: False)
         flux_threshold : float or None, optional
             Minimum beam flux in mJ (default: None)
         crystal_angle_offset : float, optional
@@ -1868,6 +1871,7 @@ class Exafs:
         print(f"  Record:          {record}")
         print(f"  Picker:          {picker}")
         print(f"  Track FEE spec:  {track_feespec}")
+        print(f"  Track FEE cam:   {track_feespec_cam}")
         print(f"  Flux threshold:  {flux_threshold}")
         print(f"  Simulate:        {simulate}")
         print(f"  Sample:          {sample}")
@@ -1940,6 +1944,11 @@ class Exafs:
                         # Check beam
                         if flux_threshold:
                             self.check_beam_status(flux_threshold)
+
+                        # Track FEE spectrometer camera
+                        if track_feespec_cam:
+                            self.xrtspec.track_feespec_camera(
+                                dccm_energy_keV, crystal_angle_offset)
 
                         # Collect
                         self._wait(dwell_times[k_idx])
