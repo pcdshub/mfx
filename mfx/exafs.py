@@ -570,7 +570,7 @@ class Exafs:
         - Resumes DAQ when flux restored
         Uses BeamCheck from mfx.optimize.beam_status.
         """
-        if flux_threshold is None:
+        if flux_threshold is None or self.simulate:
             return
 
         from mfx.optimize.beam_status import BeamCheck
@@ -801,7 +801,7 @@ class Exafs:
         else:
             print(f"... ... not needed.")
 
-        if self.vernier_offset:
+        if self.vernier_offset is not None and self.vernier_offset is not False:
             self._move_dccm_energy_with_vernier((energy_eV + self.vernier_offset) / 1000)
 
     def _request_vernier_offset_measurement(self, energy, track_tchk_data, map_tchk_track):
@@ -957,7 +957,8 @@ class Exafs:
         return False
 
     def _move_k_if_necessary(self, energy_keV, k_stepsize, k_offset,
-                            reverse, min_k_keV, track_feespec):
+                            reverse, min_k_keV, track_feespec,
+                            crystal_angle_offset=0.0):
         """
         Move K if necessary and manage DAQ state.
 
@@ -975,6 +976,8 @@ class Exafs:
             Minimum K energy in keV
         track_feespec : bool
             Track FEE spectrometer
+        crystal_angle_offset : float, optional
+            FEE spectrometer crystal angle offset in degrees (default: 0.0)
 
         Notes
         -----
@@ -1269,10 +1272,11 @@ class Exafs:
 
         self.logger.warning("Stopping run and cleaning up...")
         self._return_to_start(energy_start, k_energy_start)
-        self.xrtspec.move_feespec_energy(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
-        self.xrtspec.check_feespec_crystal_angle(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
+        if not self.simulate and self.xrtspec:
+            self.xrtspec.move_feespec_energy(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
+            self.xrtspec.check_feespec_crystal_angle(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Run ended prematurely')
 
     def _finalize_scan(self, energy_start, k_energy_start, crystal_angle_offset=0.0):
@@ -1292,10 +1296,11 @@ class Exafs:
         Logs completion message.
         """
         self._return_to_start(energy_start, k_energy_start)
-        self.xrtspec.move_feespec_energy(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
-        self.xrtspec.check_feespec_crystal_angle(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
+        if not self.simulate and self.xrtspec:
+            self.xrtspec.move_feespec_energy(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
+            self.xrtspec.check_feespec_crystal_angle(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Scan completed successfully\n')
 
     def _wait(self, wait_time):
@@ -1383,7 +1388,7 @@ class Exafs:
     # ==================== Main Scan Methods ====================
 
     def long_escan(self, simulate=False, start_eV=0.0, end_eV=None,
-                   min_k=2.0, max_k=12.0, energies_list=[], wait_time_list=[],
+                   min_k=2.0, max_k=12.0, energies_list=None, wait_time_list=None,
                    element='Fe', sample='?', tag=None, picker=None,
                    inspire=False, daq_delay=5, record=False, runs=1,
                    k_stepsize=120, reverse=False, min_k_keV=7.035,
@@ -1551,16 +1556,20 @@ class Exafs:
             log_fn(f"{param_display}: {'ON' if value else 'OFF'}")
 
         # Initialize devices if needed
-        from mfx.devices import LaserShutter
-
-        self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
-        self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='fe_foil')
-        self.nd_wheel = EpicsSignalRO("MFX:LAS:MMN:08", name="nd_wheel")
-        self.waveplate = EpicsSignalRO("MFX:LAS:MMN:10", name="waveplate")
+        if not simulate:
+            from mfx.devices import LaserShutter
+            self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
+            self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='fe_foil')
+            self.nd_wheel = EpicsSignalRO("MFX:LAS:MMN:08", name="nd_wheel")
+            self.waveplate = EpicsSignalRO("MFX:LAS:MMN:10", name="waveplate")
 
         # Store initial positions
-        energy_start = self.dccm.energy_with_vernier.energy()
-        k_energy_start = self.acr_energy_k.get().setpoint
+        if simulate:
+            energy_start = (energies_list[0] / 1000.0) if energies_list else start_eV / 1000.0
+            k_energy_start = (energies_list[0] if energies_list else start_eV) + k_stepsize / 2 + k_offset
+        else:
+            energy_start = self.dccm.energy_with_vernier.energy()
+            k_energy_start = self.acr_energy_k.get().setpoint
 
         # Build energy arrays
         energies, wait_times = self._build_energy_and_wait_time(
@@ -1628,7 +1637,8 @@ class Exafs:
 
                     # Move K if necessary
                     self._move_k_if_necessary(
-                        energy_keV, k_stepsize, k_offset, reverse, min_k_keV, track_feespec
+                        energy_keV, k_stepsize, k_offset, reverse, min_k_keV,
+                        track_feespec, crystal_angle_offset
                     )
 
                     # Move TFS
@@ -1820,8 +1830,20 @@ class Exafs:
             )
             k_positions_eV = sorted(set(k_positions_eV.tolist()))
 
+        # Normalize dwell_time to per-K-position array
+        n_k = len(k_positions_eV)
+        if np.ndim(dwell_time) == 0:
+            dwell_times = np.full(n_k, float(dwell_time))
+        else:
+            dwell_times = np.asarray(dwell_time, dtype=float)
+            if len(dwell_times) != n_k:
+                raise ValueError(
+                    f"dwell_time list length ({len(dwell_times)}) must match "
+                    f"number of K positions ({n_k})"
+                )
+
         # Total points
-        total_points = len(k_positions_eV) * len(dccm_offsets) * runs
+        total_points = n_k * len(dccm_offsets) * runs
 
         # === Print scan configuration ===
         print("\n" + "=" * 60)
@@ -1832,12 +1854,15 @@ class Exafs:
         if k_step_eV is not None:
             print(f"  K step:          {k_step_eV:.1f} eV")
         else:
-            print(f"  K step:          custom ({len(k_positions_eV)} positions)")
-        print(f"  K positions:     {len(k_positions_eV)} ({k_positions_eV[0]:.1f} to {k_positions_eV[-1]:.1f} eV)")
+            print(f"  K step:          custom ({n_k} positions)")
+        print(f"  K positions:     {n_k} ({k_positions_eV[0]:.1f} to {k_positions_eV[-1]:.1f} eV)")
         print(f"  K move mode:     {k_move_mode}")
         print(f"  DCCM offsets:    {dccm_offsets} eV")
         print(f"  DCCM points/K:   {len(dccm_offsets)}")
-        print(f"  Dwell time:      {dwell_time:.2f} s")
+        if dwell_times[0] == dwell_times[-1]:
+            print(f"  Dwell time:      {dwell_times[0]:.2f} s")
+        else:
+            print(f"  Dwell time:      {dwell_times[0]:.2f} - {dwell_times[-1]:.2f} s ({n_k} values)")
         print(f"  Runs:            {runs}")
         print(f"  Total points:    {total_points}")
         print(f"  Record:          {record}")
@@ -1846,9 +1871,9 @@ class Exafs:
         print(f"  Flux threshold:  {flux_threshold}")
         print(f"  Simulate:        {simulate}")
         print(f"  Sample:          {sample}")
-        est_time = total_points * dwell_time
+        est_time = float(np.sum(dwell_times) * len(dccm_offsets) * runs)
         if k_move_mode == 'pause':
-            est_time += len(k_positions_eV) * runs * 4  # ~4s per K move
+            est_time += n_k * runs * 4  # ~4s per K move
         print(f"  Est. time:       {est_time:.0f}s ({est_time/60:.1f} min)")
         print("=" * 60 + "\n")
 
@@ -1917,7 +1942,7 @@ class Exafs:
                             self.check_beam_status(flux_threshold)
 
                         # Collect
-                        self._wait(dwell_time)
+                        self._wait(dwell_times[k_idx])
 
                         # Record summary
                         summary.append({
@@ -2271,20 +2296,21 @@ class EXAFSEnergyRangeBuilder:
         energy_range, unique_idx = np.unique(energy_range, return_index=True)
         time_range = time_range[unique_idx]
 
-        # Store for plotting
+        # Store for plotting and trim if start_ev past preedge
         if start_ev >= preedge_end:
             self.logger.error(
                 "min_before_pre_edge must be less than preedge_end. skipping pre-edge regions.")
             index = np.argmin(np.abs(energy_range - start_ev))
-            self.energy_range = energy_range[index:]
-            self.time_range = time_range[index:]
-            self.energy_K_range = energy_K_range[index:]
-            self.K_values = K_values[index:]
-        else:
-            self.time_range = time_range
-            self.energy_range = energy_range
-            self.energy_K_range = energy_K_range
-            self.K_values = K_values
+            energy_range = energy_range[index:]
+            time_range = time_range[index:]
+            k_index = np.argmin(np.abs(energy_K_range - start_ev))
+            energy_K_range = energy_K_range[k_index:]
+            K_values = K_values[k_index:]
+
+        self.energy_range = energy_range
+        self.time_range = time_range
+        self.energy_K_range = energy_K_range
+        self.K_values = K_values
 
         if debug:
             self.plot_scan_profile(energy_range, time_range, energy_K_range, K_values)
