@@ -125,7 +125,7 @@ class XRTspec:
         The energy-to-position conversion uses the following relationships:
             crystal_angle = 140.0 - 21.2*E + 1.02*E² + offset
             camera_angle = -1.9 + 2*crystal_angle
-            camera_y = -4.92 - 0.111*E
+            camera_y = -5.02 - 0.111*E
 
         where E is the photon energy in keV.
 
@@ -238,7 +238,7 @@ class XRTspec:
         camera_angle = -1.91 + 2 * crystal_angle
 
         # Calculate camera Y position (energy-dependent height correction)
-        camera_y = -4.92 - 0.111 * energy_keV
+        camera_y = -5.02 - 0.111 * energy_keV
 
         # Alter the crystal_angle without affecting the camera_angle
         if crystal_angle_offset != 0.0:
@@ -283,7 +283,7 @@ class XRTspec:
         Moves crystal angle, camera angle, and camera Y position.
         Formula: crystal_angle = 140.0 - 21.2*E + 1.02*E²
         camera_angle = -1.9 + 2*crystal_angle
-        camera_y = -4.92 - 0.111*E
+        camera_y = -5.02 - 0.111*E
 
         Performs safety check on XRT transmission after move.
         Returns to previous position if alarm detected.
