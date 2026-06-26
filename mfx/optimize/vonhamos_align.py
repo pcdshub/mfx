@@ -18,8 +18,11 @@ _NO_SIGNAL = 1e-3   # rms at or below this means "no signal" (AMI sentinel is 0)
 
 
 class AMI:
-    def __init__(self, fresh_events=3, timeout=10.0):
+    def __init__(self, fresh_events=3, timeout=10.0, addr="172.21.152.83"):
+        import os
         from p4p.client.thread import Context
+        if addr:
+            os.environ["EPICS_PVA_ADDR_LIST"] = addr   # PVA export moved off the broadcast domain
         self._ctx          = Context('pva')
         self._fresh_events = fresh_events
         self._timeout      = timeout
