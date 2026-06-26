@@ -100,10 +100,23 @@ class NotchScan:
         self.th1 = self.dccm.th1
         self.th2 = self.dccm.th2
 
+        # Set up ACR K energy request device (follows pattern from exafs.py)
+        try:
+            from pcdsdevices.beam_stats import BeamEnergyRequestACRWait
+            self.acr_energy_k = BeamEnergyRequestACRWait(
+                name='acr_energy', prefix='MFX',
+                acr_status_suffix='AO805', pv_index=2
+            )
+        except ImportError:
+            self.acr_energy_k = None
+            logger.warning("BeamEnergyRequestACRWait unavailable; "
+                        "k_energy tracking disabled")
+
         logger.info("NotchScan initialized")
         logger.info("DCCM energy range: 4000-25000 eV")
 
-    def set_energy(self, energy_eV: float, vernier: bool = False,  wait: bool = True):
+    def set_energy(self, energy_eV: float, vernier: bool = False,
+               k_energy: bool = False, wait: bool = True):
         """
         Move DCCM to specified energy.
 
@@ -116,6 +129,9 @@ class NotchScan:
             Target photon energy in eV
         vernier : bool, optional
             Use vernier for fine energy adjustment.
+            Default is False.
+        k_energy : bool, optional
+            Move undulator K energy to follow DCCM.
             Default is False.
         wait : bool, optional
             Block until motion complete.
@@ -131,44 +147,8 @@ class NotchScan:
         1. Convert eV to keV
         2. Calculate Bragg angle via Bragg's law
         3. Move both TH1 and TH2 crystals
-        4. Wait for motion complete (if wait=True)
-        5. Verify energy reached
-
-        Bragg's Law:
-        E (keV) = 12.398 / (2 * d * sin(θ))
-        For Si(111): d = 3.1356 Å
-
-        Move Time:
-        - Small changes: ~5 seconds
-        - Large changes: ~30 seconds
-        - Depends on distance
-
-        Accuracy:
-        - Position: ±0.0001°
-        - Energy: ±0.5 eV (typical)
-        - Limited by motor resolution
-
-        Warnings
-        --------
-        Verify energy is within DCCM range (4-25 keV).
-        Large energy changes may take significant time.
-        Check beam intensity after move.
-
-        Examples
-        --------
-        Move to Cu K-edge:
-        >>> notch = NotchScan()
-        >>> notch.set_energy(8979, wait=True)
-
-        Non-blocking move:
-        >>> notch.set_energy(9000, wait=False)
-        >>> # Do other things...
-        >>> notch.dccm.energy.wait()
-
-        Scan through energies:
-        >>> for E in [8950, 9000, 9050]:
-        ...     notch.set_energy(E)
-        ...     sleep(10)  # Collect data
+        4. Optionally move undulator K to follow (k_energy=True)
+        5. Wait for motion complete (if wait=True)
 
         See Also
         --------
@@ -185,6 +165,14 @@ class NotchScan:
         else:
             self.dccm.energy.move(energy_keV, wait=wait)
 
+        # Move undulator K to follow DCCM (pattern from exafs.py)
+        if k_energy:
+            if self.acr_energy_k is not None:
+                logger.warning(f"Moving K to {energy_eV:.0f} eV")
+                self.acr_energy_k.move(energy_eV)
+            else:
+                logger.error("k_energy requested but ACR device unavailable")
+
 
     def series(
             self,
@@ -198,6 +186,7 @@ class NotchScan:
             daq_delay: int = 5,
             record: bool = False,
             vernier: bool = False,
+            k_energy: bool = False,
             daq_num: int = 2,
             exp: Optional[str] = None):
         """
@@ -236,6 +225,9 @@ class NotchScan:
             Default is False.
         vernier : bool, optional
             Use vernier for fine energy adjustment.
+            Default is False.
+        k_energy : bool, optional
+            Use K-edge energy calibration.
             Default is False.
         daq_num : int, optional
             DAQ station: 1 (LCLS-I) or 2 (LCLS-II).
@@ -390,6 +382,13 @@ class NotchScan:
         original_th1 = self.th1.position
         original_th2 = self.th2.position
         original_energy_eV = self.dccm.energy_with_vernier.energy() * 1000
+
+        # Store initial K energy if tracking (pattern from exafs.py)
+        original_k_energy_eV = None
+        if k_energy and self.acr_energy_k is not None:
+            original_k_energy_eV = self.acr_energy_k.get().setpoint
+            logger.info(f"Initial K energy: {original_k_energy_eV} eV")
+
         logger.info(
             f"Initial positions: TH1={original_th1:.4f}°, "
             f"TH2={original_th2:.4f}°"
@@ -416,7 +415,7 @@ class NotchScan:
 
                 # Move to energy
                 logger.info(f"Setting energy: {energy_eV} eV")
-                self.set_energy(energy_eV, vernier=vernier, wait=True)
+                self.set_energy(energy_eV, vernier=vernier, k_energy=k_energy, wait=True)
 
                 # Wait for settling
                 logger.info(f"Settling for {daq_delay}s...")
@@ -479,7 +478,8 @@ class NotchScan:
         answer = input("\nReturn to initial crystal positions? (y/n): ")
         if answer.lower() == 'y':
             logger.info(f"Returning to initial energy: {original_energy_eV} eV")
-            self.set_energy(original_energy_eV, vernier=vernier, wait=True)
+            self.set_energy(original_energy_eV, vernier=vernier,
+                            k_energy=k_energy, wait=True)
             logger.info("Returned to initial positions")
 
         # Prompt for analysis
@@ -597,74 +597,3 @@ class NotchScan:
 
 # Convenience instance for direct import
 notch = NotchScan()
-
-
-def notch_scan(
-        energy_scan_start_eV: float,
-        energy_scan_end_eV: float,
-        energy_scan_steps: int,
-        run_length: int = 30,
-        tag: str = 'dccm',
-        picker: str = None,
-        inspire: bool = False,
-        daq_delay: int = 5,
-        record: bool = False,
-        daq_num: int = 2,
-        exp: str = None):
-    """
-    Convenience function for performing notch scan.
-
-    Wrapper around NotchScan.series() for quick access.
-
-    Parameters
-    ----------
-    energy_scan_start_eV : float
-        Starting energy in eV
-    energy_scan_end_eV : float
-        Ending energy in eV
-    energy_scan_steps : int
-        Energy step size in eV
-    run_length : int, optional
-        Collection time per point in seconds (default: 30)
-    tag : str, optional
-        Run tag (default: 'dccm')
-    picker : str or None, optional
-        Pulse picker mode: 'open', 'flip', or None
-    inspire : bool, optional
-        Add quotes to elog (default: False)
-    daq_delay : int, optional
-        Delay between runs in seconds (default: 5)
-    record : bool, optional
-        Enable recording (default: False)
-    daq_num : int, optional
-        DAQ version: 1 or 2 (default: 2)
-    exp : str or None, optional
-        Experiment name (default: None)
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> notch_scan(7100, 7200, 5, run_length=60, record=True)
-
-    See Also
-    --------
-    NotchScan.series : Full implementation
-    """
-    notch.series(
-        energy_scan_start_eV=energy_scan_start_eV,
-        energy_scan_end_eV=energy_scan_end_eV,
-        energy_scan_steps=energy_scan_steps,
-        run_length=run_length,
-        tag=tag,
-        picker=picker,
-        inspire=inspire,
-        daq_delay=daq_delay,
-        record=record,
-        daq_num=daq_num,
-        exp=exp
-    )
-
-logger.info("Notch Scan loaded and ready")
