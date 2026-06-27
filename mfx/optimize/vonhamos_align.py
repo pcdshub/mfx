@@ -20,23 +20,48 @@ _PV_HB   = "ami:ana:graph:heartbeats"
 _NO_SIGNAL = 1e-3   # rms at or below this means "no signal" (AMI sentinel is 0)
 
 
-def _pvget(pv, timeout=5.0, addr="172.21.152.83"):
-    env = {**os.environ, "EPICS_PVA_ADDR_LIST": addr}
-    result = subprocess.run(
-        ["pvget", "-r", "value", pv],
-        capture_output=True, timeout=timeout, env=env, text=True
-    )
-    if result.returncode != 0:
-        log.warning("pvget failed for %s (rc=%d): %s", pv, result.returncode, result.stderr.strip())
-        return np.array([])
-    out = result.stdout
-    # NTNDArray output:  "    float[]  [v1,v2,...]"  or  "    int  N"
-    m = re.search(r'\[([^\]]+)\]', out)
+class AMIReadError(RuntimeError):
+    """A PV could not be read at all (comms failure / timeout). Distinct from a
+    successful read that simply shows no signal, so callers can stop driving
+    motors instead of mistaking a dropout for 'nothing here'."""
+
+
+def _parse_value(out, pv):
+    # NTScalarArray:  "... [v1,v2,...]"  ("[]" when empty = a real no-signal read)
+    m = re.search(r'\[([^\]]*)\]', out)
     if m:
-        return np.array([float(x) for x in m.group(1).split(',')])
-    # scalar fallback (e.g. heartbeats)
+        body = m.group(1).strip()
+        return np.array([float(x) for x in body.split(',')]) if body else np.array([])
+    # scalar fallback (e.g. heartbeats):  "... <int>"
     m = re.search(r'\b(\d+)\s*$', out.strip())
-    return np.array([float(m.group(1))]) if m else np.array([])
+    if m:
+        return np.array([float(m.group(1))])
+    raise AMIReadError(f"could not parse pvget output for {pv}: {out!r}")
+
+
+def _pvget(pv, timeout=5.0, addr="172.21.152.83", retries=1):
+    """Read a PV's value via the PVAccess CLI. Returns a float array (possibly
+    empty when the PV itself holds an empty array = no signal). Raises
+    AMIReadError when the PV can't be read, with one retry to ride out a
+    transient search timeout. `-w` gives pvget a real wait window so a cold
+    connect to the off-broadcast host isn't cut short."""
+    env  = {**os.environ, "EPICS_PVA_ADDR_LIST": addr}
+    last = "unknown error"
+    for attempt in range(retries + 1):
+        try:
+            result = subprocess.run(
+                ["pvget", "-w", str(timeout), "-r", "value", pv],
+                capture_output=True, timeout=timeout + 2, env=env, text=True,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            last = f"{type(exc).__name__}: {exc}"
+        else:
+            if result.returncode == 0:
+                return _parse_value(result.stdout, pv)
+            last = f"rc={result.returncode}: {result.stderr.strip()}"
+        if attempt < retries:
+            time.sleep(0.2)
+    raise AMIReadError(f"pvget {pv} failed: {last}")
 
 
 class AMI:
@@ -51,18 +76,16 @@ class AMI:
         self.goal_y        = float(goal[1])
 
     def _wait_fresh(self):
-        """Block until the heartbeat advances by fresh_events (or timeout)."""
-        hb = _pvget(_PV_HB, timeout=self._timeout, addr=self._addr)
-        if hb.size == 0:
-            log.warning("heartbeat PV %s unreachable — skipping freshness check", _PV_HB)
-            return
-        start    = int(hb[0])
-        deadline = time.time() + self._timeout
+        """Block until the heartbeat advances by fresh_events. Propagates
+        AMIReadError if the heartbeat PV can't be read, so the caller stops
+        rather than driving motors against stale/absent data."""
+        hb_timeout = min(3.0, self._timeout)
+        start      = int(_pvget(_PV_HB, timeout=hb_timeout, addr=self._addr)[0])
+        deadline   = time.time() + self._timeout
         while time.time() < deadline:
-            hb = _pvget(_PV_HB, timeout=self._timeout, addr=self._addr)
-            if hb.size > 0 and int(hb[0]) >= start + self._fresh_events:
+            if int(_pvget(_PV_HB, timeout=hb_timeout, addr=self._addr)[0]) >= start + self._fresh_events:
                 return
-            time.sleep(0.05)
+            time.sleep(0.2)
         log.warning("heartbeat timeout — data may be stale")
 
     def _read(self):
@@ -99,7 +122,12 @@ def find_signal(rot, ami, step=2.0, n_confirm=3):
         rot.move(pos)
         confirmed = 0
         for _ in range(n_confirm):
-            if ami.centroid() is not None:
+            try:
+                seen = ami.centroid() is not None
+            except AMIReadError as exc:
+                print(f"  ! lost contact with AMI ({exc}) — stopping sweep at rot={rot.position:.2f}°")
+                return False
+            if seen:
                 confirmed += 1
         if confirmed == n_confirm:
             print(f"  signal at rot={pos:.2f}°")
@@ -179,11 +207,15 @@ def align_one_crystal(crystal, ami, interactive=True):
     print(f"\n── {crystal.name}  goal_y={ami.goal_y:.1f} ──")
     park = crystal.rot.position
 
-    if ami.centroid() is None and not find_signal(crystal.rot, ami):
+    try:
+        if ami.centroid() is None and not find_signal(crystal.rot, ami):
+            return None
+        yaw   = align_yaw(crystal.rot, ami)
+        focus = optimize_focus(crystal.x, ami)
+    except AMIReadError as exc:
+        print(f"  ! lost contact with AMI ({exc}); skipping {crystal.name}")
+        crystal.rot.move(park)
         return None
-
-    yaw   = align_yaw(crystal.rot, ami)
-    focus = optimize_focus(crystal.x, ami)
 
     if not yaw['converged']:
         print(f"  ! yaw did not converge: {yaw['reason']}")
