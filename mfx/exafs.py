@@ -1709,6 +1709,7 @@ class Exafs:
                    dccm_offsets=None, dwell_time=3.0,
                    record=False, picker=None,
                    track_feespec=False, track_feespec_cam=False,
+                   track_feespec_blocking=True,
                    flux_threshold=None,
                    crystal_angle_offset=0.0,
                    sample='?', simulate=False, runs=1):
@@ -1755,6 +1756,11 @@ class Exafs:
             Track FEE spectrometer at each K move (default: False)
         track_feespec_cam : bool, optional
             Track FEE spectrometer camera at each DCCM point (default: False)
+        track_feespec_blocking : bool, optional
+            If True (default), FEE spec moves block before the K move.
+            If False, FEE spec moves run in parallel with the K move
+            (non-blocking). Reduces dead time when spectrometer motion
+            is slow. Safety check still runs after K settles.
         flux_threshold : float or None, optional
             Minimum beam flux in mJ (default: None)
         crystal_angle_offset : float, optional
@@ -1872,6 +1878,7 @@ class Exafs:
         print(f"  Record:          {record}")
         print(f"  Picker:          {picker}")
         print(f"  Track FEE spec:  {track_feespec}")
+        print(f"  FEE spec block:  {track_feespec_blocking}")
         print(f"  Track FEE cam:   {track_feespec_cam}")
         print(f"  Flux threshold:  {flux_threshold}")
         print(f"  Simulate:        {simulate}")
@@ -1916,6 +1923,7 @@ class Exafs:
                         f"{k_target_eV:.1f} eV [{k_move_mode}]"
                     )
 
+                    t_k_move = time()
                     if k_move_mode == 'pause':
                         self._k_xas_move_pause(
                             k_target_eV, k_target_keV,
@@ -1929,8 +1937,10 @@ class Exafs:
                     elif k_move_mode == 'concurrent_settled':
                         self._k_xas_move_concurrent_settled(
                             k_target_eV, k_target_keV,
-                            track_feespec, crystal_angle_offset
+                            track_feespec, crystal_angle_offset,
+                            track_feespec_blocking
                         )
+                    k_move_elapsed = time() - t_k_move
 
                     # Step DCCM through offsets
                     for offset in dccm_offsets:
@@ -1957,8 +1967,14 @@ class Exafs:
                             self.xrtspec.track_feespec_camera(
                                 dccm_energy_keV, crystal_angle_offset)
 
-                        # Collect
-                        self._wait(dwell_times[k_idx])
+                        # In concurrent_settled mode, dwell_time is a minimum
+                        # acquisition time — the K move already contributed
+                        # to acquisition since the DAQ stays running.
+                        if k_move_mode == 'concurrent_settled':
+                            remaining_dwell = max(0, dwell_times[k_idx] - k_move_elapsed)
+                            self._wait(remaining_dwell)
+                        else:
+                            self._wait(dwell_times[k_idx])
 
                         # Record summary
                         summary.append({
@@ -2121,7 +2137,8 @@ class Exafs:
         self.k_energy = k_target_eV
 
     def _k_xas_move_concurrent_settled(self, k_target_eV, k_target_keV,
-                                       track_feespec, crystal_angle_offset):
+                                       track_feespec, crystal_angle_offset,
+                                       track_feespec_blocking=True):
         """
         Move K in 'concurrent_settled' mode: DAQ stays running, block on K move.
 
@@ -2135,6 +2152,10 @@ class Exafs:
             Track FEE spectrometer
         crystal_angle_offset : float
             FEE crystal angle offset in degrees
+        track_feespec_blocking : bool, optional
+            If True (default), FEE spec moves complete before K move starts.
+            If False, FEE spec move fires non-blocking and runs in parallel
+            with the K move. Safety check still runs after K settles.
 
         Notes
         -----
@@ -2148,10 +2169,14 @@ class Exafs:
             self.k_energy = k_target_eV
             return
 
-        # Move FEE spec before K (fast)
+        # Move FEE spec — blocking or non-blocking
         if track_feespec:
-            self.xrtspec.move_feespec_energy(
-                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            if track_feespec_blocking:
+                self.xrtspec.move_feespec_energy(
+                    k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            else:
+                self.xrtspec.move_feespec_energy_nonblocking(
+                    k_target_keV, crystal_angle_offset=crystal_angle_offset)
 
         # Move K — blocking (wait for undulator to settle)
         self.acr_energy_k.move(k_target_eV)

@@ -318,6 +318,32 @@ class XRTspec:
             self.hxrsss.camy.mv(ref_camera_y)
             self.hxrsss.th.mv(ref_crystal_angle)
 
+    def move_feespec_energy_nonblocking(self, energy_keV, crystal_angle_offset=0.0):
+        """
+        Fire FEE spectrometer moves without waiting for completion.
+
+        Parameters
+        ----------
+        energy_keV : float
+            Target energy in keV
+        crystal_angle_offset : float, optional
+            Offset to add to the calculated crystal angle in degrees (default: 0.0)
+
+        Notes
+        -----
+        Issues non-blocking moves to crystal angle, camera angle, and camera Y.
+        Does NOT stop the camera or perform safety checks — those are deferred
+        to check_feespec_crystal_angle() which runs after the K move settles.
+        Use this to overlap spectrometer motion with the undulator move.
+        """
+        positions = self.get_feespec_positions(
+            energy_keV, crystal_angle_offset=crystal_angle_offset)
+        self.logger.info(
+            f'FEE spec move (non-blocking) to {energy_keV:.3f} keV')
+        self.hxrsss.tth.mv(positions['camera_angle'])
+        self.hxrsss.camy.mv(positions['camera_y'])
+        self.hxrsss.th.mv(positions['crystal_angle'])
+
     def check_feespec_crystal_angle(self, energy_keV, crystal_angle_offset=0.0):
         """
         Check and adjust FEE spectrometer crystal angle.
