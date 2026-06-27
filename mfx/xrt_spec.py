@@ -292,9 +292,9 @@ class XRTspec:
         self.logger.warning(f'Calibrating XRT-Spec for {energy_keV:.3f} keV')
 
         # Stop camera if running
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Acquire':
-            os.system('caput CAMR:FEE1:441:Acquire Done')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Done')
 
         # Store current positions
         ref_crystal_angle = self.hxrsss.th.position
@@ -349,9 +349,9 @@ class XRTspec:
             return
 
         # Stop camera
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Acquire':
-            os.system('caput CAMR:FEE1:441:Acquire Done')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Done')
 
         self.hxrsss.th.umv(positions['crystal_angle'])
 
@@ -362,9 +362,9 @@ class XRTspec:
             self.hxrsss.th.mv(ref_crystal_angle)
 
         # Restart camera
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Done':
-            os.system('caput CAMR:FEE1:441:Acquire Acquire')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
 
     def track_feespec_camera(self, energy_keV, crystal_angle_offset=0.0):
         """
@@ -382,9 +382,9 @@ class XRTspec:
         Starts camera if currently stopped.
         Performs XRT transmission safety check.
         """
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Done':
-            os.system('caput CAMR:FEE1:441:Acquire Acquire')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
 
         ref_camera_angle = self.hxrsss.tth.position
 
@@ -648,7 +648,7 @@ class XRTspec:
         # Get initial camera status
         try:
             cam_status = os.popen(
-                "caget CAMR:FEE1:441:Acquire | awk '{print $2}'"
+                "caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'"
             ).read().strip()
             camera_was_running = (cam_status == 'Acquire')
         except Exception as e:
@@ -660,7 +660,7 @@ class XRTspec:
         if record and cam_status != 'Acquire':
             self.logger.info("Starting camera...")
             try:
-                os.system('caput CAMR:FEE1:441:Acquire Acquire')
+                os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
                 sleep(2)  # Wait for camera to start
             except Exception as e:
                 raise RuntimeError(f"Failed to start camera: {e}")

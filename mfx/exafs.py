@@ -1737,6 +1737,7 @@ class Exafs:
         k_move_mode : str, optional
             'pause': Pause DAQ, move K, wait, resume DAQ (default)
             'concurrent': Request K non-blocking, immediately step DCCM
+            'concurrent_settled': DAQ stays running, move K blocking (wait for settle), then step DCCM
         dccm_window_eV : float, optional
             DCCM scans ±this around K center (default: 2.0)
         dccm_step_eV : float, optional
@@ -1811,8 +1812,8 @@ class Exafs:
         self.simulate = simulate
 
         # === Parameter defaults and validation ===
-        if k_move_mode not in ('pause', 'concurrent'):
-            raise ValueError(f"k_move_mode must be 'pause' or 'concurrent', got '{k_move_mode}'")
+        if k_move_mode not in ('pause', 'concurrent', 'concurrent_settled'):
+            raise ValueError(f"k_move_mode must be 'pause', 'concurrent', or 'concurrent_settled', got '{k_move_mode}'")
 
         if dccm_offsets is None:
             dccm_offsets = np.round(np.arange(
@@ -1894,6 +1895,7 @@ class Exafs:
         point_index = 0
 
         # === Main scan loop ===
+        t_start = time()
         try:
             for run_idx in range(runs):
                 self.logger.warning(f"Starting run {run_idx + 1}/{runs}")
@@ -1921,6 +1923,11 @@ class Exafs:
                         )
                     elif k_move_mode == 'concurrent':
                         self._k_xas_move_concurrent(
+                            k_target_eV, k_target_keV,
+                            track_feespec, crystal_angle_offset
+                        )
+                    elif k_move_mode == 'concurrent_settled':
+                        self._k_xas_move_concurrent_settled(
                             k_target_eV, k_target_keV,
                             track_feespec, crystal_angle_offset
                         )
@@ -2001,6 +2008,8 @@ class Exafs:
                     energy_start, crystal_angle_offset=crystal_angle_offset)
 
         # === Print summary ===
+        elapsed = time() - t_start
+        time_per_point = elapsed / len(summary) if summary else 0.0
         print("\n" + "=" * 60)
         print("SCAN COMPLETE")
         print("=" * 60)
@@ -2011,6 +2020,8 @@ class Exafs:
             print(f"  Energy range covered:   "
                   f"{min(s['dccm_energy_eV'] for s in summary):.1f} - "
                   f"{max(s['dccm_energy_eV'] for s in summary):.1f} eV")
+        print(f"  Total elapsed time:     {elapsed:.1f}s ({elapsed/60:.1f} min)")
+        print(f"  Time per point:         {time_per_point:.2f}s")
         print("=" * 60 + "\n")
 
         return summary
@@ -2108,6 +2119,48 @@ class Exafs:
         # Request K move — non-blocking (don't wait for completion)
         self.acr_energy_k.move(k_target_eV, wait=False)
         self.k_energy = k_target_eV
+
+    def _k_xas_move_concurrent_settled(self, k_target_eV, k_target_keV,
+                                       track_feespec, crystal_angle_offset):
+        """
+        Move K in 'concurrent_settled' mode: DAQ stays running, block on K move.
+
+        Parameters
+        ----------
+        k_target_eV : float
+            Target K energy in eV
+        k_target_keV : float
+            Target K energy in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+
+        Notes
+        -----
+        Like 'concurrent' (no DAQ pause/resume) but waits for the undulator
+        to report settled before returning. The dwell timer does not start
+        until the undulator is at its target position. Data is still collected
+        during transit since the DAQ remains running.
+        """
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_target_eV)
+            self.k_energy = k_target_eV
+            return
+
+        # Move FEE spec before K (fast)
+        if track_feespec:
+            self.xrtspec.move_feespec_energy(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Move K — blocking (wait for undulator to settle)
+        self.acr_energy_k.move(k_target_eV)
+        self.k_energy = k_target_eV
+
+        # Verify FEE spec crystal angle after K settles
+        if track_feespec:
+            self.xrtspec.check_feespec_crystal_angle(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
 
 
 class EXAFSEnergyRangeBuilder:
