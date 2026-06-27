@@ -292,6 +292,8 @@ def mfx_reload(module_name):
         from mfx.optimize.beam import Beam
         from mfx.optimize.vernier_calibration import VernierCalibration
         from mfx.optimize.beam_status import BeamCheck
+        from mfx.optimize.vonhamos_align import AMI, find_signal, align_yaw, optimize_focus, align_one_crystal, align_all_crystals
+        ami = AMI()
         beam_status = BeamCheck()
         beam = Beam()
         vernier_calib = VernierCalibration()
