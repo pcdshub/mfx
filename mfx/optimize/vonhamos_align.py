@@ -2,8 +2,11 @@
 Von Hamos six-crystal spectrometer alignment.
   PVs: ami:ana:graph:data:centroids -> [cx, cy, rms]
        ami:ana:graph:data:goal      -> [goal_x, goal_y]
-       ami:ana:graph:heartbeat      -> int
+       ami:ana:graph:heartbeats     -> int
 """
+import os
+import re
+import subprocess
 import time
 import logging
 import numpy as np
@@ -12,30 +15,52 @@ log = logging.getLogger(__name__)
 
 _PV_CEN  = "ami:ana:graph:data:centroids"
 _PV_GOAL = "ami:ana:graph:data:goal"
-_PV_HB   = "ami:ana:graph:heartbeat"
+_PV_HB   = "ami:ana:graph:heartbeats"
 
 _NO_SIGNAL = 1e-3   # rms at or below this means "no signal" (AMI sentinel is 0)
 
 
+def _pvget(pv, timeout=5.0, addr="172.21.152.83"):
+    env = {**os.environ, "EPICS_PVA_ADDR_LIST": addr}
+    result = subprocess.run(
+        ["pvget", "-r", "value", pv],
+        capture_output=True, timeout=timeout, env=env, text=True
+    )
+    if result.returncode != 0:
+        log.warning("pvget failed for %s (rc=%d): %s", pv, result.returncode, result.stderr.strip())
+        return np.array([])
+    out = result.stdout
+    # NTNDArray output:  "    float[]  [v1,v2,...]"  or  "    int  N"
+    m = re.search(r'\[([^\]]+)\]', out)
+    if m:
+        return np.array([float(x) for x in m.group(1).split(',')])
+    # scalar fallback (e.g. heartbeats)
+    m = re.search(r'\b(\d+)\s*$', out.strip())
+    return np.array([float(m.group(1))]) if m else np.array([])
+
+
 class AMI:
     def __init__(self, fresh_events=3, timeout=10.0, addr="172.21.152.83"):
-        import os
-        from p4p.client.thread import Context
         if addr:
             os.environ["EPICS_PVA_ADDR_LIST"] = addr   # PVA export moved off the broadcast domain
-        self._ctx          = Context('pva')
+        self._addr         = addr
         self._fresh_events = fresh_events
         self._timeout      = timeout
-        goal               = np.asarray(self._ctx.get(_PV_GOAL, timeout=timeout))
+        goal               = _pvget(_PV_GOAL, timeout=timeout, addr=addr)
         self.goal_x        = float(goal[0])
         self.goal_y        = float(goal[1])
 
     def _wait_fresh(self):
         """Block until the heartbeat advances by fresh_events (or timeout)."""
-        start    = int(self._ctx.get(_PV_HB))
+        hb = _pvget(_PV_HB, timeout=self._timeout, addr=self._addr)
+        if hb.size == 0:
+            log.warning("heartbeat PV %s unreachable — skipping freshness check", _PV_HB)
+            return
+        start    = int(hb[0])
         deadline = time.time() + self._timeout
         while time.time() < deadline:
-            if int(self._ctx.get(_PV_HB)) >= start + self._fresh_events:
+            hb = _pvget(_PV_HB, timeout=self._timeout, addr=self._addr)
+            if hb.size > 0 and int(hb[0]) >= start + self._fresh_events:
                 return
             time.sleep(0.05)
         log.warning("heartbeat timeout — data may be stale")
@@ -43,7 +68,7 @@ class AMI:
     def _read(self):
         """Fresh [cx, cy, rms] for the first signal. Zeros if the PV is empty."""
         self._wait_fresh()
-        arr = np.asarray(self._ctx.get(_PV_CEN), dtype=np.float32).flatten()
+        arr = _pvget(_PV_CEN, timeout=self._timeout, addr=self._addr).astype(np.float32).flatten()
         return arr if arr.size >= 3 else np.zeros(3, dtype=np.float32)
 
     def centroid(self):
