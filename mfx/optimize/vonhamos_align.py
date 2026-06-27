@@ -27,10 +27,12 @@ class AMIReadError(RuntimeError):
 
 
 def _parse_value(out, pv):
-    # NTScalarArray:  "... [v1,v2,...]"  ("[]" when empty = a real no-signal read)
-    m = re.search(r'\[([^\]]*)\]', out)
-    if m:
-        body = m.group(1).strip()
+    # The value array is the LAST [...] in the output: the field-type token
+    # "double[]" prints an empty [] earlier, so match the last group, not the
+    # first. Empty value brackets ("[]") = a real no-signal read.
+    arrays = re.findall(r'\[([^\]]*)\]', out)
+    if arrays:
+        body = arrays[-1].strip()
         return np.array([float(x) for x in body.split(',')]) if body else np.array([])
     # scalar fallback (e.g. heartbeats):  "... <int>"
     m = re.search(r'\b(\d+)\s*$', out.strip())
