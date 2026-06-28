@@ -330,24 +330,12 @@ class Wire:
 
         # Validate motor selection
         if pv is None:
-            logger.error("Must specify pv='x' or pv='y'")
-            import sys
-            sys.exit("No motor specified")
-
-        pv = pv.lower()
-        if pv not in ['x', 'y']:
-            logger.error("pv must be 'x' or 'y'")
-            import sys
-            sys.exit("Invalid motor selection")
-
-        # Validate motor selection
-        if pv is None:
             logger.error("Must specify pv='x' or pv='y' or custom pv")
             import sys
             sys.exit("No motor specified")
 
         if pv not in ['x', 'y']:
-            logger.warning("pv not 'x' or 'y'. using custom PV: {pv}")
+            logger.warning(f"pv not 'x' or 'y'. using custom PV: {pv}")
 
         # Validate DAQ number
         if daq_num not in [1, 2]:
@@ -446,7 +434,7 @@ class Wire:
 
         # Post to elog
         scan_note = (
-            f"Wire {axis_name}-scan: {start} to {end} mm, "
+            f"Wire {axis_name}: {start} to {end} mm, "
             f"{num_steps} steps @ {events_per_step} events/step"
         )
 
