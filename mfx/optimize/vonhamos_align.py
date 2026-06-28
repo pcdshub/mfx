@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 _PV_CEN  = "ami:ana:graph:data:centroids"
 _PV_GOAL = "ami:ana:graph:data:goal"
-_PV_HB   = "ami:ana:graph:heartbeats"
+_PV_HB   = "ami:ana:graph:data:heartbeats"
 
 _NO_SIGNAL = 1e-3   # rms at or below this means "no signal" (AMI sentinel is 0)
 
@@ -81,7 +81,7 @@ class AMI:
         """Block until the heartbeat advances by fresh_events. Propagates
         AMIReadError if the heartbeat PV can't be read, so the caller stops
         rather than driving motors against stale/absent data."""
-        hb_timeout = min(3.0, self._timeout)
+        hb_timeout = self._timeout #min(3.0, self._timeout)
         start      = int(_pvget(_PV_HB, timeout=hb_timeout, addr=self._addr)[0])
         deadline   = time.time() + self._timeout
         while time.time() < deadline:
@@ -109,7 +109,7 @@ class AMI:
         return float(arr[2]) if arr[2] > _NO_SIGNAL else float('inf')
 
 
-def find_signal(rot, ami, step=2.0, n_confirm=3):
+def find_signal(rot, ami, step=2.0, n_confirm=1):
     """Sweep rot up to its high limit, then down to its low limit, stopping at
     the first position where the centroid is seen n_confirm times in a row."""
     lo, hi = rot.limits
@@ -122,9 +122,11 @@ def find_signal(rot, ami, step=2.0, n_confirm=3):
     sweep = np.concatenate([np.arange(p0, hi, step), np.arange(hi, lo, -step)])
     for pos in sweep:
         rot.move(pos)
+        time.sleep(2)
         confirmed = 0
         for _ in range(n_confirm):
             try:
+                print(f"{ami.centroid()}")
                 seen = ami.centroid() is not None
             except AMIReadError as exc:
                 print(f"  ! lost contact with AMI ({exc}) — stopping sweep at rot={rot.position:.2f}°")
@@ -139,7 +141,7 @@ def find_signal(rot, ami, step=2.0, n_confirm=3):
     return False
 
 
-def measure_sensitivity(rot, ami, nudge=0.5):
+def measure_sensitivity(rot, ami, nudge=1.0):
     """cy shift (px) per degree of rot. None if the signal is lost.
 
     The yaw moves the spot vertically (the detector is rotated 90°, so the streak
@@ -149,6 +151,7 @@ def measure_sensitivity(rot, ami, nudge=0.5):
         return None
     p0 = rot.position
     rot.move(p0 + nudge)
+    time.sleep(5)
     after = ami.centroid()
     rot.move(p0)
     if after is None:
@@ -156,15 +159,17 @@ def measure_sensitivity(rot, ami, nudge=0.5):
     return (after[1] - before[1]) / nudge
 
 
-def align_yaw(rot, ami, nudge=0.5, n_iter=15, tol=1.0, max_step=2.0):
+def align_yaw(rot, ami, nudge=1.0, n_iter=15, tol=50.0, max_step=2.0):
     """Move rot to bring cy onto goal_y. Returns a result dict; check
     ['converged'], and ['reason'] when it did not converge."""
     sens = measure_sensitivity(rot, ami, nudge)
+    print(f"sens={sens} pixel per degree")
     if sens is None:
         return {'converged': False, 'reason': 'signal lost while measuring sensitivity'}
     if abs(sens) < 1e-6:
         return {'converged': False, 'reason': 'zero sensitivity'}
 
+    time.sleep(5)
     for i in range(n_iter):
         c = ami.centroid()
         if c is None:
@@ -174,6 +179,7 @@ def align_yaw(rot, ami, nudge=0.5, n_iter=15, tol=1.0, max_step=2.0):
         if abs(err) < tol:
             return {'converged': True, 'reason': None, 'cy': c[1], 'err': err, 'sens': sens}
         rot.move(rot.position + np.clip(-err / sens, -max_step, max_step))
+        time.sleep(5)
 
     return {'converged': False, 'reason': 'did not converge', 'cy': c[1], 'err': err, 'sens': sens}
 
