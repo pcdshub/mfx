@@ -132,7 +132,7 @@ class DoD:
         ip="172.21.39.172",
         port=9999,
         supported_json="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json",
-        log_file="/tmp/dod.log" #"/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log",
+        log_file="/tmp/dod.log",  # "/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log",
     ):
         from dod.ServerResponse import ServerResponse
 
@@ -1417,20 +1417,23 @@ class DoD:
         """
         post_str = ""
 
-        # Nozzle angles:
-        position = self.codi.get_CoDI_pos()
-        position_str = (
-            "Codi Information: \n CoDI data: name: "
-            + str(position[0])
-            + "\n rot_base: "
-            + str(position[1])
-            + "\n rot_left: "
-            + str(position[2])
-            + "\n rot_right: "
-            + str(position[3])
-            + "\n z-transl: "
-            + str(position[4])
-        )
+        # CoDI angles (only available when DoD was instantiated with modules='codi'):
+        if hasattr(self, "codi"):
+            position = self.codi.get_CoDI_pos()
+            position_str = (
+                "Codi Information: \n CoDI data: name: "
+                + str(position[0])
+                + "\n rot_base: "
+                + str(position[1])
+                + "\n rot_left: "
+                + str(position[2])
+                + "\n rot_right: "
+                + str(position[3])
+                + "\n z-transl: "
+                + str(position[4])
+            )
+        else:
+            position_str = "CoDI not loaded (DoD instantiated without modules='codi')"
         post_str = post_str + position_str + " \n "
 
         # Timings:
