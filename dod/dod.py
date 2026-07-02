@@ -1,3 +1,36 @@
+import time
+
+from http.client import RemoteDisconnected
+from dod.DropsDriver import myClient
+from dod.JsonFileHandler import JsonFileHandler
+
+
+def _with_reconnect(func):
+    """
+    Decorator that catches stale-connection errors and retries once after
+    reconnecting.
+
+    Handles ``RemoteDisconnected`` and ``ConnectionResetError``, both of which
+    arise when the robot's HTTP server closes the TCP session between calls.
+    A short sleep is inserted before the retry to allow the robot server time
+    to become ready for a new connection. The decorated method is retried
+    exactly once; if the retry also fails the exception propagates to the
+    caller.
+    """
+
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except (RemoteDisconnected, ConnectionResetError):
+            time.sleep(0.5)
+            self.reconnect()
+            return func(self, *args, **kwargs)
+
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
+    return wrapper
+
+
 class DoD:
     """
     Class definition of the DoD (Drop-on-Demand) robot.
@@ -95,8 +128,6 @@ class DoD:
         port=9999,
         supported_json="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json",
     ):
-        from dod.DropsDriver import myClient
-        from dod.JsonFileHandler import JsonFileHandler
         from dod.ServerResponse import ServerResponse
 
         import time
@@ -177,6 +208,7 @@ class DoD:
             - self.timing_delay_reaction
         )
 
+    @_with_reconnect
     def stop_task(self, verbose=True):
         """
         Stop a currently running robot task.
@@ -219,6 +251,7 @@ class DoD:
         if verbose == True:
             return r
 
+    @_with_reconnect
     def clear_abort(self, verbose=True):
         """
         Clear the robot abort flag and refresh status.
@@ -309,6 +342,7 @@ class DoD:
 
         return False
 
+    @_with_reconnect
     def get_status(self, verbose=False):
         """
         Return the current robot state.
@@ -351,6 +385,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def busy_wait(self, timeout):
         """
         Block until the robot is no longer busy or the timeout is reached.
@@ -397,6 +432,7 @@ class DoD:
             delta = time.time() - start
         return False
 
+    @_with_reconnect
     def get_task_details(self, task_name, verbose=False):
         """
         Retrieve the details of a named task from the robot.
@@ -437,6 +473,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def get_task_names(self, verbose=False):
         """
         Retrieve the names of all available tasks from the robot.
@@ -473,6 +510,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def get_current_position(self, verbose=False):
         """
         Return the current robot position.
@@ -513,6 +551,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def get_nozzle_status(self, verbose=False):
         """
         Return the current nozzle parameters and state.
@@ -551,6 +590,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def set_nozzle_dispensing(self, mode="Off", verbose=False):
         """
         Set the nozzle dispensing mode.
@@ -608,6 +648,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def do_move(self, position, safety_test=False, verbose=False):
         """
         Move the robot to a named position.
@@ -668,6 +709,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def move_x_abs(self, position_x, safety_test=False, verbose=False):
         """
         Move the robot to an absolute x position (robot coordinate system).
@@ -728,6 +770,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def move_y_abs(self, position_y, safety_test=False, verbose=False):
         """
         Move the robot to an absolute y position (robot coordinate system).
@@ -788,6 +831,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def move_z_abs(self, position_z, safety_test=False, verbose=False):
         """
         Move the robot to an absolute z position (robot coordinate system).
@@ -848,6 +892,7 @@ class DoD:
         else:
             return r.RESULTS
 
+    @_with_reconnect
     def do_task(self, task_name, safety_check=False, verbose=False):
         """
         Execute a named task on the robot.
