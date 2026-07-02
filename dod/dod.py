@@ -1,3 +1,4 @@
+import logging
 import time
 
 from http.client import RemoteDisconnected
@@ -21,8 +22,8 @@ def _with_reconnect(func):
     def wrapper(self, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
-        except (RemoteDisconnected, ConnectionResetError):
-            time.sleep(0.5)
+        except (RemoteDisconnected, ConnectionResetError, BrokenPipeError):
+            time.sleep(1)
             self.reconnect()
             return func(self, *args, **kwargs)
 
@@ -51,6 +52,10 @@ class DoD:
     supported_json : str, optional
         Path to the supported endpoints JSON file. Default is
         ``'/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json'``.
+    log_file : str, optional
+        Path to the log file for ``dod.DropsDriver`` and ``dod.HTTPTransceiver``
+        INFO messages. Default is
+        ``'/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log'``.
 
     Attributes
     ----------
@@ -127,6 +132,7 @@ class DoD:
         ip="172.21.39.172",
         port=9999,
         supported_json="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json",
+        log_file="/tmp/dod.log" #"/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log",
     ):
         from dod.ServerResponse import ServerResponse
 
@@ -151,6 +157,22 @@ class DoD:
         self.set_forbidden_region(
             0, 300000, self.y_safety, self.y_max, rotation_state="horizontal"
         )
+
+        # Redirect dod.DropsDriver and dod.HTTPTransceiver log output to a file
+        # so INFO messages do not appear on the console. propagate=False prevents
+        # the records from also reaching the root (console) handler.
+        _dod_log_fmt = logging.Formatter(
+            "%(asctime)s  %(name)s  %(levelname)s  %(message)s"
+        )
+        for _log_name in ("dod.DropsDriver", "dod.HTTPTransceiver"):
+            _lgr = logging.getLogger(_log_name)
+            # Idempotency guard: avoid adding a duplicate FileHandler if DoD()
+            # is instantiated more than once in the same session.
+            if not any(isinstance(h, logging.FileHandler) for h in _lgr.handlers):
+                _fh = logging.FileHandler(log_file)
+                _fh.setFormatter(_dod_log_fmt)
+                _lgr.addHandler(_fh)
+            _lgr.propagate = False
 
         # Initializing the robot client that is used for communication
         self.client = myClient(
