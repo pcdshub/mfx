@@ -1020,6 +1020,73 @@ class DoD:
         )
 
     @_with_reconnect
+    def set_nozzle_selected(self, nozzle, verbose=False):
+        """
+        Select the active nozzle for dispensing and task execution.
+
+        Sends a ``SelectNozzle`` command to the robot.  The selected nozzle
+        is the one that fires when dispensing is triggered and the one used
+        by tasks that operate on a single nozzle.
+
+        .. note::
+            ``nozzle`` must be one of the currently activated (armed) channels.
+            Use :meth:`get_nozzle_status` to check ``'Activated Nozzles'`` if
+            unsure.  The robot returns a reject if the channel is not activated.
+
+        .. note::
+            ``SelectNozzle`` and ``SetNozzleParameters`` interact — each
+            overwrites the other's ``Selected`` value.  If you call
+            :meth:`set_nozzle_voltage` (or any other parameter setter) after
+            this method, the selected nozzle will be updated to the one passed
+            to that setter.
+
+        Parameters
+        ----------
+        nozzle : int
+            Channel number to select, e.g. ``1``, ``2``, or ``3``.
+        verbose : bool, optional
+            If ``True``, return the full server response.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response.  If ``verbose=False``, returns ``r.RESULTS``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``nozzle`` is not in the currently activated nozzle set.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Select nozzle 2 for dispensing:
+
+        >>> dod.set_nozzle_selected(2)
+
+        Select nozzle 1 and inspect the response:
+
+        >>> r = dod.set_nozzle_selected(1, verbose=True)
+        """
+        raw = self.get_nozzle_status()
+        active_str, _, _ = self._parse_nozzle_status(raw)
+        active_channels = [int(ch) for ch in active_str.split(",") if ch]
+        if nozzle not in active_channels:
+            raise ValueError(
+                f"Nozzle {nozzle} is not in the active nozzle set {active_channels}. "
+                f"Use set_nozzle_active() to arm it first."
+            )
+        rr = self.client.connect("Test")
+        r = self.client.select_nozzle(nozzle)
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
     def set_nozzle_dispensing(self, mode="Off", verbose=False):
         """
         Set the nozzle dispensing mode.

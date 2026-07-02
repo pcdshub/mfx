@@ -50,10 +50,25 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 
 | Command | What it does |
 |---|---|
-| `dod.get_nozzle_status()` | Show nozzle state and parameters |
+| `dod.get_nozzle_status()` | Show raw nozzle state dict |
+| `dod.get_nozzle_parameters()` | Show per-nozzle volt / pulse / freq / volume as a dict |
 | `dod.set_nozzle_dispensing(mode='Triggered')` | Dispense on external trigger |
 | `dod.set_nozzle_dispensing(mode='Free')` | Continuous dispensing |
-| `dod.set_nozzle_dispensing(mode='Off')` | Stop all nozzles |
+| `dod.set_nozzle_dispensing(mode='Off')` | Stop all active nozzles |
+
+## Nozzle Parameters
+
+| Command | What it does | Units |
+|---|---|---|
+| `dod.set_nozzle_voltage(nozzle, volt)` | Set drive voltage for one nozzle | V |
+| `dod.set_nozzle_pulse(nozzle, pulse)` | Set pulse shape / duration for one nozzle | name or string |
+| `dod.set_nozzle_freq(nozzle, freq)` | Set dispensing frequency for one nozzle | Hz |
+| `dod.set_nozzle_active([1, 2, 3])` | Set which nozzles are armed | — |
+| `dod.set_nozzle_selected(nozzle)` | Select which armed nozzle fires on trigger | — |
+
+> **Pulse:** ch 1–2 use waveform names (e.g. `'sciPULSE_LV01'`); ch 3+ use numeric strings (e.g. `'48'`).
+> Each setter reads current state first — only the named parameter changes.
+> `set_nozzle_selected` raises `ValueError` if the nozzle is not armed.
 
 ---
 
@@ -62,11 +77,35 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | Command | What it does |
 |---|---|
 | `dod.get_task_names()` | List available tasks |
-| `dod.do_task('task_name')` | Run a task (blocks until done) |
+| `dod.do_task('task_name')` | Run a task (blocks until done; surfaces dialogs) |
+| `dod.do_task('task_name', handle_dialog='auto_ok')` | Run a task; auto-close single-button dialogs |
+| `dod.do_task('task_name', handle_dialog='auto_1')` | Run a task; auto-close all dialogs with Button1 |
 | `dod.stop_task()` | Stop a running task |
 | `dod.clear_abort()` | Clear abort state after a stop |
 
 > **Abort mid-run:** `dod.safety_abort = True`  (takes effect within ~0.5 s)
+
+> **`handle_dialog` modes:** `'raise'` (default) — print dialog and return paused dict; `'auto_ok'` — auto-close single-button only; `'auto_1'` / `'auto_2'` — auto-close all with that button.
+
+---
+
+## Error Recovery
+
+| Command | What it does |
+|---|---|
+| `dod.get_status()['Status']` | Check current state: `'Idle'`, `'Busy'`, `'Dialog'`, `'Error'` |
+| `dod.close_current_dialog(1)` | Print dialog then close with Button1 (`'OK'`) — **one-liner** |
+| `dod.close_current_dialog(2)` | Print dialog then close with Button2 (`'Abort'`) — **one-liner** |
+| `dod.reset_error()` | Clear `'Error'` state after all dialogs are dismissed |
+
+**Workflow:**
+```python
+dod.close_current_dialog(1)   # prints message + closes with OK
+# repeat if more dialogs remain
+dod.reset_error()             # only if Status still 'Error' afterwards
+```
+
+> Multiple dialogs stack LIFO — `get_status()` shows the **most recent** one first.
 
 ---
 
@@ -134,4 +173,4 @@ Key attributes (read or set directly):
 ## ⚠️ Known Limitations
 
 - **Forbidden-region checks are not yet active** — `safety_test=True` does not block unsafe moves.
-- `do_task(safety_check=True)` will crash — use default `safety_check=False`.
+- `do_task(safety_check=True)` — safety check not yet implemented; use default `safety_check=False`.

@@ -12,6 +12,7 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
 - [For Operators](#for-operators)
   - [Session Startup](#session-startup)
   - [DoD Commands](#dod-commands)
+  - [Error Recovery](#error-recovery)
   - [CoDI Commands](#codi-commands)
   - [Timing](#timing)
   - [Safety](#safety)
@@ -24,6 +25,7 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [Logging Redirect](#logging-redirect)
   - [exec-based Preset Access](#exec-based-preset-access)
   - [Relative Motion and PositionReal Format](#relative-motion-and-positionreal-format)
+  - [Nozzle Parameter Methods](#nozzle-parameter-methods)
   - [dod.py vs dod\_dev\_documented.py](#dodpy-vs-dod_dev_documentedpy)
 - [Known Issues](#known-issues)
 
@@ -76,10 +78,31 @@ dod.codi  # CoDI interface       (available as part of dod)
 
 | Command | Description |
 |---|---|
-| `dod.get_nozzle_status()` | Return nozzle parameters and dispensing state |
+| `dod.get_nozzle_status()` | Return raw nozzle status dict |
+| `dod.get_nozzle_parameters()` | Return per-nozzle parameters as a dict keyed by channel number |
 | `dod.set_nozzle_dispensing(mode='Triggered')` | Enable triggered dispensing |
 | `dod.set_nozzle_dispensing(mode='Free')` | Enable continuous dispensing |
-| `dod.set_nozzle_dispensing(mode='Off')` | Stop dispensing on all nozzles |
+| `dod.set_nozzle_dispensing(mode='Off')` | Stop dispensing on all active nozzles |
+
+#### Nozzle Parameters
+
+| Command | Description | Units |
+|---|---|---|
+| `dod.set_nozzle_voltage(nozzle, volt)` | Set drive voltage for a specific nozzle | V |
+| `dod.set_nozzle_pulse(nozzle, pulse)` | Set pulse shape for a specific nozzle | name or string |
+| `dod.set_nozzle_freq(nozzle, freq)` | Set dispensing frequency for a specific nozzle | Hz |
+| `dod.set_nozzle_active([1, 2, 3])` | Set which nozzles are armed (activated) | — |
+| `dod.set_nozzle_selected(nozzle)` | Select the nozzle that fires on trigger / task execution | — |
+
+> **Pulse shape:** Channels 1 and 2 use named waveforms (e.g. `'sciPULSE_LV01'`).
+> All other channels use a numeric string for rectangular waveform duration (e.g. `'48'`).
+> Use `dod.client.get_pulse_names()` to list available names.
+>
+> **Read-merge-write:** Each single-parameter setter reads current nozzle status
+> before writing, so only the specified parameter changes — all others are preserved.
+>
+> **`set_nozzle_selected` guard:** raises `ValueError` if the requested nozzle is not
+> in the active set, preventing a confusing robot-level reject.
 
 #### Tasks
 
@@ -88,11 +111,62 @@ dod.codi  # CoDI interface       (available as part of dod)
 | `dod.get_task_names()` | List all available robot tasks |
 | `dod.get_task_details('task_name')` | Get details of a named task |
 | `dod.do_task('task_name')` | Execute a named task (blocks until complete) |
+| `dod.do_task('task_name', handle_dialog='auto_ok')` | Execute a task; auto-close single-button dialogs |
+| `dod.do_task('task_name', handle_dialog='auto_1')` | Execute a task; auto-close all dialogs with Button1 |
 | `dod.stop_task()` | Stop a currently running task |
 | `dod.clear_abort()` | Clear abort state and refresh status |
 
 > **Mid-run abort:** Set `dod.safety_abort = True` while `do_task` is running to
 > stop the task on the next polling cycle (~0.5 s).
+
+> **Dialog handling:** If the robot enters `"Dialog"` state during a task,
+> `do_task` always prints the dialog message and button labels.  With the default
+> `handle_dialog='raise'` it returns a paused-state dict and waits for you to call
+> `dod.close_dialog(ref, selection)` manually.  See [Error Recovery](#error-recovery)
+> below for the full workflow.
+
+---
+
+#### Error Recovery
+
+Use these commands when the robot is stuck in `"Dialog"` or `"Error"` state.
+
+| Command | Description |
+|---|---|
+| `dod.get_status()['Status']` | Check current robot status (`'Idle'`, `'Busy'`, `'Dialog'`, `'Error'`) |
+| `dod.close_current_dialog(1)` | Print dialog message then close with Button1 (typically `'OK'`) — one-liner |
+| `dod.close_current_dialog(2)` | Print dialog message then close with Button2 (typically `'Abort'`) — one-liner |
+| `dod.close_dialog(ref, 1)` | Close a specific dialog by reference integer with Button1 |
+| `dod.close_dialog(ref, 2)` | Close a specific dialog by reference integer with Button2 |
+| `dod.reset_error()` | Clear persistent `"Error"` status after all dialogs are closed |
+
+**Typical error-recovery workflow:**
+
+```python
+# Close the current dialog (prints message and buttons before closing)
+dod.close_current_dialog(1)   # press OK / Yes
+dod.close_current_dialog(2)   # press Abort / No
+
+# If more dialogs are stacked, repeat until Status != 'Dialog':
+while dod.get_status().get('Status') == 'Dialog':
+    dod.close_current_dialog(1)
+
+# If Status is still 'Error' after all dialogs are dismissed:
+dod.reset_error()
+```
+
+If you need to inspect the dialog before deciding which button to press:
+
+```python
+status = dod.get_status()
+print(status['Dialog']['Message'])
+print(status['Dialog']['Button1'], '/', status['Dialog'].get('Button2', ''))
+dod.close_current_dialog(1)   # or 2
+```
+
+> **Multiple dialogs:** If more than one dialog is open, `get_status()` reports
+> the **most recent** one first — close them LIFO (last in, first out). Re-check
+> status after each call until `Status != 'Dialog'`.
 
 ---
 
@@ -471,7 +545,7 @@ dod = DoD(ip="172.21.39.172", modules='codi', log_file='/tmp/dod.log')
 
 ### `_with_reconnect` Decorator
 
-Applied to all 14 methods that call `self.client.*`. On `RemoteDisconnected`,
+Applied to all 16 methods that call `self.client.*`. On `RemoteDisconnected`,
 `ConnectionResetError`, or `BrokenPipeError`:
 
 1. Sleeps 1 s — the robot server needs a moment after dropping a connection.
@@ -618,6 +692,63 @@ call repeatedly.
 
 ---
 
+### Nozzle Parameter Methods
+
+The seven nozzle parameter methods are built on a **read-merge-write** pattern
+using three private helpers and one private low-level wrapper:
+
+```
+get_nozzle_status()          ← existing; returns raw status dict
+  └─ _parse_nozzle_status()  ← private; returns (active_str, selected_str, params)
+       └─ _active_list_to_str() ← private; converts 32-bool list → '1,2,3' string
+
+_set_nozzle_parameters()     ← private; single HTTP transaction (connect → set → disconnect)
+
+get_nozzle_parameters()      ← public; returns parsed per-nozzle dict
+set_nozzle_voltage(n, v)     ← public; read → merge volt → _set_nozzle_parameters
+set_nozzle_pulse(n, p)       ← public; read → merge pulse → _set_nozzle_parameters
+set_nozzle_freq(n, f)        ← public; read → merge freq → _set_nozzle_parameters
+set_nozzle_active([1,2,3])   ← public; read → replace active list → _set_nozzle_parameters
+```
+
+**`_parse_nozzle_status` return format (`params` dict):**
+
+```python
+{
+    1: {'volt': 0.0,  'pulse': 'sciPULSE_LV01', 'freq': 120, 'volume': 321.0},
+    2: {'volt': 57.0, 'pulse': 'VISC01',        'freq': 120, 'volume': 102.0},
+    3: {'volt': 83.0, 'pulse': '48',             'freq': 120, 'volume': 310.0},
+}
+```
+
+**`SetNozzleParameters` HTTP call format:**
+
+```
+GET /DoD/do/SetNozzleParameters?Active={active}&Selected={selected}&Volt={v}&Pulse={p}&Freq={f}
+```
+
+- `Active` and `Selected` are comma-separated channel number strings (e.g. `'1,2,3'`).
+- `Volt` and `Freq` apply to the `Selected` nozzle(s) only.
+- The `Activated Nozzles` field in the status response is a 32-element boolean list;
+  `_active_list_to_str` converts it to the string format the API expects.
+
+**`middle_invocation_wrapper` kwargs limitation:**
+
+All `myClient` methods are wrapped by `middle_invocation_wrapper`, whose `inner`
+function only accepts `*args` — not `**kwargs`. Any call to `self.client.*` must
+use **positional arguments** in the order defined in `DropsDriver.py`.
+
+**Pulse shape format by channel:**
+
+| Channel | Pulse format | Example |
+|---|---|---|
+| 1–2 (sciPULSE) | Named waveform string | `'sciPULSE_LV01'` |
+| 3+ (standard) | Numeric duration string | `'48'` |
+
+Use `dod.client.get_pulse_names()` to retrieve available waveform names.
+
+---
+
 ### `dod.py` vs `dod_dev_documented.py`
 
 These two files must remain in sync. The **only** intentional difference is the
@@ -638,7 +769,7 @@ to `dod.py`.
 | Issue | Severity | Status |
 |---|---|---|
 | **Forbidden region enforcement not operational.** `safety_test=True` in all motion methods prints a warning but does not reliably block unsafe moves. | High | Open |
-| **`do_task` unbound variable.** If called with `safety_check=True`, `r` is never assigned before the `while r.STATUS[...]` loop, causing `UnboundLocalError`. | High | Open |
+| **`do_task` unbound variable.** If called with `safety_check=True`, `r` was never assigned before the `while r.STATUS[...]` loop, causing `UnboundLocalError`. | High | Fixed (Session 5) |
 | **`logging_string()` requires `modules='codi'`.** If `DoD` is instantiated without `modules='codi'`, `self.codi` does not exist and `logging_string()` raises `AttributeError`. Resolved in the current hutch-python config by passing `modules='codi'`. | Medium | Resolved by config |
 | **`move_rel` returns `None` when all deltas are zero.** No move command is issued and the return value is `None` rather than a `ServerResponse`. Document and handle in calling code if needed. | Low | Open |
 | **`print(endpoint)` in `HTTPTransceiver.send()`.** Writes directly to stdout on every HTTP call; cannot be suppressed without editing the unowned file. | Low | Open |
