@@ -665,7 +665,7 @@ class Timing:
                 cctbx.sshproxy(user)
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin '"
+            f"ssh -Yt {user}@psana.sdf '"
             f"source /sdf/group/lcls/ds/ana/sw/conda2/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/analyze_timing_v2.py "
             f"-f {facility} -t proxy -e {exp} -r {run} -c {camera}'"

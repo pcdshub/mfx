@@ -492,7 +492,7 @@ class VernierOutput:
                 cctbx.sshproxy(user)
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin '"
+            f"ssh -Yt {user}@psana.sdf '"
             f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/fee_spec.py "
             f"-e {exp} -f {facility} -r {exp_run_list}'"
@@ -554,7 +554,7 @@ class VernierOutput:
                 cctbx.sshproxy(user)
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin '"
+            f"ssh -Yt {user}@psana.sdf '"
             f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t {run_type} -e {exp} -r {run} -z {energy} -s {step} -n {num}'"
@@ -606,7 +606,7 @@ class VernierOutput:
                 cctbx.sshproxy(user)
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin '"
+            f"ssh -Yt {user}@psana.sdf '"
             f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t {run_type} -e {exp} -r {run}'"
