@@ -731,12 +731,15 @@ class DoD:
             If the robot server cannot be reached.
         """
         rr = self.client.connect("Test")
+        # Note: myClient methods use *args only (middle_invocation_wrapper
+        # does not forward **kwargs), so positional order must match
+        # DropsDriver.set_nozzle_parameters: active, selected, volt, pulse, freq.
         r = self.client.set_nozzle_parameters(
-            active_nozzles=active_str,
-            selected_nozzles=selected_str,
-            volts=volt,
-            pulse=pulse,
-            frequency=freq,
+            active_str,
+            selected_str,
+            volt,
+            pulse,
+            freq,
         )
         rr = self.client.disconnect()
         if verbose:
