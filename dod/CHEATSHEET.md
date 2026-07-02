@@ -36,6 +36,13 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | `dod.move_x_abs(x)` | Move to absolute x | µm |
 | `dod.move_y_abs(y)` | Move to absolute y | µm |
 | `dod.move_z_abs(z)` | Move to absolute z | µm |
+| `dod.move_x_rel(dx)` | Relative x move | µm |
+| `dod.move_y_rel(dy)` | Relative y move | µm |
+| `dod.move_z_rel(dz)` | Relative z move | µm |
+| `dod.move_rel(dx, dy, dz)` | Relative move in all axes (robot frame) | µm |
+| `dod.move_rel(dx, dy, dz, coordinates='hutch')` | Relative move in hutch frame | µm |
+
+> **Coordinate systems:** `hutch(x,y,z) = robot(x,−z,y)`. Absolute and single-axis relative methods use the robot frame. Use `coordinates='hutch'` in `move_rel` to work in hutch coordinates.
 
 ---
 

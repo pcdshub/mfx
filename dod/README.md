@@ -23,6 +23,7 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [\_with\_reconnect Decorator](#_with_reconnect-decorator)
   - [Logging Redirect](#logging-redirect)
   - [exec-based Preset Access](#exec-based-preset-access)
+  - [Relative Motion and PositionReal Format](#relative-motion-and-positionreal-format)
   - [dod.py vs dod\_dev\_documented.py](#dodpy-vs-dod_dev_documentedpy)
 - [Known Issues](#known-issues)
 
@@ -60,6 +61,16 @@ dod.codi  # CoDI interface       (available as part of dod)
 | `dod.move_x_abs(x)` | Move to absolute x position | µm |
 | `dod.move_y_abs(y)` | Move to absolute y position | µm |
 | `dod.move_z_abs(z)` | Move to absolute z position | µm |
+| `dod.move_x_rel(dx)` | Move by relative offset along x | µm |
+| `dod.move_y_rel(dy)` | Move by relative offset along y | µm |
+| `dod.move_z_rel(dz)` | Move by relative offset along z | µm |
+| `dod.move_rel(dx, dy, dz)` | Move by relative offsets in all three axes (robot frame by default) | µm |
+| `dod.move_rel(dx, dy, dz, coordinates='hutch')` | Same, with deltas supplied in the hutch coordinate frame | µm |
+
+> **Coordinate systems:** Robot and hutch frames are related by
+> `hutch(x, y, z) = robot(x, −z, y)`. All absolute move methods and
+> `move_*_rel` operate in the robot frame. Pass `coordinates='hutch'` to
+> `move_rel` to work in hutch coordinates.
 
 #### Nozzle Dispensing
 
@@ -511,6 +522,35 @@ the preset API attribute structure would break it silently.
 
 ---
 
+### Relative Motion and `PositionReal` Format
+
+`move_x_rel`, `move_y_rel`, `move_z_rel`, and `move_rel` read the current
+position via `get_current_positions()` and add the supplied delta before calling
+the underlying absolute move endpoint.
+
+`PositionReal` in the server response is a dict `{"X": ..., "Y": ..., "Z": ...}`
+(confirmed from `supported.json`). The three absolute move methods previously
+unpacked it with a bare tuple unpack (`x, y, z = r.RESULTS["PositionReal"]`),
+which yields the dict **keys** rather than the values — a latent bug that had no
+effect because those variables were only used inside the (unimplemented)
+`safety_test` branch. This has been corrected in `move_x_abs`, `move_y_abs`,
+and `move_z_abs`, and the relative move methods use explicit key access from the
+start.
+
+**`move_rel` coordinate conversion** (`coordinates='hutch'`):
+
+The mapping `hutch(x, y, z) = robot(x, −z, y)` gives:
+
+| Hutch delta | Robot delta |
+|---|---|
+| `dx` | `dx_robot = dx` |
+| `dy` | `dy_robot = dz` (hutch z = robot y) |
+| `dz` | `dz_robot = −dy` (hutch y = −robot z) |
+
+Axes with a zero delta are skipped and no move command is issued for that axis.
+
+---
+
 ### Recaching the Robot JSON
 
 `supported.json` is a local cache of the robot's API endpoints and their valid
@@ -578,6 +618,21 @@ call repeatedly.
 
 ---
 
+### `dod.py` vs `dod_dev_documented.py`
+
+These two files must remain in sync. The **only** intentional difference is the
+`log_file` default:
+
+| File | `log_file` default |
+|---|---|
+| `dod_dev_documented.py` | `/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log` |
+| `dod.py` | `/tmp/dod.log` |
+
+**Workflow:** edit `dod_dev_documented.py` first, then apply the identical change
+to `dod.py`.
+
+---
+
 ## Known Issues
 
 | Issue | Severity | Status |
@@ -585,4 +640,5 @@ call repeatedly.
 | **Forbidden region enforcement not operational.** `safety_test=True` in all motion methods prints a warning but does not reliably block unsafe moves. | High | Open |
 | **`do_task` unbound variable.** If called with `safety_check=True`, `r` is never assigned before the `while r.STATUS[...]` loop, causing `UnboundLocalError`. | High | Open |
 | **`logging_string()` requires `modules='codi'`.** If `DoD` is instantiated without `modules='codi'`, `self.codi` does not exist and `logging_string()` raises `AttributeError`. Resolved in the current hutch-python config by passing `modules='codi'`. | Medium | Resolved by config |
+| **`move_rel` returns `None` when all deltas are zero.** No move command is issued and the return value is `None` rather than a `ServerResponse`. Document and handle in calling code if needed. | Low | Open |
 | **`print(endpoint)` in `HTTPTransceiver.send()`.** Writes directly to stdout on every HTTP call; cannot be suppressed without editing the unowned file. | Low | Open |
