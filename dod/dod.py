@@ -612,6 +612,410 @@ class DoD:
         else:
             return r.RESULTS
 
+    # ------------------------------------------------------------------
+    # Nozzle parameter helpers (private)
+    # ------------------------------------------------------------------
+
+    def _active_list_to_str(self, active_list):
+        """
+        Convert the 32-element ``'Activated Nozzles'`` boolean list to a
+        comma-separated channel-number string suitable for the HTTP API.
+
+        Parameters
+        ----------
+        active_list : list of bool
+            32-element list as returned in
+            ``get_nozzle_status()['Activated Nozzles']``.
+            Index ``i`` corresponds to channel ``i + 1``.
+
+        Returns
+        -------
+        str
+            Comma-separated active channel numbers, e.g. ``'1,2,3'``.
+
+        Examples
+        --------
+        >>> s = dod._active_list_to_str([True, True, False] + [False] * 29)
+        >>> print(s)
+        1,2
+        """
+        return ",".join(str(i + 1) for i, v in enumerate(active_list) if v)
+
+    def _parse_nozzle_status(self, raw_status):
+        """
+        Parse the raw nozzle status dict into structured components.
+
+        Converts the :meth:`get_nozzle_status` result into typed, per-nozzle
+        parameter dicts ready for use in read-merge-write operations.
+
+        Parameters
+        ----------
+        raw_status : dict
+            Dict as returned by :meth:`get_nozzle_status`.
+
+        Returns
+        -------
+        active_str : str
+            Comma-separated active channel numbers, e.g. ``'1,2,3'``.
+        selected_str : str
+            Comma-separated selected channel numbers, e.g. ``'1'``.
+        params : dict
+            Mapping of channel number (int) to a parameter dict with keys:
+
+            - ``'volt'`` (float)
+            - ``'pulse'`` (str)
+            - ``'freq'`` (int)
+            - ``'volume'`` (float)
+
+        Examples
+        --------
+        >>> raw = dod.get_nozzle_status()
+        >>> active_str, selected_str, params = dod._parse_nozzle_status(raw)
+        >>> print(params[1]['volt'])
+        """
+        active_str = self._active_list_to_str(raw_status["Activated Nozzles"])
+        selected_str = ",".join(str(ch) for ch in raw_status["Selected Nozzles"])
+        params = {}
+        for row in raw_status["ID,Volt,Pulse,Freq,Volume"]:
+            ch = int(row[0])
+            params[ch] = {
+                "volt": float(row[1]),
+                "pulse": row[2],
+                "freq": int(row[3]),
+                "volume": float(row[4]),
+            }
+        return active_str, selected_str, params
+
+    @_with_reconnect
+    def _set_nozzle_parameters(
+        self, active_str, selected_str, volt, pulse, freq, verbose=False
+    ):
+        """
+        Low-level wrapper for the ``SetNozzleParameters`` HTTP endpoint.
+
+        Calls ``connect → SetNozzleParameters → disconnect`` in a single
+        transaction.  All five fields are required by the robot API; callers
+        are responsible for supplying current values for any field they do not
+        intend to change (use :meth:`_parse_nozzle_status` to obtain them).
+
+        .. note::
+            ``Volt``, ``Pulse``, and ``Freq`` are applied to the nozzle(s)
+            identified by ``selected_str``.  ``active_str`` sets the globally
+            armed nozzle set.
+
+        Parameters
+        ----------
+        active_str : str
+            Comma-separated channel numbers of nozzles to arm, e.g. ``'1,2,3'``.
+        selected_str : str
+            Comma-separated channel numbers of nozzles to select, e.g. ``'2'``.
+        volt : float
+            Drive voltage for the selected nozzle(s).
+        pulse : str
+            Pulse shape name (sciPULSE channels 1–2) or numeric string (all
+            other channels).
+        freq : int
+            Dispensing frequency in Hz for the selected nozzle(s).
+        verbose : bool, optional
+            If ``True``, return the full server response.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response.  If ``verbose=False``, returns ``r.RESULTS``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+        """
+        rr = self.client.connect("Test")
+        r = self.client.set_nozzle_parameters(
+            active_nozzles=active_str,
+            selected_nozzles=selected_str,
+            volts=volt,
+            pulse=pulse,
+            frequency=freq,
+        )
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    # ------------------------------------------------------------------
+    # Nozzle parameter public methods
+    # ------------------------------------------------------------------
+
+    def get_nozzle_parameters(self):
+        """
+        Return a structured per-nozzle parameter dictionary.
+
+        Reads the current nozzle status and parses it into a dict keyed by
+        channel number, with typed values for voltage, pulse shape, frequency,
+        and volume.
+
+        Returns
+        -------
+        dict
+            Mapping of channel number (int) to a parameter dict with keys:
+
+            - ``'volt'`` (float) — drive voltage.
+            - ``'pulse'`` (str) — pulse shape name or numeric string.
+            - ``'freq'`` (int) — dispensing frequency in Hz.
+            - ``'volume'`` (float) — droplet volume in nL (read-only;
+              not settable via ``SetNozzleParameters``).
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Print voltage for all active nozzles:
+
+        >>> params = dod.get_nozzle_parameters()
+        >>> for ch, p in params.items():
+        ...     print(f'Nozzle {ch}: {p["volt"]} V, {p["pulse"]}, {p["freq"]} Hz')
+        """
+        raw = self.get_nozzle_status()
+        _, _, params = self._parse_nozzle_status(raw)
+        return params
+
+    def set_nozzle_voltage(self, nozzle, volt, verbose=False):
+        """
+        Set the drive voltage for a specific nozzle.
+
+        Reads the current nozzle status, merges the new voltage for the
+        specified nozzle, and writes all parameters back in a single HTTP call.
+        All other parameters (pulse shape, frequency, active set) are preserved.
+
+        Parameters
+        ----------
+        nozzle : int
+            Channel number of the nozzle to configure.
+        volt : float
+            Target drive voltage.
+        verbose : bool, optional
+            If ``True``, return the full server response.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response.  If ``verbose=False``, returns ``r.RESULTS``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        KeyError
+            If ``nozzle`` is not currently in the active nozzle set.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set nozzle 2 to 60 V:
+
+        >>> dod.set_nozzle_voltage(2, 60)
+
+        Set nozzle 3 to 85 V and inspect the response:
+
+        >>> r = dod.set_nozzle_voltage(3, 85, verbose=True)
+        """
+        raw = self.get_nozzle_status()
+        active_str, _, params = self._parse_nozzle_status(raw)
+        current = params[nozzle]
+        return self._set_nozzle_parameters(
+            active_str=active_str,
+            selected_str=str(nozzle),
+            volt=volt,
+            pulse=current["pulse"],
+            freq=current["freq"],
+            verbose=verbose,
+        )
+
+    def set_nozzle_pulse(self, nozzle, pulse, verbose=False):
+        """
+        Set the pulse shape for a specific nozzle.
+
+        Reads the current nozzle status, merges the new pulse shape for the
+        specified nozzle, and writes all parameters back in a single HTTP call.
+        All other parameters are preserved.
+
+        .. note::
+            Channels 1 and 2 accept named pulse shapes (e.g.
+            ``'sciPULSE_LV01'``).  All other channels use a numeric string for
+            the rectangular waveform duration (e.g. ``'48'``).  Passing the
+            wrong format for a channel will be rejected by the robot.  Use
+            ``dod.client.get_pulse_names()`` to retrieve the list of valid
+            pulse shape names.
+
+        Parameters
+        ----------
+        nozzle : int
+            Channel number of the nozzle to configure.
+        pulse : str
+            Pulse shape name (channels 1–2) or numeric duration string (all
+            other channels).
+        verbose : bool, optional
+            If ``True``, return the full server response.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response.  If ``verbose=False``, returns ``r.RESULTS``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        KeyError
+            If ``nozzle`` is not currently in the active nozzle set.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set the pulse shape on nozzle 1 (sciPULSE channel):
+
+        >>> dod.set_nozzle_pulse(1, 'sciPULSE_LV02')
+
+        Set the rectangular waveform duration on nozzle 3:
+
+        >>> dod.set_nozzle_pulse(3, '52')
+        """
+        raw = self.get_nozzle_status()
+        active_str, _, params = self._parse_nozzle_status(raw)
+        current = params[nozzle]
+        return self._set_nozzle_parameters(
+            active_str=active_str,
+            selected_str=str(nozzle),
+            volt=current["volt"],
+            pulse=pulse,
+            freq=current["freq"],
+            verbose=verbose,
+        )
+
+    def set_nozzle_freq(self, nozzle, freq, verbose=False):
+        """
+        Set the dispensing frequency for a specific nozzle.
+
+        Reads the current nozzle status, merges the new frequency for the
+        specified nozzle, and writes all parameters back in a single HTTP call.
+        All other parameters are preserved.
+
+        Parameters
+        ----------
+        nozzle : int
+            Channel number of the nozzle to configure.
+        freq : int
+            Target dispensing frequency in Hz.
+        verbose : bool, optional
+            If ``True``, return the full server response.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response.  If ``verbose=False``, returns ``r.RESULTS``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        KeyError
+            If ``nozzle`` is not currently in the active nozzle set.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set nozzle 2 to 100 Hz:
+
+        >>> dod.set_nozzle_freq(2, 100)
+
+        Set nozzle 1 to 60 Hz:
+
+        >>> dod.set_nozzle_freq(1, 60)
+        """
+        raw = self.get_nozzle_status()
+        active_str, _, params = self._parse_nozzle_status(raw)
+        current = params[nozzle]
+        return self._set_nozzle_parameters(
+            active_str=active_str,
+            selected_str=str(nozzle),
+            volt=current["volt"],
+            pulse=current["pulse"],
+            freq=freq,
+            verbose=verbose,
+        )
+
+    def set_nozzle_active(self, active_list, verbose=False):
+        """
+        Set which nozzles are armed (activated).
+
+        Reads the current nozzle status, replaces the active nozzle set with
+        ``active_list``, and writes back with the currently selected nozzle's
+        parameters preserved via a read-merge-write.
+
+        .. note::
+            ``Volt``, ``Pulse``, and ``Freq`` in the HTTP call apply to the
+            currently **selected** nozzle (unchanged by this method).  If a
+            newly activated nozzle requires specific parameters, call
+            :meth:`set_nozzle_voltage`, :meth:`set_nozzle_pulse`, or
+            :meth:`set_nozzle_freq` after this method.
+
+        Parameters
+        ----------
+        active_list : list of int
+            Channel numbers to arm, e.g. ``[1, 2, 3]``.
+        verbose : bool, optional
+            If ``True``, return the full server response.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response.  If ``verbose=False``, returns ``r.RESULTS``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Arm nozzles 1, 2, and 3:
+
+        >>> dod.set_nozzle_active([1, 2, 3])
+
+        Arm only nozzle 1:
+
+        >>> dod.set_nozzle_active([1])
+        """
+        raw = self.get_nozzle_status()
+        _, selected_str, params = self._parse_nozzle_status(raw)
+        new_active_str = ",".join(str(ch) for ch in sorted(active_list))
+
+        # Use the currently selected nozzle's params for Volt/Pulse/Freq.
+        # Falls back to the first active nozzle if selected is unavailable,
+        # or to safe defaults if no nozzles are currently active.
+        selected_ch = int(selected_str.split(",")[0]) if selected_str else None
+        if selected_ch is not None and selected_ch in params:
+            current = params[selected_ch]
+        elif params:
+            current = next(iter(params.values()))
+        else:
+            current = {"volt": 0, "pulse": "0", "freq": 120}
+
+        return self._set_nozzle_parameters(
+            active_str=new_active_str,
+            selected_str=selected_str,
+            volt=current["volt"],
+            pulse=current["pulse"],
+            freq=current["freq"],
+            verbose=verbose,
+        )
+
     @_with_reconnect
     def set_nozzle_dispensing(self, mode="Off", verbose=False):
         """
@@ -653,15 +1057,23 @@ class DoD:
         >>> dod.set_nozzle_dispensing(mode='Off')
         """
         rr = self.client.connect("Test")
+        # Read activated nozzles so 'Off' iterates only over armed channels.
+        ns = self.client.get_nozzle_status()
+        active_str, _, _ = self._parse_nozzle_status(ns.RESULTS)
+        active_channels = [int(ch) for ch in active_str.split(",") if ch]
+
         if mode == "Free":
             r = self.client.dispensing("Free")
         elif mode == "Triggered":
+            # NOTE: DropsDriver docstring specifies the API string 'Trigger';
+            # 'Triggered' is preserved here for backward compatibility until
+            # confirmed whether the robot accepts both strings.
             r = self.client.dispensing("Triggered")
         else:
-            # Turns active nozzles off. Safer if all nozzles would be turned off
+            # Turn off each activated nozzle individually to ensure all are off.
             r = self.client.dispensing("Off")
-            for i in [1, 2, 3, 4]:
-                r = self.client.select_nozzle(i)
+            for ch in active_channels:
+                r = self.client.select_nozzle(ch)
                 r = self.client.dispensing("Off")
 
         rr = self.client.disconnect()
