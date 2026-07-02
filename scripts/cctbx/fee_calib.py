@@ -196,7 +196,7 @@ def post_to_elog(exp, fig, ev_per_pixel, intercept, r_value, run_start, n_runs):
         r = requests.post(
             ws_url,
             data={"log_text": log_text, "log_tags": "energy"},
-            files=[("files", ("fee_calib.jpg", buf, "application/data"))],
+            files=[("files", ("fee_calib.jpg", buf, "image/jpeg"))],
             headers=krbheaders,
         )
         r.raise_for_status()
