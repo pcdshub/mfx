@@ -132,7 +132,7 @@ class DoD:
         ip="172.21.39.172",
         port=9999,
         supported_json="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json",
-        log_file="/tmp/dod.log",  # "/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log",
+        log_file="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log",
     ):
         from dod.ServerResponse import ServerResponse
 
@@ -921,7 +921,7 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
-    def move_x_rel(self, delta_x, safety_test=False, verbose=False):
+    def move_x_rel(self, delta_x, safety_test=False, verbose=False, wait=True):
         """
         Move the robot by a relative offset along the x axis (robot coordinate
         system).
@@ -942,6 +942,12 @@ class DoD:
         verbose : bool, optional
             If ``True``, return the full server response object. If ``False``,
             return only the results dict. Default is ``False``.
+        wait : bool, optional
+            If ``True`` (default), block until the move is complete via
+            :meth:`busy_wait`. Set to ``False`` to return immediately after
+            the move command is acknowledged, without waiting for motion to
+            finish. Used by :meth:`move_rel` with ``parallel=True`` to fire
+            multiple axes before waiting.
 
         Returns
         -------
@@ -964,6 +970,10 @@ class DoD:
         Move 2000 µm in the negative x direction:
 
         >>> dod.move_x_rel(-2000)
+
+        Fire the move without blocking (caller is responsible for waiting):
+
+        >>> dod.move_x_rel(5000, wait=False)
         """
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
@@ -981,8 +991,9 @@ class DoD:
             if self.test_forbidden_region(target_x, y_current):
                 r = self.client.move_x(target_x)
 
-        # Wait for movement to be done
-        self.busy_wait(25)
+        # Wait for movement to be done (skipped when wait=False)
+        if wait:
+            self.busy_wait(25)
 
         rr = self.client.disconnect()
         if verbose == True:
@@ -991,7 +1002,7 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
-    def move_y_rel(self, delta_y, safety_test=False, verbose=False):
+    def move_y_rel(self, delta_y, safety_test=False, verbose=False, wait=True):
         """
         Move the robot by a relative offset along the y axis (robot coordinate
         system).
@@ -1012,6 +1023,12 @@ class DoD:
         verbose : bool, optional
             If ``True``, return the full server response object. If ``False``,
             return only the results dict. Default is ``False``.
+        wait : bool, optional
+            If ``True`` (default), block until the move is complete via
+            :meth:`busy_wait`. Set to ``False`` to return immediately after
+            the move command is acknowledged, without waiting for motion to
+            finish. Used by :meth:`move_rel` with ``parallel=True`` to fire
+            multiple axes before waiting.
 
         Returns
         -------
@@ -1034,6 +1051,10 @@ class DoD:
         Move 1500 µm in the negative y direction:
 
         >>> dod.move_y_rel(-1500)
+
+        Fire the move without blocking (caller is responsible for waiting):
+
+        >>> dod.move_y_rel(3000, wait=False)
         """
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
@@ -1051,8 +1072,9 @@ class DoD:
             if self.test_forbidden_region(x_current, target_y):
                 r = self.client.move_y(target_y)
 
-        # Wait for movement to be done
-        self.busy_wait(25)
+        # Wait for movement to be done (skipped when wait=False)
+        if wait:
+            self.busy_wait(25)
 
         rr = self.client.disconnect()
         if verbose == True:
@@ -1061,7 +1083,7 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
-    def move_z_rel(self, delta_z, safety_test=False, verbose=False):
+    def move_z_rel(self, delta_z, safety_test=False, verbose=False, wait=True):
         """
         Move the robot by a relative offset along the z axis (robot coordinate
         system).
@@ -1082,6 +1104,12 @@ class DoD:
         verbose : bool, optional
             If ``True``, return the full server response object. If ``False``,
             return only the results dict. Default is ``False``.
+        wait : bool, optional
+            If ``True`` (default), block until the move is complete via
+            :meth:`busy_wait`. Set to ``False`` to return immediately after
+            the move command is acknowledged, without waiting for motion to
+            finish. Used by :meth:`move_rel` with ``parallel=True`` to fire
+            multiple axes before waiting.
 
         Returns
         -------
@@ -1104,6 +1132,10 @@ class DoD:
         Move 500 µm in the negative z direction:
 
         >>> dod.move_z_rel(-500)
+
+        Fire the move without blocking (caller is responsible for waiting):
+
+        >>> dod.move_z_rel(1000, wait=False)
         """
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
@@ -1121,8 +1153,9 @@ class DoD:
             if self.test_forbidden_region(x_current, y_current):
                 r = self.client.move_z(target_z)
 
-        # Wait for movement to be done
-        self.busy_wait(25)
+        # Wait for movement to be done (skipped when wait=False)
+        if wait:
+            self.busy_wait(25)
 
         rr = self.client.disconnect()
         if verbose == True:
@@ -1136,10 +1169,17 @@ class DoD:
         """
         Move the robot by relative offsets in x, y, and z.
 
-        A convenience wrapper that calls :meth:`move_x_rel`, :meth:`move_y_rel`,
-        and :meth:`move_z_rel` in sequence for each non-zero delta. Axes with a
+        Delegates to :meth:`move_x_rel`, :meth:`move_y_rel`, and
+        :meth:`move_z_rel` in sequence for each non-zero delta. Axes with a
         zero delta are skipped entirely, so passing only ``dx`` issues a single
         x move.
+
+        .. note::
+            The robot HTTP server rejects any ``do`` command received while a
+            move is already in progress (``STATUS == "Busy"``). True parallel
+            multi-axis motion is therefore not achievable via this API; axes
+            always move sequentially. The only path to simultaneous multi-axis
+            motion is :meth:`do_move` with a pre-defined named position.
 
         Parameters
         ----------
@@ -1189,7 +1229,7 @@ class DoD:
 
         >>> dod.move_rel(dy=1000, coordinates='hutch')
 
-        Move in all three hutch axes at once:
+        Move in all three hutch axes (sequentially):
 
         >>> dod.move_rel(dx=500, dy=1000, dz=-300, coordinates='hutch')
         """
@@ -1205,6 +1245,9 @@ class DoD:
             dy_robot = dy
             dz_robot = dz
 
+        # Sequential: each axis waits for completion before the next starts.
+        # The robot rejects do-commands issued while Busy, so parallel motion
+        # is not possible via this HTTP API.
         r = None
         if dx_robot != 0:
             r = self.move_x_rel(dx_robot, safety_test=safety_test, verbose=verbose)
@@ -1212,7 +1255,6 @@ class DoD:
             r = self.move_y_rel(dy_robot, safety_test=safety_test, verbose=verbose)
         if dz_robot != 0:
             r = self.move_z_rel(dz_robot, safety_test=safety_test, verbose=verbose)
-
         return r
 
     @_with_reconnect
