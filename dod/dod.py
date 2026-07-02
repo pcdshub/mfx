@@ -774,7 +774,9 @@ class DoD:
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
         current_real_position = r.RESULTS["PositionReal"]
-        x_current, y_current, z_current = current_real_position
+        x_current = current_real_position["X"]
+        y_current = current_real_position["Y"]
+        z_current = current_real_position["Z"]
 
         if safety_test == False:
             r = self.client.move_x(position_x)
@@ -835,7 +837,9 @@ class DoD:
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
         current_real_position = r.RESULTS["PositionReal"]
-        x_current, y_current, z_current = current_real_position
+        x_current = current_real_position["X"]
+        y_current = current_real_position["Y"]
+        z_current = current_real_position["Z"]
 
         if safety_test == False:
             r = self.client.move_y(position_y)
@@ -896,7 +900,9 @@ class DoD:
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
         current_real_position = r.RESULTS["PositionReal"]
-        x_current, y_current, z_current = current_real_position
+        x_current = current_real_position["X"]
+        y_current = current_real_position["Y"]
+        z_current = current_real_position["Z"]
 
         if safety_test == False:
             r = self.client.move_z(position_z)
@@ -913,6 +919,301 @@ class DoD:
             return r
         else:
             return r.RESULTS
+
+    @_with_reconnect
+    def move_x_rel(self, delta_x, safety_test=False, verbose=False):
+        """
+        Move the robot by a relative offset along the x axis (robot coordinate
+        system).
+
+        Reads the current x position and moves to ``x_current + delta_x``.
+
+        Parameters
+        ----------
+        delta_x : int
+            Relative displacement along x in micrometers. Positive values move
+            in the positive x direction; negative values move in the negative
+            direction.
+        safety_test : bool, optional
+            If ``True``, perform a forbidden-region check before moving.
+            Safety test is not yet fully implemented; passing ``True`` will
+            attempt the check but may not fully block unsafe moves. Default is
+            ``False``.
+        verbose : bool, optional
+            If ``True``, return the full server response object. If ``False``,
+            return only the results dict. Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Position data after the move command is issued. If ``verbose=False``,
+            returns ``r.RESULTS``. If ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Move 5000 µm in the positive x direction:
+
+        >>> dod.move_x_rel(5000)
+
+        Move 2000 µm in the negative x direction:
+
+        >>> dod.move_x_rel(-2000)
+        """
+        r = self.client.connect("Test")
+        r = self.client.get_current_positions()
+        current_real_position = r.RESULTS["PositionReal"]
+        x_current = current_real_position["X"]
+        y_current = current_real_position["Y"]
+        z_current = current_real_position["Z"]
+
+        target_x = x_current + delta_x
+
+        if safety_test == False:
+            r = self.client.move_x(target_x)
+        else:
+            print("safety test of move has yet to be implemented")
+            if self.test_forbidden_region(target_x, y_current):
+                r = self.client.move_x(target_x)
+
+        # Wait for movement to be done
+        self.busy_wait(25)
+
+        rr = self.client.disconnect()
+        if verbose == True:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def move_y_rel(self, delta_y, safety_test=False, verbose=False):
+        """
+        Move the robot by a relative offset along the y axis (robot coordinate
+        system).
+
+        Reads the current y position and moves to ``y_current + delta_y``.
+
+        Parameters
+        ----------
+        delta_y : int
+            Relative displacement along y in micrometers. Positive values move
+            in the positive y direction; negative values move in the negative
+            direction.
+        safety_test : bool, optional
+            If ``True``, perform a forbidden-region check before moving.
+            Safety test is not yet fully implemented; passing ``True`` will
+            attempt the check but may not fully block unsafe moves. Default is
+            ``False``.
+        verbose : bool, optional
+            If ``True``, return the full server response object. If ``False``,
+            return only the results dict. Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Position data after the move command is issued. If ``verbose=False``,
+            returns ``r.RESULTS``. If ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Move 3000 µm in the positive y direction:
+
+        >>> dod.move_y_rel(3000)
+
+        Move 1500 µm in the negative y direction:
+
+        >>> dod.move_y_rel(-1500)
+        """
+        r = self.client.connect("Test")
+        r = self.client.get_current_positions()
+        current_real_position = r.RESULTS["PositionReal"]
+        x_current = current_real_position["X"]
+        y_current = current_real_position["Y"]
+        z_current = current_real_position["Z"]
+
+        target_y = y_current + delta_y
+
+        if safety_test == False:
+            r = self.client.move_y(target_y)
+        else:
+            print("safety test of move has yet to be implemented")
+            if self.test_forbidden_region(x_current, target_y):
+                r = self.client.move_y(target_y)
+
+        # Wait for movement to be done
+        self.busy_wait(25)
+
+        rr = self.client.disconnect()
+        if verbose == True:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def move_z_rel(self, delta_z, safety_test=False, verbose=False):
+        """
+        Move the robot by a relative offset along the z axis (robot coordinate
+        system).
+
+        Reads the current z position and moves to ``z_current + delta_z``.
+
+        Parameters
+        ----------
+        delta_z : int
+            Relative displacement along z in micrometers. Positive values move
+            in the positive z direction; negative values move in the negative
+            direction.
+        safety_test : bool, optional
+            If ``True``, perform a forbidden-region check before moving.
+            Safety test is not yet fully implemented; passing ``True`` will
+            attempt the check but may not fully block unsafe moves. Default is
+            ``False``.
+        verbose : bool, optional
+            If ``True``, return the full server response object. If ``False``,
+            return only the results dict. Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Position data after the move command is issued. If ``verbose=False``,
+            returns ``r.RESULTS``. If ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Move 1000 µm in the positive z direction:
+
+        >>> dod.move_z_rel(1000)
+
+        Move 500 µm in the negative z direction:
+
+        >>> dod.move_z_rel(-500)
+        """
+        r = self.client.connect("Test")
+        r = self.client.get_current_positions()
+        current_real_position = r.RESULTS["PositionReal"]
+        x_current = current_real_position["X"]
+        y_current = current_real_position["Y"]
+        z_current = current_real_position["Z"]
+
+        target_z = z_current + delta_z
+
+        if safety_test == False:
+            r = self.client.move_z(target_z)
+        else:
+            print("safety test of move has yet to be implemented")
+            if self.test_forbidden_region(x_current, y_current):
+                r = self.client.move_z(target_z)
+
+        # Wait for movement to be done
+        self.busy_wait(25)
+
+        rr = self.client.disconnect()
+        if verbose == True:
+            return r
+        else:
+            return r.RESULTS
+
+    def move_rel(
+        self, dx=0, dy=0, dz=0, coordinates="robot", safety_test=False, verbose=False
+    ):
+        """
+        Move the robot by relative offsets in x, y, and z.
+
+        A convenience wrapper that calls :meth:`move_x_rel`, :meth:`move_y_rel`,
+        and :meth:`move_z_rel` in sequence for each non-zero delta. Axes with a
+        zero delta are skipped entirely, so passing only ``dx`` issues a single
+        x move.
+
+        Parameters
+        ----------
+        dx : int, optional
+            Relative displacement in micrometers along x. Default is ``0``.
+        dy : int, optional
+            Relative displacement in micrometers along y. Default is ``0``.
+        dz : int, optional
+            Relative displacement in micrometers along z. Default is ``0``.
+        coordinates : str, optional
+            Coordinate system for the supplied deltas:
+
+            - ``'robot'`` (default) — deltas are in the robot frame, identical
+              to the convention used by :meth:`move_x_abs`, :meth:`move_y_abs`,
+              and :meth:`move_z_abs`.
+            - ``'hutch'`` — deltas are in the hutch frame.  The mapping
+              ``hutch(x, y, z) = robot(x, −z, y)`` is applied internally before
+              the move commands are issued, so the caller works in hutch
+              coordinates throughout.
+
+        safety_test : bool, optional
+            If ``True``, pass a forbidden-region check to each single-axis move.
+            Not yet fully implemented. Default is ``False``.
+        verbose : bool, optional
+            If ``True``, return the full ``ServerResponse`` of the last axis
+            moved. If ``False``, return the results dict of the last axis moved.
+            Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse or None
+            Result from the last non-zero axis move, or ``None`` if all deltas
+            are zero.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached during any single-axis move.
+
+        Examples
+        --------
+        Move 5000 µm in x and −2000 µm in z (robot frame):
+
+        >>> dod.move_rel(dx=5000, dz=-2000)
+
+        Move 1000 µm along the hutch y axis:
+
+        >>> dod.move_rel(dy=1000, coordinates='hutch')
+
+        Move in all three hutch axes at once:
+
+        >>> dod.move_rel(dx=500, dy=1000, dz=-300, coordinates='hutch')
+        """
+        # Convert hutch deltas to robot deltas if requested.
+        # hutch(x, y, z) = robot(x, −z, y)
+        # ⟹  robot_x = hutch_x,  robot_y = hutch_z,  robot_z = −hutch_y
+        if coordinates == "hutch":
+            dx_robot = dx
+            dy_robot = dz
+            dz_robot = -dy
+        else:
+            dx_robot = dx
+            dy_robot = dy
+            dz_robot = dz
+
+        r = None
+        if dx_robot != 0:
+            r = self.move_x_rel(dx_robot, safety_test=safety_test, verbose=verbose)
+        if dy_robot != 0:
+            r = self.move_y_rel(dy_robot, safety_test=safety_test, verbose=verbose)
+        if dz_robot != 0:
+            r = self.move_z_rel(dz_robot, safety_test=safety_test, verbose=verbose)
+
+        return r
 
     @_with_reconnect
     def do_task(self, task_name, safety_check=False, verbose=False):
