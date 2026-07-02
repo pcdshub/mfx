@@ -1535,15 +1535,15 @@ class DoD:
 
         >>> dod.close_current_dialog(2)
         """
-        status = self.get_status()
-        if status.get("Status") != "Dialog":
+        r = self.get_status(verbose=True)
+        if r.STATUS.get("Status") != "Dialog":
             print(
                 f"[DoD] close_current_dialog: no dialog is active "
-                f"(current Status = {status.get('Status')!r})."
+                f"(current Status = {r.STATUS.get('Status')!r})."
             )
             return None
 
-        dialog = status.get("Dialog", {})
+        dialog = r.RESULTS.get("Dialog", {})
         ref = dialog.get("Reference", "?")
         msg = dialog.get("Message", "")
         btn1 = dialog.get("Button1", "OK")
