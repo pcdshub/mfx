@@ -1258,12 +1258,15 @@ class DoD:
         return r
 
     @_with_reconnect
-    def do_task(self, task_name, safety_check=False, verbose=False):
+    def do_task(
+        self, task_name, safety_check=False, handle_dialog="raise", verbose=False
+    ):
         """
         Execute a named task on the robot.
 
-        Blocks until the task completes or until ``safety_abort`` is set to
-        ``True``, in which case the task is stopped immediately.
+        Blocks until the task completes, ``safety_abort`` is set to ``True``,
+        or a robot dialog requires operator attention.  If a dialog appears
+        during execution, behaviour is controlled by ``handle_dialog``.
 
         Parameters
         ----------
@@ -1273,6 +1276,24 @@ class DoD:
             If ``True``, perform a safety check before executing the task.
             Safety check is not yet implemented; passing ``True`` will print a
             warning. Default is ``False``.
+        handle_dialog : str, optional
+            Controls how robot dialogs (``Status == "Dialog"``) are handled
+            during task execution.  The dialog reference, message, and button
+            labels are always printed to the console regardless of this setting.
+            Options:
+
+            - ``'raise'`` (default) — surface the dialog, print its content,
+              and return a dict describing the paused state.  The robot holds
+              the task open; call :meth:`close_dialog` manually to dismiss it,
+              then continue or stop as appropriate.
+            - ``'auto_1'`` — automatically close all dialogs with selection
+              ``1`` (Button1) and continue waiting for task completion.
+            - ``'auto_2'`` — automatically close all dialogs with selection
+              ``2`` (Button2) and continue waiting for task completion.
+            - ``'auto_ok'`` — automatically close single-button dialogs
+              (Button2 empty) with selection ``1``; surface two-button dialogs
+              as per ``'raise'``.
+
         verbose : bool, optional
             If ``True``, return the full server response object. If ``False``,
             return only the results dict. Default is ``False``.
@@ -1280,8 +1301,20 @@ class DoD:
         Returns
         -------
         dict or ServerResponse
-            Task result data. If ``verbose=False``, returns ``r.RESULTS``.
-            If ``verbose=True``, returns the full ``ServerResponse`` object.
+            Task result data on normal completion.  If ``verbose=False``,
+            returns ``r.RESULTS``; if ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+            If ``handle_dialog`` causes a dialog to be surfaced, returns a
+            dict of the form::
+
+                {
+                    "status": "dialog_paused",
+                    "reference": <int>,
+                    "message": <str>,
+                    "button1": <str>,
+                    "button2": <str>,
+                }
 
         Raises
         ------
@@ -1290,9 +1323,17 @@ class DoD:
 
         Examples
         --------
-        Execute a task named ``'wash_nozzle'``:
+        Execute a task, surfacing any dialogs for manual handling (default):
 
         >>> dod.do_task('wash_nozzle')
+
+        Execute a task and auto-close single-button dialogs silently:
+
+        >>> dod.do_task('MoveToProbe_96WP', handle_dialog='auto_ok')
+
+        Execute a task and auto-close all dialogs with Button1:
+
+        >>> dod.do_task('MoveToProbe_96WP', handle_dialog='auto_1')
 
         Execute a task and inspect the full response:
 
@@ -1306,9 +1347,61 @@ class DoD:
             r = self.client.execute_task(task_name)
         else:
             print("safety check needs to be implemented")
+            r = self.client.get_status()
 
-        # Wait for task to be done
-        while r.STATUS["Status"] == "Busy":
+        # Wait for task to be done; also handle Dialog state mid-task.
+        while r.STATUS["Status"] in ("Busy", "Dialog"):
+            if r.STATUS["Status"] == "Dialog":
+                # Extract dialog content from RESULTS.
+                dialog = r.RESULTS.get("Dialog", {})
+                ref = dialog.get("Reference", "?")
+                msg = dialog.get("Message", "")
+                btn1 = dialog.get("Button1", "OK")
+                btn2 = dialog.get("Button2", "")
+
+                # Always print the dialog so there is a console record.
+                print(f"\n[DoD] Dialog (ref={ref}):")
+                print(f"      {msg}")
+                if btn2:
+                    print(f"      Buttons: [1] {btn1}  [2] {btn2}")
+                else:
+                    print(f"      Buttons: [1] {btn1}")
+
+                is_single_button = btn2 == ""
+
+                # Determine whether to auto-close or surface.
+                auto_select = None
+                if handle_dialog == "auto_1":
+                    auto_select = 1
+                elif handle_dialog == "auto_2":
+                    auto_select = 2
+                elif handle_dialog == "auto_ok" and is_single_button:
+                    auto_select = 1
+
+                if auto_select is not None:
+                    print(f"      Auto-closing with selection {auto_select}.")
+                    self.client.close_dialog(ref, str(auto_select))
+                    time.sleep(0.5)
+                    r = self.client.get_status()
+                    continue
+                else:
+                    # Surface the dialog — return paused-state dict.
+                    if btn2:
+                        print(
+                            f"      → To close: dod.close_current_dialog(1)  "
+                            f"or  dod.close_current_dialog(2)"
+                        )
+                    else:
+                        print(f"      → To close: dod.close_current_dialog(1)")
+                    print(f"      Task paused.")
+                    return {
+                        "status": "dialog_paused",
+                        "reference": ref,
+                        "message": msg,
+                        "button1": btn1,
+                        "button2": btn2,
+                    }
+
             time.sleep(0.5)
             r = self.client.get_status()
             if self.safety_abort == True:
@@ -1325,6 +1418,195 @@ class DoD:
             print("error while performing task!")
 
         if verbose == True:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def close_dialog(self, reference, selection, verbose=False):
+        """
+        Close an open robot dialog by specifying its reference and button selection.
+
+        When the robot status is ``"Dialog"``, task execution is paused and the
+        robot waits for a button acknowledgement.  Call :meth:`get_status` first
+        to read the dialog reference integer and the available button labels, then
+        call this method to dismiss the dialog and allow the task to resume.
+
+        .. note::
+            If more than one dialog is open, :meth:`get_status` reports the
+            **last** (most recent) dialog, which is typically the **first** to
+            be closed (LIFO order).  Call :meth:`close_dialog` once per dialog
+            and re-poll :meth:`get_status` after each call to check whether
+            further dialogs remain.
+
+        Parameters
+        ----------
+        reference : int
+            The dialog reference integer as reported in
+            ``get_status()['Dialog']['Reference']``.  The robot assigns an
+            incrementing integer to each dialog occurrence, starting at ``1``
+            when the device is initialised.
+        selection : int
+            Button to press: ``1`` for Button1 (typically ``'OK'`` or
+            ``'Yes'``), ``2`` for Button2 (typically ``'Abort'`` or ``'No'``).
+            If only one button is available (Button2 is empty), use ``1``.
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``,
+            return only the results dict.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response after closing the dialog.  If ``verbose=False``,
+            returns ``r.RESULTS``.  If ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``selection`` is not ``1`` or ``2``.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Read the current dialog and close it with Button1:
+
+        >>> status = dod.get_status()
+        >>> ref = status['Dialog']['Reference']
+        >>> print(status['Dialog']['Message'])
+        >>> print(status['Dialog']['Button1'], '/', status['Dialog'].get('Button2', ''))
+        >>> dod.close_dialog(ref, 1)
+
+        Close a two-button dialog with Button2 (e.g. 'Abort'):
+
+        >>> dod.close_dialog(ref, 2)
+        """
+        if selection not in (1, 2):
+            raise ValueError(f"selection must be 1 or 2, got {selection!r}.")
+        rr = self.client.connect("Test")
+        r = self.client.close_dialog(reference, str(selection))
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    def close_current_dialog(self, selection, verbose=False):
+        """
+        Close the currently active robot dialog in a single call.
+
+        Convenience wrapper around :meth:`get_status` and :meth:`close_dialog`.
+        Reads the active dialog reference automatically so the operator does not
+        need to extract it manually.  The dialog message and button labels are
+        printed to the console before the dialog is closed.
+
+        If no dialog is currently open (``Status != "Dialog"``), a warning is
+        printed and the method returns ``None``.
+
+        Parameters
+        ----------
+        selection : int
+            Button to press: ``1`` for Button1 (typically ``'OK'`` or
+            ``'Yes'``), ``2`` for Button2 (typically ``'Abort'`` or ``'No'``).
+        verbose : bool, optional
+            If ``True``, return the full server response from
+            :meth:`close_dialog`.  If ``False``, return only the results dict.
+            Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse or None
+            Result of :meth:`close_dialog` on success.  ``None`` if no dialog
+            was active.
+
+        Raises
+        ------
+        ValueError
+            If ``selection`` is not ``1`` or ``2``.
+
+        Examples
+        --------
+        Close the current dialog with Button1 (OK):
+
+        >>> dod.close_current_dialog(1)
+
+        Close the current dialog with Button2 (Abort):
+
+        >>> dod.close_current_dialog(2)
+        """
+        status = self.get_status()
+        if status.get("Status") != "Dialog":
+            print(
+                f"[DoD] close_current_dialog: no dialog is active "
+                f"(current Status = {status.get('Status')!r})."
+            )
+            return None
+
+        dialog = status.get("Dialog", {})
+        ref = dialog.get("Reference", "?")
+        msg = dialog.get("Message", "")
+        btn1 = dialog.get("Button1", "OK")
+        btn2 = dialog.get("Button2", "")
+
+        print(f"[DoD] Dialog (ref={ref}):")
+        print(f"      {msg}")
+        if btn2:
+            print(f"      Buttons: [1] {btn1}  [2] {btn2}")
+        else:
+            print(f"      Buttons: [1] {btn1}")
+        print(f"      Closing with selection {selection}.")
+
+        return self.close_dialog(ref, selection, verbose=verbose)
+
+    @_with_reconnect
+    def reset_error(self, verbose=False):
+        """
+        Reset a persistent robot ``"Error"`` status after all dialogs are closed.
+
+        After closing all error dialogs via :meth:`close_dialog`, the robot may
+        remain in ``"Error"`` state with a non-``'NA'`` ``ErrorMessage``.  Call
+        this method to clear the error and return the robot to ``"Idle"``.
+
+        .. note::
+            Only call this method after all open dialogs have been dismissed.
+            Check :meth:`get_status` first — if ``Status`` is still ``"Dialog"``
+            there are dialogs remaining that must be closed before calling this
+            method.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``,
+            return only the results dict.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response after the reset command.  If ``verbose=False``,
+            returns ``r.RESULTS``.  If ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Close all dialogs and then reset error state:
+
+        >>> dod.close_dialog(ref, 1)
+        >>> dod.reset_error()
+
+        Check status after reset:
+
+        >>> print(dod.get_status()['Status'])
+        """
+        rr = self.client.connect("Test")
+        r = self.client.reset_error()
+        rr = self.client.disconnect()
+        if verbose:
             return r
         else:
             return r.RESULTS
