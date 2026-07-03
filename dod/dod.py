@@ -806,6 +806,60 @@ class DoD:
         _, _, params = self._parse_nozzle_status(raw)
         return params
 
+    @_with_reconnect
+    def get_pulse_names(self, verbose=False):
+        """
+        Return the list of available pulse shapes for the sciPULSE channels.
+
+        Wraps ``GET /DoD/get/PulseNames``.  The exact structure of ``r.RESULTS``
+        was not verified against a live robot response at the time of writing;
+        the expected format is a list of pulse shape name strings (e.g.
+        ``['sciPULSE_LV01', 'sciPULSE_LV02', ...]``).  Verify against a live
+        robot response and update this docstring accordingly.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``,
+            return only the results.  Default is ``False``.
+
+        Returns
+        -------
+        list or ServerResponse
+            If ``verbose=False``, returns ``r.RESULTS`` — expected to be a list
+            of pulse shape name strings for the sciPULSE channels.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+            .. note::
+                The exact ``RESULTS`` structure has not been verified against a
+                live robot response.  Confirm the format before relying on the
+                return value in application code.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Print available pulse shape names:
+
+        >>> names = dod.get_pulse_names()
+        >>> print(names)
+
+        Inspect the full server response:
+
+        >>> r = dod.get_pulse_names(verbose=True)
+        >>> print(r.RESULTS)
+        """
+        rr = self.client.connect("Test")
+        r = self.client.get_pulse_names()
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
     def set_nozzle_voltage(self, nozzle, volt, verbose=False):
         """
         Set the drive voltage for a specific nozzle.
@@ -871,7 +925,7 @@ class DoD:
             ``'sciPULSE_LV01'``).  All other channels use a numeric string for
             the rectangular waveform duration (e.g. ``'48'``).  Passing the
             wrong format for a channel will be rejected by the robot.  Use
-            ``dod.client.get_pulse_names()`` to retrieve the list of valid
+            ``dod.get_pulse_names()`` to retrieve the list of valid
             pulse shape names.
 
         .. note::
