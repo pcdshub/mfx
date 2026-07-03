@@ -13,7 +13,7 @@ logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 def check_settings(exp, facility, cctbx_dir):
-    logging.info("Checking xfel gui phil File")
+    logging.info("Checking xfel gui phil File: {cctbx_dir}/settings.phil")
     settings_S3DF = f'''\
 facility {{
   name = *lcls standalone
