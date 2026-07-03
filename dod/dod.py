@@ -1376,6 +1376,146 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
+    def set_led(self, duration, delay, verbose=False):
+        """
+        Set the strobe LED pulse duration and delay.
+
+        Sends ``GET /DoD/do/SetLED?Duration={duration}&Delay={delay}`` to the
+        robot server.  Both parameters are applied atomically in a single HTTP
+        call.  The robot returns a reject if either value is out of the
+        supported range; this method performs a client-side range check first
+        and raises ``ValueError`` before sending the request.
+
+        Parameters
+        ----------
+        duration : int
+            Strobe pulse width in microseconds.  Must be in the range
+            ``[1, 65000]``.
+        delay : int
+            Strobe internal delay in microseconds.  Must be in the range
+            ``[0, 6500]``.
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``
+            (default), return only the results dict.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response after the command.  If ``verbose=False``, returns
+            ``r.RESULTS``; if ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``duration`` is not in ``[1, 65000]`` or ``delay`` is not in
+            ``[0, 6500]``.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set duration to 500 µs and delay to 100 µs:
+
+        >>> dod.set_led(500, 100)
+
+        Set duration to 1000 µs with no delay, inspect the full response:
+
+        >>> r = dod.set_led(1000, 0, verbose=True)
+        >>> print(r.RESULTS)
+        """
+        if not (1 <= duration <= 65000):
+            raise ValueError(f"duration must be in [1, 65000]; got {duration!r}.")
+        if not (0 <= delay <= 6500):
+            raise ValueError(f"delay must be in [0, 6500]; got {delay!r}.")
+        rr = self.client.connect("Test")
+        r = self.client.setLED(duration, delay)
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def set_led_per_nozzle(self, nozzle, duration, delay, verbose=False):
+        """
+        Set the strobe LED pulse duration and delay for a specific nozzle.
+
+        Selects the specified nozzle via ``SelectNozzle``, waits 0.5 s, then
+        calls ``SetLED`` to apply the strobe parameters.  All three operations
+        are performed within a single ``connect``–``disconnect`` transaction.
+
+        The nozzle must be in the active (armed) set; this method raises
+        ``ValueError`` if it is not, consistent with :meth:`set_nozzle_selected`.
+
+        Parameters
+        ----------
+        nozzle : int
+            Channel number of the nozzle to configure.  Must be in the
+            currently active (armed) nozzle set.
+        duration : int
+            Strobe pulse width in microseconds.  Must be in the range
+            ``[1, 65000]``.
+        delay : int
+            Strobe internal delay in microseconds.  Must be in the range
+            ``[0, 6500]``.
+        verbose : bool, optional
+            If ``True``, return the full server response object from the
+            ``SetLED`` call.  If ``False`` (default), return only the results
+            dict.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response from the ``SetLED`` call.  If ``verbose=False``,
+            returns ``r.RESULTS``; if ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``nozzle`` is not in the active nozzle set, or if ``duration``
+            is not in ``[1, 65000]``, or if ``delay`` is not in ``[0, 6500]``.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set nozzle 1 strobe to 300 µs duration, 50 µs delay:
+
+        >>> dod.set_led_per_nozzle(1, 300, 50)
+
+        Set nozzle 2 strobe to 800 µs duration, 0 µs delay:
+
+        >>> dod.set_led_per_nozzle(2, 800, 0)
+        """
+        # Validate ranges before touching the robot.
+        if not (1 <= duration <= 65000):
+            raise ValueError(f"duration must be in [1, 65000]; got {duration!r}.")
+        if not (0 <= delay <= 6500):
+            raise ValueError(f"delay must be in [0, 6500]; got {delay!r}.")
+
+        # Guard: nozzle must be in the active set.
+        raw_status = self.get_nozzle_status()
+        _, _, params = self._parse_nozzle_status(raw_status)
+        active_channels = list(params.keys())
+        if nozzle not in active_channels:
+            raise ValueError(
+                f"nozzle {nozzle!r} is not in the active set "
+                f"{active_channels}. Arm it first with set_nozzle_active()."
+            )
+
+        rr = self.client.connect("Test")
+        r = self.client.select_nozzle(nozzle)
+        time.sleep(0.5)
+        r = self.client.setLED(duration, delay)
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
     def do_move(self, position, safety_test=False, verbose=False):
         """
         Move the robot to a named position.

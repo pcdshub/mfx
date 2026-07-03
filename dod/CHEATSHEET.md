@@ -74,6 +74,17 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 > **Waveform load time:** `set_nozzle_pulse` on ch 1 or 2 blocks for 5 s after sending the command — the robot needs this time to load the named waveform.
 > **`take_probe` requires `ProbeUptake` task on robot.** Raises `RuntimeError` if absent (`check_task=True` default). Blocks until done; default timeout = `max(30, volume)` s. Pass `timeout=` to override.
 
+## LED Strobe
+
+| Command | What it does | Units |
+|---|---|---|
+| `dod.set_led(duration, delay)` | Set strobe pulse width and delay (current nozzle) | µs |
+| `dod.set_led_per_nozzle(nozzle, duration, delay)` | Select nozzle then set its strobe params | µs |
+
+> **Ranges:** `duration` 1–65000 µs; `delay` 0–6500 µs. `ValueError` if out of range.
+> `set_led_per_nozzle` raises `ValueError` if the nozzle is not armed.
+> No read-back — track values in calling code if needed.
+
 ---
 
 ## Tasks

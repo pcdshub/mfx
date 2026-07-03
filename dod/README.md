@@ -26,6 +26,7 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [exec-based Preset Access](#exec-based-preset-access)
   - [Relative Motion and PositionReal Format](#relative-motion-and-positionreal-format)
   - [Nozzle Parameter Methods](#nozzle-parameter-methods)
+  - [LED Strobe Methods](#led-strobe-methods)
   - [dod.py vs dod\_dev\_documented.py](#dodpy-vs-dod_dev_documentedpy)
 - [Known Issues](#known-issues)
 
@@ -119,6 +120,26 @@ dod.codi  # CoDI interface       (available as part of dod)
 > `max(30, int(volume))` seconds (30 s floor + 1 s/µL at 1 µL/s assumed flow rate);
 > pass `timeout=` to override. Valid `well` strings depend on the nozzle configuration
 > in the `ProbeUptake` task — the robot rejects invalid wells.
+
+#### LED Strobe
+
+| Command | Description | Units |
+|---|---|---|
+| `dod.set_led(duration, delay)` | Set strobe pulse width and internal delay (applies to currently selected nozzle) | µs |
+| `dod.set_led_per_nozzle(nozzle, duration, delay)` | Select a nozzle then set its strobe parameters in one call | µs |
+
+> **Parameter ranges:** `duration` must be in `[1, 65000]`; `delay` must be in `[0, 6500]`.
+> Both raise `ValueError` before sending if a value is out of range.
+>
+> **Per-nozzle assignment:** Different nozzles can have different strobe settings.
+> `set_led_per_nozzle` issues a `SelectNozzle` command first (with a 0.5 s pause)
+> then calls `SetLED` — all within a single connect–disconnect transaction.
+> The nozzle must be in the active (armed) set; `ValueError` is raised if it is not.
+>
+> **No read-back endpoint:** There is no `GetLED` API endpoint; the robot does not
+> expose current strobe parameters. Track values in calling code if needed.
+
+---
 
 #### Tasks
 
@@ -299,6 +320,7 @@ DoD  (dod_dev_documented.py)        ← owned
   ├─ _with_reconnect decorator
   ├─ motion:   do_move, move_x/y/z_abs
   ├─ nozzle:   set_nozzle_dispensing, get_nozzle_status
+  ├─ led:      set_led, set_led_per_nozzle
   ├─ tasks:    do_task, get_task_names, get_task_details
   ├─ safety:   set/get/test_forbidden_region  [not yet operational]
   ├─ timing:   set_timing_* methods (EVR via pcdsdevices)
@@ -561,7 +583,7 @@ dod = DoD(ip="172.21.39.172", modules='codi', log_file='/tmp/dod.log')
 
 ### `_with_reconnect` Decorator
 
-Applied to all 16 methods that call `self.client.*`. On `RemoteDisconnected`,
+Applied to all 18 methods that call `self.client.*`. On `RemoteDisconnected`,
 `ConnectionResetError`, or `BrokenPipeError`:
 
 1. Sleeps 1 s — the robot server needs a moment after dropping a connection.
@@ -763,6 +785,52 @@ use **positional arguments** in the order defined in `DropsDriver.py`.
 | 3+ (standard) | Numeric duration string | `'48'` |
 
 Use `dod.get_pulse_names()` to retrieve available waveform names.
+
+---
+
+### LED Strobe Methods
+
+Two public methods surface the `SetLED` HTTP endpoint:
+
+```
+set_led(duration, delay)              ← direct wrapper; applies to selected nozzle
+set_led_per_nozzle(nozzle, d, delay)  ← select-then-set in one transaction
+```
+
+**Pattern for `set_led`:**
+
+```
+connect → setLED(duration, delay) → disconnect
+```
+
+**Pattern for `set_led_per_nozzle`:**
+
+```
+[pre-flight: get_nozzle_status → _parse_nozzle_status → guard nozzle in active set]
+connect → select_nozzle(nozzle) → sleep(0.5) → setLED(duration, delay) → disconnect
+```
+
+The 0.5 s sleep between `select_nozzle` and `setLED` matches the inter-command wait
+used in `set_nozzle_dispensing`'s `Off` branch — a defensive pause to let the robot
+process the select command before the next `do` request arrives.
+
+**No read-back endpoint:** There is no `GET /DoD/get/LEDStatus` or equivalent.
+The strobe parameters are write-only from the API's perspective. If the calling
+code needs to track current values, it must maintain them locally.
+
+**`myClient` method name:** `setLED(duration, delay)` (camelCase, matching the
+`DropsDriver.py` naming convention). The DoD wrappers use snake_case (`set_led`,
+`set_led_per_nozzle`) consistent with the rest of the `DoD` public API.
+
+**Client-side validation (both methods):**
+
+| Parameter | Valid range | Error |
+|---|---|---|
+| `duration` | `[1, 65000]` µs | `ValueError` |
+| `delay` | `[0, 6500]` µs | `ValueError` |
+
+Validation is performed before `connect` so no HTTP transaction is started for
+an invalid call.
 
 ---
 
