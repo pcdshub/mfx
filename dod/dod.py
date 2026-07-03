@@ -688,7 +688,7 @@ class DoD:
 
     @_with_reconnect
     def _set_nozzle_parameters(
-        self, active_str, selected_str, volt, pulse, freq, verbose=False
+        self, active_str, selected_str, volt, pulse, freq, verbose=False, wait=False
     ):
         """
         Low-level wrapper for the ``SetNozzleParameters`` HTTP endpoint.
@@ -718,6 +718,12 @@ class DoD:
             Dispensing frequency in Hz for the selected nozzle(s).
         verbose : bool, optional
             If ``True``, return the full server response.  Default is ``False``.
+        wait : bool, optional
+            If ``True``, insert a 5 s sleep between ``SetNozzleParameters`` and
+            ``disconnect``, keeping the TCP session open while the robot
+            processes the command.  Use this when loading named sciPULSE
+            waveforms on channels 1 or 2, which take up to 5 s to complete
+            on the hardware.  Default is ``False``.
 
         Returns
         -------
@@ -741,6 +747,11 @@ class DoD:
             pulse,
             freq,
         )
+        # When wait=True, block before disconnecting so the robot has time to
+        # finish processing (e.g. loading a named sciPULSE waveform on ch 1/2)
+        # while the TCP session is still open.
+        if wait:
+            time.sleep(5)
         rr = self.client.disconnect()
         if verbose:
             return r
@@ -855,6 +866,12 @@ class DoD:
             ``dod.client.get_pulse_names()`` to retrieve the list of valid
             pulse shape names.
 
+        .. note::
+            For channels 1 and 2, the robot hardware takes up to 5 seconds to
+            load the named waveform after acknowledging the HTTP command.  This
+            method blocks for 5 s after the command is sent for those channels
+            to ensure the waveform is ready before the next command is issued.
+
         Parameters
         ----------
         nozzle : int
@@ -880,17 +897,20 @@ class DoD:
 
         Examples
         --------
-        Set the pulse shape on nozzle 1 (sciPULSE channel):
+        Set the pulse shape on nozzle 1 (sciPULSE channel; blocks ~5 s):
 
         >>> dod.set_nozzle_pulse(1, 'sciPULSE_LV02')
 
-        Set the rectangular waveform duration on nozzle 3:
+        Set the rectangular waveform duration on nozzle 3 (no wait):
 
         >>> dod.set_nozzle_pulse(3, '52')
         """
         raw = self.get_nozzle_status()
         active_str, _, params = self._parse_nozzle_status(raw)
         current = params[nozzle]
+        # For channels 1 and 2, pass wait=True so _set_nozzle_parameters holds
+        # the TCP session open for 5 s while the robot loads the sciPULSE
+        # waveform before disconnecting.
         return self._set_nozzle_parameters(
             active_str=active_str,
             selected_str=str(nozzle),
@@ -898,6 +918,7 @@ class DoD:
             pulse=pulse,
             freq=current["freq"],
             verbose=verbose,
+            wait=nozzle in (1, 2),
         )
 
     def set_nozzle_freq(self, nozzle, freq, verbose=False):
