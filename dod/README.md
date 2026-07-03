@@ -88,6 +88,7 @@ dod.codi  # CoDI interface       (available as part of dod)
 
 | Command | Description | Units |
 |---|---|---|
+| `dod.get_pulse_names()` | List available sciPULSE pulse shape names | — |
 | `dod.set_nozzle_voltage(nozzle, volt)` | Set drive voltage for a specific nozzle | V |
 | `dod.set_nozzle_pulse(nozzle, pulse)` | Set pulse shape for a specific nozzle | name or string |
 | `dod.set_nozzle_freq(nozzle, freq)` | Set dispensing frequency for a specific nozzle | Hz |
@@ -98,7 +99,7 @@ dod.codi  # CoDI interface       (available as part of dod)
 
 > **Pulse shape:** Channels 1 and 2 use named waveforms (e.g. `'sciPULSE_LV01'`).
 > All other channels use a numeric string for rectangular waveform duration (e.g. `'48'`).
-> Use `dod.client.get_pulse_names()` to list available names.
+> Use `dod.get_pulse_names()` to list available names.
 >
 > **Waveform load time:** After `set_nozzle_pulse` is called on channel 1 or 2, the robot
 > hardware takes up to 5 s to load the named waveform.  The method blocks for 5 s
@@ -720,6 +721,7 @@ get_nozzle_status()          ← existing; returns raw status dict
 _set_nozzle_parameters()     ← private; single HTTP transaction (connect → set → disconnect)
 
 get_nozzle_parameters()      ← public; returns parsed per-nozzle dict
+get_pulse_names()            ← public; returns list of available sciPULSE waveform names
 set_nozzle_voltage(n, v)     ← public; read → merge volt → _set_nozzle_parameters
 set_nozzle_pulse(n, p)       ← public; read → merge pulse → _set_nozzle_parameters
 set_nozzle_freq(n, f)        ← public; read → merge freq → _set_nozzle_parameters
@@ -760,7 +762,7 @@ use **positional arguments** in the order defined in `DropsDriver.py`.
 | 1–2 (sciPULSE) | Named waveform string | `'sciPULSE_LV01'` |
 | 3+ (standard) | Numeric duration string | `'48'` |
 
-Use `dod.client.get_pulse_names()` to retrieve available waveform names.
+Use `dod.get_pulse_names()` to retrieve available waveform names.
 
 ---
 
