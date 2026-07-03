@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def check_settings(exp, facility, cctbx_dir):
-    logging.info(f"Checking xfel gui phil File: {cctbx_dir}/settings.phil")
+    logging.info(f"Checking xfel gui phil File: {cctbx_dir}/settings_{exp}.phil")
     settings_S3DF = f'''\
 facility {{
   name = *lcls standalone
@@ -83,7 +83,7 @@ db {{
 }}\
 '''
 
-    phil_file = f"{cctbx_dir}/settings.phil"
+    phil_file = f"{cctbx_dir}/settings_{exp}.phil"
     if os.path.isfile(phil_file):
         cctbx_settings = open(phil_file, "r", encoding="UTF-8")
         setting_lines = cctbx_settings.readlines()
@@ -105,7 +105,7 @@ db {{
                 change = False
 
     else:
-        logging.warning(f"settings.phil file doesn't exist. Writing new one for {exp}")
+        logging.warning(f"settings_{exp}.phil file doesn't exist. Writing new one for {exp}")
         change = True
 
     if change:

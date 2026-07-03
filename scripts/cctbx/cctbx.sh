@@ -38,6 +38,6 @@ case $step in
 
   2)
     python ${mfx_dir}/scripts/cctbx/cctbx_start.py -u $user -e $experiment -f $facility -d $debug -s 2
-    cctbx.xfel
+    CCTBX_XFEL_SETTINGS=~/.cctbx.xfel/settings_$experiment.phil cctbx.xfel
     ;;
 esac
