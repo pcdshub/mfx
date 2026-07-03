@@ -408,17 +408,22 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
-    def busy_wait(self, timeout):
+    def busy_wait(self, timeout, poll_interval=0.1):
         """
         Block until the robot is no longer busy or the timeout is reached.
 
-        Polls the robot status every 100 ms. Returns immediately if the robot
-        is not busy.
+        Polls the robot status at ``poll_interval`` second intervals. Prints a
+        message on each polling iteration so the caller can see the robot is
+        still active. Returns immediately if the robot is not busy.
 
         Parameters
         ----------
         timeout : float
             Maximum time to wait in seconds before returning.
+        poll_interval : float, optional
+            Time in seconds between status polls. Default is ``0.1`` s.
+            Increase this for long-running operations (e.g. probe uptake) to
+            reduce HTTP traffic to the robot server.
 
         Returns
         -------
@@ -438,9 +443,11 @@ class DoD:
         >>> timed_out = dod.busy_wait(30)
         >>> if timed_out:
         ...     print('Robot did not finish in time.')
-        """
-        import time
 
+        Wait for a long-running task, polling every 10 s:
+
+        >>> timed_out = dod.busy_wait(120, poll_interval=10)
+        """
         start = time.time()
         r = self.client.get_status()
         delta = 0
@@ -449,7 +456,8 @@ class DoD:
             if delta > timeout:
                 return True
 
-            time.sleep(0.1)  # Wait 100 ms to avoid spamming the robot
+            print(f"[DoD] Robot busy — checking again in {poll_interval} s ...")
+            time.sleep(poll_interval)
             r = self.client.get_status()
             delta = time.time() - start
         return False
@@ -1235,7 +1243,9 @@ class DoD:
         r = self.client.take_probe(channel, well, volume)
 
         # Block until the robot finishes the uptake move.
-        self.busy_wait(effective_timeout)
+        # Poll every 10 s — uptake operations are long-running and do not
+        # benefit from rapid polling.
+        self.busy_wait(effective_timeout, poll_interval=10)
 
         rr = self.client.disconnect()
         if verbose:
@@ -1900,7 +1910,12 @@ class DoD:
 
     @_with_reconnect
     def do_task(
-        self, task_name, safety_check=False, handle_dialog="raise", verbose=False
+        self,
+        task_name,
+        safety_check=False,
+        handle_dialog="raise",
+        verbose=False,
+        poll_interval=2.0,
     ):
         """
         Execute a named task on the robot.
@@ -1938,6 +1953,10 @@ class DoD:
         verbose : bool, optional
             If ``True``, return the full server response object. If ``False``,
             return only the results dict. Default is ``False``.
+        poll_interval : float, optional
+            Time in seconds between status polls while the robot is busy.
+            Default is ``2.0`` s.  Reduce for short tasks where tighter
+            completion latency is needed.
 
         Returns
         -------
@@ -1981,8 +2000,6 @@ class DoD:
         >>> r = dod.do_task('wash_nozzle', verbose=True)
         >>> print(r.ERROR_CODE)
         """
-        import time
-
         rr = self.client.connect("Test")
         if safety_check == False:
             r = self.client.execute_task(task_name)
@@ -2043,7 +2060,8 @@ class DoD:
                         "button2": btn2,
                     }
 
-            time.sleep(0.5)
+            print(f"[DoD] Robot busy — checking again in {poll_interval} s ...")
+            time.sleep(poll_interval)
             r = self.client.get_status()
             if self.safety_abort == True:
                 r = self.client.stop_task()
