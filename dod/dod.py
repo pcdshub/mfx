@@ -1108,6 +1108,142 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
+    def take_probe(
+        self, channel, well, volume, check_task=True, timeout=None, verbose=False
+    ):
+        """
+        Aspirate a probe sample from a well plate using the specified nozzle.
+
+        Sends a ``TakeProbe`` command to the robot, which moves the selected
+        nozzle to the named well and aspirates the requested volume.  The
+        ``channel`` parameter simultaneously selects the nozzle (equivalent to
+        calling :meth:`set_nozzle_selected`), so the selected nozzle after this
+        call will be ``channel``.
+
+        .. note::
+            This endpoint requires the task ``'ProbeUptake'`` to be present on
+            the robot.  If that task is absent the robot **silently does
+            nothing** — no reject, no error message.  By default
+            (``check_task=True``) this method calls :meth:`get_task_names`
+            before sending and raises ``RuntimeError`` if ``'ProbeUptake'`` is
+            missing, making the failure explicit.  Pass ``check_task=False`` to
+            skip this pre-flight check (e.g. when performance is critical and
+            the task is known to be present).
+
+        .. note::
+            The robot returns ``'Rejected'`` (visible in ``r.RESULTS``) if:
+            ``channel`` is not in the active nozzle set, ``volume`` > 250 µL,
+            or ``well`` is not a valid well for that nozzle's configuration.
+            The first two conditions are also caught client-side before the
+            command is sent.
+
+        Parameters
+        ----------
+        channel : int
+            Nozzle channel to use for aspiration.  Must be one of the currently
+            activated (armed) channels.  This also has the side effect of
+            selecting this nozzle for subsequent dispensing commands.
+        well : str
+            Well identifier in plate notation, e.g. ``'A1'``, ``'B3'``.  Valid
+            wells depend on the nozzle configuration defined in the
+            ``ProbeUptake`` task; the robot rejects invalid well strings.
+        volume : float
+            Aspiration volume in microlitres.  Must be ≤ 250 µL; raises
+            ``ValueError`` if exceeded before the command is sent.
+        check_task : bool, optional
+            If ``True`` (default), call :meth:`get_task_names` before sending
+            and raise ``RuntimeError`` if ``'ProbeUptake'`` is not present.
+            Set to ``False`` to skip this round-trip when the task is known to
+            be present.
+        timeout : float or None, optional
+            Maximum number of seconds to wait for the robot to finish the
+            uptake move.  If ``None`` (default), the timeout is computed as
+            ``max(30, int(volume))``: a 30 s floor for the physical movement
+            plus 1 s per µL at the assumed syringe flow rate of 1 µL/s.
+            Pass an explicit value to override.
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``,
+            return only the results dict.  Default is ``False``.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response after the uptake command.  If ``verbose=False``,
+            returns ``r.RESULTS`` (``'Accepted'`` or ``'Rejected'``).  If
+            ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``volume`` > 250 µL, or if ``channel`` is not in the currently
+            active nozzle set.
+        RuntimeError
+            If ``check_task=True`` and ``'ProbeUptake'`` is not present on the
+            robot.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Aspirate 50 µL from well A1 using nozzle 1:
+
+        >>> dod.take_probe(1, 'A1', 50)
+
+        Aspirate with a custom timeout (e.g. fast pump at known flow rate):
+
+        >>> dod.take_probe(2, 'B3', 100, timeout=45)
+
+        Skip the ProbeUptake presence check for speed:
+
+        >>> dod.take_probe(1, 'A1', 50, check_task=False)
+
+        Inspect the full server response:
+
+        >>> r = dod.take_probe(1, 'A1', 50, verbose=True)
+        >>> print(r.RESULTS)
+        """
+        # --- Client-side validation ---
+        if volume > 250:
+            raise ValueError(f"Volume {volume} µL exceeds the maximum of 250 µL.")
+
+        raw = self.get_nozzle_status()
+        active_str, _, _ = self._parse_nozzle_status(raw)
+        active_channels = [int(ch) for ch in active_str.split(",") if ch]
+        if channel not in active_channels:
+            raise ValueError(
+                f"Channel {channel} is not in the active nozzle set "
+                f"{active_channels}. Use set_nozzle_active() to arm it first."
+            )
+
+        # --- ProbeUptake task presence check ---
+        if check_task:
+            task_names = self.get_task_names()
+            if "ProbeUptake" not in task_names:
+                raise RuntimeError(
+                    "Task 'ProbeUptake' is not present on the robot. "
+                    "The TakeProbe endpoint will silently do nothing without it. "
+                    "Pass check_task=False to suppress this check."
+                )
+
+        # --- Compute effective timeout ---
+        # Default: 30 s floor for physical movement + 1 s per µL (1 µL/s assumed
+        # syringe flow rate).
+        effective_timeout = timeout if timeout is not None else max(30, int(volume))
+
+        # --- Issue command ---
+        rr = self.client.connect("Test")
+        r = self.client.take_probe(channel, well, volume)
+
+        # Block until the robot finishes the uptake move.
+        self.busy_wait(effective_timeout)
+
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
     def set_nozzle_dispensing(self, mode="Off", verbose=False):
         """
         Set the nozzle dispensing mode.
@@ -1118,7 +1254,7 @@ class DoD:
             Dispensing mode to set. Options are:
 
             - ``'Free'`` — continuous dispensing.
-            - ``'Triggered'`` — dispense on external trigger.
+            - ``'Trigger'`` — dispense on external trigger.
             - ``'Off'`` — stop dispensing on all nozzles (default).
 
         verbose : bool, optional
@@ -1141,7 +1277,7 @@ class DoD:
         --------
         Enable triggered dispensing:
 
-        >>> dod.set_nozzle_dispensing(mode='Triggered')
+        >>> dod.set_nozzle_dispensing(mode='Trigger')
 
         Turn off dispensing on all nozzles:
 
@@ -1155,17 +1291,19 @@ class DoD:
 
         if mode == "Free":
             r = self.client.dispensing("Free")
-        elif mode == "Triggered":
-            # NOTE: DropsDriver docstring specifies the API string 'Trigger';
-            # 'Triggered' is preserved here for backward compatibility until
-            # confirmed whether the robot accepts both strings.
-            r = self.client.dispensing("Triggered")
+        elif mode == "Trigger":
+            r = self.client.dispensing("Trigger")
         else:
             # Turn off each activated nozzle individually to ensure all are off.
+            # A short wait after each command gives the robot time to process
+            # before the next command arrives.
             r = self.client.dispensing("Off")
+            time.sleep(0.5)
             for ch in active_channels:
                 r = self.client.select_nozzle(ch)
+                time.sleep(0.5)
                 r = self.client.dispensing("Off")
+                time.sleep(0.5)
 
         rr = self.client.disconnect()
         if verbose == True:

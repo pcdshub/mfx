@@ -80,7 +80,7 @@ dod.codi  # CoDI interface       (available as part of dod)
 |---|---|
 | `dod.get_nozzle_status()` | Return raw nozzle status dict |
 | `dod.get_nozzle_parameters()` | Return per-nozzle parameters as a dict keyed by channel number |
-| `dod.set_nozzle_dispensing(mode='Triggered')` | Enable triggered dispensing |
+| `dod.set_nozzle_dispensing(mode='Trigger')` | Enable triggered dispensing |
 | `dod.set_nozzle_dispensing(mode='Free')` | Enable continuous dispensing |
 | `dod.set_nozzle_dispensing(mode='Off')` | Stop dispensing on all active nozzles |
 
@@ -93,16 +93,31 @@ dod.codi  # CoDI interface       (available as part of dod)
 | `dod.set_nozzle_freq(nozzle, freq)` | Set dispensing frequency for a specific nozzle | Hz |
 | `dod.set_nozzle_active([1, 2, 3])` | Set which nozzles are armed (activated) | — |
 | `dod.set_nozzle_selected(nozzle)` | Select the nozzle that fires on trigger / task execution | — |
+| `dod.take_probe(channel, well, volume)` | Aspirate from a well plate using the specified nozzle | µL |
+| `dod.take_probe(channel, well, volume, timeout=45)` | Same, with a custom wait timeout | µL / s |
 
 > **Pulse shape:** Channels 1 and 2 use named waveforms (e.g. `'sciPULSE_LV01'`).
 > All other channels use a numeric string for rectangular waveform duration (e.g. `'48'`).
 > Use `dod.client.get_pulse_names()` to list available names.
+>
+> **Waveform load time:** After `set_nozzle_pulse` is called on channel 1 or 2, the robot
+> hardware takes up to 5 s to load the named waveform.  The method blocks for 5 s
+> automatically so the waveform is ready before the next command is issued.
 >
 > **Read-merge-write:** Each single-parameter setter reads current nozzle status
 > before writing, so only the specified parameter changes — all others are preserved.
 >
 > **`set_nozzle_selected` guard:** raises `ValueError` if the requested nozzle is not
 > in the active set, preventing a confusing robot-level reject.
+>
+> **`take_probe` requirements:** Requires the task `'ProbeUptake'` to be present on the
+> robot (loaded from the robot's task library). If absent the endpoint silently does
+> nothing; the method raises `RuntimeError` by default (`check_task=True`) to make
+> this failure explicit. Pass `check_task=False` to skip the pre-flight round-trip.
+> The `channel` argument also acts as `SelectNozzle`. The default timeout is
+> `max(30, int(volume))` seconds (30 s floor + 1 s/µL at 1 µL/s assumed flow rate);
+> pass `timeout=` to override. Valid `well` strings depend on the nozzle configuration
+> in the `ProbeUptake` task — the robot rejects invalid wells.
 
 #### Tasks
 
@@ -353,7 +368,7 @@ Applied to every robot command method. On each call it:
 | `dispensing(state)` | `GET /DoD/do/Dispensing?State={state}` | `'Trigger'`, `'Free'`, or `'Off'` |
 | `setLED(duration, delay)` | `GET /DoD/do/SetLED?Duration={d}&Delay={d}` | Strobe LED parameters |
 | `set_nozzle_parameters(...)` | `GET /DoD/do/SetNozzleParameters?...` | Set active/selected nozzles, volt, pulse, freq |
-| `take_probe(channel, well, vol)` | `GET /DoD/do/TakeProbe?...` | Requires `ProbeUptake` task present |
+| `take_probe(channel, well, vol)` | `GET /DoD/do/TakeProbe?Channel={c}&ProbeWell={w}&Volume={v}` | Requires `ProbeUptake` task present; surfaced as `dod.take_probe()` |
 | `set_ip_offset()` | `GET /DoD/do/InteractionPoint` | Sets IP offset from current nozzle position |
 | `set_humidity(value)` | `GET /DoD/do/SetHumidity?rH={value}` | Sets target humidity (%rH, integer) |
 | `set_cooling_temp(temp)` | `GET /DoD/do/SetCoolingTemp?Temp={temp}` | Sets cooling device temperature (°C or `"dewpoint"`) |
@@ -773,3 +788,4 @@ to `dod.py`.
 | **`logging_string()` requires `modules='codi'`.** If `DoD` is instantiated without `modules='codi'`, `self.codi` does not exist and `logging_string()` raises `AttributeError`. Resolved in the current hutch-python config by passing `modules='codi'`. | Medium | Resolved by config |
 | **`move_rel` returns `None` when all deltas are zero.** No move command is issued and the return value is `None` rather than a `ServerResponse`. Document and handle in calling code if needed. | Low | Open |
 | **`print(endpoint)` in `HTTPTransceiver.send()`.** Writes directly to stdout on every HTTP call; cannot be suppressed without editing the unowned file. | Low | Open |
+| **`take_probe` silent-nothing if `ProbeUptake` absent.** If the `ProbeUptake` task is not loaded on the robot, `TakeProbe` returns no reject and does nothing. The `check_task=True` default guards against this but the task could be present yet misconfigured. | Medium | Mitigated by check_task guard |

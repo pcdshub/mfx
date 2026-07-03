@@ -52,7 +52,7 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 |---|---|
 | `dod.get_nozzle_status()` | Show raw nozzle state dict |
 | `dod.get_nozzle_parameters()` | Show per-nozzle volt / pulse / freq / volume as a dict |
-| `dod.set_nozzle_dispensing(mode='Triggered')` | Dispense on external trigger |
+| `dod.set_nozzle_dispensing(mode='Trigger')` | Dispense on external trigger |
 | `dod.set_nozzle_dispensing(mode='Free')` | Continuous dispensing |
 | `dod.set_nozzle_dispensing(mode='Off')` | Stop all active nozzles |
 
@@ -65,10 +65,13 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | `dod.set_nozzle_freq(nozzle, freq)` | Set dispensing frequency for one nozzle | Hz |
 | `dod.set_nozzle_active([1, 2, 3])` | Set which nozzles are armed | — |
 | `dod.set_nozzle_selected(nozzle)` | Select which armed nozzle fires on trigger | — |
+| `dod.take_probe(channel, well, volume)` | Aspirate from a well plate (e.g. `'A1'`, ≤ 250 µL); also selects `channel` | µL |
 
 > **Pulse:** ch 1–2 use waveform names (e.g. `'sciPULSE_LV01'`); ch 3+ use numeric strings (e.g. `'48'`).
 > Each setter reads current state first — only the named parameter changes.
 > `set_nozzle_selected` raises `ValueError` if the nozzle is not armed.
+> **Waveform load time:** `set_nozzle_pulse` on ch 1 or 2 blocks for 5 s after sending the command — the robot needs this time to load the named waveform.
+> **`take_probe` requires `ProbeUptake` task on robot.** Raises `RuntimeError` if absent (`check_task=True` default). Blocks until done; default timeout = `max(30, volume)` s. Pass `timeout=` to override.
 
 ---
 
