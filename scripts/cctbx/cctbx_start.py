@@ -2,6 +2,7 @@
 """
 cctbx_start
 """
+
 import argparse
 import sys
 import logging
@@ -11,6 +12,7 @@ import subprocess
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def check_settings(exp, facility, cctbx_dir):
     logging.info(f"Checking xfel gui phil File: {cctbx_dir}/settings.phil")
@@ -54,33 +56,30 @@ facility {{
     }}
   }}
 }}
-output_folder = "/pscratch/sd/c/cctbx/{exp[3:-2]}/common/results"
+output_folder = "/pscratch/sd/c/cctbx/{exp}/common/results"
 mp {{
   method = local lsf sge pbs *slurm shifter htcondor custom
   mpi_command = "srun"
-  nnodes_index = 2
+  nnodes_index = 4
   nnodes_tder = 1
-  nnodes_scale = 2
+  nnodes_scale = 1
   nnodes_merge = 1
-  nproc_per_node = 128
-  queue = "realtime"
+  nproc_per_node = 32
+  queue = ""
   wall_time = 45
-  extra_options = "--account=lcls "
+  extra_options = "--account=lcls"
   extra_options = "--constraint=cpu"
   extra_options = "--time=120"
-  env_script = "/global/common/software/cctbx/alcc-recipes/cctbx/activate.sh"
-  phenix_script = ""
+  extra_options = "--qos=realtime"
+  env_script = "/pscratch/sd/c/cctbx/brewster/20260501/alcc-recipes/cctbx/activate.sh"
+  phenix_script = "/pscratch/sd/c/cctbx/{exp}/phenix-dev-6108/phenix_env.sh"
 }}
 experiment_tag = "common"
 db {{
-  host = "db-lb.{exp}.production.svc.spin.nersc.org"
+  host = "db-loadbalancer.cctbx-common.production.svc.spin.nersc.org"
   name = "{exp}"
-  user = "user"
+  user = "{exp}"
   password = "JohanWah1"
-  server {{
-    basedir = "/pscratch/sd/c/cctbx/p10033/common/results/MySql"
-    root_password = ""
-  }}
 }}\
 '''
 
@@ -91,7 +90,8 @@ db {{
         change = False
         if setting_lines[3] != f'    experiment = "{exp}"\n':
             logging.warning(
-                f"Phil file is for a different experiment. Would you like to change it?")
+                f"Phil file is for a different experiment. Would you like to change it?"
+            )
             answer = input("(y/n)? ")
 
             if answer.lower() == "y":
@@ -110,17 +110,17 @@ db {{
 
     if change:
         settings = None
-        if facility=='S3DF':
+        if facility == "S3DF":
             settings = settings_S3DF
-        elif facility=='NERSC':
+        elif facility == "NERSC":
             settings = setting_NERSC
         else:
             logging.warning("Facility not recognized.")
         if settings is not None:
-            cctbx_settings = open(
-                phil_file, "w", encoding="UTF-8")
+            cctbx_settings = open(phil_file, "w", encoding="UTF-8")
             cctbx_settings.writelines(settings)
             cctbx_settings.close
+
 
 def parse_args(args):
     """Parse command line parameters
@@ -131,9 +131,7 @@ def parse_args(args):
     Returns:
       :obj:`argparse.Namespace`: command line parameters namespace
     """
-    parser = argparse.ArgumentParser(
-        description="startup script for cctbx on iana."
-    )
+    parser = argparse.ArgumentParser(description="startup script for cctbx on iana.")
     parser.add_argument(
         "--username",
         "-u",
@@ -188,7 +186,6 @@ def main(args):
     step = args.step
 
     if int(step) == 1:
-
         logging.info("Starting up cctbx")
 
         if facility == "S3DF":
@@ -209,11 +206,10 @@ def main(args):
             os.system(proc[0])
         else:
             subprocess.Popen(
-                proc, shell=True,
-                stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                proc, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+            )
 
     else:
-
         if facility == "NERSC":
             cctbx_dir = f"/global/homes/c/cctbx/.cctbx.xfel"
         elif facility == "S3DF":
