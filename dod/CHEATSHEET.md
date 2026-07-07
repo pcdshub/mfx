@@ -22,6 +22,7 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | Command | What it does |
 |---|---|
 | `dod.get_status()` | Print robot state (position, task, humidity, temp) |
+| `dod.get_position_names()` | List all named positions stored on the robot |
 | `dod.reconnect()` | Manually reconnect if the robot is unresponsive |
 
 > Connection drops are handled **automatically** (1 retry after 1 s). Call `reconnect()` only if the automatic retry also fails.
@@ -41,6 +42,7 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | `dod.move_z_rel(dz)` | Relative z move | µm |
 | `dod.move_rel(dx, dy, dz)` | Relative move in all axes (robot frame) | µm |
 | `dod.move_rel(dx, dy, dz, coordinates='hutch')` | Relative move in hutch frame | µm |
+| `dod.get_drive_range()` | Return max allowed coordinate per axis | µm |
 
 > **Coordinate systems:** `hutch(x,y,z) = robot(x,−z,y)`. Absolute and single-axis relative methods use the robot frame. Use `coordinates='hutch'` in `move_rel` to work in hutch coordinates.
 
@@ -73,6 +75,18 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 > `set_nozzle_selected` raises `ValueError` if the nozzle is not armed.
 > **Waveform load time:** `set_nozzle_pulse` on ch 1 or 2 blocks for 5 s after sending the command — the robot needs this time to load the named waveform.
 > **`take_probe` requires `ProbeUptake` task on robot.** Raises `RuntimeError` if absent (`check_task=True` default). Blocks until done; default timeout = `max(30, volume)` s. Pass `timeout=` to override.
+
+## Environmental Controls
+
+| Command | What it does | Units / Values |
+|---|---|---|
+| `dod.set_humidity(value)` | Set target relative humidity | %rH, integer, 0–100 |
+| `dod.set_cooling_temp(temp)` | Set cooling device temperature | °C (float) or `'dewpoint'` |
+
+> `set_humidity` raises `ValueError` outside `[0, 100]`.
+> `set_cooling_temp` raises `ValueError` if `temp` is neither a number nor `'dewpoint'`.
+
+---
 
 ## LED Strobe
 

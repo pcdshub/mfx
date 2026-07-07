@@ -54,6 +54,7 @@ dod.codi  # CoDI interface       (available as part of dod)
 |---|---|---|
 | `dod.get_status()` | Current robot state | `dict` with keys `Position`, `RunningTask`, `Humidity`, `Temperature`, `BathTemp` |
 | `dod.get_status(verbose=True)` | Full server response | `ServerResponse` object |
+| `dod.get_position_names()` | List all named positions stored on the robot | list of strings |
 | `dod.reconnect()` | Manually reconnect after a connection loss | — |
 
 #### Motion
@@ -69,6 +70,7 @@ dod.codi  # CoDI interface       (available as part of dod)
 | `dod.move_z_rel(dz)` | Move by relative offset along z | µm |
 | `dod.move_rel(dx, dy, dz)` | Move by relative offsets in all three axes (robot frame by default) | µm |
 | `dod.move_rel(dx, dy, dz, coordinates='hutch')` | Same, with deltas supplied in the hutch coordinate frame | µm |
+| `dod.get_drive_range()` | Return the maximum allowed coordinate per axis | µm |
 
 > **Coordinate systems:** Robot and hutch frames are related by
 > `hutch(x, y, z) = robot(x, −z, y)`. All absolute move methods and
@@ -138,6 +140,21 @@ dod.codi  # CoDI interface       (available as part of dod)
 >
 > **No read-back endpoint:** There is no `GetLED` API endpoint; the robot does not
 > expose current strobe parameters. Track values in calling code if needed.
+
+---
+
+#### Environmental Controls
+
+| Command | Description | Units / Values |
+|---|---|---|
+| `dod.set_humidity(value)` | Set target relative humidity | %rH, integer, `[0, 100]` |
+| `dod.set_cooling_temp(temp)` | Set cooling device temperature | °C (float) or `'dewpoint'` |
+
+> **`set_humidity` range:** raises `ValueError` if `value` is outside `[0, 100]`.
+>
+> **`set_cooling_temp` modes:** pass a float/int for a fixed setpoint in °C, or the
+> string `'dewpoint'` to enable automatic dewpoint-based adjustment.  `ValueError`
+> is raised if `temp` is neither.
 
 ---
 
@@ -321,6 +338,7 @@ DoD  (dod_dev_documented.py)        ← owned
   ├─ motion:   do_move, move_x/y/z_abs
   ├─ nozzle:   set_nozzle_dispensing, get_nozzle_status
   ├─ led:      set_led, set_led_per_nozzle
+  ├─ env:      set_humidity, set_cooling_temp
   ├─ tasks:    do_task, get_task_names, get_task_details
   ├─ safety:   set/get/test_forbidden_region  [not yet operational]
   ├─ timing:   set_timing_* methods (EVR via pcdsdevices)
@@ -583,7 +601,7 @@ dod = DoD(ip="172.21.39.172", modules='codi', log_file='/tmp/dod.log')
 
 ### `_with_reconnect` Decorator
 
-Applied to all 18 methods that call `self.client.*`. On `RemoteDisconnected`,
+Applied to all 22 methods that call `self.client.*`. On `RemoteDisconnected`,
 `ConnectionResetError`, or `BrokenPipeError`:
 
 1. Sleeps 1 s — the robot server needs a moment after dropping a connection.

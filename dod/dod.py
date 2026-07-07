@@ -541,6 +541,44 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
+    def get_position_names(self, verbose=False):
+        """
+        Retrieve the names of all available positions from the robot.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``
+            (default), return only the results dict.
+
+        Returns
+        -------
+        list or ServerResponse
+            Available position names.  If ``verbose=False``, returns
+            ``r.RESULTS`` (expected to be a list of position name strings).
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        List all available position names:
+
+        >>> positions = dod.get_position_names()
+        >>> print(positions)
+        """
+        rr = self.client.connect("Test")
+        r = self.client.get_position_names()
+        rr = self.client.disconnect()
+        if verbose == True:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
     def get_current_position(self, verbose=False):
         """
         Return the current robot position.
@@ -1511,6 +1549,151 @@ class DoD:
         r = self.client.setLED(duration, delay)
         rr = self.client.disconnect()
         if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def set_humidity(self, value, verbose=False):
+        """
+        Set the target relative humidity.
+
+        Sends ``GET /DoD/do/SetHumidity?rH={value}`` to the robot server.
+        A client-side range check is performed before the request is sent.
+
+        Parameters
+        ----------
+        value : int
+            Target relative humidity in percent (%rH).  Must be in the range
+            ``[0, 100]``.
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``
+            (default), return only the results dict.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response after the command.  If ``verbose=False``, returns
+            ``r.RESULTS``; if ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not in ``[0, 100]``.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set target humidity to 60 %rH:
+
+        >>> dod.set_humidity(60)
+        """
+        if not (0 <= value <= 100):
+            raise ValueError(f"value must be in [0, 100] %rH; got {value!r}.")
+        rr = self.client.connect("Test")
+        r = self.client.set_humidity(value)
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def set_cooling_temp(self, temp, verbose=False):
+        """
+        Set the cooling device temperature.
+
+        Sends ``GET /DoD/do/SetCoolingTemp?Temp={temp}`` to the robot server.
+        ``temp`` may be a numeric value (°C) or the string ``'dewpoint'`` to
+        enable automatic dewpoint-based adjustment.  A client-side type check
+        is performed before the request is sent.
+
+        Parameters
+        ----------
+        temp : float or str
+            Target temperature in degrees Celsius (float or int), or the
+            string ``'dewpoint'`` to enable automatic adjustment.
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``
+            (default), return only the results dict.
+
+        Returns
+        -------
+        dict or ServerResponse
+            Server response after the command.  If ``verbose=False``, returns
+            ``r.RESULTS``; if ``verbose=True``, returns the full
+            ``ServerResponse`` object.
+
+        Raises
+        ------
+        ValueError
+            If ``temp`` is neither a numeric value nor the string
+            ``'dewpoint'``.
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Set cooling to 10 °C:
+
+        >>> dod.set_cooling_temp(10.0)
+
+        Enable automatic dewpoint tracking:
+
+        >>> dod.set_cooling_temp('dewpoint')
+        """
+        if not (isinstance(temp, (int, float)) or temp == "dewpoint"):
+            raise ValueError(
+                f"temp must be a numeric value (°C) or the string "
+                f"'dewpoint'; got {temp!r}."
+            )
+        rr = self.client.connect("Test")
+        r = self.client.set_cooling_temp(temp)
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
+
+    @_with_reconnect
+    def get_drive_range(self, verbose=False):
+        """
+        Retrieve the maximum range of each axis.
+
+        Sends ``GET /DoD/get/DriveRange`` and returns the maximum allowed
+        coordinate for each axis in micrometers.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If ``True``, return the full server response object.  If ``False``
+            (default), return only the results dict.
+
+        Returns
+        -------
+        dict or ServerResponse
+            If ``verbose=False``, returns ``r.RESULTS`` — expected to be a
+            dict of the form ``{"X": max_um, "Y": max_um, "Z": max_um}``.
+            If ``verbose=True``, returns the full ``ServerResponse`` object.
+
+        Raises
+        ------
+        ConnectionError
+            If the robot server cannot be reached.
+
+        Examples
+        --------
+        Print the axis limits:
+
+        >>> limits = dod.get_drive_range()
+        >>> print(limits)
+        """
+        rr = self.client.connect("Test")
+        r = self.client.get_drive_range()
+        rr = self.client.disconnect()
+        if verbose == True:
             return r
         else:
             return r.RESULTS
