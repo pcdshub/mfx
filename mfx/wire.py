@@ -10,7 +10,8 @@ import logging
 import numpy as np
 from typing import Optional, List
 from mfx.timing import Timing
-timing=Timing()
+
+timing = Timing()
 
 logger = logging.getLogger(__name__)
 
@@ -120,10 +121,7 @@ class Wire:
     output : Analyze scan results
     """
 
-    def __init__(
-            self,
-            x_pv: str = 'MFX:LJH:JET:X',
-            y_pv: str = 'MFX:LJH:JET:Y'):
+    def __init__(self, x_pv: str = "MFX:LJH:JET:X", y_pv: str = "MFX:LJH:JET:Y"):
         """
         Initialize Wire scanner controller.
         Parameters
@@ -140,21 +138,21 @@ class Wire:
         logger.info("Wire scanner initialized")
 
     def scan(
-            self,
-            start: float,
-            end: float,
-            num_steps: int,
-            events_per_step: int = 120,
-            sample: str = 'wire',
-            tag: str = None,
-            picker: str = None,
-            inspire: bool = False,
-            record: bool = False,
-            daq_num: int = 2,
-            pv: str = None,
-            camera: str = 'alvium_dg3',
-            analysis: bool = True):
-
+        self,
+        start: float,
+        end: float,
+        num_steps: int,
+        events_per_step: int = 120,
+        sample: str = "wire",
+        tag: str = None,
+        picker: str = None,
+        inspire: bool = False,
+        record: bool = False,
+        daq_num: int = 2,
+        pv: str = None,
+        camera: str = "alvium_dg3",
+        analysis: bool = True,
+    ):
         """
         Perform wire scan across beam.
 
@@ -332,25 +330,29 @@ class Wire:
         if pv is None:
             logger.error("Must specify pv='x' or pv='y' or custom pv")
             import sys
+
             sys.exit("No motor specified")
 
-        if pv not in ['x', 'y']:
+        if pv not in ["x", "y"]:
             logger.warning(f"pv not 'x' or 'y'. using custom PV: {pv}")
 
         # Validate DAQ number
         if daq_num not in [1, 2]:
-            logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
+            logger.error("daq_num must be 1 (LCLS-I) or 2 (LCLS-II)")
             raise ValueError("Invalid daq_num")
 
         # Select motor PV
-        if pv.lower() == 'x':
+        if pv.lower() == "x":
             pv = self.x_pv
-            axis_name = 'X'
-        elif pv.lower() == 'y':
+            axis_name = "X"
+            motor_name = "wire_x"
+        elif pv.lower() == "y":
             pv = self.y_pv
-            axis_name = 'Y'
+            axis_name = "Y"
+            motor_name = "wire_y"
         else:
-            pv = axis_name= pv.upper()
+            pv = axis_name = pv.upper()
+            motor_name = pv.lower().replace(":", "_")
 
         logger.info(
             f"Starting {axis_name}-axis wire scan: "
@@ -362,10 +364,10 @@ class Wire:
             tag = sample
 
         # Configure pulse picker
-        if picker == 'open':
+        if picker == "open":
             mfx_pulsepicker.open()
             logger.info("Pulse picker: OPEN")
-        elif picker == 'flip':
+        elif picker == "flip":
             mfx_pulsepicker.flipflop()
             logger.info("Pulse picker: FLIPFLOP")
 
@@ -373,9 +375,7 @@ class Wire:
         station = 1 if daq_num == 1 else 0
         run_number = get_run(station=station) + 1
 
-        logger.info(
-            f"Run Number {run_number}: {sample}... {quote()['quote']}"
-        )
+        logger.info(f"Run Number {run_number}: {sample}... {quote()['quote']}")
 
         # Execute scan based on DAQ version
         if daq_num == 1:
@@ -383,7 +383,7 @@ class Wire:
             from nabs.plans import daq_scan
 
             # Create motor object
-            pv_motor = EpicsSignal(pv, name='pv')
+            pv_motor = EpicsSignal(pv, name=motor_name)
 
             # Run scan
             RE(
@@ -394,7 +394,7 @@ class Wire:
                     end,
                     num_steps,
                     events=events_per_step,
-                    record=record
+                    record=record,
                 )
             )
 
@@ -406,27 +406,18 @@ class Wire:
             import bluesky.plans as bp
 
             # Create motor object
-            pv_motor = OnePVMotor(pv, name="mcc")
+            pv_motor = OnePVMotor(pv, name=motor_name)
             pv_motor.setpoint.kind = "hinted"
 
             original = pv_motor()
 
             # Configure DAQ
             daq.configure(
-                motors=[pv_motor],
-                group_mask=0x1,
-                events=events_per_step,
-                record=record
+                motors=[pv_motor], group_mask=0x1, events=events_per_step, record=record
             )
 
             # Run scan
-            RE(bp.scan(
-                [daq],
-                pv_motor,
-                start,
-                end,
-                num_steps
-            ))
+            RE(bp.scan([daq], pv_motor, start, end, num_steps))
 
         # Close pulse picker
         mfx_pulsepicker.close()
@@ -445,20 +436,20 @@ class Wire:
             post=record,
             inspire=inspire,
             daq_num=daq_num,
-            add_note=scan_note
+            add_note=scan_note,
         )
 
         logger.warning(
-            'Wire scan completed. '
-            'Thank you for choosing the MFX beamline!\n'
+            "Wire scan completed. Thank you for choosing the MFX beamline!\n"
         )
 
         exp = str(get_exp())
         logger.warning(
-                f"timing.output(user='user', facility='s3df', "
-                f"exp='{exp}', run={run_number}, daq_num={daq_num})")
+            f"timing.output(user='user', facility='s3df', "
+            f"exp='{exp}', run={run_number}, daq_num={daq_num})"
+        )
 
-        logger.info(f'Setting {pv} back to original: {original}')
+        logger.info(f"Setting {pv} back to original: {original}")
         pv_motor(original)
 
         if analysis:
@@ -474,4 +465,5 @@ class Wire:
                     exp=exp,
                     run=run_number,
                     daq_num=daq_num,
-                    camera=camera)
+                    camera=camera,
+                )
