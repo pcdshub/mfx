@@ -4,7 +4,17 @@ control_gui.py -- full DoD robot control panel (dummy), REAL interface.
 Uses the real DoD interface (dod_dummy.DoDDummy) and exposes the REAL parameters:
 nozzle selection, frequency, voltage, pulse width, probe volume, dispense mode.
 
+Features:
+  - color-coded status readouts (green in-bounds / red outside or in keep-out zone)
+  - environment + nozzle readouts (humidity, temp, nozzle params)
+  - EMERGENCY STOP (stop_task + dispense_off)
+  - jog with fine/medium/coarse steps
+  - go-to named position (collision-checked)
+  - editable PARAMETER fields (nozzle/freq/voltage/pulse/probe volume/mode)
+  - automation routines that use those parameters
+  - timestamped command log
 
+Run:  uv run control_gui.py
 """
 
 import threading

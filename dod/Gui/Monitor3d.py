@@ -1,8 +1,8 @@
 """
-monitor_3d.py : simplified 3D live view of the DoD robot + safety tools.
+monitor_3d.py -- simplified 3D live view of the DoD robot + safety tools.
 
 3D view: workspace box, station markers, interaction point (beam hit) + beam
-line, keep-out zone, and the live nozzle. 
+line, keep-out zone, and the live nozzle. Drag to rotate.
 
 Safety tools (share the SAME robot as the view):
   - Pre-Flight Check: sanity-checks coordinates and workspace.
@@ -14,7 +14,8 @@ Real coordinates + drive range from the robot config
 (named_position_coords.json + MaxAxisPos). Swap the client in build_robot() for
 the real myClient to monitor live.
 
-
+Requires matplotlib:  uv add matplotlib
+Run:  uv run monitor_3d.py
 """
 
 import json
