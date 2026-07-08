@@ -3,6 +3,7 @@
 analyze_timing_v2
 """
 
+import io
 import json
 import logging
 import os
@@ -151,7 +152,9 @@ def custom_erf(x, a, sigma, mu, b):
 #     return popt, x_data, y_data, y_fit
 
 
-def fit_irfs1(x_data, y_data, run_number=None, t_stage=None, save_path=None):
+def fit_irfs1(
+    x_data, y_data, run_number=None, t_stage=None, save_path=None, ax=None, show=True
+):
     def custom_erf(x, a, sigma, mu, b):
         return a * special.erf((x - mu) / (np.sqrt(2) * sigma)) + b
 
@@ -215,15 +218,19 @@ def fit_irfs1(x_data, y_data, run_number=None, t_stage=None, save_path=None):
     y_fit = custom_erf(x_data, *popt)
 
     # --- Plot ---
-    plt.figure(figsize=(5, 3))
-    plt.scatter(x_data, y_norm, s=15, label="Data")
-    plt.plot(
+    own_figure = ax is None
+    _fig = None
+    if own_figure:
+        _fig, ax = plt.subplots(figsize=(5, 3))
+
+    ax.scatter(x_data, y_norm, s=15, label="Data")
+    ax.plot(
         x_data,
         y_fit,
         label=f"Fitted IRF, FWHM = {abs(popt[1]) * 2.355:.4f} fs or units",
     )
-    plt.xlabel(t_stage if t_stage is not None else "Position")
-    plt.ylabel("Normalized Signal")
+    ax.set_xlabel(t_stage if t_stage is not None else "Position")
+    ax.set_ylabel("Normalized Signal")
 
     title = "Sigmoid Fit"
     if run_number is not None:
@@ -231,19 +238,22 @@ def fit_irfs1(x_data, y_data, run_number=None, t_stage=None, save_path=None):
     if t_stage is not None:
         title += f" | {t_stage}"
 
-    plt.title(title)
-    plt.legend()
-    plt.grid()
-    plt.tight_layout()
+    ax.set_title(title)
+    ax.legend()
+    ax.grid()
 
-    if save_path is not None:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        logger.info(f"Fit plot saved to {save_path}")
-
-    try:
-        plt.show()
-    except Exception as e:
-        logger.warning(f"Could not display plot: {e}")
+    if own_figure:
+        plt.tight_layout()
+        if save_path is not None:
+            plt.savefig(save_path, dpi=150, bbox_inches="tight")
+            logger.info(f"Fit plot saved to {save_path}")
+        if show:
+            try:
+                plt.show()
+            except Exception as e:
+                logger.warning(f"Could not display plot: {e}")
+        else:
+            plt.close(_fig)
 
     print("\nFitted Parameters:")
     print(f"FWHM [fs]  = {abs(popt[1]) * 2.355:.2f}")
@@ -253,12 +263,80 @@ def fit_irfs1(x_data, y_data, run_number=None, t_stage=None, save_path=None):
     return popt, x_data, y_norm, y_fit
 
 
+def _post_to_elog(exp, fig, run_number, t_stage, popt):
+    """Post the combined timing-analysis figure to the LCLS eLog.
+
+    Authentication is performed via Kerberos; a valid token must exist
+    before calling this function (obtain one with ``kinit``).
+
+    Parameters
+    ----------
+    exp : str
+        Experiment name (used to construct the eLog endpoint URL).
+    fig : matplotlib.figure.Figure
+        Combined timing-analysis figure to attach to the eLog entry.
+    run_number : str or int
+        Run number being analysed.
+    t_stage : str
+        Name of the scanned timing motor.
+    popt : array-like
+        Fitted ERF parameters ``[a, sigma, mu, b]``.
+    """
+    try:
+        from krtc import KerberosTicket
+        import requests
+    except ImportError as e:
+        logger.warning(f"Could not import package for eLog posting ({e}). Skipping.")
+        return
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="jpeg", dpi=150, bbox_inches="tight")
+    buf.seek(0)
+
+    log_text = (
+        f"Timing analysis\n"
+        f"Run: {run_number}\n"
+        f"Scan motor: {t_stage}\n"
+        f"FWHM: {abs(popt[1]) * 2.355:.4f} (fit units)\n"
+        f"Center: {popt[2]:.4f}"
+    )
+
+    ws_url = (
+        f"https://pswww.slac.stanford.edu/ws-kerb/lgbk/lgbk/{exp}/ws/new_elog_entry"
+    )
+    try:
+        krbheaders = KerberosTicket("HTTP@pswww.slac.stanford.edu").getAuthHeaders()
+    except Exception as e:
+        logger.warning(
+            f"Kerberos authentication failed ({e}). "
+            "Is your token valid? Run 'kinit' first."
+        )
+        return
+
+    try:
+        r = requests.post(
+            ws_url,
+            data={"log_text": log_text, "log_tags": "timing"},
+            files=[("files", ("analyze_timing.jpg", buf, "image/jpeg"))],
+            headers=krbheaders,
+        )
+        r.raise_for_status()
+        result = r.json()
+        if result.get("success"):
+            logger.info("Timing analysis plot posted to eLog successfully.")
+        else:
+            logger.warning(f"eLog post returned an error: {result}")
+    except Exception as e:
+        logger.warning(f"Failed to post to eLog ({e})")
+
+
 def output(
     facility: str = "S3DF",
     exp: str = None,
     run: str = None,
     camera: str = "alvium_dg3",
     output_dir: str = None,
+    post_to_elog: bool = True,
 ):
     """Generates the output of the timing scan.
 
@@ -273,6 +351,9 @@ def output(
             Detector name for the camera. Default: 'alvium_dg3'
         output_dir (str):
             Base output directory. Default: /sdf/data/lcls/ds/mfx/{exp}/scratch/analyze_timing
+        post_to_elog (bool):
+            Automatically post the combined timing figure to the eLog
+            (requires a valid Kerberos token via ``kinit``). Default: True
     """
     if exp is None:
         logger.warning(
@@ -374,49 +455,49 @@ def output(
             df["normalized_laser"] = df["qadc1_sum"]
             df["normalized_laser_dg3"] = df["dg3_sum"]
 
-            # --- Raw scatter: combined figure, one subplot per signal ---
-            fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
+            # ---------------------------------------------------------------
+            # Combined multipanel figure — the original three plot windows
+            # are merged into a single 2×2 display:
+            #
+            #   [0,0] Raw QADC Ch1 scatter   [0,1] Raw camera scatter
+            #   [1,0] Binned scatter          [1,1] ERF fit
+            #
+            # Only the combined figure is shown.  The ERF fit panel (bottom-
+            # right) is also posted to the eLog when post_to_elog=True.
+            # ---------------------------------------------------------------
+            fig_combined, axes = plt.subplots(2, 2, figsize=(12, 8))
+            ax_raw_qadc, ax_raw_cam = axes[0]
+            ax_binned, ax_fit = axes[1]
 
+            # --- Panel 1 (top-left): Raw QADC Ch1 scatter ---
             if qadc_available:
-                axes[0].scatter(df["t_position"], df["normalized_laser"], s=0.1)
+                ax_raw_qadc.scatter(df["t_position"], df["normalized_laser"], s=0.1)
             else:
-                axes[0].text(
+                ax_raw_qadc.text(
                     0.5,
                     0.5,
                     "QADC not available",
                     ha="center",
                     va="center",
-                    transform=axes[0].transAxes,
+                    transform=ax_raw_qadc.transAxes,
                     fontsize=12,
                 )
-            axes[0].set_title(f"QADC Ch1 | Run {run_number} | {t_stage}")
-            axes[0].set_xlabel(t_stage)
-            axes[0].set_ylabel("QADC Ch1 signal (arb. units)")
+            ax_raw_qadc.set_title(f"QADC Ch1 | Run {run_number} | {t_stage}")
+            ax_raw_qadc.set_xlabel(t_stage)
+            ax_raw_qadc.set_ylabel("QADC Ch1 signal (arb. units)")
 
-            axes[1].scatter(df["t_position"], df["normalized_laser_dg3"], s=0.1)
-            axes[1].set_title(f"Camera: {camera} | Run {run_number} | {t_stage}")
-            axes[1].set_xlabel(t_stage)
-            axes[1].set_ylabel("Camera image sum (arb. units)")
-
-            plt.tight_layout()
-            if save_outputs:
-                fig.savefig(
-                    run_dir / f"scatter_raw_{camera}.png", dpi=150, bbox_inches="tight"
-                )
-                logger.info(
-                    f"Raw scatter plot saved to {run_dir / f'scatter_raw_{camera}.png'}"
-                )
-            try:
-                plt.show()
-            except Exception as e:
-                logger.warning(f"Could not display plot: {e}")
+            # --- Panel 2 (top-right): Raw camera scatter ---
+            ax_raw_cam.scatter(df["t_position"], df["normalized_laser_dg3"], s=0.1)
+            ax_raw_cam.set_title(f"Camera: {camera} | Run {run_number} | {t_stage}")
+            ax_raw_cam.set_xlabel(t_stage)
+            ax_raw_cam.set_ylabel("Camera image sum (arb. units)")
 
             # --- Per-signal pipeline: outlier removal → bin → fit → save ---
             signals_to_process = [(camera, "normalized_laser_dg3")]
             if qadc_available:
                 signals_to_process.append(("qadc", "normalized_laser"))
 
-            for sig_label, sig_col in signals_to_process:
+            for i_sig, (sig_label, sig_col) in enumerate(signals_to_process):
                 logger.info(f"Processing signal: {sig_label} ({sig_col})")
 
                 # Outlier removal using IQR
@@ -445,56 +526,117 @@ def output(
                     {"t_position": "mean", sig_col: "mean"}
                 )
 
-                plt.figure(figsize=(6, 4))
-                plt.scatter(
-                    binned["t_position"], binned[sig_col], color="royalblue", s=40
-                )
-                plt.xlabel(t_stage)
-                plt.ylabel(sig_col)
-                plt.title(
-                    f"Binned Scatter (Outliers Removed) | {sig_label} | Run {run_number}"
-                )
-                plt.grid(True)
-                plt.tight_layout()
-                if save_outputs:
-                    plt.savefig(
-                        run_dir / f"scatter_binned_{sig_label}.png",
-                        dpi=150,
-                        bbox_inches="tight",
+                if i_sig == 0:
+                    # --- Panel 3 (bottom-left): Binned scatter for first signal ---
+                    ax_binned.scatter(
+                        binned["t_position"], binned[sig_col], color="royalblue", s=40
                     )
-                    logger.info(
-                        f"Binned scatter plot saved to "
-                        f"{run_dir / f'scatter_binned_{sig_label}.png'}"
+                    ax_binned.set_xlabel(t_stage)
+                    ax_binned.set_ylabel(sig_col)
+                    ax_binned.set_title(
+                        f"Binned Scatter (Outliers Removed) | {sig_label} | Run {run_number}"
                     )
-                try:
-                    plt.show()
-                except Exception as e:
-                    logger.warning(f"Could not display plot: {e}")
+                    ax_binned.grid(True)
 
-                # Fit
-                popt, _, _, _ = fit_irfs1(
-                    binned["t_position"],
-                    binned[sig_col],
-                    run_number,
-                    t_stage,
-                    save_path=(run_dir / f"fit_{sig_label}.png")
-                    if save_outputs
-                    else None,
-                )
+                    # --- Panel 4 (bottom-right): ERF fit for first signal ---
+                    popt, _, _, _ = fit_irfs1(
+                        binned["t_position"],
+                        binned[sig_col],
+                        run_number,
+                        t_stage,
+                        save_path=None,  # combined figure saved below
+                        ax=ax_fit,
+                    )
 
-                if save_outputs:
-                    fit_params = {
-                        "run": run_number,
-                        "signal": sig_label,
-                        "t_stage": t_stage,
-                        "FWHM": float(abs(popt[1]) * 2.355),
-                        "center": float(popt[2]),
-                        "amplitude": float(popt[0]),
-                    }
-                    json_path = run_dir / f"fit_params_{sig_label}.json"
-                    with open(json_path, "w") as f:
-                        json.dump(fit_params, f, indent=2)
-                    logger.info(f"Fit parameters saved to {json_path}")
+                    if save_outputs:
+                        fit_params = {
+                            "run": run_number,
+                            "signal": sig_label,
+                            "t_stage": t_stage,
+                            "FWHM": float(abs(popt[1]) * 2.355),
+                            "center": float(popt[2]),
+                            "amplitude": float(popt[0]),
+                        }
+                        json_path = run_dir / f"fit_params_{sig_label}.json"
+                        with open(json_path, "w") as f:
+                            json.dump(fit_params, f, indent=2)
+                        logger.info(f"Fit parameters saved to {json_path}")
+
+                    # Finalise combined figure
+                    fig_combined.suptitle(
+                        f"Timing Analysis | Run {run_number} | {t_stage}", fontsize=13
+                    )
+                    fig_combined.tight_layout()
+
+                    if save_outputs:
+                        combined_path = (
+                            run_dir / f"combined_timing_run{int(run_number):03d}.png"
+                        )
+                        fig_combined.savefig(
+                            combined_path, dpi=150, bbox_inches="tight"
+                        )
+                        logger.info(f"Combined timing plot saved to {combined_path}")
+
+                    if post_to_elog:
+                        logger.info("Posting timing analysis to eLog...")
+                        _post_to_elog(exp, fig_combined, run_number, t_stage, popt)
+
+                    try:
+                        plt.show()
+                    except Exception as e:
+                        logger.warning(f"Could not display plot: {e}")
+                    plt.close(fig_combined)
+
+                else:
+                    # Additional signals (e.g., QADC): save outputs but do not display
+                    fig_extra, ax_extra = plt.subplots(figsize=(6, 4))
+                    ax_extra.scatter(
+                        binned["t_position"], binned[sig_col], color="royalblue", s=40
+                    )
+                    ax_extra.set_xlabel(t_stage)
+                    ax_extra.set_ylabel(sig_col)
+                    ax_extra.set_title(
+                        f"Binned Scatter (Outliers Removed) | {sig_label} | Run {run_number}"
+                    )
+                    ax_extra.grid(True)
+                    fig_extra.tight_layout()
+                    if save_outputs:
+                        fig_extra.savefig(
+                            run_dir / f"scatter_binned_{sig_label}.png",
+                            dpi=150,
+                            bbox_inches="tight",
+                        )
+                        logger.info(
+                            f"Binned scatter plot saved to "
+                            f"{run_dir / f'scatter_binned_{sig_label}.png'}"
+                        )
+                    plt.close(fig_extra)
+
+                    popt2, _, _, _ = fit_irfs1(
+                        binned["t_position"],
+                        binned[sig_col],
+                        run_number,
+                        t_stage,
+                        save_path=(run_dir / f"fit_{sig_label}.png")
+                        if save_outputs
+                        else None,
+                        ax=None,
+                        show=False,
+                    )
+
+                    if save_outputs:
+                        fit_params2 = {
+                            "run": run_number,
+                            "signal": sig_label,
+                            "t_stage": t_stage,
+                            "FWHM": float(abs(popt2[1]) * 2.355),
+                            "center": float(popt2[2]),
+                            "amplitude": float(popt2[0]),
+                        }
+                        json_path2 = run_dir / f"fit_params_{sig_label}.json"
+                        with open(json_path2, "w") as f:
+                            json.dump(fit_params2, f, indent=2)
+                        logger.info(f"Fit parameters saved to {json_path2}")
 
 
 def parse_args(args):
@@ -549,6 +691,23 @@ def parse_args(args):
         default=None,
         help="Base output directory. Default: /sdf/data/lcls/ds/mfx/{exp}/scratch/analyze_timing",
     )
+    parser.add_argument(
+        "--post-to-elog",
+        "-p",
+        dest="post_to_elog",
+        action="store_true",
+        default=True,
+        help=(
+            "Post the combined timing figure to the eLog after the fit "
+            "(requires a valid Kerberos token via kinit). Default: enabled."
+        ),
+    )
+    parser.add_argument(
+        "--no-post-to-elog",
+        dest="post_to_elog",
+        action="store_false",
+        help="Disable automatic eLog posting.",
+    )
     return parser.parse_args(args)
 
 
@@ -568,7 +727,14 @@ def main(args):
     if args.run_type == "proxy":
         proxy_jump(args.facility, args.experiment, args.run, args.camera, output_dir)
     elif args.run_type == "output":
-        output(args.facility, args.experiment, args.run, args.camera, output_dir)
+        output(
+            args.facility,
+            args.experiment,
+            args.run,
+            args.camera,
+            output_dir,
+            args.post_to_elog,
+        )
 
 
 def run():
