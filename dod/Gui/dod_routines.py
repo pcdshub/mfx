@@ -1,12 +1,12 @@
 """
-dod_routines.py -- automation routines for the DoD robot (Goals 1 & 3).
+dod_routines.py -- automation routines for the DoD robot .
 
 Rewritten to use the REAL DoD interface (dod_dummy.DoDDummy, or the real DoD
 class). Routines control the real parameters: nozzle frequency/voltage/pulse
 width, probe volume, dispense mode, nozzle selection.
 
 Each routine takes:
-  - dod:  a DoDDummy (now) or the real DoD object (later)
+  - dod:  a DoDDummy (now) or the real DoD object (hopefully later)
   - log:  optional callback log(msg) for live progress
 and returns a result dict.
 """
@@ -72,8 +72,25 @@ def safe_goto(dod, name, log=_noop):
     return r
 
 
-def configure_nozzle(dod, nozzle=1, frequency=30000, voltage=80, pulse_width=20, log=_noop):
-    """Set the real droplet-generation parameters. Nozzle must be 1-8."""
+def configure_nozzle(dod, nozzle=1, frequency=30000, voltage=80, pulse_width=20,
+                     activate=True, log=_noop):
+    """
+    Set the real droplet-generation parameters.
+
+    A nozzle must be ACTIVATED (armed) before it can be SELECTED -- the real
+    client rejects select_nozzle() for any channel not in 'Activated Nozzles'.
+    With activate=True we arm it first; set activate=False to require that the
+    caller has already armed it.
+    """
+    if activate and hasattr(dod, "set_nozzle_active"):
+        armed = set(getattr(dod, "activated_nozzles", []))
+        if nozzle not in armed:
+            r = dod.set_nozzle_active(sorted(armed | {nozzle}))
+            if isinstance(r, dict) and not r.get("ok"):
+                log(f"[nozzle] ARM REJECTED: {r.get('reason')}")
+                return {"ok": False, "reason": r.get("reason")}
+            log(f"[nozzle] armed channel {nozzle}")
+
     r = dod.select_nozzle(nozzle)
     if isinstance(r, dict) and not r.get("ok"):
         log(f"[nozzle] REJECTED: {r.get('reason')}")
@@ -110,32 +127,63 @@ def wash_cycle(dod, log=_noop, task="WashFlush_Medium"):
     return {"ok": True}
 
 
+def well_sequence(n, row="A", start=1):
+    """Well IDs for a plate row, e.g. ['A1','A2','A3']. Wraps to the next row after 12."""
+    wells, r, c = [], ord(row), start
+    for _ in range(n):
+        if c > 12:
+            c = 1
+            r += 1
+        wells.append(f"{chr(r)}{c}")
+        c += 1
+    return wells
+
+
 def sample_test_routine(dod, n_samples=3, probe_volume=40, dispense_seconds=1.0,
                         dispense_mode="Trigger", nozzle=1, frequency=30000,
                         voltage=80, pulse_width=20, probe="Probe (96WP-1nozzle)",
-                        log=_noop):
+                        wells=None, log=_noop):
     """
     Goal 1: test droplet injection for many samples, using REAL parameters.
-    For each sample: configure nozzle -> take probe(volume) -> go to interaction
-    point -> dispense(mode) for dispense_seconds -> record -> wash.
+    Per sample: take_probe(channel, well, volume) -> InteractionPoint ->
+    dispense(mode) -> record -> give_probe -> wash.
+
+    `wells` is a list of plate wells, one per sample (defaults to A1, A2, ...).
+    take_probe caps volume at 250 uL and requires the nozzle to be ACTIVATED.
     """
-    log(f"[sample_test] {n_samples} samples | probe {probe_volume}uL | mode {dispense_mode}")
-    configure_nozzle(dod, nozzle, frequency, voltage, pulse_width, log=log)
+    if probe_volume > getattr(dod, "MAX_PROBE_VOLUME_UL", 250):
+        log(f"[sample_test] ABORT: probe volume {probe_volume} uL exceeds the 250 uL max")
+        return {"ok": False, "reason": "probe volume exceeds maximum"}
+
+    wells = wells or well_sequence(n_samples)
+    log(f"[sample_test] {n_samples} samples | probe {probe_volume}uL | mode {dispense_mode} | wells {wells}")
+
+    cfg = configure_nozzle(dod, nozzle, frequency, voltage, pulse_width, log=log)
+    if not cfg.get("ok"):
+        return {"ok": False, "reason": cfg.get("reason")}
+
     records = []
     for i in range(1, n_samples + 1):
-        log(f"[sample_test] --- sample {i}/{n_samples} ---")
+        well = wells[i - 1]
+        log(f"[sample_test] --- sample {i}/{n_samples} (well {well}) ---")
         safe_goto(dod, probe, log=log)
-        dod.take_probe(probe_volume)
-        log(f"[sample_test] took probe {probe_volume}uL")
+        r = dod.take_probe(nozzle, well, probe_volume)
+        if isinstance(r, dict) and not r.get("ok"):
+            log(f"[sample_test] ABORT: take_probe failed -- {r.get('reason')}")
+            return {"ok": False, "reason": r.get("reason"), "records": records}
+        log(f"[sample_test] took {probe_volume}uL from {well} (ch {nozzle})")
         safe_goto(dod, "InteractionPoint", log=log)
         dod.dispense_on(dispense_mode)
         log(f"[sample_test] dispensing ({dispense_mode}) for {dispense_seconds}s")
         time.sleep(min(dispense_seconds, 0.05))  # dummy: don't actually wait long
         dod.dispense_off()
-        # simulated measured volume (real robot: read drop-detection/camera)
-        measured = probe_volume * random.uniform(0.95, 1.05)
-        rec = {"sample": i, "probe_volume": probe_volume,
-               "measured_volume_est": round(measured, 2),
+        # read the droplet volume the REAL way (drop-detection -> nozzle status)
+        measured = read_measured_volume(dod)
+        if measured is None:
+            measured = probe_volume * random.uniform(0.95, 1.05)   # fallback only
+        rec = {"sample": i, "well": well, "channel": nozzle,
+               "probe_volume": probe_volume,
+               "measured_volume": round(measured, 2),
                "frequency": frequency, "voltage": voltage}
         records.append(rec)
         log(f"[sample_test] recorded: {rec}")

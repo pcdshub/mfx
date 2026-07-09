@@ -1,9 +1,6 @@
 """
 dod_dummy.py -- an offline dummy that mirrors the REAL DoD class interface.
 
-The real DoD class (from the robot codebase) exposes methods like move_absolute,
-move_to_position, take_probe(volume), set_nozzle_frequency/voltage/pulse_width,
-select_nozzle, dispense_on(mode)/dispense_off, run_task, set_humidity, etc.
 
 This dummy implements the SAME method names and parameters, tracks state, and
 enforces collision-avoidance on moves via pathplan -- so routines written against
@@ -11,7 +8,7 @@ this dummy will work against the real DoD class with minimal change (swap the
 object). Every real parameter (frequency, voltage, pulse width, probe volume,
 dispense mode, nozzle) is a real attribute you can set and read.
 
-Values on the dummy are simulated; on the real robot they come from hardware.
+Values on the dummy are simulated for now; on the real robot they come from hardware.
 """
 
 import json
@@ -31,15 +28,26 @@ class DoDDummy:
         self.y = 0.0
         self.z = 0.0
         # --- nozzle / droplet parameters (the REAL knobs) ---
-        self.nozzle = 1                 # selected nozzle (1-8)
+        # A nozzle must be ACTIVATED before it can be SELECTED. The real client
+        # rejects select_nozzle() for any channel not in 'Activated Nozzles'.
+        self.activated_nozzles = [1]    # armed channels (subset of 1-8)
+        self.nozzle = 1                 # selected nozzle (must be in activated_nozzles)
         self.nozzle_frequency = 30000   # Hz
         self.nozzle_voltage = 80        # V
         self.nozzle_pulse_width = 20    # us
         # --- dispensing state ---
-        self.dispensing_state = "Off"   # Off / Trigger / Free / Auto
+        self.dispensing_state = "Off"   # Off / Trigger / Free  (real client: no 'Auto')
         # --- probe / sample ---
         self.probe_volume = 0.0         # uL currently held
+        self.probe_well = None          # last well aspirated from, e.g. 'A1'
         self._measured_volume = 0.0     # last measured droplet volume (from volume task)
+        # Tasks the robot knows about. take_probe silently does NOTHING on the real
+        # robot if 'ProbeUptake' is absent -- so we model its presence explicitly.
+        self.available_tasks = [
+            "ProbeUptake", "AutoDropDetection", "AutoDropDetectionDropVolume",
+            "WashFlush_Medium", "WashFlush_Light_Narrow", "WashFlush_Strong_Narrow",
+            "MorningWashProcedure", "DrySystem", "SpotProbeRun", "ScanSpotArea",
+        ]
         # --- environment ---
         self.humidity = 40              # %
         self.temperature = 20           # C
@@ -84,17 +92,23 @@ class DoDDummy:
         On the dummy the Volume is simulated; on the real robot it's the measured
         value (Sebastian noted: don't fully rely on it -- sanity-check it).
         """
+        # NOTE: the real endpoint returns these as an ARRAY OF STRINGS (JSON),
+        # so callers must cast. read_measured_volume() does float(...) on the last field.
         results = {
-            "Activated Nozzles": [self.nozzle],
+            "Activated Nozzles": list(self.activated_nozzles),
             "Selected Nozzles": [self.nozzle],
-            # packed as [ID, Volt, Pulse, Freq, Volume]
+            # packed as [ID, Volt, Pulse, Freq, Volume] -- strings, like the real robot
             "ID,Volt,Pulse,Freq,Volume": [
-                self.nozzle, self.nozzle_voltage, self.nozzle_pulse_width,
-                self.nozzle_frequency, self._measured_volume,
+                str(self.nozzle), str(self.nozzle_voltage), str(self.nozzle_pulse_width),
+                str(self.nozzle_frequency), str(self._measured_volume),
             ],
             "Dispensing": self.dispensing_state,
         }
         return results
+
+    def get_drive_range(self):
+        """Max range of each axis in um. Real robot reads this live; we know the values."""
+        return {"X": 254000, "Y": 118000, "Z": 40000}
 
     def get_status(self):
         return {"Position": self.get_position(),
@@ -142,11 +156,38 @@ class DoDDummy:
         return r
 
     # ---------------------------------------------------------- nozzle params
+    def set_nozzle_active(self, channels):
+        """
+        Arm a set of nozzle channels. Only ACTIVATED nozzles can be selected.
+        Mirrors the real DoD.set_nozzle_active([1, 2, 3]).
+        """
+        chans = sorted({int(c) for c in channels})
+        bad = [c for c in chans if not (1 <= c <= 8)]
+        if bad:
+            self._rec(f"set_nozzle_active REJECTED: {bad} out of range (1-8)")
+            return {"ok": False, "reason": f"channels {bad} out of range (1-8)"}
+        self.activated_nozzles = chans
+        # if the currently selected nozzle is no longer armed, fall back to the first
+        if self.nozzle not in chans and chans:
+            self.nozzle = chans[0]
+        self._rec(f"set_nozzle_active({chans})")
+        return {"ok": True}
+
     def select_nozzle(self, n):
+        """
+        Select the nozzle that fires when dispensing is triggered.
+        The real client REJECTS any channel not in 'Activated Nozzles' -- being in
+        1-8 is not sufficient. Arm it first with set_nozzle_active().
+        """
         n = int(n)
         if not (1 <= n <= 8):
             self._rec(f"select_nozzle REJECTED: {n} (valid range is 1-8)")
             return {"ok": False, "reason": f"nozzle {n} out of range (1-8)"}
+        if n not in self.activated_nozzles:
+            self._rec(f"select_nozzle REJECTED: {n} not in activated {self.activated_nozzles}")
+            return {"ok": False,
+                    "reason": f"nozzle {n} is not activated (armed: {self.activated_nozzles}); "
+                              f"call set_nozzle_active() first"}
         self.nozzle = n; self._rec(f"select_nozzle({n})"); return {"ok": True}
 
     def set_nozzle_frequency(self, freq):
@@ -160,9 +201,10 @@ class DoDDummy:
 
     # ------------------------------------------------------------ dispensing
     def dispense_on(self, mode="Trigger"):
-        if mode not in ("Trigger", "Free", "Auto"):
-            self._rec(f"dispense_on invalid mode: {mode}")
-            return {"ok": False, "reason": "invalid mode"}
+        # Real client accepts only 'Trigger', 'Free', 'Off'. There is no 'Auto'.
+        if mode not in ("Trigger", "Free"):
+            self._rec(f"dispense_on REJECTED: invalid mode {mode!r} (use 'Trigger' or 'Free')")
+            return {"ok": False, "reason": f"invalid mode {mode!r}; valid: Trigger, Free"}
         self.dispensing_state = mode
         self._rec(f"dispense_on({mode})")
         return {"ok": True}
@@ -173,10 +215,40 @@ class DoDDummy:
         return {"ok": True}
 
     # ------------------------------------------------------------ probe/sample
-    def take_probe(self, volume):
-        self.probe_volume = float(volume)
-        self._rec(f"take_probe({volume} uL)")
-        return {"ok": True}
+    MAX_PROBE_VOLUME_UL = 250
+
+    def take_probe(self, channel, probe_well, volume, check_task=True):
+        """
+        Aspirate `volume` uL from `probe_well` (e.g. 'A1') using nozzle `channel`.
+        Mirrors the real signature: take_probe(channel, probe_well, volume).
+
+        Real-robot behaviour modeled here:
+          - rejects if volume > 250 uL
+          - rejects if channel is not among the ACTIVATED nozzles
+          - if the 'ProbeUptake' task is missing, the real robot SILENTLY DOES
+            NOTHING (no reject, no error). We make that failure explicit.
+          - selects `channel` as a side effect (as the real endpoint does)
+        """
+        volume = float(volume)
+        if volume > self.MAX_PROBE_VOLUME_UL:
+            self._rec(f"take_probe REJECTED: {volume} uL > {self.MAX_PROBE_VOLUME_UL} uL max")
+            return {"ok": False, "reason": f"volume {volume} exceeds {self.MAX_PROBE_VOLUME_UL} uL max"}
+        channel = int(channel)
+        if channel not in self.activated_nozzles:
+            self._rec(f"take_probe REJECTED: channel {channel} not activated {self.activated_nozzles}")
+            return {"ok": False, "reason": f"channel {channel} is not activated"}
+        if check_task and "ProbeUptake" not in self.available_tasks:
+            self._rec("take_probe FAILED: task 'ProbeUptake' missing (real robot would do nothing silently)")
+            return {"ok": False, "reason": "task 'ProbeUptake' not present on robot"}
+
+        # side effect: TakeProbe also selects the channel
+        self.nozzle = channel
+        self.probe_volume = volume
+        self.probe_well = probe_well
+        self._rec(f"take_probe(ch={channel}, well={probe_well}, {volume} uL)")
+        # real robot: uptake takes time -- ~1 s per uL, 30 s floor
+        self.busy_wait(max(30, int(volume)))
+        return {"ok": True, "channel": channel, "well": probe_well, "volume": volume}
 
     def give_probe(self):
         self._rec(f"give_probe() (was {self.probe_volume} uL)")
@@ -228,13 +300,22 @@ class DoDDummy:
         _t.sleep(0.05 if self.fast else timeout)
         return False  # False = finished within timeout (real: True if timed out)
 
+    def auto_drop(self):
+        """
+        Run the drop-detection task. The published client docs name this task
+        'AutoDropDetection' and note that execute_task('AutoDropDetection') is
+        equivalent. Populates the Volume field read back via get_nozzle_status().
+        """
+        return self.run_task("AutoDropDetection")
+
     def measure_volume(self):
         """
         Simulate running the droplet-volume measurement task.
-        On the REAL robot you'd instead run the actual volume task (name TBC with
-        Sebastian -- likely AutoDropDetectionDropVolume / AutoDropDetection_Dropvol)
-        and then read get_nozzle_status. Here we just simulate a value so the
-        routine flow is identical.
+        On the REAL robot: run_task('AutoDropDetection') (or a variant such as
+        AutoDropDetectionDropVolume -- confirm which populates Volume), then read
+        get_nozzle_status()['ID,Volt,Pulse,Freq,Volume'][-1].
+        Sebastian's caveat: don't fully rely on this readback; sanity-check it
+        against the drop-detection camera.
         """
         import random
         self._measured_volume = round(random.gauss(100.0, 4.0), 2)
