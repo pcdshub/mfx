@@ -788,6 +788,76 @@ class BashUtilities:
 
         logger.info("Mirror GUI launched")
 
+    def ppm(self):
+        """
+        Open PPM GUI.
+
+        Launches Matt's Dev Branch PPM GUI.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        PPM GUI:
+        - Matt's Dev Branch PPM GUI
+        - Used for PPM alignment and diagnostics
+        """
+        logger.info("Opening PPM GUI")
+
+        cmd = ("/cds/home/opr/mfxopr/bin/PPM_screen")
+
+        logger.warning(cmd)
+
+        subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+
+        logger.info("PPM GUI launched")
+
+    def ppm_kill(self):
+        """
+        Kill PPM GUI.
+
+        Terminates the PPM GUI process.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        PPM GUI:
+        - Matt's Dev Branch PPM GUI
+        - Used for PPM alignment and diagnostics
+        """
+        logger.info("Killing PPM GUI")
+
+        cmd = ("pkill -9 -f PPM_screen")
+
+        logger.warning(cmd)
+
+        subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+
+        logger.info("PPM GUI terminated")
+
     def grabber(self):
         """
         Launch elog grabber utility.
