@@ -14,7 +14,6 @@ Real coordinates + drive range from the robot config
 (named_position_coords.json + MaxAxisPos). Swap the client in build_robot() for
 the real myClient to monitor live.
 
-Run:  uv run monitor_3d.py
 """
 
 import json

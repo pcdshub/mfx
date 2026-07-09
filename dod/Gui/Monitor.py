@@ -4,7 +4,6 @@ monitor.py -- live monitoring dashboard for the DoD robot (2D, three views).
 Three standard engineering views: top-down (X-Y), front (X-Z), side (Y-Z).
 Uses real coordinates + drive range, runs against the DoDDummy.
 
-Run:  uv run monitor.py
 """
 
 import json
