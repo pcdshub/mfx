@@ -20,7 +20,12 @@ from pathplan import Point, Zone, is_move_safe, plan_detour
 
 
 class DoDDummy:
-    def __init__(self, zone=None, positions_file="named_position_coords.json"):
+    def __init__(self, zone=None, positions_file="named_position_coords.json",
+                 fast=True):
+        # fast=True  -> tasks return almost immediately (good for iterating/testing)
+        # fast=False -> tasks actually take their modeled duration, so routines
+        #               pace the way they would on the real robot.
+        self.fast = fast
         # --- motion state (um) ---
         self.x = 0.0
         self.y = 0.0
@@ -138,7 +143,11 @@ class DoDDummy:
 
     # ---------------------------------------------------------- nozzle params
     def select_nozzle(self, n):
-        self.nozzle = int(n); self._rec(f"select_nozzle({n})"); return True
+        n = int(n)
+        if not (1 <= n <= 8):
+            self._rec(f"select_nozzle REJECTED: {n} (valid range is 1-8)")
+            return {"ok": False, "reason": f"nozzle {n} out of range (1-8)"}
+        self.nozzle = n; self._rec(f"select_nozzle({n})"); return {"ok": True}
 
     def set_nozzle_frequency(self, freq):
         self.nozzle_frequency = float(freq); self._rec(f"set_nozzle_frequency({freq})"); return True
@@ -182,8 +191,42 @@ class DoDDummy:
         self.temperature = float(value); self._rec(f"set_temperature({value})"); return True
 
     # ------------------------------------------------------------------ tasks
-    def run_task(self, name):
-        self.last_task = name; self._rec(f"run_task({name})"); return {"ok": True}
+    # Approximate real durations (seconds) for tasks, so timing is modeled even
+    # on the dummy. On the real robot, busy_wait polls get_status until done;
+    # here we just sleep the modeled duration. Adjust with real values later.
+    TASK_DURATIONS = {
+        "WashFlush_Medium": 8.0, "WashFlush_Light_Narrow": 5.0,
+        "WashFlush_Strong_Narrow": 10.0, "MorningWashProcedure": 30.0,
+        "ProbeUptake": 15.0, "DrySystem": 20.0,
+    }
+
+    def run_task(self, name, wait=True):
+        """
+        Start a task. On the real robot this returns quickly but the task keeps
+        running -- so we busy_wait for completion when wait=True (the safe default).
+        On the dummy we sleep the modeled duration so timing behaves realistically.
+        """
+        self.last_task = name
+        self._rec(f"run_task({name})")
+        duration = self.TASK_DURATIONS.get(name, 2.0)
+        if wait:
+            self.busy_wait(duration)
+        return {"ok": True, "task": name, "duration": duration}
+
+    def busy_wait(self, timeout, poll_interval=0.5):
+        """
+        Model waiting for the robot to finish being busy. On the real robot this
+        polls get_status until Status != 'Busy'. Same signature, so routines
+        written against this dummy work unchanged on real hardware.
+
+        fast=True  -> sleep only a token amount (keeps testing snappy)
+        fast=False -> sleep the full modeled duration, so a routine paces the way
+                      it would on the robot (e.g. an 8 s wash really takes 8 s)
+        """
+        import time as _t
+        self._rec(f"busy_wait({timeout}s, fast={self.fast})")
+        _t.sleep(0.05 if self.fast else timeout)
+        return False  # False = finished within timeout (real: True if timed out)
 
     def measure_volume(self):
         """

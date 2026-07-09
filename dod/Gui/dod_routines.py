@@ -73,13 +73,32 @@ def safe_goto(dod, name, log=_noop):
 
 
 def configure_nozzle(dod, nozzle=1, frequency=30000, voltage=80, pulse_width=20, log=_noop):
-    """Set the real droplet-generation parameters."""
-    dod.select_nozzle(nozzle)
+    """Set the real droplet-generation parameters. Nozzle must be 1-8."""
+    r = dod.select_nozzle(nozzle)
+    if isinstance(r, dict) and not r.get("ok"):
+        log(f"[nozzle] REJECTED: {r.get('reason')}")
+        return {"ok": False, "reason": r.get("reason")}
     dod.set_nozzle_frequency(frequency)
     dod.set_nozzle_voltage(voltage)
     dod.set_nozzle_pulse_width(pulse_width)
     log(f"[nozzle] #{nozzle} freq={frequency}Hz volt={voltage}V pulse={pulse_width}us")
     return {"ok": True}
+
+
+def safety_check_routine(dod, log=_noop):
+    """
+    Safety automation routine: run the full pre-flight safety validation before
+    operating. Checks the coordinate data, required positions, workspace bounds,
+    and that no position sits in the keep-out zone. Returns pass/fail.
+    """
+    from dod_safety_tools import preflight_check
+    log("[safety] running pre-flight safety checks...")
+    passed, total, text = preflight_check()
+    ok = (passed == total)
+    log(f"[safety] {passed}/{total} checks passed" + (" -- ALL CLEAR" if ok else " -- REVIEW NEEDED"))
+    if not ok:
+        log("[safety] WARNING: not all checks passed. Review before operating.")
+    return {"ok": ok, "passed": passed, "total": total}
 
 
 def wash_cycle(dod, log=_noop, task="WashFlush_Medium"):

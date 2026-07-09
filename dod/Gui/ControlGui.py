@@ -1,5 +1,5 @@
 """
-control_gui.py -- full DoD robot control panel (dummy), REAL interface.
+control_gui.py -- full DoD robot control panel (dummy), interface.
 
 Uses the real DoD interface (dod_dummy.DoDDummy) and exposes the REAL parameters:
 nozzle selection, frequency, voltage, pulse width, probe volume, dispense mode.
@@ -14,7 +14,7 @@ Features:
   - automation routines that use those parameters
   - timestamped command log
 
-Run:  uv run control_gui.py
+
 """
 
 import threading
@@ -38,7 +38,9 @@ def inside_workspace(x, y, z):
 
 
 def build_robot():
-    d = DoDDummy(zone=KEEP_OUT)
+    # fast=False -> routines pace like the real robot (an 8 s wash takes 8 s).
+    # Toggle it live from the "Realistic task timing" checkbox.
+    d = DoDDummy(zone=KEEP_OUT, fast=False)
     d.connect()
     return d
 
@@ -81,12 +83,24 @@ class ControlGUI:
                   font=("Arial", 13, "bold"), height=2, command=self.estop
                   ).grid(row=1, column=0, columnspan=2, sticky="ew", **pad)
 
+        # realistic task timing toggle (off = snappy testing)
+        self.realistic = tk.BooleanVar(value=not self.dod.fast)
+        ttk.Checkbutton(self.root, text="Realistic task timing (wash really takes ~8s)",
+                        variable=self.realistic, command=self.toggle_timing
+                        ).grid(row=1, column=1, sticky="e", padx=5)
+
         # jog
         jf = ttk.LabelFrame(self.root, text="Jog")
         jf.grid(row=2, column=0, sticky="nsew", **pad)
         sf = ttk.Frame(jf); sf.grid(row=0, column=0, columnspan=3)
         for label, val in STEP_SIZES.items():
             ttk.Radiobutton(sf, text=label, variable=self.step, value=val).pack(side="left")
+        # custom step: type an exact value and use it
+        cf = ttk.Frame(jf); cf.grid(row=4, column=0, columnspan=3, pady=(4, 0))
+        ttk.Label(cf, text="Custom step (um):").pack(side="left")
+        self.custom_step = tk.IntVar(value=500)
+        ttk.Entry(cf, textvariable=self.custom_step, width=8).pack(side="left", padx=3)
+        ttk.Button(cf, text="Use", command=self.use_custom_step).pack(side="left")
         for axis, r in (("X", 1), ("Y", 2), ("Z", 3)):
             ttk.Label(jf, text=axis).grid(row=r, column=0, padx=3)
             ttk.Button(jf, text=f"{axis}-", width=4, command=lambda a=axis: self.jog(a, -1)).grid(row=r, column=1)
@@ -129,6 +143,7 @@ class ControlGUI:
         ttk.Button(rtf, text="Stability Check", command=self.run_stability).grid(row=0, column=5, padx=3)
         ttk.Button(rtf, text="Wash Cycle", command=self.run_wash).grid(row=1, column=2, padx=3, pady=3)
         ttk.Button(rtf, text="Scan Slide", command=self.run_scan).grid(row=1, column=5, padx=3)
+        ttk.Button(rtf, text="Safety Check", command=self.run_safety).grid(row=1, column=0, columnspan=2, padx=3, pady=3)
 
         # log
         lf = ttk.LabelFrame(self.root, text="Command Log")
@@ -157,6 +172,18 @@ class ControlGUI:
                     voltage=self.p_voltage.get(), pulse_width=self.p_pulse.get())
 
     # ---- actions ----
+    def use_custom_step(self):
+        # set the active jog step to whatever the user typed
+        try:
+            val = int(self.custom_step.get())
+            if val <= 0:
+                self.log("custom step must be positive")
+                return
+            self.step.set(val)
+            self.log(f"jog step set to {val} um")
+        except Exception:
+            self.log("custom step must be a whole number")
+
     def jog(self, axis, direction):
         d = {"X": 0, "Y": 0, "Z": 0}
         d[axis] = self.step.get() * direction
@@ -175,11 +202,26 @@ class ControlGUI:
         self.dod.dispense_off(); self.log("dispense OFF"); self._refresh()
 
     def apply_nozzle(self):
+        # validate nozzle range before applying (robot has 8 nozzles)
+        n = self.p_nozzle.get()
+        if not (1 <= n <= 8):
+            self.log(f"nozzle {n} invalid -- must be 1-8")
+            return
         R.configure_nozzle(self.dod, log=self.log, **self._params()); self._refresh()
+
+    def toggle_timing(self):
+        # checkbox ON  = realistic  -> dummy.fast must be False
+        # checkbox OFF = fast tests -> dummy.fast must be True
+        self.dod.fast = not self.realistic.get()
+        mode = "realistic (tasks take their real duration)" if self.realistic.get() else "fast (tasks return immediately)"
+        self.log(f"task timing: {mode}")
 
     def estop(self):
         self.dod.stop_task(); self.dod.dispense_off()
         self.log("*** EMERGENCY STOP ***"); self._refresh()
+
+    def run_safety(self):
+        self._threaded(lambda: self._report(R.safety_check_routine(self.dod, log=self.log)))
 
     def run_sample_test(self):
         p = self._params()
