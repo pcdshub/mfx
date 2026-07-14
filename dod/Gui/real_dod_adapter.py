@@ -19,7 +19,7 @@ HOW TO USE
   from real_dod_adapter import RealDoDAdapter
   import dod_routines as R
 
-  dod = RealDoDAdapter(ip="172.21.72.187", port=9999)   # confirm IP w/ Josue
+  dod = RealDoDAdapter(ip="172.21.72.187", port=9999)   # confirm IP w
   dod.connect()
   R.wash_cycle(dod, log=print)          # your existing routine, real robot
 
@@ -91,15 +91,18 @@ class RealDoDAdapter:
 
     # ------------------------------------------------------------- lifecycle
     def connect(self, client="adapter"):
-        """Create the real DoD object. Import here so this file loads anywhere."""
-        if self.dry_run:
-            self._rec(f"[DRY RUN] would connect real DoD at {self.ip}:{self.port}")
-            self.connected = True
-            return True
+        """
+        Create the real DoD object. ALWAYS connects for real, even in dry_run --
+        connecting and READING are harmless; only MOTION is gated by dry_run.
+        (Earlier this returned early in dry_run, which left _dod = None and made
+        every getter silently return fake placeholder values. That was a bug:
+        fake data that prints "OK" is worse than an error.)
+        """
         from dod.dod import DoD
         self._dod = DoD(ip=self.ip, port=self.port)
         self.connected = True
-        self._rec(f"[REAL] connected DoD at {self.ip}:{self.port}")
+        self._rec(f"[REAL] connected DoD at {self.ip}:{self.port}"
+                  + ("  (dry_run: reads are REAL, motion is blocked)" if self.dry_run else ""))
         # cache the real task list so routines can check availability
         try:
             self.available_tasks = self._dod.get_task_names()
@@ -119,58 +122,88 @@ class RealDoDAdapter:
         return self.connect()
 
     # -------------------------------------------------------------- getters
+    #
+    # RULE: getters ALWAYS read the real robot. They NEVER invent a value.
+    # If we can't read, we RAISE -- because a fake number that looks fine is
+    # far more dangerous than a visible error. dry_run does NOT affect reads.
+    def _require_connection(self, what):
+        if self._dod is None:
+            raise RuntimeError(
+                f"cannot read {what}: not connected to the robot. "
+                f"Call connect() first (and check the IP)."
+            )
+
     def get_status(self):
         """Map the real get_status() into the shape your GUI/routines expect."""
-        if self.dry_run or self._dod is None:
-            return {"Position": self.get_position(), "dispensing": self.dispensing_state,
-                    "probe_volume": self.probe_volume, "humidity": 40,
-                    "temperature": 20, "nozzle": self.nozzle}
+        self._require_connection("status")
         r = self._dod.get_status()
-        # real keys: Position, RunningTask, Dialog, LastProbe, Humidity, Temperature...
-        pos = self.get_position()
-        return {"Position": pos, "dispensing": self.dispensing_state,
+        if not isinstance(r, dict):
+            raise RuntimeError(f"robot returned unexpected status type: {type(r)}")
+        return {"Position": self.get_position(),
+                "dispensing": r.get("Dispensing", self.dispensing_state),
                 "probe_volume": self.probe_volume,
-                "humidity": r.get("Humidity", 40) if isinstance(r, dict) else 40,
-                "temperature": r.get("Temperature", 20) if isinstance(r, dict) else 20,
-                "nozzle": self.nozzle}
+                "humidity": r.get("Humidity"),
+                "temperature": r.get("Temperature"),
+                "nozzle": self.nozzle,
+                "raw": r}          # keep the untouched robot reply for inspection
 
     def get_position(self):
-        """Return {'X','Y','Z'} from the real robot's PositionReal."""
-        if self._dod is None:
-            return {"X": 0.0, "Y": 0.0, "Z": 0.0}
+        """
+        Return {'X','Y','Z'} read from the real robot's get_current_position().
+
+        The real reply looks like:
+            {'CurrentPosition': 0, 'Position': ['0', 'Probe (96WP-1nozzle)', ...],
+             'PositionReal': {'X': 253973, 'Y': 0, 'Z': 0}}
+        PositionReal is a DICT (confirmed on hardware). We also accept a
+        3-element list in case a different firmware returns one. If we can't
+        find real coordinates we RAISE rather than return zeros.
+        """
+        self._require_connection("position")
         r = self._dod.get_current_position()
-        real = r.get("PositionReal") if isinstance(r, dict) else None
-        if isinstance(real, dict):
-            return {"X": real.get("X", 0.0), "Y": real.get("Y", 0.0), "Z": real.get("Z", 0.0)}
+        if not isinstance(r, dict):
+            raise RuntimeError(f"get_current_position returned {type(r)}, expected dict")
+        real = r.get("PositionReal")
+        if isinstance(real, dict) and {"X", "Y", "Z"} <= set(real.keys()):
+            return {"X": float(real["X"]), "Y": float(real["Y"]), "Z": float(real["Z"])}
         if isinstance(real, (list, tuple)) and len(real) == 3:
-            return {"X": real[0], "Y": real[1], "Z": real[2]}
-        return {"X": 0.0, "Y": 0.0, "Z": 0.0}
+            return {"X": float(real[0]), "Y": float(real[1]), "Z": float(real[2])}
+        raise RuntimeError(
+            f"could not read X/Y/Z from PositionReal={real!r} "
+            f"(full reply keys: {list(r.keys())})"
+        )
 
     def get_nozzle_status(self, verbose=False):
-        if self.dry_run or self._dod is None:
-            return {"Activated Nozzles": [self.nozzle], "Selected Nozzles": [self.nozzle],
-                    "ID,Volt,Pulse,Freq,Volume": [str(self.nozzle), str(self.nozzle_voltage),
-                        str(self.nozzle_pulse_width), str(self.nozzle_frequency), "0"],
-                    "Dispensing": self.dispensing_state}
+        self._require_connection("nozzle status")
         return self._dod.get_nozzle_status()
 
     def get_drive_range(self):
-        # real config [MaxAxisPos]; the real DoD doesn't expose a getter, so use known values
-        return {"X": 254000, "Y": 118000, "Z": 40000}
+        """
+        Axis travel limits (um).
+
+        NOTE: these are read from the robot config file [MaxAxisPos], NOT from a
+        live endpoint -- the DoD wrapper doesn't expose a drive-range getter.
+        So this is CONFIG data, not a live hardware read. Flagged as such.
+        """
+        return {"X": 254000, "Y": 118000, "Z": 40000, "_source": "config [MaxAxisPos], not live"}
 
     def get_forbidden_region(self, rotation_state="both"):
-        if self.dry_run or self._dod is None:
-            # config-derived (see real_gridplan.default_regions_from_config)
-            return [(0, 300000, 0, 10000), (0, 300000, 50000, 500000)]
+        """Read the robot's OWN exclusion regions. Always live; never faked."""
+        self._require_connection("forbidden regions")
         return self._dod.get_forbidden_region(rotation_state)
 
-    def test_forbidden_region(self, x, y, frame="robot"):
-        if self.dry_run or self._dod is None:
-            for (xs, xe, ys, ye) in self.get_forbidden_region():
-                if xs < x < xe and ys < y < ye:
-                    return True   # forbidden
-            return False
-        # real returns True if SAFE; we return True if FORBIDDEN to match dummy.
+    def test_forbidden_region(self, x, y):
+        """
+        Ask the ROBOT whether (x, y) is forbidden. Returns True if FORBIDDEN.
+
+        The real DoD.test_forbidden_region(x, y) returns True when the point is
+        SAFE, so we invert it to match the dummy's convention.
+
+        NOTE: the real endpoint takes only (x, y) -- there is no 'frame'
+        argument. Which coordinate frame these x/y are in vs. the saved
+        positions is an OPEN QUESTION (source says hutch(x,y,z)=robot(x,-z,y)).
+        Do not trust this mapping until we confirm the frame.
+        """
+        self._require_connection("forbidden-region test")
         return not self._dod.test_forbidden_region(x, y)
 
     def where(self):
