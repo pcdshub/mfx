@@ -44,7 +44,8 @@ def read_live_position(dod, verbose=True):
 
     get_current_position() returns two candidate positions that can disagree:
         'PositionReal' : {'X':..,'Y':..,'Z':..}   -- dict
-        
+        'Position'     : ['0','Probe (96WP-1nozzle)','171497','114000','24893',...]
+                          -- list; elements [2],[3],[4] are X,Y,Z as strings
     We print the raw reply and both candidates rather than silently picking one.
     Returns the PositionReal dict if present, else the Position list values.
     """
@@ -72,16 +73,16 @@ def read_live_position(dod, verbose=True):
 
     if verbose:
         if from_real:
-            print("     PositionReal -> X=%.0f Y=%.0f Z=%.0f"
+            print("     LIVE position (PositionReal) -> X=%.0f Y=%.0f Z=%.0f"
                   % (from_real["X"], from_real["Y"], from_real["Z"]))
         if from_list:
             name = plist[1] if len(plist) > 1 else "?"
-            print("     Position[2:5] -> X=%.0f Y=%.0f Z=%.0f   (name: %s)"
-                  % (from_list["X"], from_list["Y"], from_list["Z"], name))
-        if from_real and from_list and from_real != from_list:
-            print("     *** THESE TWO DISAGREE. Compare against where the robot")
-            print("         physically is to see which one is the live position. ***")
+            print("     (Position field = table entry '%s': %.0f, %.0f, %.0f"
+                  " -- last named position, may be stale)"
+                  % (name, from_list["X"], from_list["Y"], from_list["Z"]))
 
+    # PositionReal is the live encoder reading. The Position field is a lookup
+    # of the last named position commanded and does not track live motion.
     if from_real:
         return from_real
     if from_list:
