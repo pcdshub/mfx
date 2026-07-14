@@ -136,11 +136,13 @@ class RealDoDAdapter:
 
     def get_position(self):
         """Return {'X','Y','Z'} from the real robot's PositionReal."""
-        if self.dry_run or self._dod is None:
+        if self._dod is None:
             return {"X": 0.0, "Y": 0.0, "Z": 0.0}
         r = self._dod.get_current_position()
         real = r.get("PositionReal") if isinstance(r, dict) else None
-        if real and len(real) == 3:
+        if isinstance(real, dict):
+            return {"X": real.get("X", 0.0), "Y": real.get("Y", 0.0), "Z": real.get("Z", 0.0)}
+        if isinstance(real, (list, tuple)) and len(real) == 3:
             return {"X": real[0], "Y": real[1], "Z": real[2]}
         return {"X": 0.0, "Y": 0.0, "Z": 0.0}
 
