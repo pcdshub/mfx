@@ -1,9 +1,6 @@
 """
 safe_demo.py -- a SAFE demo to run on the real robot today.
 
-Design principle: NEVER assume a move's path is safe. The real robot's own
-do_move only checks the ENDPOINT ("No testing of the path of a motion
-included!"), and paths are not always straight/clear. So this demo:
 
   PART 1 (READ ONLY -- zero motion, zero risk):
      - connect + read status/position
@@ -56,7 +53,7 @@ def part1_readonly(dod, positions):
         print("   status OK:", st)
     except Exception as e:
         print("   FAILED to read status:", e)
-        print("   -> connection/IP problem. Stop here and check with Josue.")
+        print("   -> connection/IP problem. Stop here and check IP again maybe?.")
         return False
 
     print("\n[2/4] current position")
@@ -101,7 +98,7 @@ def part1_readonly(dod, positions):
     except Exception as e:
         print("   could not read forbidden regions:", e)
 
-    print("\nPART 1 complete. Your code read real robot state with NO motion.")
+    print("\nPART 1 complete. the code reads real robot state with NO motion.")
     return True
 
 
@@ -129,9 +126,9 @@ def part2_guarded_move(dod, positions, dest, dry_run):
     print(f"   straight-line distance: {dist:.0f} um")
     print()
     print("   *** WARNING ***")
-    print("   do_move uses the robot's native move. Per the DoD source, it does")
-    print("   NOT check the PATH -- only that the endpoint is valid. Confirm with")
-    print("   Sebastian that the straight path from HERE to the target is clear")
+    print("   do_move uses the robot's native move., it does")
+    print("   NOT check the PATH -- only that the endpoint is valid.")
+    print("   confirm that the straight path from HERE to the target is clear")
     print("   BEFORE proceeding. If you are not sure, do NOT move.")
     print()
 
@@ -173,7 +170,7 @@ def main():
     if args.move:
         part2_guarded_move(dod, positions, args.move, dry_run=dry)
     else:
-        print("\n(no --move given, so PART 2 skipped. Read-only demo done.)")
+        print("\n(no --move given. Read-only demo done.)")
 
     dod.disconnect()
     print("\ndone.")
