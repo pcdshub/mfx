@@ -1,5 +1,5 @@
 """
-control_gui.py -- full DoD robot control panel (dummy), interface.
+control_gui.py -- full DoD robot control panel (dummy), REAL interface.
 
 Uses the real DoD interface (dod_dummy.DoDDummy) and exposes the REAL parameters:
 nozzle selection, frequency, voltage, pulse width, probe volume, dispense mode.
@@ -14,7 +14,7 @@ Features:
   - automation routines that use those parameters
   - timestamped command log
 
-
+Run:  uv run control_gui.py
 """
 
 import threading
@@ -83,12 +83,6 @@ class ControlGUI:
                   font=("Arial", 13, "bold"), height=2, command=self.estop
                   ).grid(row=1, column=0, columnspan=2, sticky="ew", **pad)
 
-        # realistic task timing toggle (off = snappy testing)
-        self.realistic = tk.BooleanVar(value=not self.dod.fast)
-        ttk.Checkbutton(self.root, text="Realistic task timing (wash really takes ~8s)",
-                        variable=self.realistic, command=self.toggle_timing
-                        ).grid(row=1, column=1, sticky="e", padx=5)
-
         # jog
         jf = ttk.LabelFrame(self.root, text="Jog")
         jf.grid(row=2, column=0, sticky="nsew", **pad)
@@ -144,6 +138,26 @@ class ControlGUI:
         ttk.Button(rtf, text="Wash Cycle", command=self.run_wash).grid(row=1, column=2, padx=3, pady=3)
         ttk.Button(rtf, text="Scan Slide", command=self.run_scan).grid(row=1, column=5, padx=3)
         ttk.Button(rtf, text="Safety Check", command=self.run_safety).grid(row=1, column=0, columnspan=2, padx=3, pady=3)
+        # sweep + align (Goal 5)
+        ttk.Label(rtf, text="sweep:").grid(row=2, column=0, sticky="e")
+        self.p_sweep = tk.StringVar(value="voltage")
+        ttk.Combobox(rtf, textvariable=self.p_sweep, values=["voltage", "frequency", "pulse_width"],
+                     width=10, state="readonly").grid(row=2, column=1)
+        ttk.Button(rtf, text="Parameter Sweep", command=self.run_sweep).grid(row=2, column=2, padx=3, pady=3)
+        ttk.Button(rtf, text="Align Droplet", command=self.run_align).grid(row=2, column=5, padx=3)
+        # operational routines (all grounded in real tasks / real APIs)
+        ttk.Button(rtf, text="Startup", command=self.run_startup).grid(row=3, column=0, padx=3, pady=3)
+        ttk.Button(rtf, text="Shutdown", command=self.run_shutdown).grid(row=3, column=1, padx=3)
+        ttk.Button(rtf, text="Nozzle Health", command=self.run_nozzle_health).grid(row=3, column=2, padx=3)
+        ttk.Button(rtf, text="Region Check", command=self.run_region).grid(row=3, column=3, columnspan=2, padx=3)
+        ttk.Button(rtf, text="Verify Positions", command=self.run_verify).grid(row=3, column=5, padx=3)
+
+        # realistic task timing toggle -- affects how long routines take, so it
+        # lives with the routines. ON = tasks take their real duration.
+        self.realistic = tk.BooleanVar(value=not self.dod.fast)
+        ttk.Checkbutton(rtf, text="Realistic task timing (tasks take their real duration)",
+                        variable=self.realistic, command=self.toggle_timing
+                        ).grid(row=4, column=0, columnspan=6, sticky="w", padx=3, pady=(6, 2))
 
         # log
         lf = ttk.LabelFrame(self.root, text="Command Log")
@@ -173,7 +187,7 @@ class ControlGUI:
 
     # ---- actions ----
     def use_custom_step(self):
-        # set the active jog step to whatever the user typed
+        # set the active jog step to whatever the user wants
         try:
             val = int(self.custom_step.get())
             if val <= 0:
@@ -202,7 +216,7 @@ class ControlGUI:
         self.dod.dispense_off(); self.log("dispense OFF"); self._refresh()
 
     def apply_nozzle(self):
-        # validate nozzle range before applying (robot has 8 nozzles)
+        # validate nozzle range before applying (robot has 8 nozzles) change to 4 soon
         n = self.p_nozzle.get()
         if not (1 <= n <= 8):
             self.log(f"nozzle {n} invalid -- must be 1-8")
@@ -240,6 +254,29 @@ class ControlGUI:
     def run_scan(self):
         p = self._params()
         self._threaded(lambda: (R.scan_slide(self.dod, dispense_mode=self.p_mode.get(), log=self.log, **p), self._refresh()))
+
+    def run_sweep(self):
+        p = self._params()
+        self._threaded(lambda: self._report(R.parameter_sweep(
+            self.dod, param=self.p_sweep.get(), dispense_mode=self.p_mode.get(), log=self.log, **p)))
+
+    def run_align(self):
+        self._threaded(lambda: (self._report(R.align_droplet(self.dod, log=self.log)), self._refresh()))
+
+    def run_startup(self):
+        self._threaded(lambda: (self._report(R.startup_routine(self.dod, log=self.log)), self._refresh()))
+
+    def run_shutdown(self):
+        self._threaded(lambda: (self._report(R.shutdown_routine(self.dod, log=self.log)), self._refresh()))
+
+    def run_nozzle_health(self):
+        self._threaded(lambda: self._report(R.nozzle_health_check(self.dod, log=self.log)))
+
+    def run_region(self):
+        self._threaded(lambda: self._report(R.region_exclusion_check(self.dod, log=self.log)))
+
+    def run_verify(self):
+        self._threaded(lambda: self._report(R.verify_positions(self.dod, log=self.log)))
 
     def _report(self, result):
         self.log(f"result: {result}")

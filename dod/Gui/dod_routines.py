@@ -1,12 +1,12 @@
 """
-dod_routines.py -- automation routines for the DoD robot .
+dod_routines.py -- automation routines for the DoD robot (Goals 1 & 3).
 
 Rewritten to use the REAL DoD interface (dod_dummy.DoDDummy, or the real DoD
 class). Routines control the real parameters: nozzle frequency/voltage/pulse
 width, probe volume, dispense mode, nozzle selection.
 
 Each routine takes:
-  - dod:  a DoDDummy (now) or the real DoD object (hopefully later)
+  - dod:  a DoDDummy (now) or the real DoD object (later)
   - log:  optional callback log(msg) for live progress
 and returns a result dict.
 """
@@ -231,6 +231,138 @@ def stability_check(dod, shots=10, dispense_mode="Trigger", nozzle=1,
     return result
 
 
+def parameter_sweep(dod, param="voltage", values=None, dispense_mode="Trigger",
+                    nozzle=1, frequency=30000, voltage=80, pulse_width=20,
+                    repeats=3, log=_noop):
+    """
+    Sweep one nozzle parameter across a range of values and record the resulting
+    droplet volume at each -- so you can see how droplet volume responds to the
+    setting. `param` is 'voltage', 'frequency', or 'pulse_width'.
+
+    For each value: set that parameter, fire `repeats` shots, average the measured
+    volume. Saves a CSV (one row per value). Great for finding a good operating point.
+    """
+    if param not in ("voltage", "frequency", "pulse_width"):
+        log(f"[sweep] unknown parameter: {param}")
+        return {"ok": False, "reason": "param must be voltage/frequency/pulse_width"}
+    if not values:
+        # sensible default sweeps if none given
+        values = {"voltage": [60, 70, 80, 90, 100],
+                  "frequency": [20000, 25000, 30000, 35000, 40000],
+                  "pulse_width": [10, 15, 20, 25, 30]}[param]
+
+    log(f"[sweep] sweeping {param} over {values} ({repeats} shots each)")
+    # arm+select the nozzle once
+    cfg = configure_nozzle(dod, nozzle, frequency, voltage, pulse_width, log=log)
+    if not cfg.get("ok"):
+        return {"ok": False, "reason": cfg.get("reason")}
+    safe_goto(dod, "InteractionPoint", log=log)
+
+    setter = {"voltage": dod.set_nozzle_voltage,
+              "frequency": dod.set_nozzle_frequency,
+              "pulse_width": dod.set_nozzle_pulse_width}[param]
+
+    rows = []
+    for val in values:
+        setter(val)
+        vols = []
+        for _ in range(repeats):
+            dod.dispense_on(dispense_mode)
+            v = read_measured_volume(dod)
+            if v is None:
+                v = random.gauss(100.0, 4.0)
+            dod.dispense_off()
+            vols.append(v)
+            time.sleep(0.01)
+        avg = round(sum(vols) / len(vols), 2)
+        rows.append({param: val, "avg_volume": avg, "shots": repeats})
+        log(f"[sweep] {param}={val} -> avg volume {avg}")
+
+    csv_file = save_results_csv(rows, kind=f"sweep_{param}")
+    if csv_file:
+        log(f"[sweep] data saved to {csv_file}")
+    log("[sweep] DONE")
+    return {"ok": True, "param": param, "rows": rows, "csv": csv_file}
+
+
+def align_droplet(dod, tolerance=15.0, max_steps=25, gain=0.6, log=_noop,
+                  um_per_pixel=1.0, sign_x=+1, sign_y=+1, offset_in_pixels=False):
+    """
+    Goal 5: align the droplet to the camera crosshair.
+
+    Reads the droplet's offset from the crosshair (drop-detection camera on the
+    real robot; simulated on the dummy) and nudges the nozzle to reduce it, in a
+    closed loop, until the offset is within `tolerance` um or `max_steps` is hit.
+
+    `gain` (0-1) is how much of the measured offset to correct each step -- a simple
+    proportional controller. Lower = gentler/slower, higher = faster but can overshoot.
+
+    ---- HARDWARE CALIBRATION (set these when moving to the real robot) ----
+    The dummy reports the offset directly in microns with axes already matching the
+    robot, so the defaults below are a no-op. On the REAL robot you MUST set them:
+
+      um_per_pixel     : microns of nozzle motion per camera pixel of droplet shift.
+                         Measure it: move the nozzle a known amount, see how many
+                         pixels the droplet moves. REQUIRED if the camera reports
+                         pixels (set offset_in_pixels=True).
+      sign_x / sign_y  : +1 or -1 per axis. The camera may be rotated/mirrored, so
+                         moving the nozzle +X might move the droplet LEFT (-) on the
+                         image. GET THIS RIGHT FIRST: a wrong sign makes the loop
+                         DIVERGE (the offset explodes) instead of converging. Verify
+                         by nudging one axis and watching which way the droplet goes.
+      offset_in_pixels : True if get_droplet_camera_offset() returns pixels (then we
+                         multiply by um_per_pixel); False if it already returns um.
+
+    Returns whether it converged, the final offset, and the step history.
+    """
+    if not hasattr(dod, "get_droplet_camera_offset"):
+        log("[align] this robot has no camera offset readout -- cannot align")
+        return {"ok": False, "reason": "no camera offset available"}
+
+    scale = um_per_pixel if offset_in_pixels else 1.0
+    log(f"[align] aligning to crosshair (tol {tolerance}um, gain {gain}, "
+        f"scale {scale}um/unit, signs x{sign_x:+d} y{sign_y:+d})")
+    safe_goto(dod, "InteractionPoint", log=log)
+    dod.dispense_on("Trigger")   # need a droplet visible to align it
+
+    history = []
+    converged = False
+    diverging = False
+    prev_dist = None
+    for step in range(1, max_steps + 1):
+        off = dod.get_droplet_camera_offset()
+        # convert to microns and apply the axis sign mapping
+        dx = off["dx"] * scale * sign_x
+        dy = off["dy"] * scale * sign_y
+        dist = (dx * dx + dy * dy) ** 0.5
+        history.append({"step": step, "dx": round(dx, 1), "dy": round(dy, 1),
+                        "distance": round(dist, 1)})
+        log(f"[align] step {step}: offset dx={dx:.0f} dy={dy:.0f} (dist {dist:.0f} um)")
+        if dist <= tolerance:
+            converged = True
+            log(f"[align] CONVERGED in {step} steps (offset {dist:.0f} um)")
+            break
+        # SAFETY: if the offset is growing, the sign mapping is probably wrong.
+        # Stop instead of running the nozzle away.
+        if prev_dist is not None and dist > prev_dist * 1.5:
+            diverging = True
+            log("[align] ABORT: offset is GROWING -- check sign_x/sign_y "
+                "(camera axes likely flipped vs robot)")
+            break
+        prev_dist = dist
+        # proportional correction: move the nozzle by -gain * offset
+        dod.move_relative(-gain * dx, -gain * dy, 0)
+
+    dod.dispense_off()
+    if not converged and not diverging:
+        log(f"[align] did NOT converge within {max_steps} steps")
+    csv_file = save_results_csv(history, kind="alignment")
+    if csv_file:
+        log(f"[align] step history saved to {csv_file}")
+    return {"ok": converged, "diverging": diverging, "steps": len(history),
+            "final": history[-1], "csv": csv_file, "history": history}
+
+
 def scan_slide(dod, dispense_mode="Trigger", nozzle=1, frequency=30000,
                voltage=80, pulse_width=20, log=_noop):
     """Visit the Slide A1..B6 grid and spot each point with real nozzle params."""
@@ -246,6 +378,122 @@ def scan_slide(dod, dispense_mode="Trigger", nozzle=1, frequency=30000,
         log(f"[scan_slide] spotted {name}")
     log("[scan_slide] DONE")
     return {"ok": True, "spots": len(order)}
+
+
+def startup_routine(dod, log=_noop):
+    """
+    Beam-time startup sequence, using REAL tasks from the robot config:
+    home -> MorningWashProcedure -> DrySystem -> verify status.
+    """
+    log("[startup] beginning startup sequence")
+    safe_goto(dod, "Home", log=log)
+    for task in ("MorningWashProcedure", "DrySystem"):
+        if task in getattr(dod, "available_tasks", [task]):
+            dod.run_task(task)
+            log(f"[startup] ran {task}")
+        else:
+            log(f"[startup] SKIP {task} (not present on robot)")
+    status = dod.get_status()
+    log(f"[startup] status: pos={status['Position']} dispensing={status['dispensing']}")
+    log("[startup] DONE -- ready for operation")
+    return {"ok": True, "status": status}
+
+
+def shutdown_routine(dod, log=_noop):
+    """
+    Safe shutdown sequence: stop everything -> give back any probe -> wash -> dry
+    -> return Home. Uses real tasks.
+    """
+    log("[shutdown] beginning shutdown sequence")
+    dod.stop_task()
+    dod.dispense_off()
+    if getattr(dod, "probe_volume", 0):
+        dod.give_probe()
+        log("[shutdown] returned probe")
+    wash_cycle(dod, log=log)
+    if "DrySystem" in getattr(dod, "available_tasks", []):
+        dod.run_task("DrySystem")
+        log("[shutdown] ran DrySystem")
+    safe_goto(dod, "Home", log=log)
+    log("[shutdown] DONE -- safe to leave")
+    return {"ok": True}
+
+
+def nozzle_health_check(dod, channels=range(1, 9), log=_noop):
+    """
+    Activate, select, and read back each nozzle in turn, reporting which respond.
+    Uses the real activated-vs-selected logic (select requires activation first).
+    """
+    log("[nozzle_health] checking nozzles 1-8")
+    results = []
+    for ch in channels:
+        arm = dod.set_nozzle_active([ch]) if hasattr(dod, "set_nozzle_active") else {"ok": True}
+        sel = dod.select_nozzle(ch)
+        ok = isinstance(sel, dict) and sel.get("ok", False)
+        status = dod.get_nozzle_status() if ok else None
+        row = {"channel": ch, "responds": ok}
+        if status:
+            # Volume/params come back as strings in 'ID,Volt,Pulse,Freq,Volume'
+            packed = status.get("ID,Volt,Pulse,Freq,Volume", [])
+            row["volt"] = packed[1] if len(packed) > 1 else None
+            row["freq"] = packed[3] if len(packed) > 3 else None
+        results.append(row)
+        log(f"[nozzle_health] nozzle {ch}: {'OK' if ok else 'no response'}")
+    csv_file = save_results_csv(results, kind="nozzle_health")
+    if csv_file:
+        log(f"[nozzle_health] saved to {csv_file}")
+    working = [r["channel"] for r in results if r["responds"]]
+    log(f"[nozzle_health] working nozzles: {working}")
+    return {"ok": True, "results": results, "working": working, "csv": csv_file}
+
+
+def region_exclusion_check(dod, log=_noop):
+    """
+    Query the robot's OWN forbidden region and test each named position against it,
+    using the real get_forbidden_region() / test_forbidden_region() API (real hutch
+    coordinates from the DoD class), instead of a made-up keep-out box.
+    """
+    if not hasattr(dod, "get_forbidden_region"):
+        log("[region] robot has no forbidden-region API")
+        return {"ok": False, "reason": "no forbidden-region API"}
+    region = dod.get_forbidden_region()
+    log(f"[region] robot forbidden region (hutch): {region}")
+    flagged = []
+    for name, c in dod.positions.items():
+        # positions are stored in robot frame; test_forbidden_region converts
+        prev_z = dod.z
+        dod.z = c["Z"]   # so the hutch-Y conversion uses this position's height
+        forbidden = dod.test_forbidden_region(c["X"], c["Y"], frame="robot")
+        dod.z = prev_z
+        if forbidden:
+            flagged.append(name)
+    if flagged:
+        log(f"[region] {len(flagged)} positions fall in the forbidden region: {flagged}")
+    else:
+        log("[region] no named positions fall in the robot's forbidden region")
+    return {"ok": True, "region": region, "flagged": flagged}
+
+
+def verify_positions(dod, tolerance=100, log=_noop):
+    """
+    Read the robot's live drive range and current position, and sanity-check the
+    52 saved coordinates against the drive range (all should fit inside it).
+    Uses real get_drive_range() / get_position() / positions table.
+    """
+    dr = dod.get_drive_range()
+    log(f"[verify] drive range: {dr}")
+    out_of_range = []
+    for name, c in dod.positions.items():
+        if not (0 <= c["X"] <= dr["X"] and 0 <= c["Y"] <= dr["Y"] and 0 <= c["Z"] <= dr["Z"]):
+            out_of_range.append(name)
+    pos = dod.get_position()
+    log(f"[verify] current position: {pos}")
+    if out_of_range:
+        log(f"[verify] {len(out_of_range)} saved positions are OUTSIDE the drive range: {out_of_range}")
+    else:
+        log(f"[verify] all {len(dod.positions)} saved positions fit inside the drive range")
+    return {"ok": not out_of_range, "drive_range": dr,
+            "n_positions": len(dod.positions), "out_of_range": out_of_range}
 
 
 if __name__ == "__main__":

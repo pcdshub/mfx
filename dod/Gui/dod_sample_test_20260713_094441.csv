@@ -1,0 +1,4 @@
+sample,well,channel,probe_volume,measured_volume,frequency,voltage
+1,A1,1,40,99.04,30000,80
+2,A2,1,40,102.9,30000,80
+3,A3,1,40,105.86,30000,80

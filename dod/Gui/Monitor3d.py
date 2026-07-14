@@ -67,7 +67,7 @@ class Monitor3D:
         self._targets = [(n, (c["X"], c["Y"], c["Z"])) for n, c in STATIONS.items()]
         self._ti = 0
         self.nozzle_plot = None
-        self.path_plot = []   # line artists for a previewed path
+        self.path_plot = []   # line for a previewed path
 
         self._build()
         self._poll()
@@ -133,7 +133,7 @@ class Monitor3D:
 
     # ---- drawing ----
     def _draw_preview_path(self, path):
-        # clear any old previewed path
+        # clears any old previewed path
         for artist in self.path_plot:
             try:
                 artist.remove()
