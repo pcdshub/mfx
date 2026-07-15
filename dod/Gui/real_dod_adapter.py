@@ -1,52 +1,9 @@
-"""
-real_dod_adapter.py -- run your EXISTING routines on the REAL robot, unchanged.
 
-THE IDEA
-  Your routines (wash_cycle, sample_test_routine, stability_check, scan_slide,
-  configure_nozzle, safe_goto ...) all call methods on a `dod` object:
-      dod.move_to_position(name), dod.run_task(name), dod.dispense_on(mode), ...
-  Those are the names your DUMMY exposes. The REAL DoD class uses DIFFERENT
-  names: do_move(name), do_task(name), set_nozzle_dispensing(mode), ...
-
-  This adapter exposes the DUMMY's method names but calls the REAL DoD methods
-  underneath. So you pass a RealDoDAdapter into your existing routines and they
-  run on the real robot with ZERO changes to dod_routines.py or control_gui.py.
-
-  It's the "swap the backend" step your handoff doc always planned -- now with
-  the real method names filled in from the actual dod.py source.
-
-HOW TO USE
-  from real_dod_adapter import RealDoDAdapter
-  import dod_routines as R
-
-  dod = RealDoDAdapter(ip="172.21.72.187", port=9999)   # confirm IP w
-  dod.connect()
-  R.wash_cycle(dod, log=print)          # your existing routine, real robot
-
-SAFETY
-  - Every move goes through the real robot's own do_move / move_*_abs, which
-    themselves busy_wait for completion.
-  - dry_run=True (default!) makes the adapter PRINT what it WOULD call and NOT
-    move the robot. Flip to dry_run=False only when you're ready to move.
-  - Methods the real robot doesn't expose (e.g. move_relative) are implemented
-    via the real absolute moves + get_current_position, or clearly refused.
-
-WHAT'S REAL vs UNCERTAIN
-  - Real method names: from the published dod.py source. REAL.
-  - Coordinate frame for named moves: do_move(name) uses the robot's OWN stored
-    position, so YOU don't supply coordinates -- the frame problem doesn't bite
-    for named moves. It only matters for raw x/y moves (see move_absolute note).
-"""
 
 
 class RealDoDAdapter:
     def __init__(self, ip="172.21.72.187", port=9999, dry_run=True, log=print,
                  positions_file="named_position_coords.json"):
-        """
-        ip/port : real robot (confirm with Josue -- source default is 172.21.72.187)
-        dry_run : if True, DO NOT move; just print intended real calls. Default True
-                  so nothing moves until you explicitly turn it off.
-        """
         self.ip = ip
         self.port = port
         self.dry_run = dry_run
