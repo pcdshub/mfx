@@ -2,7 +2,7 @@
 Von Hamos six-crystal spectrometer alignment.
   PVs: ami:ana:graph:data:centroids -> [cx, cy, rms]
        ami:ana:graph:data:goal      -> [goal_x, goal_y]
-       ami:ana:graph:heartbeats     -> int
+       ami:ana:graph:data:heartbeats -> int
 """
 import os
 import re
@@ -16,6 +16,12 @@ log = logging.getLogger(__name__)
 _PV_CEN  = "ami:ana:graph:data:centroids"
 _PV_GOAL = "ami:ana:graph:data:goal"
 _PV_HB   = "ami:ana:graph:data:heartbeats"
+
+_CTRL_ADDR = "172.21.72.53"                       # Average2D.0 window lives here
+_PV_AVG_N  = "ami:ctrl:graph:Average2D.0:N"
+_PV_APPLY  = "ami:ctrl:graph:apply"
+_AVG_FIND  = 100   # high averaging for find_signal
+_AVG_ALIGN = 3     # low averaging for measure_sensitivity, align_yaw and optimize_focus
 
 _NO_SIGNAL = 1e-3   # rms at or below this means "no signal" (AMI sentinel is 0)
 
@@ -66,6 +72,28 @@ def _pvget(pv, timeout=5.0, addr="172.21.152.83", retries=1):
     raise AMIReadError(f"pvget {pv} failed: {last}")
 
 
+def _pvput(pv, value, timeout=5.0, addr=_CTRL_ADDR, retries=1):
+    """Write a scalar to a PV via the PVAccess CLI. Raises AMIReadError on failure
+    (one retry to ride out a transient search timeout)."""
+    env  = {**os.environ, "EPICS_PVA_ADDR_LIST": addr}
+    last = "unknown error"
+    for attempt in range(retries + 1):
+        try:
+            result = subprocess.run(
+                ["pvput", "-w", str(timeout), pv, str(value)],
+                capture_output=True, timeout=timeout + 2, env=env, text=True,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            last = f"{type(exc).__name__}: {exc}"
+        else:
+            if result.returncode == 0:
+                return
+            last = f"rc={result.returncode}: {result.stderr.strip()}"
+        if attempt < retries:
+            time.sleep(0.2)
+    raise AMIReadError(f"pvput {pv}={value} failed: {last}")
+
+
 class AMI:
     def __init__(self, fresh_events=3, timeout=10.0, addr="172.21.152.83"):
         if addr:
@@ -73,9 +101,20 @@ class AMI:
         self._addr         = addr
         self._fresh_events = fresh_events
         self._timeout      = timeout
+        self._avg_n        = None          # last averaging window set (None = unknown)
         goal               = _pvget(_PV_GOAL, timeout=timeout, addr=addr)
         self.goal_x        = float(goal[0])
         self.goal_y        = float(goal[1])
+
+    def set_averaging(self, n):
+        """Set the Average2D.0 window over EPICS and apply it."""
+        n = int(n)
+        if n == self._avg_n:
+            return
+        _pvput(_PV_AVG_N, n, timeout=self._timeout)
+        _pvput(_PV_APPLY, 1, timeout=self._timeout)
+        self._avg_n = n
+        time.sleep(1.0)
 
     def _wait_fresh(self):
         """Block until the heartbeat advances by fresh_events. Propagates
@@ -111,7 +150,9 @@ class AMI:
 
 def find_signal(rot, ami, step=2.0, n_confirm=1):
     """Sweep rot up to its high limit, then down to its low limit, stopping at
-    the first position where the centroid is seen n_confirm times in a row."""
+    the first position where the centroid is seen n_confirm times in a row.
+    Detection runs deep so a weak spot clears the noise floor."""
+    ami.set_averaging(_AVG_FIND)
     lo, hi = rot.limits
     p0     = rot.position
     if not np.isfinite(lo):
@@ -122,17 +163,18 @@ def find_signal(rot, ami, step=2.0, n_confirm=1):
     sweep = np.concatenate([np.arange(p0, hi, step), np.arange(hi, lo, -step)])
     for pos in sweep:
         rot.move(pos)
-        time.sleep(2)
+        ami._wait_fresh()
         confirmed = 0
         for _ in range(n_confirm):
             try:
-                print(f"{ami.centroid()}")
-                seen = ami.centroid() is not None
+                c = ami.centroid()
             except AMIReadError as exc:
                 print(f"  ! lost contact with AMI ({exc}) — stopping sweep at rot={rot.position:.2f}°")
                 return False
-            if seen:
-                confirmed += 1
+            print(f"  rot={pos:.2f}°  centroid={c}")
+            if c is None:
+                break
+            confirmed += 1
         if confirmed == n_confirm:
             print(f"  signal at rot={pos:.2f}°")
             return True
@@ -145,13 +187,14 @@ def measure_sensitivity(rot, ami, nudge=1.0):
     """cy shift (px) per degree of rot. None if the signal is lost.
 
     The yaw moves the spot vertically (the detector is rotated 90°, so the streak
-    lays horizontally), so the steered coordinate is cy, not cx."""
+    lays horizontally), so the steered coordinate is cy, not cx. Shallow window so
+    the centroid reflects the nudged position instead of blending with the old."""
+    ami.set_averaging(_AVG_ALIGN)
     before = ami.centroid()
     if before is None:
         return None
     p0 = rot.position
     rot.move(p0 + nudge)
-    time.sleep(5)
     after = ami.centroid()
     rot.move(p0)
     if after is None:
@@ -162,6 +205,7 @@ def measure_sensitivity(rot, ami, nudge=1.0):
 def align_yaw(rot, ami, nudge=1.0, n_iter=15, tol=50.0, max_step=2.0):
     """Move rot to bring cy onto goal_y. Returns a result dict; check
     ['converged'], and ['reason'] when it did not converge."""
+    ami.set_averaging(_AVG_ALIGN)
     sens = measure_sensitivity(rot, ami, nudge)
     print(f"sens={sens} pixel per degree")
     if sens is None:
@@ -169,7 +213,6 @@ def align_yaw(rot, ami, nudge=1.0, n_iter=15, tol=50.0, max_step=2.0):
     if abs(sens) < 1e-6:
         return {'converged': False, 'reason': 'zero sensitivity'}
 
-    time.sleep(5)
     for i in range(n_iter):
         c = ami.centroid()
         if c is None:
@@ -179,14 +222,14 @@ def align_yaw(rot, ami, nudge=1.0, n_iter=15, tol=50.0, max_step=2.0):
         if abs(err) < tol:
             return {'converged': True, 'reason': None, 'cy': c[1], 'err': err, 'sens': sens}
         rot.move(rot.position + np.clip(-err / sens, -max_step, max_step))
-        time.sleep(5)
 
     return {'converged': False, 'reason': 'did not converge', 'cy': c[1], 'err': err, 'sens': sens}
 
 
 def optimize_focus(x_motor, ami, span=2.0, steps=11):
     """Scan x over +/-span and move to the position of minimum rms. Returns a
-    result dict; check ['converged']."""
+    result dict; check ['converged']. Shallow window so each rms reflects that x."""
+    ami.set_averaging(_AVG_ALIGN)
     start     = x_motor.position
     positions = np.linspace(start - span, start + span, steps)
     rms_vals  = []
