@@ -41,7 +41,6 @@ class DodGui:
         self.drive_range = None
 
         self._build()
-        self._load_stations()
         self._read_drive_range()
         self._poll()
 
