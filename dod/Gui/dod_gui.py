@@ -179,7 +179,7 @@ class DodGui:
 
 def main():
     ap = argparse.ArgumentParser(description="Live GUI for the real DoD robot")
-    ap.add_argument("--ip", default="172.21.32.172")
+    ap.add_argument("--ip", default="172.21.39.172")
     args = ap.parse_args()
     root = tk.Tk()
     DodGui(root, args.ip)
