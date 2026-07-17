@@ -26,8 +26,7 @@ from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
 # every robot call comes from safe_demo -- nothing is reimplemented here
-from safe_demo import (connect_dod, read_live_position, read_drive_range,
-                       , preflight, wash_routine)
+from safe_demo import (connect_dod, read_live_position, read_drive_range, preflight, wash_routine)
 
 POLL_MS = 1000
 
