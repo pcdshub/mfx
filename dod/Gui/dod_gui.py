@@ -108,16 +108,7 @@ class DodGui:
         return messagebox.askyesno("Confirm move", message)
 
     # ------------------------------------------------------------ startup reads
-    def _load_stations(self):
-        try:
-            names = read_station_names(self.dod)
-            self.station_box["values"] = names
-            if names:
-                self.station.set(names[0])
-            self.log("loaded %d stations from the robot" % len(names))
-        except Exception as e:
-            self.log("could not read station names: %s" % e)
-            self.log("  -> dropdown will be empty; type a station name is not supported yet")
+   
 
     def _read_drive_range(self):
         try:
