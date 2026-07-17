@@ -1,21 +1,18 @@
 """
-dod_gui.py -- a window for the DoD robot. ALL the robot logic lives in
-safe_demo.py; this file is only the window.
+dod_gui.py -- a window for the DoD robot. ALL robot logic lives in safe_demo.py;
+this file is only the window.
 
-    button "GO TO STATION"  ->  safe_demo.wash_routine(...)
-    position readout        ->  safe_demo.read_live_position(...)
-    drive range             ->  safe_demo.read_drive_range(...)
-    station dropdown        ->  safe_demo.read_station_names(...)
-
+    button "RUN ROUTINE"  ->  safe_demo.wash_routine(...)
+    position readout      ->  safe_demo.read_live_position(...)
+    drive range           ->  safe_demo.read_drive_range(...)
+    station dropdown      ->  safe_demo.read_station_names(...)
+    task dropdown         ->  safe_demo.read_task_names(...)
 
 
 
 SAFETY
-  - The position readout polls and is read-only. It never moves anything.
-  - "GO TO STATION" is the only thing that moves the robot, and it pops a
-    confirm dialog first (that dialog IS the `confirm` callback wash_routine uses).
-  - do_move() drives a STRAIGHT LINE and does not check the path. Park the robot
-    somewhere safe by hand and confirm each path until collision avoidance exists.
+  - The position readout polls and is read-only.
+  - Dry run is ON by default.
   - The routine runs on a background thread because do_move() blocks.
 """
 
@@ -26,7 +23,8 @@ from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
 # every robot call comes from safe_demo -- nothing is reimplemented here
-from safe_demo import (connect_dod, read_live_position, read_drive_range, preflight, wash_routine)
+from safe_demo import (connect_dod, read_live_position, read_drive_range,
+                       read_station_names, read_task_names, preflight, wash_routine)
 
 POLL_MS = 1000
 
@@ -41,6 +39,8 @@ class DodGui:
         self.drive_range = None
 
         self._build()
+        self._load_stations()
+        self._load_tasks()
         self._read_drive_range()
         self._poll()
 
@@ -62,30 +62,28 @@ class DodGui:
 
         ttk.Label(gf, text="station:").grid(row=0, column=0, padx=4, pady=6, sticky="e")
         self.station = tk.StringVar()
-        self.station_box = ttk.Combobox(gf, textvariable=self.station, width=26, state="readonly")
+        # NOT readonly -- if the name list fails to load you can still type one
+        self.station_box = ttk.Combobox(gf, textvariable=self.station, width=26)
         self.station_box.grid(row=0, column=1, padx=4)
 
         ttk.Label(gf, text="task (optional):").grid(row=1, column=0, padx=4, sticky="e")
         self.task = tk.StringVar()
-        ttk.Entry(gf, textvariable=self.task, width=28).grid(row=1, column=1, padx=4)
+        self.task_box = ttk.Combobox(gf, textvariable=self.task, width=26)
+        self.task_box.grid(row=1, column=1, padx=4)
 
         self.dry = tk.BooleanVar(value=True)
         ttk.Checkbutton(gf, text="Dry run (print the plan, do not move)",
                         variable=self.dry).grid(row=2, column=0, columnspan=2,
                                                 sticky="w", padx=4, pady=(4, 0))
 
-        self.go_btn = tk.Button(gf, text="GO TO STATION", bg="#2e7d32", fg="white",
+        self.go_btn = tk.Button(gf, text="RUN ROUTINE", bg="#2e7d32", fg="white",
                                 font=("Arial", 11, "bold"), height=3, width=16,
                                 command=self.run_routine)
         self.go_btn.grid(row=0, column=2, rowspan=3, padx=8, pady=6)
 
-        tk.Label(gf, text="do_move drives a STRAIGHT LINE and does not check the path.",
-                 fg="#b71c1c").grid(row=3, column=0, columnspan=3, sticky="w",
-                                    padx=4, pady=(2, 4))
-
         lf = ttk.LabelFrame(self.root, text="Log")
         lf.grid(row=2, column=0, columnspan=2, sticky="nsew", **pad)
-        self.logbox = scrolledtext.ScrolledText(lf, width=78, height=16, font=("Consolas", 9),
+        self.logbox = scrolledtext.ScrolledText(lf, width=82, height=16, font=("Consolas", 9),
                                                 state="disabled", bg="#0e1116", fg="#cfd8dc")
         self.logbox.pack(fill="both", expand=True, padx=4, pady=4)
 
@@ -94,7 +92,7 @@ class DodGui:
         self.log("connected to %s" % self.ip)
 
     def log(self, msg):
-        """This is the `log` callback safe_demo's routine writes into."""
+        """The `log` callback safe_demo's routine writes into."""
         ts = datetime.now().strftime("%H:%M:%S")
         self.logbox.configure(state="normal")
         self.logbox.insert("end", "[%s] %s\n" % (ts, msg))
@@ -102,11 +100,29 @@ class DodGui:
         self.logbox.configure(state="disabled")
 
     def confirm(self, message):
-        """This is the `confirm` callback -- the GUI's version of typing GO."""
+        """The `confirm` callback -- the GUI's version of typing GO."""
         return messagebox.askyesno("Confirm move", message)
 
     # ------------------------------------------------------------ startup reads
-   
+    def _load_stations(self):
+        try:
+            names = read_station_names(self.dod)
+            self.station_box["values"] = names
+            if names:
+                pass  # leave blank: most wash tasks position themselves
+            self.log("loaded %d stations from the robot" % len(names))
+        except Exception as e:
+            self.log("could not read station names: %s" % e)
+            self.log("   -> type a station name into the box instead")
+
+    def _load_tasks(self):
+        try:
+            tasks = read_task_names(self.dod)
+            self.task_box["values"] = sorted(tasks)
+            self.log("loaded %d tasks from the robot" % len(tasks))
+        except Exception as e:
+            self.log("could not read task names: %s" % e)
+            self.log("   -> type a task name into the box instead")
 
     def _read_drive_range(self):
         try:
@@ -147,11 +163,11 @@ class DodGui:
         if self.busy:
             self.log("already running -- ignoring")
             return
-        station = self.station.get().strip()
-        if not station:
-            self.log("no station selected")
-            return
+        station = self.station.get().strip() or None
         task = self.task.get().strip() or None
+        if not station and not task:
+            self.log("nothing to do -- pick a task, a station, or both")
+            return
 
         self.busy = True
         self.go_btn.config(state="disabled")
@@ -159,8 +175,8 @@ class DodGui:
 
     def _worker(self, station, task):
         """
-        Runs safe_demo's preflight + wash_routine, hand THIS window's
-        log box and confirm dialog. Off the UI thread because do_move blocks.
+        Runs safe_demo's preflight + wash_routine, handing them THIS window's log
+        box and confirm dialog. Off the UI thread because do_move blocks.
         """
         try:
             if not preflight(self.dod, station, task, log=self.log):
