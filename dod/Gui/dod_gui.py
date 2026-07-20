@@ -1,5 +1,3 @@
-
-
 import argparse
 import threading
 import tkinter as tk
@@ -8,7 +6,7 @@ from datetime import datetime
 
 # every robot call comes from safe_demo -- nothing is reimplemented here
 from safe_demo import (connect_dod, read_live_position, read_drive_range,
-                       read_station_names, read_task_names, preflight, wash_routine,
+                       read_task_names, preflight,
                        run_task, describe_task, jog_axis, set_nozzle_params, task_risk,
                        read_activated_nozzles, select_nozzle)
 
