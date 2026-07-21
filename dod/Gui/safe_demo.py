@@ -12,19 +12,7 @@ def _unwrap(r):
     return r.RESULTS if hasattr(r, "RESULTS") else r
 
 
-# ---------------------------------------------------------------------------
-# READS -- never move anything, never invent a value
-# ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
-    """
-    LIVE position from get_current_position(). CONFIRMED real reply:
-        {'CurrentPosition': 0,
-         'Position': ['0', 'Probe (96WP-1nozzle)', '176270', '113817', '25385', ...],
-         'PositionReal': {'X': 254000, 'Y': 0, 'Z': 0}}
-
-    'PositionReal' is the live coordinates. 'Position' is the last NAMED position
-    selected -- it does not track live motion and goes stale.
-    """
     r = dod.get_current_position()
     if verbose:
         print("RAW get_current_position():")
@@ -144,12 +132,6 @@ def read_nozzle_state(dod):
 
 
 def dialog_is_open(status):
-    """
-    CONFIRMED: 'Dialog' is a DICT, not a string:
-        {'Reference': 0, 'Message': '', 'Button1': '', 'Button2': ''}
-    An empty dict is truthy in Python, so `if status['Dialog']` is ALWAYS true.
-    A dialog is only really open when Reference != 0 or Message is non-empty.
-    """
     dlg = status.get("Dialog") if isinstance(status, dict) else None
     if not isinstance(dlg, dict):
         return bool(dlg) and str(dlg).strip() not in ("", "None", "NA")
@@ -158,11 +140,7 @@ def dialog_is_open(status):
     return (ref not in (0, "0", None)) or bool(msg)
 
 
-# ---------------------------------------------------------------------------
-# ROUTINE -- shared by the terminal and the GUI
-# ---------------------------------------------------------------------------
 def preflight(dod, station, task=None, log=print):
-    """Checks before motion. True only if everything genuinely passed."""
     log("=== PREFLIGHT (read-only) ===")
     ok = True
 
@@ -208,21 +186,17 @@ def _terminal_confirm(message):
     return input("\nType GO to run: ").strip() == "GO"
 
 
-# Wash tasks that MOVE THE ROBOT THEMSELVES (confirmed by reading the .tsk files).
 # e.g. WashFlush_Medium is: MoveToWasteStation1 -> pump ON -> syringe 250uL ->
 # wait 7s -> move WashStation1 -> ultrasonic 10s -> syringe back ->
-# move CameraStation -> pump OFF.  So a do_move() beforehand is REDUNDANT.
+# move CameraStation -> pump OFF. 
 SELF_POSITIONING_TASKS = {
     "WashFlush_Light_Narrow", "WashFlush_Medium", "WashFlush_Medium_Narrow",
     "WashFlush_Strong", "WashFlush_Strong_Narrow", "Washflush_Well",
 }
 
-# Tasks with NO drive steps at all -- ultrasonic only. Zero motion, no liquid.
 # The safest possible way to prove do_task() works on hardware.
 NO_MOTION_TASKS = {"WashFlush_Piezo_only", "WashFlush_Piezo_Pump_only"}
 
-# Single-move tasks: the robot runs its OWN move as a task. Safer than do_move
-# (which moves one raw axis). Confirmed by reading the .tsk files -- each is one
 # MOVE step to a named position.
 MOVE_TASKS = {
     "MoveHome", "MoveToCameraStation", "MoveToWasteStation1", "MoveToTray1",
@@ -406,7 +380,7 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
         client.set_nozzle_parameters(active, selected, volts, pulse, frequency)
 
     There are NO separate per-parameter setters -- this one call sets them all,
-    so read the CURRENT activated/selected/values first and only change what
+    so we read the CURRENT activated/selected/values first and only change what
     was passed, to avoid clobbering the others.
 
     volts:int, pulse:str, frequency:int  (per the DropsDriver signature)
@@ -587,7 +561,7 @@ def describe_task(task):
 
 def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
     """
-    Run one task by name via do_task(). 
+    Run one task by name via do_task(). Verified path -- no dummy method names.
 
     do_task() BLOCKS until the task finishes (polls get_status() every 0.5 s
     while Busy). The real abort is dod.safety_abort = True, checked each poll.
