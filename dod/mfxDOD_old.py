@@ -28,7 +28,7 @@ class User:
     from mfx.db import mfx_lxt_fast1 as lxt_fast
     from pcdsdevices.device_types import Newport, IMS
     from pcdsdevices.evr import Trigger
-    from epics import caget 
+    from epics import caget
 
     #from macros import *
     import time
@@ -40,7 +40,7 @@ class User:
     from pcdsdevices.evr import Trigger
     #from xpp.db import cp
     #from xpp.db import lp
-    #from xpp.db import xpp_pulsepicker as pp
+    #from xpp.db import xpp_pulsepicker as mfx_pulsepicker
     #from xpp.db import xpp_ccm as ccm
     #from pcdsdevices.device_types import Newport, IMS
     # WAIT A WHILE FOR THE DAQ TO START

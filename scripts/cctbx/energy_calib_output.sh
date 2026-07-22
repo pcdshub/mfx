@@ -24,7 +24,7 @@ case $facility in
     mfx3="/global/common/software/lcls/mfx"
     # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh #psana1
     # source /pscratch/sd/c/cctbx/psana2/alcc-recipes/cctbx/activate.sh
-    source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh #psana2
+    source /pscratch/sd/c/cctbx/brewster/20260501/alcc-recipes/cctbx/activate.sh #psana2
     ;;
 esac
 

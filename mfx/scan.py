@@ -299,7 +299,7 @@ class Scan:
         series : Multiple scans at different settings
         Wire.scan : Specialized wire scanner
         """
-        from mfx.db import RE, daq, pp
+        from mfx.db import RE, daq, mfx_pulsepicker
         from mfx.devices import Lxt, LxtFast
         from pcdsdevices.pv_positioner import OnePVMotor
         from mfx.autorun import quote, post
@@ -329,10 +329,10 @@ class Scan:
 
         # Configure pulse picker
         if picker == 'open':
-            pp.open()
+            mfx_pulsepicker.open()
             logger.info("Pulse picker: OPEN")
         elif picker == 'flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
             logger.info("Pulse picker: FLIPFLOP")
 
         # Create motor/PV object
@@ -458,7 +458,7 @@ class Scan:
 
             # Cleanup
             if close:
-                pp.close()
+                mfx_pulsepicker.close()
 
             if daq_num == 2:
                 daq.control.setState("configured")
@@ -484,7 +484,7 @@ class Scan:
 
         # Cleanup
         if close:
-            pp.close()
+            mfx_pulsepicker.close()
             logger.info("Pulse picker: CLOSED")
 
         if daq_num == 2:
@@ -657,7 +657,7 @@ class Scan:
         scan : Single scan
         output : Analyze series results
         """
-        from mfx.db import pp, daq
+        from mfx.db import mfx_pulsepicker, daq
         from mfx.autorun import quote, autorun
         from mfx.macros import get_exp
 
@@ -693,9 +693,9 @@ class Scan:
 
         # Configure pulse picker
         if picker == 'open':
-            pp.open()
+            mfx_pulsepicker.open()
         elif picker == 'flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         # Store original PV value
         logger.info(f"Storing original {pv} value")
@@ -750,7 +750,7 @@ class Scan:
         finally:
             # Cleanup
             if close:
-                pp.close()
+                mfx_pulsepicker.close()
 
             # Prompt to return to original value
             logger.warning("Series completed. Return to original PV value?")

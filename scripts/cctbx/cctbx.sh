@@ -24,7 +24,7 @@ case $facility in
       2)
         mfx_dir="/global/common/software/lcls/mfx"
         # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
-        source /pscratch/sd/c/cctbx/dwpaley/dialsbuilds/20251125/alcc-recipes/cctbx/activate.sh
+        source /pscratch/sd/c/cctbx/brewster/20260501/alcc-recipes/cctbx/activate.sh
         ;;
     esac
     ;;
@@ -38,6 +38,6 @@ case $step in
 
   2)
     python ${mfx_dir}/scripts/cctbx/cctbx_start.py -u $user -e $experiment -f $facility -d $debug -s 2
-    cctbx.xfel
+    CCTBX_XFEL_SETTINGS=~/.cctbx.xfel/settings_$experiment.phil cctbx.xfel
     ;;
 esac

@@ -52,7 +52,7 @@ class cctbx:
     - Interactive and batch processing
     - Preferred for real-time analysis
     - Location: SLAC campus
-    - Access: mfxopr@s3dflogin
+    - Access: mfxopr@psana.sdf
 
     NERSC (Berkeley):
     - National Energy Research Scientific Computing Center
@@ -219,7 +219,7 @@ class cctbx:
         logger.info("  2. One-time password (OTP) from authenticator")
 
         cmd = (
-            f"ssh -Yt {user}@s3dflogin "
+            f"ssh -Yt {user}@psana.sdf "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/sshproxy.sh "
             f"-c cctbx -u {user}"
         )
@@ -389,7 +389,7 @@ class cctbx:
             script = ("/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
                       "image_viewer.py")
             cmd = (
-                f"ssh -Yt {user}@s3dflogin "
+                f"ssh -Yt {user}@psana.sdf "
                 f"/sdf/group/lcls/ds/tools/cctbx/build/bin/python "
                 f"{script} "
                 f"-e {experiment} -f {facility} -t {image_type} "
@@ -558,7 +558,7 @@ class cctbx:
         if facility == 'S3DF':
             script = "/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/index.sh"
             cmd = (
-                f"ssh {user}@s3dflogin "
+                f"ssh {user}@psana.sdf "
                 f"'{script} {experiment} {run} {group} "
                 f"{'-d' if debug else ''}'"
             )
@@ -713,7 +713,7 @@ class cctbx:
         if facility == 'S3DF':
             script = "/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/merge.sh"
             cmd = (
-                f"ssh {user}@s3dflogin "
+                f"ssh {user}@psana.sdf "
                 f"'{script} {experiment} {group} "
                 f"{'-d' if debug else ''}'"
             )
@@ -910,7 +910,7 @@ class cctbx:
             script = ("/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
                       "geom_refine.sh")
             cmd = (
-                f"ssh {user}@s3dflogin "
+                f"ssh {user}@psana.sdf "
                 f"'{script} {experiment} {group} {level_arg}'"
             )
         elif facility == 'NERSC':
@@ -971,7 +971,7 @@ class cctbx:
         facility = facility.upper()
 
         cmd = (
-            f"ssh -Yt {user}@s3dflogin "
+            f"ssh -Yt {user}@psana.sdf "
             f"/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx.sh "
             f"{user} {experiment} {facility} 1 {str(debug)} "
             )
@@ -1006,7 +1006,7 @@ class cctbx:
             sys.exit()
 
         proc = [
-            f'ssh -YAC {user}@s3dflogin '
+            f'ssh -YAC {user}@psana.sdf '
             f'/sdf/group/lcls/ds/tools/mfx/scripts/cctbx/cctbx_notch_check.sh "{self.runlist}"'
             ]
 

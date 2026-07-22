@@ -10,7 +10,8 @@ import logging
 import numpy as np
 from typing import Optional, List
 from mfx.timing import Timing
-timing=Timing()
+
+timing = Timing()
 
 logger = logging.getLogger(__name__)
 
@@ -120,32 +121,38 @@ class Wire:
     output : Analyze scan results
     """
 
-    def __init__(self):
+    def __init__(self, x_pv: str = "MFX:LJH:JET:X", y_pv: str = "MFX:LJH:JET:Y"):
         """
         Initialize Wire scanner controller.
-
-        Sets up motor PV connections for X and Y axes.
+        Parameters
+        ----------
+        x_pv : str, optional
+            EPICS PV for X motor (default: 'MFX:LJH:JET:X')
+        y_pv : str, optional
+            EPICS PV for Y motor (default: 'MFX:LJH:JET:Y')
         """
-        # self.x_pv = 'MFX:USR:MMN:41'
+        # self.x_pv = 'MFX:USR:MMN:41' #DoT motors
         # self.y_pv = 'MFX:USR:MMN:42'
-        self.x_pv = 'MFX:LJH:JET:X'
-        self.y_pv = 'MFX:LJH:JET:Y'
+        self.x_pv = x_pv
+        self.y_pv = y_pv
         logger.info("Wire scanner initialized")
 
     def scan(
-            self,
-            start: float,
-            end: float,
-            num_steps: int,
-            events_per_step: int = 120,
-            sample: str = 'wire',
-            tag: str = None,
-            picker: str = None,
-            inspire: bool = False,
-            record: bool = False,
-            daq_num: int = 2,
-            pv: str = None,
-            analysis: bool = True):
+        self,
+        start: float,
+        end: float,
+        num_steps: int,
+        events_per_step: int = 120,
+        sample: str = "wire",
+        tag: str = None,
+        picker: str = None,
+        inspire: bool = False,
+        record: bool = False,
+        daq_num: int = 2,
+        pv: str = None,
+        camera: str = "alvium_dg3",
+        analysis: bool = True,
+    ):
         """
         Perform wire scan across beam.
 
@@ -182,6 +189,8 @@ class Wire:
             DAQ version: 1 (LCLS-I) or 2 (LCLS-II) (default: 2)
         pv : str or None, required
             Motor to scan: 'x' or 'y'
+        camera : str, optional
+            Detector name for timing analysis camera (default: 'alvium_dg3')
         analysis : bool, optional
             Prompt for automatic analysis after scan completion,
             by default True.
@@ -294,6 +303,16 @@ class Wire:
         ...     record=True
         ... )
 
+        Scan with non-default camera:
+        >>> wire.scan(
+        ...     start=-2.0,
+        ...     end=2.0,
+        ...     num_steps=41,
+        ...     pv='x',
+        ...     camera='t_zero_alvium',
+        ...     record=True
+        ... )
+
         See Also
         --------
         output : Analyze scan results
@@ -302,34 +321,38 @@ class Wire:
         """
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
-        from mfx.db import RE, pp, daq
+        from mfx.db import RE, daq
+        from mfx.db import mfx_pulsepicker as mfx_pulsepicker
         from mfx.autorun import quote, post
         from mfx.macros import get_exp, get_run
 
         # Validate motor selection
         if pv is None:
-            logger.error("Must specify pv='x' or pv='y'")
+            logger.error("Must specify pv='x' or pv='y' or custom pv")
             import sys
+
             sys.exit("No motor specified")
 
-        pv = pv.lower()
-        if pv not in ['x', 'y']:
-            logger.error("pv must be 'x' or 'y'")
-            import sys
-            sys.exit("Invalid motor selection")
+        if pv not in ["x", "y"]:
+            logger.warning(f"pv not 'x' or 'y'. using custom PV: {pv}")
 
         # Validate DAQ number
         if daq_num not in [1, 2]:
-            logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
+            logger.error("daq_num must be 1 (LCLS-I) or 2 (LCLS-II)")
             raise ValueError("Invalid daq_num")
 
         # Select motor PV
-        if pv == 'x':
+        if pv.lower() == "x":
             pv = self.x_pv
-            axis_name = 'X'
-        else:
+            axis_name = "X"
+            motor_name = "wire_x"
+        elif pv.lower() == "y":
             pv = self.y_pv
-            axis_name = 'Y'
+            axis_name = "Y"
+            motor_name = "wire_y"
+        else:
+            pv = axis_name = pv.upper()
+            motor_name = pv.lower().replace(":", "_")
 
         logger.info(
             f"Starting {axis_name}-axis wire scan: "
@@ -341,20 +364,18 @@ class Wire:
             tag = sample
 
         # Configure pulse picker
-        if picker == 'open':
-            pp.open()
+        if picker == "open":
+            mfx_pulsepicker.open()
             logger.info("Pulse picker: OPEN")
-        elif picker == 'flip':
-            pp.flipflop()
+        elif picker == "flip":
+            mfx_pulsepicker.flipflop()
             logger.info("Pulse picker: FLIPFLOP")
 
         # Get run number
         station = 1 if daq_num == 1 else 0
         run_number = get_run(station=station) + 1
 
-        logger.info(
-            f"Run Number {run_number}: {sample}... {quote()['quote']}"
-        )
+        logger.info(f"Run Number {run_number}: {sample}... {quote()['quote']}")
 
         # Execute scan based on DAQ version
         if daq_num == 1:
@@ -362,7 +383,7 @@ class Wire:
             from nabs.plans import daq_scan
 
             # Create motor object
-            pv_motor = EpicsSignal(pv, name='pv')
+            pv_motor = EpicsSignal(pv, name=motor_name)
 
             # Run scan
             RE(
@@ -373,7 +394,7 @@ class Wire:
                     end,
                     num_steps,
                     events=events_per_step,
-                    record=record
+                    record=record,
                 )
             )
 
@@ -385,35 +406,26 @@ class Wire:
             import bluesky.plans as bp
 
             # Create motor object
-            pv_motor = OnePVMotor(pv, name="mcc")
+            pv_motor = OnePVMotor(pv, name=motor_name)
             pv_motor.setpoint.kind = "hinted"
 
             original = pv_motor()
 
             # Configure DAQ
             daq.configure(
-                motors=[pv_motor],
-                group_mask=0x1,
-                events=events_per_step,
-                record=record
+                motors=[pv_motor], group_mask=0x1, events=events_per_step, record=record
             )
 
             # Run scan
-            RE(bp.scan(
-                [daq],
-                pv_motor,
-                start,
-                end,
-                num_steps
-            ))
+            RE(bp.scan([daq], pv_motor, start, end, num_steps))
 
         # Close pulse picker
-        pp.close()
+        mfx_pulsepicker.close()
         logger.info("Pulse picker: CLOSED")
 
         # Post to elog
         scan_note = (
-            f"Wire {axis_name}-scan: {start} to {end} mm, "
+            f"Wire {axis_name}: {start} to {end} mm, "
             f"{num_steps} steps @ {events_per_step} events/step"
         )
 
@@ -424,20 +436,20 @@ class Wire:
             post=record,
             inspire=inspire,
             daq_num=daq_num,
-            add_note=scan_note
+            add_note=scan_note,
         )
 
         logger.warning(
-            'Wire scan completed. '
-            'Thank you for choosing the MFX beamline!\n'
+            "Wire scan completed. Thank you for choosing the MFX beamline!\n"
         )
 
         exp = str(get_exp())
         logger.warning(
-                f"timing.output(user='user', facility='s3df', "
-                f"exp='{exp}', run={run_number}, daq_num={daq_num})")
+            f"timing.output(user='user', facility='s3df', "
+            f"exp='{exp}', run={run_number}, daq_num={daq_num})"
+        )
 
-        logger.info(f'Setting {pv} back to original: {original}')
+        logger.info(f"Setting {pv} back to original: {original}")
         pv_motor(original)
 
         if analysis:
@@ -452,4 +464,6 @@ class Wire:
                     facility=facility,
                     exp=exp,
                     run=run_number,
-                    daq_num=daq_num)
+                    daq_num=daq_num,
+                    camera=camera,
+                )

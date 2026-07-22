@@ -109,6 +109,11 @@ with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = Yano()
 
+with safe_load('tape_drive_motors'):
+    from pcdsdevices.device_types import Newport
+    tapedrive_x = Newport('MFX:USR:MMN:42', name='tapedrive_x')   # give descriptions later
+    tapedrive_y = Newport('MFX:USR:MMN:41', name='tapedrive_y')
+
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *
     codi = CoDI()
@@ -134,6 +139,15 @@ with safe_load('XLJ_Fast'):
     xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
     xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
+
+with safe_load('Wolter_mirror_motion'):
+    from pcdsdevices.epics_motor import IMS
+    wolter_x = IMS("MFX:USR:MMS:22", name="wolter_x")
+    wolter_y = IMS("MFX:USR:MMS:20", name="wolter_y")
+    wolter_z = IMS("MFX:USR:MMS:21", name="wolter_z")
+    wolter_rx = IMS("MFX:USR:MMS:17", name="wolter_rx")
+    wolter_ry = IMS("MFX:USR:MMS:19", name="wolter_ry")
+    wolter_rz = IMS("MFX:USR:MMS:18", name="wolter_rz")
 
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
@@ -166,7 +180,7 @@ with safe_load('Get_Info'):
 
 with safe_load('Wire_Scan'):
     from mfx.wire import *
-    wire = Wire()
+    wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
 
 with safe_load('EXAFS'):
     from mfx.exafs import *
@@ -316,9 +330,9 @@ def mfx_reload(module_name):
         from mfx.find import Find
         find = Find()
 
-    if module_name == 'mfx.wire':
+    if module_name == 'mfx.wire': #This is double trouble
         from mfx.wire import Wire
-        wire = Wire()
+        wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
 
     if module_name == 'mfx.debug':
         from mfx.debug import Debug
@@ -352,7 +366,7 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_dia_ipm as ipm0
     from mfx.db import mfx_dg1_ipm as ipm1
     from mfx.db import mfx_dg2_ipm as ipm2
-    from mfx.db import mfx_pulsepicker as pp
+    from mfx.db import mfx_pulsepicker as mfx_pulsepicker
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
     from mfx.db import um6_pim as xcs_yag1

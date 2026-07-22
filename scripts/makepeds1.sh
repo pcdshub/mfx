@@ -11,29 +11,29 @@ usage: $0 options
 Make a pedestal file for offline use
 
 OPTIONS:
-        -u|--user        
+        -u|--user
                user (needs to be able to log into the s3df)
-        -p|--post <text>  
+        -p|--post <text>
                add <text> to elog post
         -t|--test
                 do not deploy pedestals (epix10k only)
-        -r|--run         
+        -r|--run
                runnumber for pedestal
-        -e|--experiment <expname> 
+        -e|--experiment <expname>
                in case you do not want pedestals for the ongoing experiment
         -q|--queue <queue>
                queue for batch submisson
-        -A|--alvium         
+        -A|--alvium
                make pedestals for Alvium (default only cspad/EPIX detectors)
-        -O|--opal         
+        -O|--opal
                make pedestals for Opals (default only cspad/EPIX detectors)
-        -Z|--zyla         
+        -Z|--zyla
                make pedestals for Zyla (default only cspad/EPIX detectors)
         -R|--Rayonix
                make pedestals for Rayonix (please note that this is not the correct procedure for this detector)
         -U|--uxi
                make pedestals for Uxi/Icarus detector
-        -j|--jungfrau3     
+        -j|--jungfrau3
                make pedestals for Jungfrau - 3 run version(default only cspad/EPIX detectors)
         -r|--reservation <reservation>
                reservation for batch submisson
@@ -43,19 +43,19 @@ OPTIONS:
                lasing off run for XTCAV
         -v|--validity_start <val_run>
                validity range (set to <val_run>-end)
-        -N|--nevents <#>  
+        -N|--nevents <#>
                 use this number of events (default 1000). Needed when using -c as original events are counted
-        -c|--eventcode <evtcode x> 
+        -c|--eventcode <evtcode x>
                 use events with eventcode <x> set
-        -n|--noise_max <#> 
+        -n|--noise_max <#>
                 if you have created a noise file, then write pixel mask file for pixels with noise above #sigmas
-        -C|--noise_min <#> 
+        -C|--noise_min <#>
                 if noise filecreated, write pixel mask file for pixels with noise below xxx (currently integer only)
-        -m|--adu_min <#> 
+        -m|--adu_min <#>
                 write pixel mask file for pixels with pedestal below xxx (currently integer only)
-        -x|--adu_max <#>  
+        -x|--adu_max <#>
                 write pixel mask file for pixels with pedestal above xxx )currently integer only)
-        -i|--interactive 
+        -i|--interactive
                 start calibman. -r 0: show all darks, -r n: show runs (n-25) - 25
         -d|--calibdir
                 give path for alternative calibdir
@@ -232,8 +232,8 @@ else
         DIR=/sdf/group/lcls/ds/tools/engineering_tools/latest/scripts
     fi
 
-    echo ssh -Y "$USER"@s3dflogin ssh -Y psana "$DIR/$MAKEPEDSEXE $@"
-    ssh -Y "$USER"@s3dflogin ssh -Y psana "$DIR/$MAKEPEDSEXE $@"
+    echo ssh -Y "$USER"@psana.sdf ssh -Y psana "$DIR/$MAKEPEDSEXE $@"
+    ssh -Y "$USER"@psana.sdf ssh -Y psana "$DIR/$MAKEPEDSEXE $@"
     chk="$?"
 fi
 
