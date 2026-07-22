@@ -1,7 +1,7 @@
 # Code Repository Summary
 
 !!! info "Auto-Generated Documentation"
-    Last updated: 2026-03-05 20:46:47
+    Last updated: 2026-07-22 12:35:25
 
 ## Table of Contents
 
@@ -175,11 +175,71 @@
 
 **dod** - `dod.py`
 
-   `def __init__(self, modules = 'None', ip = '172.21.72.187', port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json')`
+   `def __init__(self, modules = 'None', ip = '172.21.39.172', port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json')`
 
    `def stop_task(self, verbose = True)`
 
    `def clear_abort(self, verbose = True)`
+
+   `def reconnect(self, reload = False, verbose = False)`
+
+   `def get_status(self, verbose = False)`
+
+   `def busy_wait(self, timeout)`
+
+   `def get_task_details(self, task_name, verbose = False)`
+
+   `def get_task_names(self, verbose = False)`
+
+   `def get_current_position(self, verbose = False)`
+
+   `def get_nozzle_status(self, verbose = False)`
+
+   `def set_nozzle_dispensing(self, mode = 'Off', verbose = False)`
+
+   `def do_move(self, position, safety_test = False, verbose = False)`
+
+   `def move_x_abs(self, position_x, safety_test = False, verbose = False)`
+
+   `def move_y_abs(self, position_y, safety_test = False, verbose = False)`
+
+   `def move_z_abs(self, position_z, safety_test = False, verbose = False)`
+
+   `def do_task(self, task_name, safety_check = False, verbose = False)`
+
+   `def get_forbidden_region(self, rotation_state = 'both')`
+
+   `def set_forbidden_region(self, x_start, x_stop, y_start, y_stop, rotation_state = 'both')`
+
+   `def test_forbidden_region(self, x_test, y_test)`
+
+   `def set_timing_update(self)`
+
+   `def set_timing_zero_nozzle(self, nozzle, timing_rel)`
+
+   `def set_timing_rel_LED(self, timing_rel)`
+
+   `def set_timing_rel_reaction(self, timing_rel)`
+
+   `def set_timing_abs_Xray(self, timing_abs)`
+
+   `def set_timing_relative_nozzle(self, nozzle, timing_rel)`
+
+   `def logging_string(self)`
+
+**dod_dev** - `dod_dev.py`
+
+   `def _with_reconnect(func)`
+
+   `def wrapper(self, *args, **kwargs)`
+
+   `def __init__(self, modules = None, ip = '172.21.39.172', port = 9999, supported_json = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json', log_file = '/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log')`
+
+   `def stop_task(self, verbose = True)`
+
+   `def clear_abort(self, verbose = True)`
+
+   `def reconnect(self, reload = False, verbose = False)`
 
    `def get_status(self, verbose = False)`
 
@@ -360,6 +420,10 @@
 
    `def mirrors(self)`
 
+   `def ppm(self)`
+
+   `def ppm_kill(self)`
+
    `def grabber(self)`
 
    `def cleanup_shm(self)`
@@ -532,6 +596,10 @@
 
    `def __init__(self)`
 
+   `def mv(self, value)`
+
+   `def __init__(self, simulate = False)`
+
    `def _move_dccm_energy_with_vernier(self, energy_keV)`
 
    `def _move_k_energy(self, k_energy)`
@@ -570,7 +638,7 @@
 
    `def _request_k_energy_update(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV)`
 
-   `def _move_k_if_necessary(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV, track_feespec)`
+   `def _move_k_if_necessary(self, energy_keV, k_stepsize, k_offset, reverse, min_k_keV, track_feespec, crystal_angle_offset = 0.0)`
 
    `def _align_undulator(self, on_diagnostic, using_device, with_method, grid_bins)`
 
@@ -594,7 +662,15 @@
 
    `def _post(self, sample = '?', tag = None, run_number = None, post = False, inspire = False, add_note = '')`
 
-   `def long_escan(self, simulate = False, start_eV = 0.0, end_eV = None, min_k = 2.0, max_k = 12.0, energies_list = [], wait_time_list = [], element = 'Fe', sample = '?', tag = None, picker = None, inspire = False, daq_delay = 5, record = False, runs = 1, k_stepsize = 120, reverse = False, min_k_keV = 7.035, k_offset = 0, flux_threshold = None, attenuation = None, min_time_EXAFS = 0.5, max_time_EXAFS = 10.0, tchk = False, diagnostic = 'dg2', map_focus_track = False, map_tchk_track = False, map_lens_beam_energy_offset = False, lens_beam_energy_offset = 0.0, track_focus = False, crystal_angle_offset = 0.0, tfs_margin_mm = 5.0, ref_focal_length_um = None, ref_z_stage_mm = None, tfs_target = 400.37, avoid_forbidden_combo = True, enable_prefocus = True, track_feespec = False, track_feespec_cam = False, undulator_point = False, undulator_on_diagnostic = 'dg1', undulator_using_device = 'yag', undulator_with_method = 'calib', undulator_grid_bins = 5, debug = False, tfs_offset = 0.0)`
+   `def long_escan(self, simulate = False, start_eV = 0.0, end_eV = None, min_k = 2.0, max_k = 12.0, energies_list = None, wait_time_list = None, element = 'Fe', sample = '?', tag = None, picker = None, inspire = False, daq_delay = 5, record = False, runs = 1, k_stepsize = 120, reverse = False, min_k_keV = 7.035, k_offset = 0, flux_threshold = None, attenuation = None, min_time_EXAFS = 0.5, max_time_EXAFS = 10.0, tchk = False, diagnostic = 'dg2', map_focus_track = False, map_tchk_track = False, map_lens_beam_energy_offset = False, lens_beam_energy_offset = 0.0, track_focus = False, crystal_angle_offset = 0.0, tfs_margin_mm = 5.0, ref_focal_length_um = None, ref_z_stage_mm = None, tfs_target = 400.37, avoid_forbidden_combo = True, enable_prefocus = True, track_feespec = False, track_feespec_cam = False, undulator_point = False, undulator_on_diagnostic = 'dg1', undulator_using_device = 'yag', undulator_with_method = 'calib', undulator_grid_bins = 5, debug = False, tfs_offset = 0.0)`
+
+   `def k_xas_scan(self, start_eV = None, end_eV = None, element = 'Fe', k_step_eV = None, k_positions = None, k_move_mode = 'pause', dccm_window_eV = 2.0, dccm_step_eV = 1.0, dccm_offsets = None, dwell_time = 3.0, record = False, picker = None, track_feespec = False, track_feespec_cam = False, track_feespec_blocking = True, flux_threshold = None, crystal_angle_offset = 0.0, sample = '?', simulate = False, runs = 1)`
+
+   `def _k_xas_move_pause(self, k_target_eV, k_target_keV, track_feespec, crystal_angle_offset)`
+
+   `def _k_xas_move_concurrent(self, k_target_eV, k_target_keV, track_feespec, crystal_angle_offset)`
+
+   `def _k_xas_move_concurrent_settled(self, k_target_eV, k_target_keV, track_feespec, crystal_angle_offset, track_feespec_blocking = True)`
 
    `def __init__(self)`
 
@@ -658,6 +734,8 @@
 
    `def get_run(hutch = 'mfx', station: int = 0)`
 
+   `def wolter_positions(distance_IP_detector: float)`
+
    `def __init__(self, detname: str = 'Rayonix')`
 
    `def _energy_keV_to_wavelength_A(self, energy_keV)`
@@ -712,13 +790,11 @@
 
    `def __init__(self)`
 
-   `def set_energy(self, energy_eV: float, vernier: bool = False, wait: bool = True)`
+   `def set_energy(self, energy_eV: float, vernier: bool = False, k_energy: bool = False, wait: bool = True)`
 
-   `def series(self, energy_scan_start_eV: float, energy_scan_end_eV: float, energy_scan_steps: int, run_length: int = 30, tag: str = 'dccm', picker: Optional[str] = None, inspire: bool = False, daq_delay: int = 5, record: bool = False, vernier: bool = False, daq_num: int = 2, exp: Optional[str] = None)`
+   `def series(self, energy_scan_start_eV: float, energy_scan_end_eV: float, energy_scan_steps: int, run_length: int = 30, tag: str = 'dccm', picker: Optional[str] = None, inspire: bool = False, daq_delay: int = 5, record: bool = False, vernier: bool = False, k_energy: bool = False, daq_num: int = 2, exp: Optional[str] = None)`
 
    `def output(self, user: str, facility: str = 'S3DF', exp: str = None, run: str = None, energy: float = None, step: float = None, num: int = None, daq_num: int = 2)`
-
-   `def notch_scan(energy_scan_start_eV: float, energy_scan_end_eV: float, energy_scan_steps: int, run_length: int = 30, tag: str = 'dccm', picker: str = None, inspire: bool = False, daq_delay: int = 5, record: bool = False, daq_num: int = 2, exp: str = None)`
 
 **om** - `om.py` *OnDA (Online Data Analysis) monitor control for MFX beamline.*
 
@@ -1072,6 +1148,2250 @@
 
    `def trigger(self)`
 
+**roadrunner/janus/actions/acq** - `acq.py` *This is part of the janus package.*
+
+   `def __init__(self, widgets: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def reset_conditions(self)`
+
+   `def start(self)`
+
+   `def stop(self)`
+
+   `def run(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def cleanup(self)`
+
+   `def write_info(self)`
+
+   `def time_total(self)`
+
+   `def time_remaining(self)`
+
+   `def __init__(self, widget: QToolBox, start_button: QPushButton)`
+
+   `def init_active(self)`
+
+   `def set_active(self, index: int)`
+
+   `def get_active(self)`
+
+   `def start(self)`
+
+   `def associate(self, tab: QWidget, action: Method)`
+
+**roadrunner/janus/actions/acq_ed_rot_step** - `acq_ed_rot_step.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _take_pedestals(self, s)`
+
+   `def _set_detector_parameters(self)`
+
+   `def _emit_updated(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def cleanup(self)`
+
+**roadrunner/janus/actions/acq_fluorescence** - `acq_fluorescence.py` *(Error parsing file)*
+
+**roadrunner/janus/actions/acq_lcls_xtal_grid_fly** - `acq_lcls_xtal_grid_fly.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def pause(self, is_paused: bool)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def cleanup(self)`
+
+   `def _oscillate(self)`
+
+   `def _set_sequence(self, row: GridRowInfo, acc_pulses: int, inv_row: bool, pulse_rate: float, window = 0)`
+
+   `def _set_galil_parameters(self, row: GridRowInfo, acc_pulses: int, inv_row: bool, pulse_rate: float, angle: float)`
+
+   `def _move_to_start_position(self, row: GridRowInfo, acc_pulses: int, inv_row: bool, pulse_rate: float, angle: float)`
+
+   `def _post_elog(self, msg, run = None, tags = None, attachments = None, experiment = True, facility = False, title = None)`
+
+**roadrunner/janus/actions/acq_lcls_xtal_grid_step** - `acq_lcls_xtal_grid_step.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _set_detector_parameters(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def pause(self, is_paused: bool)`
+
+   `def cleanup(self)`
+
+**roadrunner/janus/actions/acq_lcls_xtal_rotational** - `acq_lcls_xtal_rotational.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _set_detector_parameters(self)`
+
+   `def _emit_updated(self)`
+
+   `def pause(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def prepare_xdsinp(self, processpath, imagepath)`
+
+   `def cleanup(self)`
+
+**roadrunner/janus/actions/acq_xtal_grid_fly** - `acq_xtal_grid_fly.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _set_detector_parameters(self, n: int)`
+
+   `def pause(self, is_paused: bool)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def prepare_crystfel(self, processpath, imagepath)`
+
+   `def cleanup(self)`
+
+   `def _oscillate(self)`
+
+**roadrunner/janus/actions/acq_xtal_grid_fly_window** - `acq_xtal_grid_fly_window.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _set_detector_parameters(self, n: int)`
+
+   `def pause(self, is_paused: bool)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def prepare_crystfel(self, processpath, imagepath)`
+
+   `def cleanup(self)`
+
+   `def write_points_info(self)`
+
+   `def _oscillate(self)`
+
+   `def find_window_length(self, points)`
+
+   `def find_line_length(self, points)`
+
+**roadrunner/janus/actions/acq_xtal_grid_step** - `acq_xtal_grid_step.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _set_detector_parameters(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def pause(self, is_paused: bool)`
+
+   `def cleanup(self)`
+
+**roadrunner/janus/actions/acq_xtal_grid_step_optimized** - `acq_xtal_grid_step_optimized.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self, determined_crystal_positions = [])`
+
+   `def _set_detector_parameters(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def bragg_peaks_calculation(self, subdir)`
+
+   `def cleanup(self)`
+
+**roadrunner/janus/actions/acq_xtal_rotational** - `acq_xtal_rotational.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self)`
+
+   `def _set_detector_parameters(self)`
+
+   `def _emit_updated(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def prepare_xdsinp(self, processpath, imagepath)`
+
+   `def cleanup(self)`
+
+**roadrunner/janus/actions/acq_xtal_rotational_loop_centering** - `acq_xtal_rotational_loop_centering.py` *This is part of the janus package.*
+
+   `def set_active(self, flag: bool)`
+
+   `def set_parameters(self, offset = 0)`
+
+   `def _set_detector_parameters(self, subdir)`
+
+   `def _emit_updated(self)`
+
+   `def prepare(self)`
+
+   `def execute(self)`
+
+   `def cleanup(self)`
+
+   `def bragg_peaks_calculation(self, subdir, num_cbfs)`
+
+**roadrunner/janus/actions/continuous_focus** - `continuous_focus.py` *This is part of the janus package.*
+
+   `def __init__(self, widgets: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def is_active(self)`
+
+   `def run(self)`
+
+   `def stop(self)`
+
+**roadrunner/janus/application** - `application.py` *This is part of the janus package.*
+
+   `def __init__(self, title: str = 'Janus', splash: bool = None)`
+
+   `def start(self)`
+
+   `def init_utils(self)`
+
+   `def init_devices(self)`
+
+   `def init_widgets(self)`
+
+   `def init_actions(self)`
+
+   `def on_init_done(self)`
+
+   `def on_exit(self)`
+
+**roadrunner/janus/applications/cameraviewer/main** - `main.py` *This is part of the janus package.*
+
+   `def __init__(self)`
+
+   `def init_utils(self)`
+
+   `def init_devices(self)`
+
+   `def init_widgets(self)`
+
+**roadrunner/janus/applications/mfx/enable_motors** - `enable_motors.py`
+
+   *(No public functions)*
+
+**roadrunner/janus/applications/mfx/main** - `main.py`
+
+   `def __init__(self)`
+
+   `def init_utils(self)`
+
+   `def init_devices(self)`
+
+   `def init_widgets(self)`
+
+   `def init_actions(self)`
+
+   `def on_exit(self)`
+
+**roadrunner/janus/applications/regae/main** - `main.py` *Created on Apr 23, 2019*
+
+   `def __init__(self, parent = None)`
+
+   `def closeEvent(self, event)`
+
+   `def readSettings(self)`
+
+   `def __init__(self)`
+
+   `def init_utils(self, pre = False, post = False)`
+
+   `def init_devices(self)`
+
+   `def init_controllers(self)`
+
+   `def add_ui_widget(self, layout, widget, widget_name, first = False)`
+
+   `def make_widget_with_layout(self, parent, widget_type, layout_type)`
+
+   `def make_base_layout(self)`
+
+   `def init_menu_and_status_bar(self, main_window)`
+
+   `def show_device_window(self)`
+
+   `def hide_device_window(self)`
+
+   `def init_widgets(self)`
+
+   `def init_actions(self)`
+
+   `def main_window_close_event(self, event)`
+
+   `def on_exit(self)`
+
+**roadrunner/janus/applications/test/main** - `main.py` *Created on Apr 23, 2019*
+
+   `def __init__(self)`
+
+   `def init_utils(self)`
+
+   `def init_devices(self)`
+
+   `def init_widgets(self)`
+
+   `def on_exit(self)`
+
+**roadrunner/janus/common** - `common.py` *This is part of the janus package.*
+
+   `def on_started(self)`
+
+   `def __init__(self, target: Optional[Callable] = None, name: Optional[str] = None, parent: Optional[QObject] = None)`
+
+**roadrunner/janus/devices/attribute** - `attribute.py` *This is part of the janus package.*
+
+   `def __new__(cls, attr: Any, device: Optional[Device] = None)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def __set_name__(self, owner: object, name: str)`
+
+   `def __get__(self, obj: object, type: type = None)`
+
+   `def info(self)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def _on_value_changed(self, name: str, value: Any)`
+
+   `def read(self, refresh: bool = False, alt: Any = None)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def __get__(self, obj: object, type: type = None)`
+
+   `def read(self, refresh: bool = False, alt: Any = None)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def write(self, value: Any)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def execute(self, *values)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo], device: Optional[Device] = None)`
+
+   `def __init__(self, attr: Any, device: Optional[Device] = None)`
+
+   `def read(self, refresh: bool = False, alt: Any = None)`
+
+   `def __init__(self, attr: Any, device: Optional[Device] = None)`
+
+   `def read(self, refresh: bool = False, alt: Any = None)`
+
+   `def write(self, value: Any)`
+
+   `def __init__(self, attr: Any, device: Optional[Device] = None)`
+
+   `def execute(self, *values)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo, AttributeReadable], device: Optional[Device] = None)`
+
+   `def _on_value_changed(self, value: Any)`
+
+   `def read(self, refresh: bool = False, alt: Any = None)`
+
+   `def info(self)`
+
+   `def connect(self, attr: AttributeReadable)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo, AttributeWritable], device: Optional[Device] = None)`
+
+   `def _on_value_changed(self, value: Any)`
+
+   `def read(self, refresh: bool = False, alt: Any = None)`
+
+   `def write(self, value: Any)`
+
+   `def info(self)`
+
+   `def connect(self, attr: AttributeWritable)`
+
+   `def __init__(self, attr: Union[str, dict, AttributeInfo, AttributeExecutable], device: Optional[Device] = None)`
+
+   `def execute(self, *values)`
+
+   `def info(self)`
+
+   `def connect(self, attr: AttributeExecutable)`
+
+**roadrunner/janus/devices/common** - `common.py` *This is part of the janus package.*
+
+   `def _missing_(cls, value)`
+
+   `def _missing_(cls, value)`
+
+   `def _missing_(cls, value)`
+
+   `def __post_init__(self)`
+
+   `def from_dict(data: dict)`
+
+   `def _missing_(cls, value)`
+
+   `def from_dict(data: dict)`
+
+   `def from_str_or_dict(data: Union[str, dict, DeviceConfig])`
+
+   `def from_dict(data: dict)`
+
+   `def from_str_or_dict(data: Union[str, dict, DeviceInfo])`
+
+   `def from_device_config(data: DeviceConfig)`
+
+   `def from_state(state: DeviceState)`
+
+**roadrunner/janus/devices/connector** - `connector.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceInfo])`
+
+   `def __init__(self, config: Union[str, dict, DeviceInfo])`
+
+   `def add_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def remove_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def state(self, refresh: bool = False)`
+
+   `def read(self, attribute: str = None, refresh: bool = False, alt: Any = None)`
+
+   `def write(self, attribute: str = None, value: Any = None)`
+
+   `def execute(self, command: str = None, *values)`
+
+**roadrunner/janus/devices/device** - `device.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def on_value_changed(self, attribute: str, value: Any)`
+
+   `def get_attribute_list(self)`
+
+   `def get_attribute(self, attr: str)`
+
+   `def add_attribute(self, attr: Union[str, dict, AttributeInfo])`
+
+   `def get_device_info(self)`
+
+   `def get_device_classes(cls)`
+
+**roadrunner/janus/devices/epics/camera** - `camera.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def get_device_classes(cls)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_gain_time_auto(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_gain_time_auto(self, value: bool)`
+
+   `def read_exposure_time_auto(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_exposure_time_auto(self, value: bool)`
+
+   `def execute_start(self, *values)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_exposure_time(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_exposure_time(self, value: Union[int, float])`
+
+   `def execute_start(self, *values)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _update_image(self, value: Any)`
+
+   `def _update_state(self, value: DeviceState)`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_image(self, refresh: bool = False, alt: Any = QImage(0, 1, 1, QImage.Format_Grayscale8))`
+
+   `def read_image_size(self, refresh: bool = False, alt: Any = None)`
+
+**roadrunner/janus/devices/epics/connector** - `connector.py` *This is part of the janus package.*
+
+   `def to_type(ftype: int)`
+
+   `def __init__(self, config: Union[str, dict, DeviceInfo])`
+
+   `def __del__(self)`
+
+   `def add_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def remove_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def _on_epics_event(self, pvname: str, value: Any, char_value: str, count: int, ftype: int, type: type, status: int, precision: int, units: str, severity: int, timestamp: float, read_access: bool, write_access: bool, access: str, host: str, enum_strs: List[str], upper_disp_limit: float, lower_disp_limit: float, upper_alarm_limit: float, lower_alarm_limit: float, upper_warning_limit: float, lower_warning_limit: float, upper_ctrl_limit: float, lower_ctrl_limit: float, chid: int, cb_info: Tuple, **kw)`
+
+   `def state(self, refresh: bool = False)`
+
+   `def read(self, attribute: str = None, refresh: bool = False, alt: Any = None)`
+
+   `def write(self, attribute: str = None, value: Any = None)`
+
+   `def execute(self, command: str = None, *values)`
+
+**roadrunner/janus/devices/epics/device** - `device.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/epics/galil** - `galil.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def execute_dummy(self, *values)`
+
+   `def execute_write_read(self, *values)`
+
+**roadrunner/janus/devices/epics/io** - `io.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_value(self, refresh: bool = False, alt: Any = None)`
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_value(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_value(self, value: bool)`
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/epics/lcls_pulse_picker** - `lcls_pulse_picker.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def execute_close(self, *values)`
+
+   `def execute_burstmode(self, *values)`
+
+   `def execute_flipflop(self, *values)`
+
+**roadrunner/janus/devices/epics/motor** - `motor.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_acceleration(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_acceleration(self, value: float)`
+
+   `def read_conversion(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_conversion(self, value: float)`
+
+   `def read_soft_limits_enable(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_soft_limits_enable(self, value: bool)`
+
+   `def read_soft_limit_min_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_soft_limit_max_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_hard_limit_min_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_hard_limit_max_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def execute_stop(self, *values)`
+
+   `def execute_calibrate(self, value: float)`
+
+   `def execute_enable(self, *values)`
+
+   `def execute_disable(self, *values)`
+
+**roadrunner/janus/devices/interfaces** - `interfaces.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Any = None)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_value(self, refresh = False)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_value(self, refresh = False)`
+
+   `def write_value(self, value: bool)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/simulation/camera** - `camera.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _load_images(self)`
+
+   `def _update(self)`
+
+   `def execute_start(self, *values)`
+
+   `def execute_stop(self, *values)`
+
+**roadrunner/janus/devices/simulation/connector** - `connector.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceInfo])`
+
+   `def add_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def state(self, refresh: bool = False)`
+
+   `def write(self, attribute: str = None, value: Any = None)`
+
+**roadrunner/janus/devices/simulation/detector** - `detector.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _update(self)`
+
+   `def execute_start(self, *values)`
+
+   `def execute_stop(self, *values)`
+
+**roadrunner/janus/devices/simulation/device** - `device.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/simulation/io** - `io.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/simulation/motor** - `motor.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def __del__(self)`
+
+   `def write_position(self, value: float)`
+
+   `def _update(self)`
+
+   `def write_soft_limits_enabled(self, value: bool)`
+
+   `def execute_stop(self, *values)`
+
+   `def execute_calibrate(self, value: float)`
+
+   `def execute_enable(self, *values)`
+
+   `def execute_disable(self, *values)`
+
+**roadrunner/janus/devices/tango/camera** - `camera.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def get_device_classes(cls)`
+
+   `def __init__(self, parent)`
+
+   `def on_value_changed(self, attribute: str, value: Any)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_state(self, refresh: bool = False)`
+
+   `def read_gain_auto(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_gain_auto(self, value: bool)`
+
+   `def read_exposure_time_auto(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_exposure_time_auto(self, value: bool)`
+
+   `def read_scale(self, refresh: bool = False)`
+
+   `def read_image(self, refresh = True, alt: Any = QImage(0, 1, 1, QImage.Format_Grayscale8))`
+
+   `def execute_start(self)`
+
+**roadrunner/janus/devices/tango/connector** - `connector.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceInfo])`
+
+   `def __del__(self)`
+
+   `def add_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def remove_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def _register_tango_event(self, attribute: AttributeInfo, start_polling: bool = True)`
+
+   `def _deregister_tango_event(self, event_info: _TangoEventInfo)`
+
+   `def _on_tango_event(self, event)`
+
+   `def stop(self)`
+
+   `def run(self)`
+
+   `def state(self, refresh: bool = False)`
+
+   `def read(self, attribute: str = None, refresh: bool = False, alt: Any = None)`
+
+   `def write(self, attribute: str = None, value: Any = None)`
+
+   `def execute(self, command: str = None, *values)`
+
+**roadrunner/janus/devices/tango/detector** - `detector.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_temperature(self, refresh: bool = False, alt: Any = None)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_trigger_mode(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_trigger_mode(self, value: Union[str, int])`
+
+   `def read_one(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_none(self, value: float)`
+
+   `def write_energy(self, value: float)`
+
+   `def execute_stop(self, *values)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def read_trigger_mode(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_trigger_mode(self, value: Union[str, int])`
+
+   `def _update_file_path(self, value: str)`
+
+   `def read_file_name(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_file_name(self, value)`
+
+   `def read_file_path(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_file_path(self, value)`
+
+   `def execute_start(self, *values)`
+
+**roadrunner/janus/devices/tango/device** - `device.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/tango/motor** - `motor.py` *This is part of the janus package.*
+
+   `def __new__(cls, config: Union[str, dict, DeviceConfig])`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def get_device_classes(cls)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _toggle_soft_limits(self, value: bool)`
+
+   `def read_soft_limit_min_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_soft_limit_max_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_false(self, refresh: bool = False, alt: Any = None)`
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _on_value_changed(self, name: str, value: Any)`
+
+   `def read_velocity(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_velocity(self, value: float)`
+
+   `def read_acceleration(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_acceleration(self, value: float)`
+
+   `def read_soft_limits_enable(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_soft_limits_enable(self, value: bool)`
+
+   `def read_soft_limit_min_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_soft_limit_max_fault(self, refresh: bool = False, alt: Any = None)`
+
+**roadrunner/janus/devices/tine/connector** - `connector.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceInfo])`
+
+   `def __del__(self)`
+
+   `def add_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def remove_attribute(self, attribute: Union[str, dict, AttributeInfo])`
+
+   `def _on_tine_event(self, id: int, ret: int, data)`
+
+   `def _tine_error(self, ret: int)`
+
+   `def state(self, refresh: bool = False)`
+
+   `def read(self, attribute: str = None, refresh: bool = False, alt: Any = None)`
+
+   `def write(self, attribute: str = None, value: Any = None)`
+
+   `def execute(self, command: str = None, *values)`
+
+**roadrunner/janus/devices/tine/device** - `device.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/virtual/centring_motor** - `centring_motor.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _on_value_changed(self, attribute: str, value: Any)`
+
+   `def _update_state(self, refresh: bool = False)`
+
+   `def _update_position(self, refresh: bool = False)`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_position(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_position(self, value: float)`
+
+   `def read_soft_limit_min_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_soft_limit_max_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_hard_limit_min_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_hard_limit_max_fault(self, refresh: bool = False, alt: Any = None)`
+
+   `def execute_stop(self, *values)`
+
+**roadrunner/janus/devices/virtual/device** - `device.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+**roadrunner/janus/devices/virtual/lcls_daq** - `lcls_daq.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _ensure_daq(self)`
+
+   `def _update_state(self)`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_run_number(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_file_writer_enabled(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_file_writer_enabled(self, value: bool)`
+
+   `def execute_connect(self, *values)`
+
+   `def execute_disconnect(self, *values)`
+
+   `def execute_start(self, *values)`
+
+   `def execute_stop(self, *values)`
+
+**roadrunner/janus/devices/virtual/lcls_sequencer** - `lcls_sequencer.py` *This is part of the janus package.*
+
+   `def __init__(self, config: Union[str, dict, DeviceConfig])`
+
+   `def _on_state_changed(self, *args, obj: OphydObject, sub_type: str, **kwargs)`
+
+   `def read_state(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_pulse_req(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_pulse_req(self, value: bool)`
+
+   `def read_play_mode(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_play_mode(self, value: int)`
+
+   `def read_play_count(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_total_play_count(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_current_step(self, refresh: bool = False, alt: Any = None)`
+
+   `def read_sync_marker(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_sync_marker(self, value: int)`
+
+   `def read_rep_count(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_rep_count(self, value: int)`
+
+   `def read_sequence(self, refresh: bool = False, alt: Any = None)`
+
+   `def write_sequence(self, value: list)`
+
+   `def read_sequence_length(self, refresh: bool = False, alt: Any = None)`
+
+**roadrunner/janus/utils/chemical_element** - `chemical_element.py` *Created on Apr 10, 2019*
+
+   `def ChemicalElement(z)`
+
+**roadrunner/janus/utils/chips** - `chips.py` *This is part of the janus package.*
+
+   `def from_dict(data: dict)`
+
+   `def serialize(self)`
+
+   `def __init__(self, config: Dict = None)`
+
+   `def update_chip(self, chip)`
+
+   `def get_chip(self, name)`
+
+   `def get_chip_list(self)`
+
+**roadrunner/janus/utils/config** - `config.py` *This is part of the janus package.*
+
+   `def __init__(self, filename: str = None, defaults: Dict = None)`
+
+   `def connect_signals(self)`
+
+   `def has_section(self, section: str)`
+
+   `def has_option(self, section: str, option: str)`
+
+   `def get(self, section: str, option: str, fallback: Any = None)`
+
+   `def get_bool(self, section: str, option: str, fallback: bool = None)`
+
+   `def get_int(self, section: str, option: str, fallback: int = None)`
+
+   `def get_float(self, section: str, option: str, fallback: float = None)`
+
+   `def get_str(self, section: str, option: str, fallback: str = None)`
+
+   `def get_device_config(self, section: str, option: str, fallback: dict = None)`
+
+   `def set(self, section: str, option: str, value: Any)`
+
+   `def set_bool(self, section: str, option: str, value: Any)`
+
+   `def set_int(self, section: str, option: str, value: Any)`
+
+   `def set_float(self, section: str, option: str, value: Any)`
+
+   `def set_str(self, section: str, option: str, value: Any)`
+
+   `def add_persistent(self, section: str, option: str, getter: Callable[[], Any], setter: Callable[[Any], None], data_type: type = str)`
+
+   `def remove_persistent(self, section: str, option: str)`
+
+   `def load_persistents(self)`
+
+   `def save_persistents(self)`
+
+   `def load(self)`
+
+   `def save(self)`
+
+**roadrunner/janus/utils/diana** - `diana.py`
+
+   `def _dictionary_to_graphql_query(dictionary: dict)`
+
+   `def _mutation_payload_from_run_attributes(run_attributes: InputRunAttributes)`
+
+   `def retrieve_samples_from_diana(diana_url: str = DIANA_GRAPHQL_URL)`
+
+   `def _sample_from_dict(sample_dict: Dict[str, Any])`
+
+   `def submit_new_run_to_diana(run_attributes: InputRunAttributes, diana_url: str = DIANA_GRAPHQL_URL)`
+
+**roadrunner/janus/utils/log** - `log.py` *This is part of the janus package.*
+
+   `def __init__(self)`
+
+   `def _set_proxy_object(self, logger)`
+
+   `def __getattr__(self, attr)`
+
+   `def format(self, record)`
+
+   `def formatTime(self, record, datefmt = None)`
+
+   `def formatException(sef, exc_info)`
+
+   `def formatStack(self, stack_info)`
+
+   `def format(self, record)`
+
+   `def formatTime(self, record, datefmt = None)`
+
+   `def formatException(sef, exc_info)`
+
+   `def formatStack(self, stack_info)`
+
+   `def format(self, record)`
+
+   `def formatTime(self, record, datefmt = None)`
+
+   `def formatException(sef, exc_info)`
+
+   `def formatStack(self, stack_info)`
+
+   `def setup_main_logging(handler = None)`
+
+   `def emit(self, record)`
+
+   `def set_external_log_handler(handler)`
+
+   `def get_main_logfile_path()`
+
+   `def setup_logger_for_process(logger, parent_id = None)`
+
+**roadrunner/janus/utils/maxwell** - `maxwell.py` *This is part of the janus package.*
+
+   `def __init__(self)`
+
+   `def read_info(self)`
+
+   `def get_ssh_command(self)`
+
+   `def get_sbatch_command(self, jobname_prefix = 'onlineanalysis', job_dependency = 'singleton', logfile_path = '', work_dir = '')`
+
+   `def queue_command(self, command, jobname_prefix = 'onlineanalysis', job_dependency = 'singleton', logfile_path = '/dev/null', work_dir = '')`
+
+**roadrunner/janus/utils/moving_avg_lcls_beam** - `moving_avg_lcls_beam.py` *This is part of the janus package.*
+
+   `def __init__(self, gasDetDev1, gasDetDev2, gasDetDev3, gasDetDev4)`
+
+   `def setMovingAverageLength(self, value)`
+
+   `def setInitalValues(self)`
+
+   `def addGasDetSample(self, channelIndex, value)`
+
+   `def getGasDetMean(self, channelIndex)`
+
+   `def running_mean(self, x, N)`
+
+   `def run(self)`
+
+**roadrunner/janus/utils/path** - `path.py` *This is part of the janus package.*
+
+   `def __init__(self)`
+
+   `def set_beamtime_dir(self, name: str)`
+
+   `def set_user_dir(self, name: str)`
+
+   `def set_sample_dir(self, name: str)`
+
+   `def set_user_and_sample_dir(self, name: str)`
+
+   `def set_run_number(self, number: int)`
+
+   `def set_run_number_check(self, template: str)`
+
+   `def get_path(self, template: str, force: bool = False, number: int = None)`
+
+   `def get_relative_path(self, template1: str, template2: str)`
+
+   `def get_filename(self, template: str = 'sample_number')`
+
+   `def get_run_number(self, last: bool = False)`
+
+   `def inc_run_number(self)`
+
+   `def sanatize(self, name: str)`
+
+   `def is_beamtime_open(self)`
+
+   `def is_commissioning_open(self)`
+
+   `def is_fallback_open(self)`
+
+   `def beamtime_info(self)`
+
+   `def commissioning_info(self)`
+
+   `def _info(self, filename: str)`
+
+   `def __init__(self, beamline: str)`
+
+   `def set_beamtime_dir(self, name: str)`
+
+   `def set_mode(self, mode: int)`
+
+   `def get_path(self, template: str, force: bool = False, number: int = None)`
+
+**roadrunner/janus/widgets/acq** - `acq.py` *This is part of the janus package.*
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def update_values(self, value)`
+
+   `def _edit_sample_name(self)`
+
+   `def _load_sample_name(self, name)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def show(self, acq_method = None)`
+
+   `def hide(self)`
+
+   `def reset(self)`
+
+   `def update(self)`
+
+   `def format_time(self, t: float)`
+
+**roadrunner/janus/widgets/acq_ed** - `acq_ed.py` *This is part of the janus package.*
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+**roadrunner/janus/widgets/acq_fluorescence** - `acq_fluorescence.py` *This is part of the janus package.*
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def add_element_row(self, element)`
+
+   `def get_selected_elements(self)`
+
+   `def clear(self)`
+
+   `def show(self)`
+
+   `def hide(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def update_element(self, i)`
+
+   `def update_edge(self, i)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def set_peak_energy(self)`
+
+   `def set_inflection_energy(self)`
+
+**roadrunner/janus/widgets/acq_lcls** - `acq_lcls.py` *This is part of the janus package.*
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def get_windows(self)`
+
+   `def set_windows(self, windows: List[int])`
+
+   `def toggle_whole_chip(self, checked: bool)`
+
+   `def _get_rot(self)`
+
+   `def _set_rot(self, rot = 'no')`
+
+   `def _get_windows_count(self)`
+
+   `def register_persistents(self)`
+
+**roadrunner/janus/widgets/acq_xtal** - `acq_xtal.py` *This is part of the janus package.*
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def clearGridAndSetScangrid(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def _get_rot(self)`
+
+   `def _set_rot(self, rot = 'no')`
+
+   `def register_persistents(self)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def _get_rot(self)`
+
+   `def _set_rot(self, rot = 'no')`
+
+   `def register_persistents(self)`
+
+**roadrunner/janus/widgets/advanced_motor_controls** - `advanced_motor_controls.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, devices: Dict[str, any] = {}, title: str = '', unit: str = '')`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def setup_ui(self)`
+
+   `def init_values(self)`
+
+   `def add_commands(self)`
+
+   `def poll_position(self)`
+
+   `def close(self, result: int)`
+
+   `def set_title(self, value)`
+
+   `def set_unit(self, value)`
+
+   `def set_velocity(self, value: Optional[float] = None)`
+
+   `def set_acceleration(self, value: Optional[float] = None)`
+
+   `def set_conversion(self, value: Optional[float] = None)`
+
+   `def set_soft_limits_enabled(self, value: Optional[bool] = None)`
+
+   `def set_soft_limit_min(self, value: Optional[float] = None)`
+
+   `def set_soft_limit_max(self, value: Optional[float] = None)`
+
+   `def set_position(self, value: Optional[float] = None)`
+
+   `def stop(self)`
+
+   `def dec_position(self)`
+
+   `def inc_position(self)`
+
+   `def calibrate(self, value: Optional[float] = None)`
+
+   `def set_plot_scale(self, value: Optional[float] = None)`
+
+   `def set_plot_duration(self, value: Optional[int] = None)`
+
+   `def set_plot_update_rate(self, value: Optional[int] = None)`
+
+   `def reset_plot(self)`
+
+**roadrunner/janus/widgets/camera_controls** - `camera_controls.py` *This is part of the janus package.*
+
+   `def setup_ui(self)`
+
+   `def init_values(self)`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def set_gain_auto(self, value: Optional[int] = None)`
+
+   `def set_exposure_time_auto(self, value: Optional[int] = None)`
+
+**roadrunner/janus/widgets/continuous_focus_control** - `continuous_focus_control.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, widgets: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def setup_ui(self)`
+
+   `def register_persistents(self)`
+
+   `def connect_signals(self)`
+
+   `def validate_corners(self)`
+
+   `def build_rect_from_corners(self)`
+
+   `def on_focus_btn_clicked(self, corner: str)`
+
+   `def set_corner(self, corner: str, point: List[float])`
+
+   `def get_corner(self, corner: str)`
+
+   `def on_clear_btn_clicked(self, corner: str)`
+
+   `def on_clear_all_clicked(self)`
+
+   `def set_active(self, checked: bool)`
+
+   `def validate_points(self, points: List[List[float]])`
+
+   `def get_winding_order(self, points: List[List[float]])`
+
+   `def is_zero_size(self, points: List[List[float]])`
+
+   `def start_point_is_ll(self, points: List[List[float]])`
+
+**roadrunner/janus/widgets/diana** - `diana.py` *(Error parsing file)*
+
+**roadrunner/janus/widgets/discrete_position_control** - `discrete_position_control.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: QWidget = None, devices: Dict[str, Dict[str, any]] = {}, titles: Dict[str, str] = {}, positions: Dict[str, List] = {}, title: str = '')`
+
+   `def setup_ui(self)`
+
+   `def __init__(self, parent: QWidget = None, devices: Dict[str, any] = {}, positions: List[str] = [], title: str = '')`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def init_values(self)`
+
+   `def init_devices(self, devices: Dict[str, any] = {})`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def setup_ui(self)`
+
+   `def get_positions(self)`
+
+   `def set_positions(self, positions: Dict[str, Dict[str, float]])`
+
+   `def reset_positions(self)`
+
+   `def check_position(self)`
+
+   `def set_position(self, value: Union[int, str])`
+
+   `def get_position(self)`
+
+   `def save_position(self)`
+
+   `def open_details_dialog(self)`
+
+   `def stop(self)`
+
+   `def __init__(self, parent: DiscretePositionControl = None, title: str = '')`
+
+   `def connect_signals(self)`
+
+   `def setup_ui(self)`
+
+   `def init_values(self)`
+
+   `def update_values(self)`
+
+   `def set_title(self, value: str)`
+
+   `def close(self, result)`
+
+   `def set_motor_position(self, value: float)`
+
+   `def set_current_motor_position(self)`
+
+   `def set_position_title(self, value: str = None)`
+
+   `def add_position(self)`
+
+   `def remove_position(self)`
+
+   `def move_up_position(self)`
+
+   `def move_down_position(self)`
+
+   `def _swap_items(self, a, b)`
+
+**roadrunner/janus/widgets/gonio_controls** - `gonio_controls.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: QWidget = None, devices: Dict[str, any] = {})`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def setup_ui(self)`
+
+   `def _set_angle_0(self)`
+
+   `def _set_angle_90(self)`
+
+   `def _set_angle_180(self)`
+
+   `def _set_angle_270(self)`
+
+   `def _set_angle_inc(self)`
+
+   `def _set_angle_dec(self)`
+
+   `def set_angle(self, value)`
+
+   `def set_step_size(self, value: Union[float, int, str, None] = None)`
+
+   `def stop(self)`
+
+**roadrunner/janus/widgets/humidity** - `humidity.py` *Created on Mar 31, 2020*
+
+   `def __init__(self, parent = None, device = None)`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute)`
+
+   `def register_persistents(self)`
+
+   `def setup_ui(self)`
+
+**roadrunner/janus/widgets/layout** - `layout.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: Union[Widget, QWidget, None] = None, horizontal: bool = False)`
+
+   `def setup_ui(self)`
+
+   `def add(self, widget: Union[Widget, QWidget], panel: int = 0)`
+
+   `def remove(self, widget: Union[Widget, QWidget])`
+
+   `def __init__(self, parent: Union[Widget, QWidget, None] = None, horizontal: bool = False, panels: int = 2, sizes: List[int] = [], utils: Dict[str, any] = {})`
+
+   `def setup_ui(self)`
+
+   `def init_utils(self, utils: Dict[str, any] = {})`
+
+   `def register_persistents(self)`
+
+**roadrunner/janus/widgets/lcls_motor_enable** - `lcls_motor_enable.py` *This is part of the janus package.*
+
+   `def __init__(self, push_button: QPushButton, ctrl: Device, enable: str, disable: str, status: str)`
+
+   `def update(self)`
+
+   `def toggle_enable(self)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, widgets: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def setup_ui(self)`
+
+   `def _update(self)`
+
+**roadrunner/janus/widgets/pane/pane** - `pane.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def added(self, pane: Pane)`
+
+   `def removed(self)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+   `def input_priority(self)`
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def added(self, pane: Pane)`
+
+   `def removed(self)`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {}, toolbar: Optional[PaneToolBar] = None)`
+
+   `def setup_ui(self)`
+
+   `def take_snapshot(self)`
+
+   `def add(self, component: Union[PaneControl, PaneContent])`
+
+   `def add_content(self, content: PaneContent)`
+
+   `def add_control(self, control: PaneControl)`
+
+   `def remove(self, component: Union[PaneControl, PaneContent])`
+
+   `def remove_content(self, content: PaneContent)`
+
+   `def remove_control(self, control: PaneControl)`
+
+   `def get(self, component: Type)`
+
+   `def eventFilter(self, source: QObject, event: QEvent)`
+
+   `def paint_event(self, event: QPaintEvent)`
+
+**roadrunner/janus/widgets/pane/pane_content_beam_profile** - `pane_content_beam_profile.py` *This is part of the janus package.*
+
+   `def __init__(self, image: QImage)`
+
+   `def __init__(self, pane: Optional[Pane] = None, devices: Dict[str, any] = {})`
+
+   `def added(self, pane: Pane)`
+
+   `def removed(self)`
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def set_beam_marker(self)`
+
+   `def init_devices(self, devices: Dict[str, any] = {})`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def added(self, pane: Pane)`
+
+   `def removed(self)`
+
+   `def toggle_beam_profile(self)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+**roadrunner/janus/widgets/pane/pane_content_camera_stream** - `pane_content_camera_stream.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None, devices: Dict[str, any] = {})`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def init_devices(self, devices: Dict[str, any] = {})`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+**roadrunner/janus/widgets/pane/pane_content_scale** - `pane_content_scale.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+**roadrunner/janus/widgets/pane/pane_control_content_beam_marker** - `pane_control_content_beam_marker.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def setup_ui(self)`
+
+   `def register_persistents(self)`
+
+   `def toggle_set_position_active(self)`
+
+   `def get_width(self)`
+
+   `def set_width(self, width: float)`
+
+   `def get_height(self)`
+
+   `def set_height(self, height: float)`
+
+   `def get_size(self)`
+
+   `def set_size(self, x: float, y: float)`
+
+   `def get_position(self)`
+
+   `def set_position(self, x: float, y: float)`
+
+   `def get_pos_x(self)`
+
+   `def set_pos_x(self, x: float)`
+
+   `def get_pos_y(self)`
+
+   `def set_pos_y(self, y: float)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+**roadrunner/janus/widgets/pane/pane_control_content_grid** - `pane_control_content_grid.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def setup_ui(self)`
+
+   `def register_persistents(self)`
+
+   `def place_grid(self)`
+
+   `def remove_grid(self)`
+
+   `def get_grid(self)`
+
+   `def set_grid(self, data: Union[Grid, List])`
+
+   `def exchange_grid(self, name)`
+
+   `def _on_value_changed(self)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+   `def is_handle(self, pos: QPoint)`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+   `def __init__(self, parent: PaneControlContentGrid)`
+
+   `def reset(self)`
+
+   `def added(self, pane: Pane)`
+
+   `def removed(self)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+   `def paint_event(self, painter: QPainter)`
+
+   `def paint_priority(self)`
+
+   `def __init__(self, chip: Chip)`
+
+   `def set_chip(self, chip: Chip)`
+
+   `def get_origin_offset(self)`
+
+   `def set_origin_offset(self, x: Union[float, QPointF], y: Optional[float] = None)`
+
+   `def set_angle(self, value: float)`
+
+   `def get_angle(self)`
+
+   `def rotate(self, value: float, center: Optional[QPointF] = None)`
+
+   `def _set_transform(self, x, y, a)`
+
+   `def get_tranform(self)`
+
+   `def get_chip_border(self)`
+
+   `def get_bounding_box(self)`
+
+   `def get_row_info(self, window: int = None)`
+
+   `def get_top_left_offset(self)`
+
+   `def get_window_borders(self)`
+
+   `def _transform_rect(self, rect: QRectF)`
+
+   `def get_points(self, invalid: bool = True, ignored: bool = True, window: int = None, rect: QRectF = None)`
+
+**roadrunner/janus/widgets/pane/pane_control_pan_tilt_zoom** - `pane_control_pan_tilt_zoom.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def reset(self)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+**roadrunner/janus/widgets/pane/pane_control_sample_motors** - `pane_control_sample_motors.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None, devices: Dict[str, any] = {})`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def init_devices(self, devices: Dict[str, any] = {})`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+**roadrunner/janus/widgets/pane/pane_control_zoom** - `pane_control_zoom.py` *This is part of the janus package.*
+
+   `def __init__(self, pane: Optional[Pane] = None)`
+
+   `def reset(self)`
+
+   `def input_event(self, source: QObject, event: QEvent)`
+
+**roadrunner/janus/widgets/pane/pane_convenience_classes** - `pane_convenience_classes.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {}, toolbar: Optional[PaneToolBar] = None)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {}, toolbar: Optional[PaneToolBar] = None)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {}, toolbar: Optional[PaneToolBar] = None)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None)`
+
+   `def set_pane(self, pane: Pane)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+**roadrunner/janus/widgets/pane/pane_tool_bar** - `pane_tool_bar.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None)`
+
+   `def add_section(self, section: str)`
+
+   `def add_action(self, icon_path: str, text: str, slot: Optional[Callable] = None, section: str = 'default', group: str = '')`
+
+   `def get_action(self, text, section: str = 'default')`
+
+   `def remove_action(self, action: QAction, section: str = 'default')`
+
+   `def add_widget(self, widget: QWidget, section: str = 'default')`
+
+   `def remove_widget(self, widget: Union[QWidget, QAction], section: str = 'default')`
+
+   `def hide_section(self, section: str)`
+
+   `def show_section(self, section: str)`
+
+**roadrunner/janus/widgets/qt_modified** - `qt_modified.py` *This is part of the janus package.*
+
+   `def __init__(self)`
+
+   `def eventFilter(self, source, event)`
+
+   `def __init__(self)`
+
+   `def keyPressEvent(self, e: QKeyEvent)`
+
+   `def __init__(self, parent = None)`
+
+   `def __init__(self, parent = None)`
+
+   `def eventFilter(self, source, event)`
+
+   `def __init__(self, parent = None)`
+
+   `def eventFilter(self, source, event)`
+
+   `def __init__(self, parent = None)`
+
+   `def keyPressEvent(self, e: QKeyEvent)`
+
+   `def focusOutEvent(self, e)`
+
+   `def stepBy(self, value)`
+
+   `def __init__(self, parent = None)`
+
+   `def keyPressEvent(self, e: QKeyEvent)`
+
+   `def focusOutEvent(self, e)`
+
+   `def __init__(self, parent = None)`
+
+   `def eventFilter(self, source, event)`
+
+   `def __init__(self, parent = None)`
+
+   `def eventFilter(self, source, event)`
+
+   `def __init__(self, parent = None)`
+
+   `def eventFilter(self, source, event)`
+
+   `def __init__(self, parent = None)`
+
+   `def contextMenuEvent(self, e)`
+
+   `def __init__(self, parent = None)`
+
+   `def setup_ui(self)`
+
+   `def choose(self)`
+
+   `def showPopup(self, *args, **kwargs)`
+
+   `def __init__(self, parent = None)`
+
+   `def paintEvent(self, event)`
+
+   `def setBpmDiameter(self, diameter)`
+
+   `def setBpmHorizontalGap(self, gap)`
+
+   `def setBpmVerticalGap(self, gap)`
+
+   `def setBeamWidth(self, width)`
+
+   `def setBeamHeight(self, height)`
+
+   `def setBeamPosX(self, pos)`
+
+   `def setBeamPosY(self, pos)`
+
+   `def __init__(self, parent: QWidget = None, unit: str = '', format: str = '{position: 0.3f}{unit}')`
+
+   `def setUnit(self, unit: str)`
+
+   `def setFormat(self, format: str)`
+
+   `def setPosition(self, position: float)`
+
+   `def setColorLeft(self, color: QColor)`
+
+   `def setColorMiddle(self, color: QColor)`
+
+   `def setColorRight(self, color: QColor)`
+
+   `def _setText(self)`
+
+   `def paintEvent(self, event)`
+
+   `def __init__(self, parent: QWidget = None, unit: str = '')`
+
+   `def setUnit(self, unit: str)`
+
+   `def setStepSize(self, step_size: [float, str])`
+
+   `def getStepSize(self)`
+
+   `def checkStepSize(self, step_size: str)`
+
+   `def __init__(self, parent = None)`
+
+   `def closeEvent(self, event)`
+
+   `def read_settings(self)`
+
+**roadrunner/janus/widgets/sample_changer** - `sample_changer.py` *This is part of the janus package.*
+
+   `def setup_ui(self)`
+
+   `def connect_signals(self)`
+
+   `def update_values(self, attribute, value)`
+
+   `def _highlight_sample(self, sample, highlight = True)`
+
+   `def _mount_selected_sample(self, item = None, i = None)`
+
+   `def show_progress_dialog(self)`
+
+   `def mountSelectedSample(self, item = None, i = None)`
+
+   `def updateRobot(self)`
+
+   `def sampleTreeExpanded(self, item)`
+
+   `def highlightSample(self, sample, highlight = True)`
+
+   `def showRobotProgressDialog(self)`
+
+   `def mountSample(self, sampleNumber = None)`
+
+   `def demountSample(self)`
+
+**roadrunner/janus/widgets/simple_motor_controls** - `simple_motor_controls.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: QWidget = None, devices: Dict[str, any] = {}, titles: Dict[str, str] = {}, units: Dict[str, str] = {}, title: str = '')`
+
+   `def setup_ui(self)`
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, devices: Dict[str, any] = {}, title: str = '', unit: str = '', key: str = '')`
+
+   `def setup_ui(self)`
+
+   `def register_persistents(self)`
+
+   `def connect_signals(self)`
+
+   `def init_values(self)`
+
+   `def update_values(self, attribute: str, value: Any)`
+
+   `def set_position(self, value: float)`
+
+   `def open_properties_dialog(self)`
+
+   `def stop(self)`
+
+**roadrunner/janus/widgets/statusbar_p09** - `statusbar_p09.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: QWidget = None, devices: Dict[str, any] = {})`
+
+   `def connect_signals(self)`
+
+   `def register_persistents(self)`
+
+   `def init_values(self)`
+
+   `def update_petra(self, attribute, value)`
+
+   `def update_energy(self, attribute, value)`
+
+   `def update_undulator(self, attribute, value)`
+
+   `def update_vacuum(self, attribute, value)`
+
+   `def update_beamshutter0(self, attribute, value)`
+
+   `def update_beamshutter1(self, attribute, value)`
+
+   `def update_beamshutter2(self, attribute, value)`
+
+   `def update_beamshutter3(self, attribute, value)`
+
+   `def update_fastshutter_upstream(self, attribute, value)`
+
+   `def update_fastshutter(self, attribute, value)`
+
+   `def update_gonio(self, attribute, value)`
+
+   `def update_detector_z(self, attribute, value)`
+
+   `def update_detector(self, attribute, value)`
+
+   `def setup_ui(self)`
+
+**roadrunner/janus/widgets/ui/acq_ed_rot_step_ui** - `acq_ed_rot_step_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/acq_run_parameters_ui** - `acq_run_parameters_ui.py`
+
+   `def setupUi(self, FormAcqRun)`
+
+   `def retranslateUi(self, FormAcqRun)`
+
+**roadrunner/janus/widgets/ui/acq_xanes_parameters_ui** - `acq_xanes_parameters_ui.py`
+
+   `def setupUi(self, FormAcqXanes)`
+
+   `def retranslateUi(self, FormAcqXanes)`
+
+**roadrunner/janus/widgets/ui/acq_xanes_presenter_ui** - `acq_xanes_presenter_ui.py`
+
+   `def setupUi(self, FormPresenterXanes)`
+
+   `def retranslateUi(self, FormPresenterXanes)`
+
+**roadrunner/janus/widgets/ui/acq_xrf_parameters_ui** - `acq_xrf_parameters_ui.py`
+
+   `def setupUi(self, FormAcqXrf)`
+
+   `def retranslateUi(self, FormAcqXrf)`
+
+**roadrunner/janus/widgets/ui/acq_xtal_grid_fly_ui** - `acq_xtal_grid_fly_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/acq_xtal_grid_fly_window_ui** - `acq_xtal_grid_fly_window_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/acq_xtal_grid_step_ui** - `acq_xtal_grid_step_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/acq_xtal_loopcentering_ui** - `acq_xtal_loopcentering_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/acq_xtal_rotational_ui** - `acq_xtal_rotational_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/advanced_motor_control_ui** - `advanced_motor_control_ui.py`
+
+   `def setupUi(self, Dialog)`
+
+   `def retranslateUi(self, Dialog)`
+
+**roadrunner/janus/widgets/ui/camera_controls_ui** - `camera_controls_ui.py`
+
+   `def setupUi(self, QWidgetCamera)`
+
+   `def retranslateUi(self, QWidgetCamera)`
+
+**roadrunner/janus/widgets/ui/chip_details_ui** - `chip_details_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/continuous_focus_ui** - `continuous_focus_ui.py`
+
+   `def setupUi(self, ContinuousFocus)`
+
+   `def retranslateUi(self, ContinuousFocus)`
+
+**roadrunner/janus/widgets/ui/discrete_position_control_ui** - `discrete_position_control_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/discrete_position_details_ui** - `discrete_position_details_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/element_chooser_ui** - `element_chooser_ui.py`
+
+   `def setupUi(self, Dialog)`
+
+   `def retranslateUi(self, Dialog)`
+
+**roadrunner/janus/widgets/ui/gonio_manual_control_ui** - `gonio_manual_control_ui.py`
+
+   `def setupUi(self, FormGonioControl)`
+
+   `def retranslateUi(self, FormGonioControl)`
+
+**roadrunner/janus/widgets/ui/humidifier** - `humidifier.py`
+
+   `def setupUi(self, Humidifier)`
+
+   `def retranslateUi(self, Humidifier)`
+
+**roadrunner/janus/widgets/ui/log_ui** - `log_ui.py`
+
+   `def setupUi(self, QWidgetLog)`
+
+   `def retranslateUi(self, QWidgetLog)`
+
+**roadrunner/janus/widgets/ui/sample_changer_ui** - `sample_changer_ui.py`
+
+   `def setupUi(self, FormSampleChanger)`
+
+   `def retranslateUi(self, FormSampleChanger)`
+
+**roadrunner/janus/widgets/ui/simple_motor_control_ui** - `simple_motor_control_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/ui/statusbar_p09_ui** - `statusbar_p09_ui.py`
+
+   `def setupUi(self, Statusbar_P09)`
+
+   `def retranslateUi(self, Statusbar_P09)`
+
+**roadrunner/janus/widgets/ui/stop_all_button_ui** - `stop_all_button_ui.py`
+
+   `def setupUi(self, Form)`
+
+   `def retranslateUi(self, Form)`
+
+**roadrunner/janus/widgets/widget** - `widget.py` *This is part of the janus package.*
+
+   `def __init__(self, parent: Union[Widget, QWidget] = None, utils: Dict[str, any] = {}, widgets: Dict[str, any] = {}, devices: Dict[str, any] = {})`
+
+   `def init_utils(self, utils: Dict[str, any] = {})`
+
+   `def init_devices(self, devices: Dict[str, any] = {})`
+
+   `def init_widgets(self, widgets: Dict[str, any] = {})`
+
+   `def setup_ui(self)`
+
+   `def register_persistents(self)`
+
+   `def connect_signals(self)`
+
 **scan** - `scan.py` *Generic motor scanning utilities for MFX beamline.*
 
    `def __init__(self)`
@@ -1114,9 +3434,9 @@
 
    `def clustered_points(self, y, z, n, power = 2.0, center = None, plot = False)`
 
-   `def scan(self, start: float, end: float, steps: int, events_per_step: int = 240, sample: str = '?', tag: str = 'timing', picker: str = None, inspire: bool = False, record: bool = True, daq_num: int = 2, pv: str = None, laser: int = None, analysis: bool = True, randomize: bool = False, cluster: bool = False, center: float = None, delay: bool = False, duration: float = 300.0, sweep_time: float = 5.0)`
+   `def scan(self, start: float, end: float, steps: int, events_per_step: int = 240, sample: str = '?', tag: str = 'timing', picker: str = None, inspire: bool = False, record: bool = True, daq_num: int = 2, pv: str = None, laser: int = None, analysis: bool = True, randomize: bool = False, cluster: bool = False, center: float = None, delay: bool = False, duration: float = 300.0, sweep_time: float = 5.0, camera: str = 'alvium_dg3')`
 
-   `def output(self, user: str, facility: str = 'S3DF', exp: str = None, run: str = None, daq_num: int = 2)`
+   `def output(self, user: str, facility: str = 'S3DF', exp: str = None, run: str = None, daq_num: int = 2, camera: str = 'alvium_dg3')`
 
 **vernier** - `vernier.py` *Vernier energy control and calibration utilities for MFX beamline.*
 
@@ -1150,35 +3470,9 @@
 
 **wire** - `wire.py` *Wire scanner control and scanning utilities for MFX beamline.*
 
-   `def __init__(self)`
+   `def __init__(self, x_pv: str = 'MFX:LJH:JET:X', y_pv: str = 'MFX:LJH:JET:Y')`
 
-   `def scan(self, start: float, end: float, num_steps: int, num_events: int = 120, sample: str = 'wire', tag: str = None, picker: str = None, inspire: bool = False, record: bool = False, daq_num: int = 2, mcc: str = None)`
-
-   `def output(self, user: str, facility: str = 'S3DF', run_type: str = 'scan', exp: str = None, run: int = None)`
-
-   `def __init__(self)`
-
-   `def x()`
-
-   `def y()`
-
-   `def __init__(self)`
-
-   `def x(value: float)`
-
-   `def y(value: float)`
-
-   `def wire_scan(start: float, end: float, num_steps: int, mcc: str, num_events: int = 120, record: bool = False, **kwargs)`
-
-   `def get_wire_position()`
-
-   `def set_wire_position(x: Optional[float] = None, y: Optional[float] = None)`
-
-   `def analyze_wire_scan(user: str, facility: str = 'S3DF', exp: str = None, run: int = None)`
-
-   `def home_wire()`
-
-   `def park_wire(x_park: float = -10.0, y_park: float = -10.0)`
+   `def scan(self, start: float, end: float, num_steps: int, events_per_step: int = 120, sample: str = 'wire', tag: str = None, picker: str = None, inspire: bool = False, record: bool = False, daq_num: int = 2, pv: str = None, camera: str = 'alvium_dg3', analysis: bool = True)`
 
 **xas** - `xas.py` *X-ray Absorption Spectroscopy (XAS) utilities for MFX beamline.*
 
@@ -1204,6 +3498,10 @@
 
    `def __init__(self, motors: List, orientation: str = 'horizontal', scale: float = 0.1, mode: str = 'translation')`
 
+   `def _axis_to_jet_getter(self, motor)`
+
+   `def ensure_synced_before_move(self, motor, decimals: int = 2)`
+
    `def _setup_translation_keys(self)`
 
    `def _setup_rotation_keys(self)`
@@ -1214,13 +3512,21 @@
 
    `def print_help(self)`
 
-   `def print_status(self)`
+   `def format_status_line(self)`
+
+   `def print_status_line(self, in_place: bool = True)`
 
    `def update_scale(self, factor: float)`
 
-   `def execute_move(self, motor, direction: int)`
+   `def execute_move(self, axis: str, direction: int)`
 
    `def run(self)`
+
+   `def motor_pos(m)`
+
+   `def status_line()`
+
+   `def show_status()`
 
    `def xlj_fast(orientation: str = 'horizontal', scale: float = 0.1)`
 
@@ -1235,6 +3541,8 @@
    `def get_feespec_positions(self, energy_keV, crystal_angle_offset = 0.0, debug = False)`
 
    `def move_feespec_energy(self, energy_keV, crystal_angle_offset = 0.0)`
+
+   `def move_feespec_energy_nonblocking(self, energy_keV, crystal_angle_offset = 0.0)`
 
    `def check_feespec_crystal_angle(self, energy_keV, crystal_angle_offset = 0.0)`
 
@@ -1283,17 +3591,21 @@
 
 ## Scripts
 
-**analyze_timing** - `analyze_timing.py` *analyze_timing*
+**analyze_timing** - `analyze_timing.py` *Timing analysis for MFX beamline laser-X-ray synchronisation scans.*
 
-   `def proxy_jump(facility: str = 'S3DF', exp: str = None, run: str = None)`
+   `def proxy_jump(facility = 'S3DF', exp = None, run = None, camera = 'alvium_dg3', output_dir = None, motor_label = None)`
 
    `def get_scan_motor(run)`
 
    `def custom_erf(x, a, sigma, mu, b)`
 
-   `def fit_irfs1(x_data, y_data, run_number, t_stage)`
+   `def fit_irfs1(x_data, y_data, run_number = None, t_stage = None, save_path = None, ax = None, show = True)`
 
-   `def output(facility: str = 'S3DF', exp: str = None, run: str = None)`
+   `def _erf(x, a, sigma, mu, b)`
+
+   `def _post_to_elog(exp, fig, run_number, t_stage, popt)`
+
+   `def output(facility = 'S3DF', exp = None, run = None, camera = 'alvium_dg3', output_dir = None, post_to_elog = True, motor_label = None)`
 
    `def parse_args(args)`
 
@@ -1345,6 +3657,8 @@
 
    `def calibrate_energy_scale(peak_positions, energies)`
 
+   `def post_to_elog(exp, fig, ev_per_pixel, intercept, r_value, run_start, n_runs)`
+
    `def run(args)`
 
 **cctbx/fee_spec** - `fee_spec.py` *fee_spec*
@@ -1359,7 +3673,19 @@
 
 **cctbx/fee_summed** - `fee_summed.py`
 
-   *(No public functions)*
+   `def process_runs(exp, runs)`
+
+   `def plot_spectrum(exp, runs, data)`
+
+   `def plot_presence(events)`
+
+   `def plot_histogram(maxes)`
+
+   `def post_to_elog(exp, fig, runs, total, edge_pixel)`
+
+   `def parse_args(args)`
+
+   `def main(args)`
 
 **cctbx/geom_refine** - `geom_refine.py` *cctbx_start*
 
@@ -1671,5 +3997,5 @@
 
 ## Repository Statistics
 
-- **Total Modules:** 84
-- **Total Functions:** 732
+- **Total Modules:** 196
+- **Total Functions:** 1783
