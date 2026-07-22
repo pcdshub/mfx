@@ -1,0 +1,93 @@
+
+/* Custom styling for MFX documentation */
+
+:root {
+    --md-primary-fg-color: #FF6F00;
+    --md-primary-fg-color--light: #FF8F00;
+    --md-primary-fg-color--dark: #E65100;
+}
+
+/* Code block styling */
+.highlight {
+    border-radius: 0.5rem;
+    margin: 1em 0;
+}
+
+/* Improve table styling */
+.md-typeset table:not([class]) {
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+    background-color: var(--md-primary-fg-color);
+    color: white;
+    font-weight: bold;
+}
+
+/* Docstring styling */
+.doc-contents {
+    padding-left: 1.5rem;
+}
+
+.doc-md-description {
+    margin-top: 0.5rem;
+}
+
+/* Parameter tables */
+.field-list {
+    margin: 1rem 0;
+}
+
+.field-list dt {
+    font-weight: bold;
+    color: var(--md-primary-fg-color);
+}
+
+/* Section headings */
+.doc-heading {
+    border-bottom: 2px solid var(--md-primary-fg-color);
+    padding-bottom: 0.5rem;
+    margin-top: 2rem;
+}
+
+/* Signature styling */
+.doc-object-name {
+    color: var(--md-primary-fg-color);
+    font-weight: bold;
+}
+
+/* Admonition improvements */
+.admonition {
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Navigation improvements */
+.md-nav__item--active > .md-nav__link {
+    font-weight: bold;
+}
+
+/* Code annotations */
+.md-annotation {
+    border-radius: 0.25rem;
+}
+
+/* Improve spacing for nested lists */
+.md-typeset ul ul,
+.md-typeset ol ol {
+    margin-left: 1rem;
+}
+
+/* Better code inline styling */
+.md-typeset code {
+    border-radius: 0.25rem;
+    padding: 0.15rem 0.3rem;
+}
+
+/* Keyboard keys styling */
+.md-typeset kbd {
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 0 1px rgba(0,0,0,0.2);
+}
