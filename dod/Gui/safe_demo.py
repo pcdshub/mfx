@@ -51,17 +51,6 @@ def read_station_names(dod):
 
 
 def read_task_names(dod):
-    """
-    The robot's REAL callable task list, via get_task_names().
-
-    IMPORTANT (confirmed on hardware): this is NOT the same as the config file's
-    [Task] 'Hidden Tasks' key. The config lists ~100 hidden tasks
-    (WashFlush_Medium, WashFlush_Strong_Narrow, MorningWashProcedure, ...) and
-    NONE of them appear here. execute_task runs tasks from THIS list only.
-
-    Real wash-ish tasks that DO exist: WashFlush_Light, WashFlush_Strong,
-    Ultimate_Wash_Sequence.
-    """
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
 
 
@@ -309,14 +298,24 @@ def read_activated_nozzles(dod):
     act = ns.get("Activated Nozzles")
     if act is None:
         raise RuntimeError("no 'Activated Nozzles' field in nozzle status")
-    # may come back as a list of channel numbers, or a list of booleans by channel
+
+    def _is_boolish(v):
+        return isinstance(v, bool) or (isinstance(v, str)
+                                       and v.strip().lower() in ("true", "false"))
+
+    def _truthy(v):
+        return v is True or (isinstance(v, str) and v.strip().lower() == "true")
+
+    # If every entry looks boolean-ish, treat the list as per-channel flags.
+    if act and all(_is_boolish(v) for v in act):
+        return [str(i + 1) for i, v in enumerate(act) if _truthy(v)]
+
+    # Otherwise treat entries as explicit channel identifiers.
     out = []
-    for i, v in enumerate(act):
-        if isinstance(v, bool):
-            if v:
-                out.append(str(i + 1))         # boolean-per-channel form
-        else:
-            out.append(str(v))                 # explicit channel-number form
+    for v in act:
+        s = str(v).strip()
+        if s and s.lower() not in ("false",):   # skip any stray 'False'
+            out.append(s)
     return out
 
 
@@ -351,10 +350,6 @@ def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm
 
 
 def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Select the nozzle via the real dod.set_nozzle_selected(nozzle) method.
-    That method validates the channel is armed and raises ValueError if not,
-    """
     channel = str(channel)
     try:
         armed = read_activated_nozzles(dod)
@@ -400,6 +395,17 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
 
 def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
                       select=None, dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Set nozzle voltage / pulse / frequency via the REAL single call:
+        client.set_nozzle_parameters(active, selected, volts, pulse, frequency)
+
+    There are NO separate per-parameter setters -- this one call sets them all,
+    so we read the CURRENT activated/selected/values first and only change what
+    was passed, to avoid clobbering the others.
+
+    volts:int, pulse:str, frequency:int  (per the DropsDriver signature)
+    select: optionally change the selected nozzle channel too (str).
+    """
     # read current state so we don't wipe unspecified fields
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
@@ -420,15 +426,28 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
     new_p = str(pulse) if pulse is not None else (str(cur_p) if cur_p is not None else "20")
     new_f = int(frequency) if frequency is not None else (int(float(cur_f)) if cur_f is not None else 30000)
 
-    # activated / selected as comma strings (that's what the endpoint wants)
-    def _as_str(v, default):
+    # activated / selected must be sent as comma-separated CHANNEL NUMBERS
+    # (e.g. "1,2"), NOT booleans. The robot reports them as a per-channel flag
+    # list like ['True','True','False',...], so convert flags -> channel numbers.
+    def _channels(v, default):
         if v is None:
             return default
         if isinstance(v, (list, tuple)):
-            return ",".join(str(x) for x in v)
+            def _boolish(x):
+                return isinstance(x, bool) or (isinstance(x, str)
+                                               and x.strip().lower() in ("true", "false"))
+            def _truthy(x):
+                return x is True or (isinstance(x, str) and x.strip().lower() == "true")
+            if v and all(_boolish(x) for x in v):
+                nums = [str(i + 1) for i, x in enumerate(v) if _truthy(x)]
+                return ",".join(nums) if nums else default
+            # explicit identifiers already
+            return ",".join(str(x).strip() for x in v
+                            if str(x).strip() and str(x).strip().lower() != "false")
         return str(v)
-    act_s = _as_str(activated, "1")
-    sel_s = str(select) if select is not None else _as_str(selected, "1")
+
+    act_s = _channels(activated, "1")
+    sel_s = str(select) if select is not None else _channels(selected, "1")
 
     log("=== SET NOZZLE PARAMS ===")
     log("   active=%s selected=%s volts=%d pulse=%s freq=%d"
@@ -543,11 +562,6 @@ def task_risk(task):
 
 
 def describe_task(task):
-    """
-    Plain-language note about a task, shown in the confirm dialog.
-    Known tasks get a specific note; anything else is categorized by its name
-    so even tasks we've never seen get a sensible label.
-    """
     t = task or ""
     tl = t.lower()
 
@@ -583,12 +597,6 @@ def describe_task(task):
 
 
 def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Run one task by name via do_task(). Verified path -- no dummy method names.
-
-    do_task() BLOCKS until the task finishes (polls get_status() every 0.5 s
-    while Busy). The real abort is dod.safety_abort = True, checked each poll.
-    """
     note = describe_task(task)
     log("=== TASK: %s ===" % task)
     log("   what it does: %s" % note)
