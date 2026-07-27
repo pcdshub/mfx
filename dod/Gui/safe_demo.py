@@ -1,5 +1,3 @@
-
-
 import argparse
 import sys
 
@@ -17,15 +15,6 @@ def _unwrap(r):
 # READS -- never move anything, never invent a value
 # ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
-    """
-    LIVE position from get_current_position(). CONFIRMED real reply:
-        {'CurrentPosition': 0,
-         'Position': ['0', 'Probe (96WP-1nozzle)', '176270', '113817', '25385', ...],
-         'PositionReal': {'X': 254000, 'Y': 0, 'Z': 0}}
-
-    'PositionReal' is the live coordinates. 'Position' is the last NAMED position
-    selected -- it does not track live motion and goes stale.
-    """
     r = dod.get_current_position()
     if verbose:
         print("RAW get_current_position():")
@@ -42,11 +31,6 @@ def read_live_position(dod, verbose=False):
 
 
 def read_drive_range(dod):
-    """
-    LIVE axis limits via client.get_drive_range(). CONFIRMED real reply:
-        {'Xmax': 254000, 'Ymax': 118000, 'Zmax': 40000}
-    Note the keys are Xmax/Ymax/Zmax -- NOT X/Y/Z.
-    """
     r = _unwrap(dod.client.get_drive_range())
     if isinstance(r, dict):
         if {"Xmax", "Ymax", "Zmax"} <= set(r.keys()):
@@ -67,33 +51,10 @@ def read_station_names(dod):
 
 
 def read_task_names(dod):
-    """
-    The robot's REAL callable task list, via get_task_names().
-
-    IMPORTANT (confirmed on hardware): this is NOT the same as the config file's
-    [Task] 'Hidden Tasks' key. The config lists ~100 hidden tasks
-    (WashFlush_Medium, WashFlush_Strong_Narrow, MorningWashProcedure, ...) and
-    NONE of them appear here. execute_task runs tasks from THIS list only.
-
-    Real wash-ish tasks that DO exist: WashFlush_Light, WashFlush_Strong,
-    Ultimate_Wash_Sequence.
-    """
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
 
 
 def read_nozzle_state(dod):
-    """
-    CONFIRMED real get_nozzle_status() reply:
-        {'Activated Nozzles': [True, True, False, False, False, False, False, False],
-         'Selected Nozzles': [1],
-         'ID,Volt,Pulse,Freq,Volume': [['1','10.00','sciPULSE_LV01','120','146'],
-                                       ['2','58','VISC01','120','102']],
-         'Dispensing': 'Off'}
-
-    Note: 'Activated Nozzles' is a list of BOOLEANS indexed by channel (index 0
-    = channel 1), not a list of channel numbers. And the params entry is a LIST
-    OF LISTS -- one row per activated nozzle.
-    """
     print("\n=== NOZZLE STATE (read-only) ===")
     r = dod.get_nozzle_status()
     print("RAW get_nozzle_status():")
@@ -145,12 +106,6 @@ def read_nozzle_state(dod):
 
 
 def dialog_is_open(status):
-    """
-    CONFIRMED: 'Dialog' is a DICT, not a string:
-        {'Reference': 0, 'Message': '', 'Button1': '', 'Button2': ''}
-    An empty dict is truthy in Python, so `if status['Dialog']` is ALWAYS true.
-    A dialog is only really open when Reference != 0 or Message is non-empty.
-    """
     dlg = status.get("Dialog") if isinstance(status, dict) else None
     if not isinstance(dlg, dict):
         return bool(dlg) and str(dlg).strip() not in ("", "None", "NA")
@@ -245,23 +200,6 @@ OPERATOR_TASKS = {"MorningWashProcedure"}
 
 def wash_routine(dod, station=None, task=None, dry_run=True,
                  log=print, confirm=_terminal_confirm):
-    """
-    Run a task, and optionally move to a station first.
-
-    IMPORTANT: the WashFlush_* tasks position themselves (they start with a move
-    to WasteStation1 and end at CameraStation). So for those you do NOT need a
-    station -- passing one just adds an extra trip across the hutch for nothing.
-    Pass a station only for a task that does not move itself.
-
-    log(msg)         -- where progress goes (print, or the GUI's log box)
-    confirm(message) -- must return True to proceed (input, or a GUI dialog)
-
-    do_task() BLOCKS until the task finishes -- it polls get_status() every 0.5 s
-    while Status == "Busy". No manual wait is needed, and stop_task() afterwards
-    would stop nothing. stop_task() also has a documented bug: it leaves the robot
-    stuck in "Busy". The real abort hook is dod.safety_abort = True, which do_task
-    checks each poll.
-    """
     if not station and not task:
         log("nothing to do -- give a task, a station, or both.")
         return {"ok": False, "reason": "nothing to do"}
