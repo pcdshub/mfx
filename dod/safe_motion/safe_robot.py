@@ -49,14 +49,23 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-# DoD and its reconnect decorator.
-# When deployed as mfx.dod.safe_motion the relative import resolves correctly
-# regardless of sys.path.  The fallback covers standalone development use
-# (safe_motion loaded directly from DoD_dev with MFX_Hutch_Python/mfx on sys.path).
-try:
-    from ..dod import DoD, _with_reconnect  # deployed: mfx.dod.safe_motion
-except ImportError:
-    from dod.dod import DoD, _with_reconnect  # development fallback
+# Load DoD and _with_reconnect directly from dod.py by filesystem path,
+# bypassing sys.modules and sys.path entirely.  This is necessary because in
+# a live hutch-python session 'dod' is already cached in sys.modules from the
+# PCDS installation; a normal import would find that cached version instead of
+# the one sitting next to this package.
+import importlib.util as _ilu
+import os as _os
+
+_dod_py = _os.path.normpath(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "dod.py")
+)
+_spec = _ilu.spec_from_file_location("_dod", _dod_py)
+_dod = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_dod)
+DoD = _dod.DoD
+_with_reconnect = _dod._with_reconnect
+del _ilu, _os, _dod_py, _spec, _dod
 
 from .registry import (
     load_registry,
