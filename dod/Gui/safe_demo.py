@@ -1,4 +1,3 @@
-
 import argparse
 import sys
 
@@ -16,7 +15,6 @@ def _unwrap(r):
 # READS -- never move anything, never invent a value
 # ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
- 
     r = dod.get_current_position()
     if verbose:
         print("RAW get_current_position():")
@@ -33,7 +31,11 @@ def read_live_position(dod, verbose=False):
 
 
 def read_drive_range(dod):
-  
+    """
+    LIVE axis limits via client.get_drive_range(). CONFIRMED real reply:
+        {'Xmax': 254000, 'Ymax': 118000, 'Zmax': 40000}
+    Note the keys are Xmax/Ymax/Zmax -- NOT X/Y/Z.
+    """
     r = _unwrap(dod.client.get_drive_range())
     if isinstance(r, dict):
         if {"Xmax", "Ymax", "Zmax"} <= set(r.keys()):
@@ -54,12 +56,10 @@ def read_station_names(dod):
 
 
 def read_task_names(dod):
-
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
 
 
 def read_nozzle_state(dod):
-    
     print("\n=== NOZZLE STATE (read-only) ===")
     r = dod.get_nozzle_status()
     print("RAW get_nozzle_status():")
@@ -111,6 +111,12 @@ def read_nozzle_state(dod):
 
 
 def dialog_is_open(status):
+    """
+    CONFIRMED: 'Dialog' is a DICT, not a string:
+        {'Reference': 0, 'Message': '', 'Button1': '', 'Button2': ''}
+    An empty dict is truthy in Python, so `if status['Dialog']` is ALWAYS true.
+    A dialog is only really open when Reference != 0 or Message is non-empty.
+    """
     dlg = status.get("Dialog") if isinstance(status, dict) else None
     if not isinstance(dlg, dict):
         return bool(dlg) and str(dlg).strip() not in ("", "None", "NA")
@@ -319,12 +325,40 @@ def read_activated_nozzles(dod):
     return out
 
 
+def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Set the nozzle dispensing mode via the real dod.set_nozzle_dispensing(mode).
+    mode: 'Off', 'Free' (continuous), or 'Trigger' (dispense on external trigger).
+
+    'Off' is always safe. 'Free' and 'Trigger' start the nozzle DISPENSING
+    liquid, so they get a clear confirmation. Per the real source, 'Off'
+    iterates over each armed channel to make sure all are stopped.
+    """
+    mode = str(mode).strip().capitalize()   # normalize off/free/trigger
+    if mode not in ("Off", "Free", "Trigger"):
+        log("bad dispensing mode %r -- must be Off, Free, or Trigger" % mode)
+        return {"ok": False, "reason": "bad mode"}
+
+    log("=== SET DISPENSING: %s ===" % mode)
+
+    if dry_run:
+        log("[DRY RUN] would call dod.set_nozzle_dispensing(%r)" % mode)
+        return {"ok": True, "dry_run": True}
+
+    # 'Off' is safe and needs no scary confirm; Free/Trigger start liquid.
+    if mode in ("Free", "Trigger"):
+        if not confirm("Start dispensing in %r mode?\n\n"
+                       "This makes the selected nozzle EJECT LIQUID.\n"
+                       "Make sure the nozzle is over a safe target.\n\nProceed?" % mode):
+            log("aborted -- dispensing not changed.")
+            return {"ok": False, "reason": "not confirmed"}
+
+    r = dod.set_nozzle_dispensing(mode)
+    log("   -> %s" % (r,))
+    return {"ok": True, "result": r}
+
+
 def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Select the nozzle for dispensing / task execution via client.select_nozzle().
-    The robot rejects a channel that is not in Activated Nozzles, so we check
-    against the real activated list first and give a clear message.
-    """
     channel = str(channel)
     try:
         armed = read_activated_nozzles(dod)
@@ -339,14 +373,18 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
 
     log("=== SELECT NOZZLE %s ===" % channel)
     if dry_run:
-        log("[DRY RUN] would call client.select_nozzle(%r)" % channel)
+        log("[DRY RUN] would call dod.set_nozzle_selected(%s)" % channel)
         return {"ok": True, "dry_run": True}
 
     if not confirm("Select nozzle %s for dispensing/tasks?" % channel):
         log("aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    r = dod.client.select_nozzle(channel)
+    try:
+        ch_int = int(channel)
+    except ValueError:
+        ch_int = channel
+    r = dod.set_nozzle_selected(ch_int)
     log("   -> %s" % (r,))
     return {"ok": True, "result": r}
 
@@ -403,17 +441,6 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
 
 
 def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Nudge one axis by `delta` um (relative). axis is 'X', 'Y', or 'Z'.
-
-    *** DANGER ***
-    This uses move_x_abs / move_y_abs / move_z_abs on the DoD object. Per the
-    real source these move ONE axis to an absolute coordinate in the ROBOT
-    coordinate system, with NO safety test (they connect, move, busy_wait, then
-    disconnect). They do NOT lift Z to a safe height or check the path.
-    So: small steps only, clamp to the drive range, confirm every nudge.
-    The caller must guarantee the path is clear (nozzle not down in a well, etc.).
-    """
     axis = axis.upper()
     if axis not in ("X", "Y", "Z"):
         log("bad axis %r" % axis)
@@ -422,41 +449,43 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
     here = read_live_position(dod)
     target = here[axis] + delta
 
-    # clamp to the live drive range so a nudge can't exceed the limits
+    # clamp so the resulting position stays inside the live drive range.
+    # We clamp the DELTA (not an absolute target), since the move is relative.
     try:
         dr = read_drive_range(dod)
         lo, hi = 0.0, dr[axis]
         if target < lo or target > hi:
-            clamped = min(max(target, lo), hi)
-            log("target %s=%.0f is outside 0..%.0f -- clamped to %.0f"
-                % (axis, target, hi, clamped))
-            target = clamped
+            clamped_target = min(max(target, lo), hi)
+            log("would land at %s=%.0f, outside 0..%.0f -- clamping step"
+                % (axis, target, hi))
+            delta = clamped_target - here[axis]
+            target = clamped_target
     except Exception as e:
         log("could not read drive range to clamp: %s -- refusing jog" % e)
         return {"ok": False, "reason": "no drive range"}
 
-    if target == here[axis]:
+    if delta == 0:
         log("already at the limit on %s -- no move" % axis)
         return {"ok": False, "reason": "at limit"}
 
-    log("JOG %s: %.0f -> %.0f  (%+.0f um)" % (axis, here[axis], target, target - here[axis]))
+    log("JOG %s: %.0f -> %.0f  (%+.0f um)" % (axis, here[axis], target, delta))
 
-    method_name = "move_%s_abs" % axis.lower()
+    method_name = "move_%s_rel" % axis.lower()
     if dry_run:
-        log("[DRY RUN] would call dod.%s(%.0f)" % (method_name, target))
+        log("[DRY RUN] would call dod.%s(%+.0f)" % (method_name, delta))
         return {"ok": True, "dry_run": True}
 
     msg = ("RAW JOG -- no safety check.\n\n"
-           "move %s from %.0f to %.0f (%+.0f um)?\n\n"
+           "move %s by %+.0f um (from %.0f to %.0f)?\n\n"
            "%s does NOT lift Z or check for collision. Make sure the\n"
            "nozzle can travel there without hitting anything.\n\nProceed?"
-           % (axis, here[axis], target, target - here[axis], method_name))
+           % (axis, delta, here[axis], target, method_name))
     if not confirm(msg):
         log("jog aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    mover = getattr(dod, method_name)   # move_x_abs / move_y_abs / move_z_abs
-    log("   -> %s" % (mover(target),))
+    mover = getattr(dod, method_name)   # move_x_rel / move_y_rel / move_z_rel
+    log("   -> %s" % (mover(delta),))
     try:
         p = read_live_position(dod)
         log("   now at: X=%.0f Y=%.0f Z=%.0f" % (p["X"], p["Y"], p["Z"]))
@@ -528,12 +557,6 @@ def describe_task(task):
 
 
 def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Run one task by name via do_task(). Verified path -- no dummy method names.
-
-    do_task() BLOCKS until the task finishes (polls get_status() every 0.5 s
-    while Busy). The real abort is dod.safety_abort = True, checked each poll.
-    """
     note = describe_task(task)
     log("=== TASK: %s ===" % task)
     log("   what it does: %s" % note)

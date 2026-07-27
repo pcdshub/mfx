@@ -1,3 +1,24 @@
+"""
+dod_gui.py -- a window for the DoD robot. ALL robot logic lives in safe_demo.py;
+this file is only the window.
+
+    button "RUN TASK"     ->  safe_demo.run_task(...)
+    position readout      ->  safe_demo.read_live_position(...)
+    drive range           ->  safe_demo.read_drive_range(...)
+    task dropdown         ->  safe_demo.read_task_names(...)
+
+Run ON mfx-mezz01, inside the hutch-python session (py39):
+    %run dod_gui.py --ip 172.21.39.172
+
+Run it ONCE -- each %run opens another window.
+
+SAFETY
+  - The position readout polls and is read-only.
+  - "RUN TASK" is the only thing that runs a task, and it pops a confirm
+    dialog first. The task moves the robot itself if it needs to.
+  - Dry run is ON by default.
+  - The routine runs on a background thread because do_move() blocks.
+"""
 
 import argparse
 import threading
@@ -9,7 +30,7 @@ from datetime import datetime
 from safe_demo import (connect_dod, read_live_position, read_drive_range,
                        read_task_names, preflight,
                        run_task, describe_task, jog_axis, set_nozzle_params, task_risk,
-                       read_activated_nozzles, select_nozzle)
+                       read_activated_nozzles, select_nozzle, set_dispensing)
 
 POLL_MS = 1000
 
@@ -116,9 +137,21 @@ class DodGui:
                  fg="#444441", font=("Arial", 8)).grid(row=1, column=0, columnspan=10,
                                                        sticky="w", padx=4, pady=(0, 4))
 
+        # dispensing row
+        ttk.Label(nf, text="dispensing:").grid(row=2, column=0, padx=(6, 2), pady=(2, 6), sticky="e")
+        tk.Button(nf, text="OFF", bg="#2e7d32", fg="white", font=("Arial", 9, "bold"), width=7,
+                  command=lambda: self.dispense("Off")).grid(row=2, column=1, padx=2, pady=(2, 6))
+        tk.Button(nf, text="Free", bg="#e65100", fg="white", font=("Arial", 9, "bold"), width=7,
+                  command=lambda: self.dispense("Free")).grid(row=2, column=2, padx=2, pady=(2, 6))
+        tk.Button(nf, text="Trigger", bg="#e65100", fg="white", font=("Arial", 9, "bold"), width=7,
+                  command=lambda: self.dispense("Trigger")).grid(row=2, column=3, padx=2, pady=(2, 6))
+        tk.Label(nf, text="Free/Trigger EJECT LIQUID. OFF is always safe.",
+                 fg="#b71c1c", font=("Arial", 8)).grid(row=2, column=4, columnspan=6,
+                                                       sticky="w", padx=6, pady=(2, 6))
+
         lf = ttk.LabelFrame(self.root, text="Log")
         lf.grid(row=4, column=0, columnspan=2, sticky="nsew", **pad)
-        self.logbox = scrolledtext.ScrolledText(lf, width=82, height=16, font=("Consolas", 9),
+        self.logbox = scrolledtext.ScrolledText(lf, width=82, height=22, font=("Consolas", 13),
                                                 state="disabled", bg="#0e1116", fg="#cfd8dc")
         self.logbox.pack(fill="both", expand=True, padx=4, pady=4)
 
@@ -222,6 +255,22 @@ class DodGui:
                           log=self.log, confirm=self.confirm)
         except Exception as e:
             self.log("SELECT FAILED: %s" % e)
+        finally:
+            self.busy = False
+
+    def dispense(self, mode):
+        if self.busy:
+            self.log("busy -- ignoring")
+            return
+        self.busy = True
+        threading.Thread(target=self._dispense_worker, args=(mode,), daemon=True).start()
+
+    def _dispense_worker(self, mode):
+        try:
+            set_dispensing(self.dod, mode, dry_run=self.dry.get(),
+                           log=self.log, confirm=self.confirm)
+        except Exception as e:
+            self.log("DISPENSE FAILED: %s" % e)
         finally:
             self.busy = False
 
