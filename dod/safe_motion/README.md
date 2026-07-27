@@ -139,6 +139,23 @@ dod.safe_mode = False         # passthrough to DoD, zero overhead
 
 ---
 
+### Inspecting the current configuration
+
+```python
+dod.print_status()
+```
+
+Prints a summary of the loaded configuration and current state:
+
+- `safe_mode` on/off and whether it is locked
+- Sentinel timestamp
+- Position tolerance, small move limit, and plate Z limit
+- Each exclusion zone (centre, dimensions, angle) and the clearance buffer
+- Task preconditions
+- All named positions with XYZ coordinates, plus a count of `_wp_*` waypoints
+
+---
+
 ### If a position divergence occurs
 
 `SafeRobot` detects the error, calls `stop_task()`, prints a description, and

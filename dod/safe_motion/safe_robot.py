@@ -190,6 +190,8 @@ class SafeRobot(DoD):
             for obs in config.get("obstacles", [])
         ]
 
+        self._obstacles: list = obstacles
+        self._clearance_um: float = clearance
         self._buffered_obstacles: list = [obs.expand(clearance) for obs in obstacles]
 
         self._graph: VisibilityGraph = VisibilityGraph(
@@ -232,6 +234,52 @@ class SafeRobot(DoD):
             "[SafeRobot] Divergence lock cleared.  "
             "Re-enable safe_mode manually when the robot state is confirmed."
         )
+
+    def print_status(self) -> None:
+        """Print a summary of the current SafeRobot configuration and state."""
+        w = 62
+        print("=" * w)
+        print("  SafeRobot status")
+        print("=" * w)
+
+        # --- State ---
+        lock_str = "  *** LOCKED ***" if self.safe_mode_locked else ""
+        print(f"  safe_mode        : {self.safe_mode}{lock_str}")
+        print(f"  sentinel         : {self._sentinel_str or 'not set'}")
+        print(f"  pos tolerance    : {self._position_tolerance_um:.0f} µm")
+        print(f"  small move limit : {self._small_move_threshold_um:.0f} µm")
+        print(f"  plate Z limit    : {self._plate_z_um:.0f} µm")
+
+        # --- Exclusion zones ---
+        print(
+            f"\n  Exclusion zones  : {len(self._obstacles)} obstacle(s), "
+            f"clearance {self._clearance_um:.0f} µm"
+        )
+        for i, obs in enumerate(self._obstacles):
+            print(
+                f"    [{i}] cx={obs.cx:.0f}  cy={obs.cy:.0f}  "
+                f"w={obs.w:.0f}  h={obs.h:.0f}  angle={obs.angle:.1f}°"
+            )
+
+        # --- Task preconditions ---
+        print(f"\n  Task preconditions: {len(self._task_preconditions)} entry/entries")
+        for task, pos in self._task_preconditions.items():
+            print(f"    {task!r:25s} → {pos!r}")
+
+        # --- Position registry ---
+        named = {k: v for k, v in self._registry.items() if not k.startswith("_wp_")}
+        wp_count = sum(1 for k in self._registry if k.startswith("_wp_"))
+        print(
+            f"\n  Positions registry: {len(named)} named position(s) + "
+            f"{wp_count} waypoint(s)"
+        )
+        for name, entry in sorted(named.items()):
+            print(
+                f"    {name:28s}  "
+                f"X={entry['X']:8d}  Y={entry['Y']:8d}  Z={entry['Z']:8d} µm"
+            )
+
+        print("=" * w)
 
     # ------------------------------------------------------------------
     # Internal helpers
