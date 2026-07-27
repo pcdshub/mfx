@@ -12,7 +12,11 @@ def _unwrap(r):
     return r.RESULTS if hasattr(r, "RESULTS") else r
 
 
+# ---------------------------------------------------------------------------
+# READS -- never move anything, never invent a value
+# ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
+ 
     r = dod.get_current_position()
     if verbose:
         print("RAW get_current_position():")
@@ -29,11 +33,7 @@ def read_live_position(dod, verbose=False):
 
 
 def read_drive_range(dod):
-    """
-    LIVE axis limits via client.get_drive_range(). CONFIRMED real reply:
-        {'Xmax': 254000, 'Ymax': 118000, 'Zmax': 40000}
-    Note the keys are Xmax/Ymax/Zmax -- NOT X/Y/Z.
-    """
+  
     r = _unwrap(dod.client.get_drive_range())
     if isinstance(r, dict):
         if {"Xmax", "Ymax", "Zmax"} <= set(r.keys()):
@@ -54,33 +54,12 @@ def read_station_names(dod):
 
 
 def read_task_names(dod):
-    """
-    The robot's REAL callable task list, via get_task_names().
 
-    IMPORTANT (confirmed on hardware): this is NOT the same as the config file's
-    [Task] 'Hidden Tasks' key. The config lists ~100 hidden tasks
-    (WashFlush_Medium, WashFlush_Strong_Narrow, MorningWashProcedure, ...) and
-    NONE of them appear here. execute_task runs tasks from THIS list only.
-
-    Real wash-ish tasks that DO exist: WashFlush_Light, WashFlush_Strong,
-    Ultimate_Wash_Sequence.
-    """
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
 
 
 def read_nozzle_state(dod):
-    """
-    CONFIRMED real get_nozzle_status() reply:
-        {'Activated Nozzles': [True, True, False, False, False, False, False, False],
-         'Selected Nozzles': [1],
-         'ID,Volt,Pulse,Freq,Volume': [['1','10.00','sciPULSE_LV01','120','146'],
-                                       ['2','58','VISC01','120','102']],
-         'Dispensing': 'Off'}
-
-    Note: 'Activated Nozzles' is a list of BOOLEANS indexed by channel (index 0
-    = channel 1), not a list of channel numbers. And the params entry is a LIST
-    OF LISTS -- one row per activated nozzle.
-    """
+    
     print("\n=== NOZZLE STATE (read-only) ===")
     r = dod.get_nozzle_status()
     print("RAW get_nozzle_status():")
@@ -140,7 +119,11 @@ def dialog_is_open(status):
     return (ref not in (0, "0", None)) or bool(msg)
 
 
+# ---------------------------------------------------------------------------
+# ROUTINE -- shared by the terminal and the GUI
+# ---------------------------------------------------------------------------
 def preflight(dod, station, task=None, log=print):
+    """Checks before motion. True only if everything genuinely passed."""
     log("=== PREFLIGHT (read-only) ===")
     ok = True
 
@@ -148,13 +131,21 @@ def preflight(dod, station, task=None, log=print):
         st = dod.get_status()
         log("status: %s" % (st,))
         if isinstance(st, dict):
+            # REAL status shape (confirmed on hardware): there is NO 'Status'
+            # field. Busy-ness is reported through 'RunningTask', which reads
+            # 'NA' (or empty) when the robot is idle, and a real task name only
+            # while a task is actually running. So the robot is busy ONLY when
+            # RunningTask holds something other than NA/empty/none.
             running = str(st.get("RunningTask", "")).strip()
-            if running:
-                log("*** robot is busy running %r -- wait for it. ***" % running)
+            idle_markers = ("", "na", "n/a", "none", "idle", "ready", "-")
+            if running.lower() not in idle_markers:
+                log("*** robot is busy running %r -- wait for it to finish. ***" % running)
                 ok = False
+
             if dialog_is_open(st):
                 log("*** an open DIALOG is showing -- the robot silently rejects "
                     "commands until it is closed: %r ***" % st.get("Dialog"))
+                log("    (tip: close it at the robot, then retry.)")
                 ok = False
     except Exception as e:
         log("FAILED to read status: %s" % e)
@@ -186,17 +177,21 @@ def _terminal_confirm(message):
     return input("\nType GO to run: ").strip() == "GO"
 
 
+# Wash tasks that MOVE THE ROBOT THEMSELVES (confirmed by reading the .tsk files).
 # e.g. WashFlush_Medium is: MoveToWasteStation1 -> pump ON -> syringe 250uL ->
 # wait 7s -> move WashStation1 -> ultrasonic 10s -> syringe back ->
-# move CameraStation -> pump OFF. 
+# move CameraStation -> pump OFF.  So a do_move() beforehand is REDUNDANT.
 SELF_POSITIONING_TASKS = {
     "WashFlush_Light_Narrow", "WashFlush_Medium", "WashFlush_Medium_Narrow",
     "WashFlush_Strong", "WashFlush_Strong_Narrow", "Washflush_Well",
 }
 
+# Tasks with NO drive steps at all -- ultrasonic only. Zero motion, no liquid.
 # The safest possible way to prove do_task() works on hardware.
 NO_MOTION_TASKS = {"WashFlush_Piezo_only", "WashFlush_Piezo_Pump_only"}
 
+# Single-move tasks: the robot runs its OWN move as a task. Safer than do_move
+# (which moves one raw axis). Confirmed by reading the .tsk files -- each is one
 # MOVE step to a named position.
 MOVE_TASKS = {
     "MoveHome", "MoveToCameraStation", "MoveToWasteStation1", "MoveToTray1",
@@ -210,23 +205,6 @@ OPERATOR_TASKS = {"MorningWashProcedure"}
 
 def wash_routine(dod, station=None, task=None, dry_run=True,
                  log=print, confirm=_terminal_confirm):
-    """
-    Run a task, and optionally move to a station first.
-
-    IMPORTANT: the WashFlush_* tasks position themselves (they start with a move
-    to WasteStation1 and end at CameraStation). So for those you do NOT need a
-    station -- passing one just adds an extra trip across the hutch for nothing.
-    Pass a station only for a task that does not move itself.
-
-    log(msg)         -- where progress goes (print, or the GUI's log box)
-    confirm(message) -- must return True to proceed (input, or a GUI dialog)
-
-    do_task() BLOCKS until the task finishes -- it polls get_status() every 0.5 s
-    while Status == "Busy". No manual wait is needed, and stop_task() afterwards
-    would stop nothing. stop_task() also has a documented bug: it leaves the robot
-    stuck in "Busy". The real abort hook is dod.safety_abort = True, which do_task
-    checks each poll.
-    """
     if not station and not task:
         log("nothing to do -- give a task, a station, or both.")
         return {"ok": False, "reason": "nothing to do"}
@@ -307,7 +285,7 @@ def wash_routine(dod, station=None, task=None, dry_run=True,
         try:
             st = dod.get_status()
             running = str(st.get("RunningTask", "")).strip() if isinstance(st, dict) else ""
-            if running:
+            if running.lower() not in ("", "na", "n/a", "none", "idle", "ready", "-"):
                 log("   note: RunningTask is still %r" % running)
             else:
                 log("   task finished, robot idle.")
@@ -375,17 +353,6 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
 
 def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
                       select=None, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Set nozzle voltage / pulse / frequency via the REAL single call:
-        client.set_nozzle_parameters(active, selected, volts, pulse, frequency)
-
-    There are NO separate per-parameter setters -- this one call sets them all,
-    so we read the CURRENT activated/selected/values first and only change what
-    was passed, to avoid clobbering the others.
-
-    volts:int, pulse:str, frequency:int  (per the DropsDriver signature)
-    select: optionally change the selected nozzle channel too (str).
-    """
     # read current state so we don't wipe unspecified fields
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
@@ -440,10 +407,10 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
     Nudge one axis by `delta` um (relative). axis is 'X', 'Y', or 'Z'.
 
     *** DANGER ***
-    This uses move_x/y/z, which the DoD source warns are RAW moves:
-      "does not include a Z move up to the safe height nor any other safety
-       feature checking whether the move ... can lead to collision or breaking
-       of a dispenser Tip."
+    This uses move_x_abs / move_y_abs / move_z_abs on the DoD object. Per the
+    real source these move ONE axis to an absolute coordinate in the ROBOT
+    coordinate system, with NO safety test (they connect, move, busy_wait, then
+    disconnect). They do NOT lift Z to a safe height or check the path.
     So: small steps only, clamp to the drive range, confirm every nudge.
     The caller must guarantee the path is clear (nozzle not down in a well, etc.).
     """
@@ -474,20 +441,21 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
 
     log("JOG %s: %.0f -> %.0f  (%+.0f um)" % (axis, here[axis], target, target - here[axis]))
 
+    method_name = "move_%s_abs" % axis.lower()
     if dry_run:
-        log("[DRY RUN] would call dod.client.move_%s(%.0f)" % (axis.lower(), target))
+        log("[DRY RUN] would call dod.%s(%.0f)" % (method_name, target))
         return {"ok": True, "dry_run": True}
 
     msg = ("RAW JOG -- no safety check.\n\n"
            "move %s from %.0f to %.0f (%+.0f um)?\n\n"
-           "move_%s does NOT lift Z or check for collision. Make sure the\n"
+           "%s does NOT lift Z or check for collision. Make sure the\n"
            "nozzle can travel there without hitting anything.\n\nProceed?"
-           % (axis, here[axis], target, target - here[axis], axis.lower()))
+           % (axis, here[axis], target, target - here[axis], method_name))
     if not confirm(msg):
         log("jog aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    mover = getattr(dod.client, "move_%s" % axis.lower())
+    mover = getattr(dod, method_name)   # move_x_abs / move_y_abs / move_z_abs
     log("   -> %s" % (mover(target),))
     try:
         p = read_live_position(dod)
@@ -597,7 +565,8 @@ def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
     try:
         st = dod.get_status()
         running = str(st.get("RunningTask", "")).strip() if isinstance(st, dict) else ""
-        log("   note: RunningTask still %r" % running if running else "   task finished, robot idle.")
+        _busy = running.lower() not in ("", "na", "n/a", "none", "idle", "ready", "-")
+        log("   note: RunningTask still %r" % running if _busy else "   task finished, robot idle.")
     except Exception as e:
         log("   could not read status: %s" % e)
     log("task complete.")
