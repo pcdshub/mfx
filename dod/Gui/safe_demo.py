@@ -1,3 +1,5 @@
+
+
 import argparse
 import sys
 
@@ -15,6 +17,15 @@ def _unwrap(r):
 # READS -- never move anything, never invent a value
 # ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
+    """
+    LIVE position from get_current_position(). CONFIRMED real reply:
+        {'CurrentPosition': 0,
+         'Position': ['0', 'Probe (96WP-1nozzle)', '176270', '113817', '25385', ...],
+         'PositionReal': {'X': 254000, 'Y': 0, 'Z': 0}}
+
+    'PositionReal' is the live coordinates. 'Position' is the last NAMED position
+    selected -- it does not track live motion and goes stale.
+    """
     r = dod.get_current_position()
     if verbose:
         print("RAW get_current_position():")
@@ -56,10 +67,33 @@ def read_station_names(dod):
 
 
 def read_task_names(dod):
+    """
+    The robot's REAL callable task list, via get_task_names().
+
+    IMPORTANT (confirmed on hardware): this is NOT the same as the config file's
+    [Task] 'Hidden Tasks' key. The config lists ~100 hidden tasks
+    (WashFlush_Medium, WashFlush_Strong_Narrow, MorningWashProcedure, ...) and
+    NONE of them appear here. execute_task runs tasks from THIS list only.
+
+    Real wash-ish tasks that DO exist: WashFlush_Light, WashFlush_Strong,
+    Ultimate_Wash_Sequence.
+    """
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
 
 
 def read_nozzle_state(dod):
+    """
+    CONFIRMED real get_nozzle_status() reply:
+        {'Activated Nozzles': [True, True, False, False, False, False, False, False],
+         'Selected Nozzles': [1],
+         'ID,Volt,Pulse,Freq,Volume': [['1','10.00','sciPULSE_LV01','120','146'],
+                                       ['2','58','VISC01','120','102']],
+         'Dispensing': 'Off'}
+
+    Note: 'Activated Nozzles' is a list of BOOLEANS indexed by channel (index 0
+    = channel 1), not a list of channel numbers. And the params entry is a LIST
+    OF LISTS -- one row per activated nozzle.
+    """
     print("\n=== NOZZLE STATE (read-only) ===")
     r = dod.get_nozzle_status()
     print("RAW get_nozzle_status():")
@@ -211,6 +245,23 @@ OPERATOR_TASKS = {"MorningWashProcedure"}
 
 def wash_routine(dod, station=None, task=None, dry_run=True,
                  log=print, confirm=_terminal_confirm):
+    """
+    Run a task, and optionally move to a station first.
+
+    IMPORTANT: the WashFlush_* tasks position themselves (they start with a move
+    to WasteStation1 and end at CameraStation). So for those you do NOT need a
+    station -- passing one just adds an extra trip across the hutch for nothing.
+    Pass a station only for a task that does not move itself.
+
+    log(msg)         -- where progress goes (print, or the GUI's log box)
+    confirm(message) -- must return True to proceed (input, or a GUI dialog)
+
+    do_task() BLOCKS until the task finishes -- it polls get_status() every 0.5 s
+    while Status == "Busy". No manual wait is needed, and stop_task() afterwards
+    would stop nothing. stop_task() also has a documented bug: it leaves the robot
+    stuck in "Busy". The real abort hook is dod.safety_abort = True, which do_task
+    checks each poll.
+    """
     if not station and not task:
         log("nothing to do -- give a task, a station, or both.")
         return {"ok": False, "reason": "nothing to do"}
@@ -359,6 +410,12 @@ def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm
 
 
 def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Select the nozzle via the real dod.set_nozzle_selected(nozzle) method.
+    That method validates the channel is armed and raises ValueError if not,
+    so we also check the activated list first to give a clean message.
+    Note: set_nozzle_selected takes an INT channel.
+    """
     channel = str(channel)
     try:
         armed = read_activated_nozzles(dod)
@@ -391,6 +448,17 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
 
 def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
                       select=None, dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Set nozzle voltage / pulse / frequency via the REAL single call:
+        client.set_nozzle_parameters(active, selected, volts, pulse, frequency)
+
+    There are NO separate per-parameter setters -- this one call sets them all,
+    so we read the CURRENT activated/selected/values first and only change what
+    was passed, to avoid clobbering the others.
+
+    volts:int, pulse:str, frequency:int  (per the DropsDriver signature)
+    select: optionally change the selected nozzle channel too (str).
+    """
     # read current state so we don't wipe unspecified fields
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
@@ -441,6 +509,19 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
 
 
 def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Nudge one axis by `delta` um, RELATIVE to the current position.
+    axis is 'X', 'Y', or 'Z'.
+
+    *** DANGER ***
+    This uses move_x_rel / move_y_rel / move_z_rel on the DoD object. Per the
+    real source these read the current position, move by the given delta in the
+    ROBOT coordinate system, and busy_wait for completion -- with NO safety test.
+    They do NOT lift Z to a safe height or check the path.
+    So: small steps only, clamp the delta to stay in the drive range, confirm
+    every nudge. The caller must guarantee the path is clear (nozzle not down in
+    a well, etc.).
+    """
     axis = axis.upper()
     if axis not in ("X", "Y", "Z"):
         log("bad axis %r" % axis)
@@ -470,22 +551,39 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
 
     log("JOG %s: %.0f -> %.0f  (%+.0f um)" % (axis, here[axis], target, delta))
 
-    method_name = "move_%s_rel" % axis.lower()
+    # The deployed DoD version may or may not have the relative move methods.
+    # Prefer move_<axis>_rel(delta); if absent, fall back to move_<axis>_abs(target).
+    rel_name = "move_%s_rel" % axis.lower()
+    abs_name = "move_%s_abs" % axis.lower()
+    has_rel = hasattr(dod, rel_name)
+    has_abs = hasattr(dod, abs_name)
+
+    if has_rel:
+        plan = "dod.%s(%+.0f)" % (rel_name, delta)
+    elif has_abs:
+        plan = "dod.%s(%.0f)" % (abs_name, target)
+    else:
+        log("this DoD has neither %s nor %s -- cannot jog." % (rel_name, abs_name))
+        return {"ok": False, "reason": "no move method"}
+
     if dry_run:
-        log("[DRY RUN] would call dod.%s(%+.0f)" % (method_name, delta))
+        log("[DRY RUN] would call %s" % plan)
         return {"ok": True, "dry_run": True}
 
     msg = ("RAW JOG -- no safety check.\n\n"
            "move %s by %+.0f um (from %.0f to %.0f)?\n\n"
-           "%s does NOT lift Z or check for collision. Make sure the\n"
+           "This does NOT lift Z or check for collision. Make sure the\n"
            "nozzle can travel there without hitting anything.\n\nProceed?"
-           % (axis, delta, here[axis], target, method_name))
+           % (axis, delta, here[axis], target))
     if not confirm(msg):
         log("jog aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    mover = getattr(dod, method_name)   # move_x_rel / move_y_rel / move_z_rel
-    log("   -> %s" % (mover(delta),))
+    if has_rel:
+        r = getattr(dod, rel_name)(delta)          # relative: pass the step
+    else:
+        r = getattr(dod, abs_name)(target)         # absolute: pass the target
+    log("   via %s -> %s" % (rel_name if has_rel else abs_name, r))
     try:
         p = read_live_position(dod)
         log("   now at: X=%.0f Y=%.0f Z=%.0f" % (p["X"], p["Y"], p["Z"]))
@@ -557,6 +655,12 @@ def describe_task(task):
 
 
 def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Run one task by name via do_task(). Verified path -- no dummy method names.
+
+    do_task() BLOCKS until the task finishes (polls get_status() every 0.5 s
+    while Busy). The real abort is dod.safety_abort = True, checked each poll.
+    """
     note = describe_task(task)
     log("=== TASK: %s ===" % task)
     log("   what it does: %s" % note)
