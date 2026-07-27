@@ -50,12 +50,13 @@ import json
 from typing import Optional
 
 # DoD and its reconnect decorator.
-# Requires MFX_Hutch_Python on sys.path during development:
-#   import sys; sys.path.insert(0, '/path/to/MFX_Hutch_Python')
-from mfx.dod.dod import DoD, _with_reconnect
+# Requires MFX_Hutch_Python/mfx on sys.path during development:
+#   import sys; sys.path.insert(0, '/path/to/MFX_Hutch_Python/mfx')
+from dod.dod import DoD, _with_reconnect
 
 from .registry import (
     load_registry,
+    load_registry_from_json,
     lookup_name_by_coords,
     RegistryDict,
     WAYPOINT_COORD_TOLERANCE_UM,
@@ -70,8 +71,14 @@ class SafeRobot(DoD):
     Parameters
     ----------
     robot_config_path:
-        Path to the robot's Windows INI configuration file.  This file is
-        parsed to build the position registry (name → coordinates + speeds).
+        Path to the robot's configuration file.  Accepts either:
+
+        - A Windows INI file (``.ini``) — parsed directly from the robot's
+          native config format.
+        - A positions JSON file (``.json``) — produced by the setup script
+          as a sidecar alongside the INI.  Use this path when the full INI
+          is not available on the server (e.g. during development or when
+          the INI must not be committed to version control).
     exclusion_zone_config:
         Path to the exclusion zone JSON config file.  Must contain at minimum
         ``build_plate``, ``clearance_um``, and ``obstacles`` keys.  May also
@@ -131,12 +138,17 @@ class SafeRobot(DoD):
         self._waypoint_coord_tolerance_um: float = waypoint_coord_tolerance_um
 
         # ----------------------------------------------------------------
-        # Load position registry from robot INI config
+        # Load position registry — INI or JSON depending on file extension
         # ----------------------------------------------------------------
 
         self._registry: RegistryDict
         self._sentinel_str: Optional[str]
-        self._registry, self._sentinel_str = load_registry(robot_config_path)
+        if robot_config_path.lower().endswith(".json"):
+            self._registry, self._sentinel_str = load_registry_from_json(
+                robot_config_path
+            )
+        else:
+            self._registry, self._sentinel_str = load_registry(robot_config_path)
 
         # ----------------------------------------------------------------
         # Load exclusion zone config and build graph

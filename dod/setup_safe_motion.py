@@ -80,18 +80,16 @@ def _stub_module(name: str) -> _types.ModuleType:
 
 
 for _name in [
-    "mfx",
-    "mfx.dod",
-    "mfx.dod.dod",
     "dod",
+    "dod.dod",
     "dod.DropsDriver",
     "dod.JsonFileHandler",
 ]:
     _stub_module(_name)
 
-# Provide the two names safe_robot.py imports from mfx.dod.dod
-sys.modules["mfx.dod.dod"].DoD = type("DoD", (), {})  # type: ignore[attr-defined]
-sys.modules["mfx.dod.dod"]._with_reconnect = lambda f: f  # type: ignore[attr-defined]
+# Provide the two names safe_robot.py imports from dod.dod
+sys.modules["dod.dod"].DoD = type("DoD", (), {})  # type: ignore[attr-defined]
+sys.modules["dod.dod"]._with_reconnect = lambda f: f  # type: ignore[attr-defined]
 
 from safe_motion.obb import OBB
 from safe_motion.graph import VisibilityGraph
@@ -159,7 +157,9 @@ def _read_ini(robot_ini_path: str) -> Tuple[List[str], str]:
     ``records`` is a list of raw record strings (tab-separated fields, no
     separator).  ``full_text`` is the complete file content for reconstruction.
     """
-    with open(robot_ini_path, "r", encoding="utf-8", errors="replace") as fh:
+    with open(
+        robot_ini_path, "r", encoding="utf-8", errors="replace", newline=""
+    ) as fh:
         full_text = fh.read()
 
     match = _POSITIONS_RE.search(full_text)
@@ -298,7 +298,57 @@ def _reconstruct_ini(full_text: str, packed_positions: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Step 8 — Summary
+# Step 8 — Build positions JSON (sidecar)
+# ---------------------------------------------------------------------------
+
+
+def _build_positions_json(all_records: List[str], sentinel_ts: str) -> dict:
+    """Parse *all_records* into a JSON-serialisable positions dict.
+
+    Returns a dict with two top-level keys:
+
+    ``positions``
+        ``{name: {X, Y, Z, vX, vY, vZ}}`` for every non-sentinel record.
+    ``sentinel``
+        The sentinel timestamp string (e.g. ``'20260727181742'``).
+
+    This is the format read by :func:`registry.load_registry_from_json`.
+    """
+    positions: dict = {}
+    for rec in all_records:
+        fields = rec.split("\t")
+        if len(fields) < 8:
+            continue
+        name = fields[1].strip()
+        if not name or name.startswith("_last_edit_"):
+            continue
+        try:
+            positions[name] = {
+                "X": int(fields[2]),
+                "Y": int(fields[3]),
+                "Z": int(fields[4]),
+                "vX": int(fields[5]),
+                "vY": int(fields[6]),
+                "vZ": int(fields[7]),
+            }
+        except ValueError:
+            continue
+    return {"positions": positions, "sentinel": sentinel_ts}
+
+
+def _json_path_for_ini(ini_path: str) -> str:
+    """Return the sidecar JSON path for a given INI path.
+
+    Replaces a ``.ini`` extension with ``.json``; appends ``.json`` otherwise.
+    """
+    p = Path(ini_path)
+    if p.suffix.lower() == ".ini":
+        return str(p.with_suffix(".json"))
+    return str(p) + ".json"
+
+
+# ---------------------------------------------------------------------------
+# Step 9 — Summary
 # ---------------------------------------------------------------------------
 
 
@@ -307,6 +357,7 @@ def _print_summary(
     wp_records: List[str],
     sentinel_ts: str,
     dry_run: bool,
+    json_path: Optional[str] = None,
 ) -> None:
     mode = "[DRY RUN] " if dry_run else ""
     print(f"\n{mode}setup_safe_motion summary")
@@ -322,8 +373,10 @@ def _print_summary(
     print(f"  Sentinel timestamp           : {sentinel_ts}")
     if dry_run:
         print("\n  *** DRY RUN — robot INI file was NOT modified. ***")
+        print("  *** DRY RUN — positions JSON was NOT written.   ***")
         print("  Re-run without --dry-run to write changes.")
     else:
+        print(f"  Positions JSON written       : {json_path}")
         print(
             "\n  *** IMPORTANT: Reload the robot configuration (restart robot software) ***"
         )
@@ -402,10 +455,16 @@ def main() -> None:
     packed = _pack_positions(all_records)
     new_ini_text = _reconstruct_ini(full_text, packed)
 
-    # 8. Summary
-    _print_summary(kept, wp_records, sentinel_ts, dry_run=args.dry_run)
+    # 8. Build sidecar JSON
+    json_path = _json_path_for_ini(args.robot_ini)
+    positions_json = _build_positions_json(all_records, sentinel_ts)
 
-    # 9. Write (or print)
+    # 9. Summary
+    _print_summary(
+        kept, wp_records, sentinel_ts, dry_run=args.dry_run, json_path=json_path
+    )
+
+    # 10. Write (or print)
     if args.dry_run:
         print("--- Reconstructed Positions line (dry run) ---")
         # Find and print just the Positions line for review
@@ -416,9 +475,13 @@ def main() -> None:
         print("--- End dry run output ---")
     else:
         out_path = args.robot_ini
-        with open(out_path, "w", encoding="utf-8") as fh:
+        with open(out_path, "w", encoding="utf-8", newline="\r\n") as fh:
             fh.write(new_ini_text)
         print(f"Wrote updated INI to: {out_path}")
+
+        with open(json_path, "w", encoding="utf-8") as fh:
+            json.dump(positions_json, fh, indent=2)
+        print(f"Wrote positions JSON to: {json_path}")
 
 
 if __name__ == "__main__":

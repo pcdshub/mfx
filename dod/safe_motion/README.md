@@ -63,6 +63,26 @@ python setup_safe_motion.py \
 The script is idempotent — re-running strips old `_wp_*` entries and rewrites
 them. Safe to run after any config change.
 
+> **Dry-run output is for review only.**
+> The terminal expands tab characters to spaces when printing, so the
+> `Positions` line shown by `--dry-run` cannot be reliably copy-pasted into
+> the INI file. Always use the live write (without `--dry-run`) to produce
+> the actual file — do not hand-edit the INI based on the printed output.
+
+> **Windows line endings.**
+> The script writes the output file with Windows CRLF (`\r\n`) line endings
+> regardless of the platform it runs on. The resulting file is safe to
+> transfer to the Windows robot PC (e.g. via USB) without any further
+> conversion.
+
+> **Positions JSON sidecar.**
+> Every live run (without `--dry-run`) also writes a `robot_config.json`
+> alongside the INI (same directory, `.ini` extension replaced with `.json`).
+> This JSON contains only the named positions and the sentinel timestamp —
+> no machine-specific settings.  Commit this file to version control instead
+> of the full INI.  `SafeRobot` can load from it directly by passing the
+> `.json` path as `robot_config_path` (see Instantiation).
+
 **Step 3 — Restart the robot software**
 
 The robot must reload its config file for the new named positions to become
@@ -76,7 +96,7 @@ active. Restart the robot software before using `SafeRobot` in safe mode.
 
 ```python
 import sys
-sys.path.insert(0, '/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python')
+sys.path.insert(0, '/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx')
 sys.path.insert(0, '/sdf/home/d/dehe/Ops_supp/DoD_dev')
 
 from safe_motion import SafeRobot
@@ -155,8 +175,8 @@ import to resolve:
 
 ```python
 import sys
-sys.path.insert(0, '/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python')
-from mfx.dod.safe_motion import SafeRobot
+sys.path.insert(0, '/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx')
+from dod.safe_motion import SafeRobot
 ```
 
 This is not needed once the package is deployed into `MFX_Hutch_Python`.
@@ -169,7 +189,8 @@ This is not needed once the package is deployed into `MFX_Hutch_Python`.
 from mfx.dod.safe_motion import SafeRobot
 
 robot = SafeRobot(
-    robot_config_path='/path/to/robot_config.ini',
+    robot_config_path='/path/to/robot_config.ini',   # full INI, or:
+    # robot_config_path='/path/to/robot_config.json', # positions JSON sidecar
     exclusion_zone_config='/path/to/exclusion_zones.json',
     # optional:
     position_tolerance_um=500.0,   # post-move verify tolerance (default 500 µm)
@@ -179,8 +200,13 @@ robot = SafeRobot(
 )
 ```
 
+`robot_config_path` accepts either the full robot INI file or the positions
+JSON sidecar produced by the setup script.  Pass the `.json` path when the
+full INI is not available on the server or must not be committed to version
+control.
+
 At instantiation, `SafeRobot`:
-- Parses the robot INI config to build the position registry.
+- Parses the robot config (INI or JSON) to build the position registry.
 - Loads the exclusion zone config and builds the visibility graph.
 - Sets `safe_mode = False` — motion is in passthrough mode until explicitly enabled.
 

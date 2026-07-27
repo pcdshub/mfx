@@ -147,6 +147,54 @@ def load_registry(
     return registry_dict, sentinel_str
 
 
+def load_registry_from_json(
+    path: str,
+) -> Tuple[RegistryDict, Optional[str]]:
+    """Parse a positions JSON file produced by the setup script.
+
+    The JSON must have the structure written by ``setup_safe_motion.py``::
+
+        {
+          "positions": {
+            "Home":    {"X": 0, "Y": 0, "Z": 0, "vX": 0, "vY": 0, "vZ": 25000},
+            "_wp_000": {"X": 100000, ...},
+            ...
+          },
+          "sentinel": "20260727181742"
+        }
+
+    Parameters
+    ----------
+    path:
+        Filesystem path to the ``.json`` positions file.
+
+    Returns
+    -------
+    registry_dict:
+        ``{name: {'X': int, 'Y': int, 'Z': int, 'vX': int, 'vY': int, 'vZ': int}}``
+    sentinel_str:
+        The sentinel timestamp string, or ``None`` if absent.
+    """
+    import json as _json
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data: dict = _json.load(fh)
+
+    registry_dict: RegistryDict = {}
+    for name, entry in data.get("positions", {}).items():
+        registry_dict[name] = {
+            "X": int(entry["X"]),
+            "Y": int(entry["Y"]),
+            "Z": int(entry["Z"]),
+            "vX": int(entry["vX"]),
+            "vY": int(entry["vY"]),
+            "vZ": int(entry["vZ"]),
+        }
+
+    sentinel_str: Optional[str] = data.get("sentinel") or None
+    return registry_dict, sentinel_str
+
+
 def lookup_name_by_coords(
     registry_dict: RegistryDict,
     x: float,
