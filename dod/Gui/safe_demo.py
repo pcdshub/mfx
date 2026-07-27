@@ -51,6 +51,17 @@ def read_station_names(dod):
 
 
 def read_task_names(dod):
+    """
+    The robot's REAL callable task list, via get_task_names().
+
+    IMPORTANT (confirmed on hardware): this is NOT the same as the config file's
+    [Task] 'Hidden Tasks' key. The config lists ~100 hidden tasks
+    (WashFlush_Medium, WashFlush_Strong_Narrow, MorningWashProcedure, ...) and
+    NONE of them appear here. execute_task runs tasks from THIS list only.
+
+    Real wash-ish tasks that DO exist: WashFlush_Light, WashFlush_Strong,
+    Ultimate_Wash_Sequence.
+    """
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
 
 
@@ -292,11 +303,6 @@ def wash_routine(dod, station=None, task=None, dry_run=True,
 
 
 def read_activated_nozzles(dod):
-    """
-    The channels that are ARMED, from get_nozzle_status()['Activated Nozzles'].
-    Only these can be selected -- the robot rejects select_nozzle() for others.
-    Returns a list of channel strings, e.g. ['1','2','3','4'].
-    """
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
         raise RuntimeError("nozzle status is %s, not a dict" % type(ns))
@@ -315,14 +321,6 @@ def read_activated_nozzles(dod):
 
 
 def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Set the nozzle dispensing mode via the real dod.set_nozzle_dispensing(mode).
-    mode: 'Off', 'Free' (continuous), or 'Trigger' (dispense on external trigger).
-
-    'Off' is always safe. 'Free' and 'Trigger' start the nozzle DISPENSING
-    liquid, so they get a clear confirmation. Per the real source, 'Off'
-    iterates over each armed channel to make sure all are stopped.
-    """
     mode = str(mode).strip().capitalize()   # normalize off/free/trigger
     if mode not in ("Off", "Free", "Trigger"):
         log("bad dispensing mode %r -- must be Off, Free, or Trigger" % mode)
@@ -342,8 +340,13 @@ def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm
             log("aborted -- dispensing not changed.")
             return {"ok": False, "reason": "not confirmed"}
 
-    r = dod.set_nozzle_dispensing(mode)
-    log("   -> %s" % (r,))
+    if hasattr(dod, "set_nozzle_dispensing"):
+        r = dod.set_nozzle_dispensing(mode)
+        log("   via set_nozzle_dispensing -> %s" % (r,))
+    else:
+        # fallback: lower-level client.dispensing() takes the mode string
+        r = dod.client.dispensing(mode)
+        log("   via client.dispensing -> %s" % (r,))
     return {"ok": True, "result": r}
 
 
@@ -351,8 +354,6 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
     """
     Select the nozzle via the real dod.set_nozzle_selected(nozzle) method.
     That method validates the channel is armed and raises ValueError if not,
-    so we also check the activated list first to give a clean message.
-    Note: set_nozzle_selected takes an INT channel.
     """
     channel = str(channel)
     try:
@@ -367,8 +368,16 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
         return {"ok": False, "reason": "not activated"}
 
     log("=== SELECT NOZZLE %s ===" % channel)
+
+    # The deployed DoD version may not have set_nozzle_selected. Prefer it if
+    # present (it validates + is the documented method); otherwise fall back to
+    # the lower-level client.select_nozzle(channel).
+    has_dod_method = hasattr(dod, "set_nozzle_selected")
     if dry_run:
-        log("[DRY RUN] would call dod.set_nozzle_selected(%s)" % channel)
+        if has_dod_method:
+            log("[DRY RUN] would call dod.set_nozzle_selected(%s)" % channel)
+        else:
+            log("[DRY RUN] would call dod.client.select_nozzle(%s)" % channel)
         return {"ok": True, "dry_run": True}
 
     if not confirm("Select nozzle %s for dispensing/tasks?" % channel):
@@ -379,24 +388,18 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
         ch_int = int(channel)
     except ValueError:
         ch_int = channel
-    r = dod.set_nozzle_selected(ch_int)
-    log("   -> %s" % (r,))
+
+    if has_dod_method:
+        r = dod.set_nozzle_selected(ch_int)
+        log("   via set_nozzle_selected -> %s" % (r,))
+    else:
+        r = dod.client.select_nozzle(str(ch_int))   # client wants a string channel
+        log("   via client.select_nozzle -> %s" % (r,))
     return {"ok": True, "result": r}
 
 
 def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
                       select=None, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Set nozzle voltage / pulse / frequency via the REAL single call:
-        client.set_nozzle_parameters(active, selected, volts, pulse, frequency)
-
-    There are NO separate per-parameter setters -- this one call sets them all,
-    so we read the CURRENT activated/selected/values first and only change what
-    was passed, to avoid clobbering the others.
-
-    volts:int, pulse:str, frequency:int  (per the DropsDriver signature)
-    select: optionally change the selected nozzle channel too (str).
-    """
     # read current state so we don't wipe unspecified fields
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
@@ -447,19 +450,6 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
 
 
 def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Nudge one axis by `delta` um, RELATIVE to the current position.
-    axis is 'X', 'Y', or 'Z'.
-
-    *** DANGER ***
-    This uses move_x_rel / move_y_rel / move_z_rel on the DoD object. Per the
-    real source these read the current position, move by the given delta in the
-    ROBOT coordinate system, and busy_wait for completion -- with NO safety test.
-    They do NOT lift Z to a safe height or check the path.
-    So: small steps only, clamp the delta to stay in the drive range, confirm
-    every nudge. The caller must guarantee the path is clear (nozzle not down in
-    a well, etc.).
-    """
     axis = axis.upper()
     if axis not in ("X", "Y", "Z"):
         log("bad axis %r" % axis)
