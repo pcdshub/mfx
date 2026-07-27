@@ -50,9 +50,13 @@ import json
 from typing import Optional
 
 # DoD and its reconnect decorator.
-# Requires MFX_Hutch_Python/mfx on sys.path during development:
-#   import sys; sys.path.insert(0, '/path/to/MFX_Hutch_Python/mfx')
-from dod.dod import DoD, _with_reconnect
+# When deployed as mfx.dod.safe_motion the relative import resolves correctly
+# regardless of sys.path.  The fallback covers standalone development use
+# (safe_motion loaded directly from DoD_dev with MFX_Hutch_Python/mfx on sys.path).
+try:
+    from ..dod import DoD, _with_reconnect  # deployed: mfx.dod.safe_motion
+except ImportError:
+    from dod.dod import DoD, _with_reconnect  # development fallback
 
 from .registry import (
     load_registry,
