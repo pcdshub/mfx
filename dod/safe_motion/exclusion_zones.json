@@ -1,0 +1,86 @@
+{
+  "_note": [
+    "MFX DoD robot — safe_motion exclusion zone configuration.",
+    "All dimensions in micrometres (µm) unless otherwise noted.",
+    "All coordinates are in ROBOT FRAME: Robot X = Hutch X, Robot Y = Hutch Z, Robot Z = -Hutch Y.",
+    "This file is read by SafeRobot.__init__ at instantiation time.",
+    "Re-run the setup script and reload SafeRobot after editing this file."
+  ],
+
+  "build_plate": {
+    "_note": "Physical dimensions of the robot build plate.",
+    "x_um": 250000,
+    "y_um": 120000,
+    "z_um": 40000
+  },
+
+  "clearance_um": 5000,
+  "_clearance_note": [
+    "Safety buffer added to every side of each obstacle before path planning.",
+    "The robot path will stay at least this far from the raw obstacle boundary.",
+    "Set based on exclusion zone tightness, not just mechanical noise floor.",
+    "Must be > waypoint_coord_tolerance_um (10 µm) by a large margin."
+  ],
+
+  "small_move_threshold_um": 100,
+  "_small_move_threshold_note": [
+    "Maximum displacement allowed for raw coordinate moves (move_x_rel, move_y_rel,",
+    "move_x_abs, move_y_abs) in safe mode.",
+    "Moves within this threshold undergo an endpoint check only (no full path plan).",
+    "Moves beyond this threshold are blocked; use do_move() instead.",
+    "Typical use: fine alignment jogs during sample positioning."
+  ],
+
+  "waypoint_speeds": {
+    "_note": [
+      "Speeds written into robot INI config for setup-script-generated waypoints.",
+      "If omitted, the setup script uses Home position speeds as defaults.",
+      "WARNING: if speeds are missing in the robot INI, the robot falls back to",
+      "hardware maximum — unsafe for tight-corridor waypoint moves."
+    ],
+    "vx_um_per_s": 25000,
+    "vy_um_per_s": 25000,
+    "vz_um_per_s": 5000
+  },
+
+  "task_preconditions": {
+    "_note": [
+      "Maps task_name -> required_start_position_name.",
+      "Tasks in safe mode are BLOCKED unless listed here.",
+      "The robot must be at required_start_position_name (within position_tolerance_um)",
+      "before the task is issued.",
+      "This enforces a verified entry condition only — path safety INSIDE the task",
+      "is NOT checked. Document task safety assumptions alongside each entry.",
+      "",
+      "For take_probe, use the fixed key 'take_probe'.",
+      "For do_task, use the task name as the key."
+    ],
+    "take_probe": "Home",
+    "wash_nozzle": "Home",
+    "MoveToProbe_96WP": "Home"
+  },
+
+  "obstacles": [
+    {
+      "_name": "Example fixture — replace with real geometry",
+      "_note": [
+        "cx_um / cy_um: centre of the rectangle in robot frame (µm).",
+        "To specify by corner: cx = x_min + w/2, cy = y_min + h/2.",
+        "angle_deg: CCW rotation from robot +X axis. Use 0.0 for axis-aligned."
+      ],
+      "cx_um": 80000,
+      "cy_um": 60000,
+      "w_um": 30000,
+      "h_um": 15000,
+      "angle_deg": 0.0
+    },
+    {
+      "_name": "Example rotated obstacle — remove or replace",
+      "cx_um": 180000,
+      "cy_um": 40000,
+      "w_um": 20000,
+      "h_um": 10000,
+      "angle_deg": 30.0
+    }
+  ]
+}
