@@ -11,6 +11,23 @@ def _unwrap(r):
     return r.RESULTS if hasattr(r, "RESULTS") else r
 
 
+def _client_do(dod, fn, *args):
+    method = getattr(dod.client, fn)
+    try:
+        dod.client.connect("Test")     # register as an authorized user
+    except Exception as e:
+        # connect may not exist on some builds; try the call anyway
+        pass
+    try:
+        r = method(*args)
+    finally:
+        try:
+            dod.client.disconnect()
+        except Exception:
+            pass
+    return r
+
+
 # ---------------------------------------------------------------------------
 # READS -- never move anything, never invent a value
 # ---------------------------------------------------------------------------
@@ -344,8 +361,8 @@ def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm
         log("   via set_nozzle_dispensing -> %s" % (r,))
     else:
         # fallback: lower-level client.dispensing() takes the mode string
-        r = dod.client.dispensing(mode)
-        log("   via client.dispensing -> %s" % (r,))
+        r = _client_do(dod, "dispensing", mode)
+        log("   via client.dispensing -> %s" % (_unwrap(r),))
     return {"ok": True, "result": r}
 
 
@@ -388,24 +405,13 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
         r = dod.set_nozzle_selected(ch_int)
         log("   via set_nozzle_selected -> %s" % (r,))
     else:
-        r = dod.client.select_nozzle(str(ch_int))   # client wants a string channel
-        log("   via client.select_nozzle -> %s" % (r,))
+        r = _client_do(dod, "select_nozzle", str(ch_int))   # client wants a string channel
+        log("   via client.select_nozzle -> %s" % (_unwrap(r),))
     return {"ok": True, "result": r}
 
 
 def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
                       select=None, dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Set nozzle voltage / pulse / frequency via the REAL single call:
-        client.set_nozzle_parameters(active, selected, volts, pulse, frequency)
-
-    There are NO separate per-parameter setters -- this one call sets them all,
-    so we read the CURRENT activated/selected/values first and only change what
-    was passed, to avoid clobbering the others.
-
-    volts:int, pulse:str, frequency:int  (per the DropsDriver signature)
-    select: optionally change the selected nozzle channel too (str).
-    """
     # read current state so we don't wipe unspecified fields
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
@@ -463,8 +469,8 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
         log("aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    r = dod.client.set_nozzle_parameters(act_s, sel_s, new_v, new_p, new_f)
-    log("   -> %s" % (r,))
+    r = _client_do(dod, "set_nozzle_parameters", act_s, sel_s, new_v, new_p, new_f)
+    log("   -> %s" % (_unwrap(r),))
     return {"ok": True, "result": r}
 
 
