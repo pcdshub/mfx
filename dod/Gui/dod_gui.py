@@ -30,16 +30,42 @@ class DodGui:
 
     # ------------------------------------------------------------ layout
     def _build(self):
-        pad = {"padx": 6, "pady": 4}
+        # ---- overall look: a bit bigger, nicer fonts, more breathing room ----
+        self.root.geometry("760x900")          # a bit bigger starting size
+        self.root.minsize(680, 760)
+        self.root.configure(bg="#eceff1")
+
+        UI   = ("Segoe UI", 11)                # clean sans for labels/buttons
+        UI_B = ("Segoe UI", 11, "bold")
+        MONO = ("Consolas", 13)               # readable monospace for numbers/log
+
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")           # cleaner base than the default
+        except Exception:
+            pass
+        style.configure("TLabelframe", background="#eceff1", borderwidth=1,
+                        relief="solid", padding=8)
+        style.configure("TLabelframe.Label", background="#eceff1",
+                        font=("Segoe UI", 11, "bold"), foreground="#37474f")
+        style.configure("TLabel", background="#eceff1", font=UI)
+        style.configure("TCheckbutton", background="#eceff1", font=UI)
+        style.configure("TCombobox", font=UI)
+        style.configure("TEntry", font=UI)
+        self._font_ui, self._font_ui_b, self._font_mono = UI, UI_B, MONO
+
+        pad = {"padx": 10, "pady": 7}
 
         pf = ttk.LabelFrame(self.root, text="Live position (read-only)")
         pf.grid(row=0, column=0, columnspan=2, sticky="ew", **pad)
-        self.pos_lbl = tk.Label(pf, text="X=?  Y=?  Z=?", font=("Consolas", 16), width=30)
-        self.pos_lbl.grid(row=0, column=0, padx=6, pady=6)
-        self.state_lbl = tk.Label(pf, text="connecting...", font=("Arial", 10, "bold"), width=22)
-        self.state_lbl.grid(row=0, column=1, padx=6)
-        self.range_lbl = tk.Label(pf, text="drive range: ?", font=("Consolas", 9))
-        self.range_lbl.grid(row=1, column=0, columnspan=2, sticky="w", padx=6)
+        self.pos_lbl = tk.Label(pf, text="X=?  Y=?  Z=?", font=("Consolas", 20),
+                                width=26, bg="#eceff1", fg="#1a237e")
+        self.pos_lbl.grid(row=0, column=0, padx=8, pady=8)
+        self.state_lbl = tk.Label(pf, text="connecting...", font=UI_B, width=20)
+        self.state_lbl.grid(row=0, column=1, padx=8)
+        self.range_lbl = tk.Label(pf, text="drive range: ?", font=("Consolas", 11),
+                                  bg="#eceff1", fg="#37474f")
+        self.range_lbl.grid(row=1, column=0, columnspan=2, sticky="w", padx=8)
 
         gf = ttk.LabelFrame(self.root, text="Run a task")
         gf.grid(row=1, column=0, columnspan=2, sticky="ew", **pad)
@@ -50,17 +76,22 @@ class DodGui:
         self.task_box.grid(row=0, column=1, padx=4)
         self.task_box.bind("<<ComboboxSelected>>", self._describe)
 
-        self.desc_lbl = tk.Label(gf, text="pick a task", font=("Arial", 9),
+        self.desc_lbl = tk.Label(gf, text="pick a task", font=("Segoe UI", 10),
                                  fg="#444441", wraplength=340, justify="left")
         self.desc_lbl.grid(row=1, column=0, columnspan=2, sticky="w", padx=4, pady=(0, 4))
 
         self.dry = tk.BooleanVar(value=True)
         ttk.Checkbutton(gf, text="Dry run (print the plan, do not move)",
                         variable=self.dry).grid(row=2, column=0, columnspan=2,
-                                                sticky="w", padx=4, pady=(2, 4))
+                                                sticky="w", padx=4, pady=(2, 0))
+
+        self.skip_confirm = tk.BooleanVar(value=False)
+        ttk.Checkbutton(gf, text="Skip confirmation pop-ups (act immediately)",
+                        variable=self.skip_confirm).grid(row=3, column=0, columnspan=2,
+                                                         sticky="w", padx=4, pady=(0, 4))
 
         self.go_btn = tk.Button(gf, text="RUN TASK", bg="#2e7d32", fg="white",
-                                font=("Arial", 11, "bold"), height=3, width=14,
+                                font=("Segoe UI", 12, "bold"), height=2, width=15,
                                 command=self.run_selected_task)
         self.go_btn.grid(row=0, column=2, rowspan=3, padx=8, pady=6)
 
@@ -80,12 +111,12 @@ class DodGui:
             ("-Z", "Z", -1), ("+Z", "Z", +1),
         ]):
             b = tk.Button(btns, text=label, width=5, height=1,
-                          font=("Arial", 10, "bold"),
+                          font=("Segoe UI", 10, "bold"),
                           command=lambda a=axis, s=sign: self.jog(a, s))
             b.grid(row=0, column=col, padx=3)
 
         tk.Label(jf, text="move_x/y/z do NOT lift Z or check collision. Small steps only.",
-                 fg="#b71c1c", font=("Arial", 9)).grid(row=2, column=0, columnspan=6,
+                 fg="#b71c1c", font=("Segoe UI", 9)).grid(row=2, column=0, columnspan=6,
                                                        sticky="w", padx=4, pady=(0, 4))
 
         # ---- nozzle parameters panel ----
@@ -97,7 +128,7 @@ class DodGui:
         self.nozzle = tk.StringVar()
         self.nozzle_box = ttk.Combobox(nf, textvariable=self.nozzle, width=5, state="readonly")
         self.nozzle_box.grid(row=0, column=1, padx=(0, 4))
-        tk.Button(nf, text="SELECT", bg="#1565c0", fg="white", font=("Arial", 9, "bold"),
+        tk.Button(nf, text="SELECT", bg="#1565c0", fg="white", font=("Segoe UI", 10, "bold"),
                   command=self.select_nozzle_btn).grid(row=0, column=2, padx=(0, 12))
 
         self.volts = tk.StringVar(value="80")
@@ -109,27 +140,27 @@ class DodGui:
             ttk.Label(nf, text=lab).grid(row=0, column=3 + col * 2, padx=(4, 2), pady=6, sticky="e")
             ttk.Entry(nf, textvariable=var, width=w).grid(row=0, column=4 + col * 2, padx=(0, 4))
         tk.Button(nf, text="SET PARAMS", bg="#1565c0", fg="white",
-                  font=("Arial", 10, "bold"), command=self.set_params).grid(
+                  font=("Segoe UI", 10, "bold"), command=self.set_params).grid(
                       row=0, column=9, padx=8, pady=6)
         tk.Label(nf, text="select dropdown shows only ACTIVATED channels. params: one call sets all three.",
-                 fg="#444441", font=("Arial", 8)).grid(row=1, column=0, columnspan=10,
+                 fg="#607d8b", font=("Segoe UI", 9)).grid(row=1, column=0, columnspan=10,
                                                        sticky="w", padx=4, pady=(0, 4))
 
         # dispensing row
         ttk.Label(nf, text="dispensing:").grid(row=2, column=0, padx=(6, 2), pady=(2, 6), sticky="e")
-        tk.Button(nf, text="OFF", bg="#2e7d32", fg="white", font=("Arial", 9, "bold"), width=7,
+        tk.Button(nf, text="OFF", bg="#2e7d32", fg="white", font=("Segoe UI", 10, "bold"), width=8,
                   command=lambda: self.dispense("Off")).grid(row=2, column=1, padx=2, pady=(2, 6))
-        tk.Button(nf, text="Free", bg="#e65100", fg="white", font=("Arial", 9, "bold"), width=7,
+        tk.Button(nf, text="Free", bg="#e65100", fg="white", font=("Segoe UI", 10, "bold"), width=8,
                   command=lambda: self.dispense("Free")).grid(row=2, column=2, padx=2, pady=(2, 6))
-        tk.Button(nf, text="Trigger", bg="#e65100", fg="white", font=("Arial", 9, "bold"), width=7,
+        tk.Button(nf, text="Trigger", bg="#e65100", fg="white", font=("Segoe UI", 10, "bold"), width=8,
                   command=lambda: self.dispense("Trigger")).grid(row=2, column=3, padx=2, pady=(2, 6))
         tk.Label(nf, text="Free/Trigger EJECT LIQUID. OFF is always safe.",
-                 fg="#b71c1c", font=("Arial", 8)).grid(row=2, column=4, columnspan=6,
+                 fg="#b71c1c", font=("Segoe UI", 9)).grid(row=2, column=4, columnspan=6,
                                                        sticky="w", padx=6, pady=(2, 6))
 
         lf = ttk.LabelFrame(self.root, text="Log")
         lf.grid(row=4, column=0, columnspan=2, sticky="nsew", **pad)
-        self.logbox = scrolledtext.ScrolledText(lf, width=82, height=22, font=("Consolas", 13),
+        self.logbox = scrolledtext.ScrolledText(lf, width=82, height=22, font=("Consolas", 13), borderwidth=0,
                                                 state="disabled", bg="#0e1116", fg="#cfd8dc")
         self.logbox.pack(fill="both", expand=True, padx=4, pady=4)
 
@@ -146,7 +177,17 @@ class DodGui:
         self.logbox.configure(state="disabled")
 
     def confirm(self, message):
-        """The `confirm` callback -- the GUI's version of typing GO."""
+        """
+        The `confirm` callback -- the GUI's version of typing GO.
+
+        If "Skip confirmation pop-ups" is ticked, auto-approve WITHOUT showing
+        the dialog. Dry-run still protects you (it never calls confirm at all
+        when dry_run is on -- it just prints), and every action is still logged,
+        so skipping confirms only removes the extra click, not the safety record.
+        """
+        if self.skip_confirm.get():
+            self.log("(confirmation skipped -- 'skip pop-ups' is on)")
+            return True
         return messagebox.askyesno("Confirm move", message)
 
     # ------------------------------------------------------------ startup reads
