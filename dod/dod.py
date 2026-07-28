@@ -408,7 +408,7 @@ class DoD:
             return r.RESULTS
 
     @_with_reconnect
-    def busy_wait(self, timeout, poll_interval=0.1):
+    def busy_wait(self, timeout, poll_interval=2.0):
         """
         Block until the robot is no longer busy or the timeout is reached.
 
@@ -421,7 +421,7 @@ class DoD:
         timeout : float
             Maximum time to wait in seconds before returning.
         poll_interval : float, optional
-            Time in seconds between status polls. Default is ``0.1`` s.
+            Time in seconds between status polls. Default is ``2.0`` s.
             Increase this for long-running operations (e.g. probe uptake) to
             reduce HTTP traffic to the robot server.
 
