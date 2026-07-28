@@ -11,12 +11,25 @@ def _unwrap(r):
     return r.RESULTS if hasattr(r, "RESULTS") else r
 
 
+def _readable(r):
+    """Turn any robot reply into a short, readable status for the log."""
+    v = _unwrap(r)
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        # common shapes: {'Status':...}, {'RESULTS':'Accepted'}, etc.
+        for key in ("Status", "Result", "RESULTS", "Dispensing", "Selected"):
+            if key in v:
+                return str(v[key])
+        return "ok"
+    return "ok" if v is not None else "no reply"
+
+
 def _client_do(dod, fn, *args):
     method = getattr(dod.client, fn)
     try:
         dod.client.connect("Test")     # register as an authorized user
-    except Exception as e:
-        # connect may not exist on some builds; try the call anyway
+    except Exception:
         pass
     try:
         r = method(*args)
@@ -85,7 +98,6 @@ def read_nozzle_state(dod):
     dispensing = r.get("Dispensing")
     packed = r.get("ID,Volt,Pulse,Freq,Volume")
 
-    # booleans -> channel numbers (index 0 == channel 1)
     armed = []
     if isinstance(activated, (list, tuple)):
         armed = [i + 1 for i, on in enumerate(activated) if on is True]
@@ -94,7 +106,6 @@ def read_nozzle_state(dod):
     print("Selected (fires)  : %s" % ("<not present>" if selected is None else selected))
     print("Dispensing        : %s" % ("<not present>" if dispensing is None else dispensing))
 
-    # params: list of rows, one per nozzle
     if isinstance(packed, (list, tuple)) and packed and isinstance(packed[0], (list, tuple)):
         print("Nozzle parameters :")
         for row in packed:
@@ -109,7 +120,6 @@ def read_nozzle_state(dod):
     else:
         print("Nozzle parameters : <unexpected shape: %r>" % (packed,))
 
-    # is the selected channel actually armed?
     try:
         sel = [int(s) for s in selected] if selected else []
         not_armed = [s for s in sel if s not in armed]
@@ -143,11 +153,6 @@ def preflight(dod, station, task=None, log=print):
         st = dod.get_status()
         log("status: %s" % (st,))
         if isinstance(st, dict):
-            # REAL status shape (confirmed on hardware): there is NO 'Status'
-            # field. Busy-ness is reported through 'RunningTask', which reads
-            # 'NA' (or empty) when the robot is idle, and a real task name only
-            # while a task is actually running. So the robot is busy ONLY when
-            # RunningTask holds something other than NA/empty/none.
             running = str(st.get("RunningTask", "")).strip()
             idle_markers = ("", "na", "n/a", "none", "idle", "ready", "-")
             if running.lower() not in idle_markers:
@@ -189,29 +194,18 @@ def _terminal_confirm(message):
     return input("\nType GO to run: ").strip() == "GO"
 
 
-# Wash tasks that MOVE THE ROBOT THEMSELVES (confirmed by reading the .tsk files).
-# e.g. WashFlush_Medium is: MoveToWasteStation1 -> pump ON -> syringe 250uL ->
-# wait 7s -> move WashStation1 -> ultrasonic 10s -> syringe back ->
-# move CameraStation -> pump OFF.  So a do_move() beforehand is REDUNDANT.
 SELF_POSITIONING_TASKS = {
     "WashFlush_Light_Narrow", "WashFlush_Medium", "WashFlush_Medium_Narrow",
     "WashFlush_Strong", "WashFlush_Strong_Narrow", "Washflush_Well",
 }
 
-# Tasks with NO drive steps at all -- ultrasonic only. Zero motion, no liquid.
-# The safest possible way to prove do_task() works on hardware.
 NO_MOTION_TASKS = {"WashFlush_Piezo_only", "WashFlush_Piezo_Pump_only"}
 
-# Single-move tasks: the robot runs its OWN move as a task. Safer than do_move
-# (which moves one raw axis). Confirmed by reading the .tsk files -- each is one
-# MOVE step to a named position.
 MOVE_TASKS = {
     "MoveHome", "MoveToCameraStation", "MoveToWasteStation1", "MoveToTray1",
     "MoveToProbe_96WP", "MoveToInteractionPoint", "MoveToEppi1Nozzle1",
 }
 
-# Tasks that pause for an operator to click OK (Message steps). They BLOCK until
-# a human responds at the robot -- do not expect them to finish on their own.
 OPERATOR_TASKS = {"MorningWashProcedure"}
 
 
@@ -221,7 +215,6 @@ def wash_routine(dod, station=None, task=None, dry_run=True,
         log("nothing to do -- give a task, a station, or both.")
         return {"ok": False, "reason": "nothing to do"}
 
-    # warn about a pointless move
     if station and task in SELF_POSITIONING_TASKS:
         log("NOTE: '%s' moves itself (WasteStation1 -> WashStation1 -> CameraStation)."
             % task)
@@ -277,9 +270,9 @@ def wash_routine(dod, station=None, task=None, dry_run=True,
 
     if station:
         log("dispensing off")
-        log("   -> %s" % (dod.set_nozzle_dispensing("Off"),))
+        log("   -> %s" % (_readable(dod.set_nozzle_dispensing("Off")),))
         log("moving to '%s' ..." % station)
-        log("   -> %s" % (dod.do_move(station),))
+        log("   -> %s" % (_readable(dod.do_move(station)),))
         try:
             p = read_live_position(dod)
             log("   arrived: X=%.0f Y=%.0f Z=%.0f" % (p["X"], p["Y"], p["Z"]))
@@ -288,7 +281,7 @@ def wash_routine(dod, station=None, task=None, dry_run=True,
 
     if task:
         log("running task '%s' (blocks until done) ..." % task)
-        log("   -> %s" % (dod.do_task(task),))
+        log("   -> %s" % (_readable(dod.do_task(task)),))
         try:
             p = read_live_position(dod)
             log("   position after task: X=%.0f Y=%.0f Z=%.0f" % (p["X"], p["Y"], p["Z"]))
@@ -323,21 +316,19 @@ def read_activated_nozzles(dod):
     def _truthy(v):
         return v is True or (isinstance(v, str) and v.strip().lower() == "true")
 
-    # If every entry looks boolean-ish, treat the list as per-channel flags.
     if act and all(_is_boolish(v) for v in act):
         return [str(i + 1) for i, v in enumerate(act) if _truthy(v)]
 
-    # Otherwise treat entries as explicit channel identifiers.
     out = []
     for v in act:
         s = str(v).strip()
-        if s and s.lower() not in ("false",):   # skip any stray 'False'
+        if s and s.lower() not in ("false",):
             out.append(s)
     return out
 
 
 def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm):
-    mode = str(mode).strip().capitalize()   # normalize off/free/trigger
+    mode = str(mode).strip().capitalize()
     if mode not in ("Off", "Free", "Trigger"):
         log("bad dispensing mode %r -- must be Off, Free, or Trigger" % mode)
         return {"ok": False, "reason": "bad mode"}
@@ -345,10 +336,9 @@ def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm
     log("=== SET DISPENSING: %s ===" % mode)
 
     if dry_run:
-        log("[DRY RUN] would call dod.set_nozzle_dispensing(%r)" % mode)
+        log("[DRY RUN] would set dispensing to %r" % mode)
         return {"ok": True, "dry_run": True}
 
-    # 'Off' is safe and needs no scary confirm; Free/Trigger start liquid.
     if mode in ("Free", "Trigger"):
         if not confirm("Start dispensing in %r mode?\n\n"
                        "This makes the selected nozzle EJECT LIQUID.\n"
@@ -358,11 +348,9 @@ def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm
 
     if hasattr(dod, "set_nozzle_dispensing"):
         r = dod.set_nozzle_dispensing(mode)
-        log("   via set_nozzle_dispensing -> %s" % (r,))
     else:
-        # fallback: lower-level client.dispensing() takes the mode string
         r = _client_do(dod, "dispensing", mode)
-        log("   via client.dispensing -> %s" % (_unwrap(r),))
+    log("   dispensing set to %s -> %s" % (mode, _readable(r)))
     return {"ok": True, "result": r}
 
 
@@ -381,15 +369,9 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
 
     log("=== SELECT NOZZLE %s ===" % channel)
 
-    # The deployed DoD version may not have set_nozzle_selected. Prefer it if
-    # present (it validates + is the documented method); otherwise fall back to
-    # the lower-level client.select_nozzle(channel).
     has_dod_method = hasattr(dod, "set_nozzle_selected")
     if dry_run:
-        if has_dod_method:
-            log("[DRY RUN] would call dod.set_nozzle_selected(%s)" % channel)
-        else:
-            log("[DRY RUN] would call dod.client.select_nozzle(%s)" % channel)
+        log("[DRY RUN] would select nozzle %s" % channel)
         return {"ok": True, "dry_run": True}
 
     if not confirm("Select nozzle %s for dispensing/tasks?" % channel):
@@ -403,16 +385,14 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
 
     if has_dod_method:
         r = dod.set_nozzle_selected(ch_int)
-        log("   via set_nozzle_selected -> %s" % (r,))
     else:
-        r = _client_do(dod, "select_nozzle", str(ch_int))   # client wants a string channel
-        log("   via client.select_nozzle -> %s" % (_unwrap(r),))
+        r = _client_do(dod, "select_nozzle", str(ch_int))
+    log("   nozzle %s selected -> %s" % (channel, _readable(r)))
     return {"ok": True, "result": r}
 
 
 def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
                       select=None, dry_run=True, log=print, confirm=_terminal_confirm):
-    # read current state so we don't wipe unspecified fields
     ns = dod.get_nozzle_status()
     if not isinstance(ns, dict):
         log("could not read nozzle status (%s) -- refusing to set blind" % type(ns))
@@ -422,19 +402,14 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
     selected = ns.get("Selected Nozzles")
     packed = ns.get("ID,Volt,Pulse,Freq,Volume")
 
-    # current values from the packed field: [ID, Volt, Pulse, Freq, Volume]
     cur_v = cur_p = cur_f = None
     if isinstance(packed, (list, tuple)) and len(packed) >= 4:
         cur_v, cur_p, cur_f = packed[1], packed[2], packed[3]
 
-    # build the arguments -- new value if given, else keep current
     new_v = int(volts) if volts is not None else (int(float(cur_v)) if cur_v is not None else 80)
     new_p = str(pulse) if pulse is not None else (str(cur_p) if cur_p is not None else "20")
     new_f = int(frequency) if frequency is not None else (int(float(cur_f)) if cur_f is not None else 30000)
 
-    # activated / selected must be sent as comma-separated CHANNEL NUMBERS
-    # (e.g. "1,2"), NOT booleans. The robot reports them as a per-channel flag
-    # list like ['True','True','False',...], so convert flags -> channel numbers.
     def _channels(v, default):
         if v is None:
             return default
@@ -447,7 +422,6 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
             if v and all(_boolish(x) for x in v):
                 nums = [str(i + 1) for i, x in enumerate(v) if _truthy(x)]
                 return ",".join(nums) if nums else default
-            # explicit identifiers already
             return ",".join(str(x).strip() for x in v
                             if str(x).strip() and str(x).strip().lower() != "false")
         return str(v)
@@ -460,8 +434,8 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
         % (act_s, sel_s, new_v, new_p, new_f))
 
     if dry_run:
-        log("[DRY RUN] would call client.set_nozzle_parameters(%r, %r, %d, %r, %d)"
-            % (act_s, sel_s, new_v, new_p, new_f))
+        log("[DRY RUN] would set volts=%d pulse=%s freq=%d on nozzle(s) %s"
+            % (new_v, new_p, new_f, sel_s))
         return {"ok": True, "dry_run": True}
 
     if not confirm("Set nozzle parameters?\n\nvolts=%d  pulse=%s  freq=%d\nselected=%s"
@@ -470,7 +444,7 @@ def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
         return {"ok": False, "reason": "not confirmed"}
 
     r = _client_do(dod, "set_nozzle_parameters", act_s, sel_s, new_v, new_p, new_f)
-    log("   -> %s" % (_unwrap(r),))
+    log("   params set -> %s" % (_readable(r),))
     return {"ok": True, "result": r}
 
 
@@ -483,8 +457,6 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
     here = read_live_position(dod)
     target = here[axis] + delta
 
-    # clamp so the resulting position stays inside the live drive range.
-    # We clamp the DELTA (not an absolute target), since the move is relative.
     try:
         dr = read_drive_range(dod)
         lo, hi = 0.0, dr[axis]
@@ -504,23 +476,21 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
 
     log("JOG %s: %.0f -> %.0f  (%+.0f um)" % (axis, here[axis], target, delta))
 
-    # The deployed DoD version may or may not have the relative move methods.
-    # Prefer move_<axis>_rel(delta); if absent, fall back to move_<axis>_abs(target).
     rel_name = "move_%s_rel" % axis.lower()
     abs_name = "move_%s_abs" % axis.lower()
     has_rel = hasattr(dod, rel_name)
     has_abs = hasattr(dod, abs_name)
 
     if has_rel:
-        plan = "dod.%s(%+.0f)" % (rel_name, delta)
+        plan = "move %s by %+.0f um" % (axis, delta)
     elif has_abs:
-        plan = "dod.%s(%.0f)" % (abs_name, target)
+        plan = "move %s to %.0f um" % (axis, target)
     else:
         log("this DoD has neither %s nor %s -- cannot jog." % (rel_name, abs_name))
         return {"ok": False, "reason": "no move method"}
 
     if dry_run:
-        log("[DRY RUN] would call %s" % plan)
+        log("[DRY RUN] would %s" % plan)
         return {"ok": True, "dry_run": True}
 
     msg = ("RAW JOG -- no safety check.\n\n"
@@ -533,10 +503,10 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
         return {"ok": False, "reason": "not confirmed"}
 
     if has_rel:
-        r = getattr(dod, rel_name)(delta)          # relative: pass the step
+        r = getattr(dod, rel_name)(delta)
     else:
-        r = getattr(dod, abs_name)(target)         # absolute: pass the target
-    log("   via %s -> %s" % (rel_name if has_rel else abs_name, r))
+        r = getattr(dod, abs_name)(target)
+    log("   moved %s -> %s" % (axis, _readable(r)))
     try:
         p = read_live_position(dod)
         log("   now at: X=%.0f Y=%.0f Z=%.0f" % (p["X"], p["Y"], p["Z"]))
@@ -546,13 +516,6 @@ def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confir
 
 
 def task_risk(task):
-    """
-    Rough risk tag for a task, for GUI color/filtering:
-      'none'  -- no motion (ultrasonic only, waits)
-      'move'  -- moves the robot
-      'op'    -- pauses for an operator
-      '?'     -- unknown
-    """
     tl = (task or "").lower()
     if task in NO_MOTION_TASKS or tl.startswith("wait"):
         return "none"
@@ -571,7 +534,6 @@ def describe_task(task):
     t = task or ""
     tl = t.lower()
 
-    # --- specific known categories first ---
     if task in NO_MOTION_TASKS:
         return "ultrasonic only -- no drive steps, nothing should move."
     if task in MOVE_TASKS or tl.startswith("moveto") or tl == "movehome":
@@ -581,7 +543,6 @@ def describe_task(task):
     if task in SELF_POSITIONING_TASKS:
         return "positions itself (WasteStation1 -> WashStation1 -> CameraStation) and washes."
 
-    # --- pattern-based fallback for anything else ---
     if tl.startswith("takeprobe") or "take_" in tl or tl.startswith("250725_take"):
         return ("takes a probe: moves to the sample well and pumps liquid into the "
                 "nozzle, then parks. Moves the robot itself.")
@@ -608,7 +569,7 @@ def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
     log("   what it does: %s" % note)
 
     if dry_run:
-        log("[DRY RUN] would call dod.do_task('%s')  # blocks until finished" % task)
+        log("[DRY RUN] would run task '%s'  (blocks until finished)" % task)
         log("Nothing run.")
         return {"ok": True, "dry_run": True}
 
@@ -625,7 +586,7 @@ def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
         return {"ok": False, "reason": "not confirmed"}
 
     log("running '%s' (blocks until done) ..." % task)
-    log("   -> %s" % (dod.do_task(task),))
+    log("   -> %s" % (_readable(dod.do_task(task)),))
     try:
         p = read_live_position(dod)
         log("   position after: X=%.0f Y=%.0f Z=%.0f" % (p["X"], p["Y"], p["Z"]))
