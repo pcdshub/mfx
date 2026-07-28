@@ -136,7 +136,7 @@ class SafeRobot(DoD):
         # ----------------------------------------------------------------
 
         #: Set to True to enable safe-mode motion checks.
-        self.safe_mode: bool = False
+        self.safe_mode: bool = True
 
         #: Locked after a post-move divergence; cleared by acknowledge_divergence().
         self.safe_mode_locked: bool = False
