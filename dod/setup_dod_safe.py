@@ -37,12 +37,23 @@ for _p in [_DOD_DIR, f"{_DOD_DIR}/Gui"]:
         sys.path.insert(0, _p)
 
 # ---------------------------------------------------------------------------
+# Evict cached modules so re-runs always pick up the latest code
+# ---------------------------------------------------------------------------
+
+for _key in list(sys.modules.keys()):
+    if (
+        _key == "safe_motion"
+        or _key.startswith("safe_motion.")
+        or _key in ("dod",)
+        or _key.startswith("dod.")
+    ):
+        del sys.modules[_key]
+
+# ---------------------------------------------------------------------------
 # Plain DoD
 # ---------------------------------------------------------------------------
 
 import dod as _dod_mod
-
-importlib.reload(_dod_mod)
 
 dod = _dod_mod.DoD(ip=_IP, log_file=_LOG)
 print(f"[setup] dod       ready  (ip={_IP})")
