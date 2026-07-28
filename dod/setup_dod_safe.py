@@ -37,16 +37,13 @@ for _p in [_DOD_DIR, f"{_DOD_DIR}/Gui"]:
         sys.path.insert(0, _p)
 
 # ---------------------------------------------------------------------------
-# Evict cached modules so re-runs always pick up the latest code
+# Evict safe_motion modules so re-runs always pick up the latest code.
+# dod is NOT evicted — it is a PCDS package and must be reloaded in-place
+# to preserve its submodule structure (DropsDriver, JsonFileHandler, etc.).
 # ---------------------------------------------------------------------------
 
 for _key in list(sys.modules.keys()):
-    if (
-        _key == "safe_motion"
-        or _key.startswith("safe_motion.")
-        or _key in ("dod",)
-        or _key.startswith("dod.")
-    ):
+    if _key == "safe_motion" or _key.startswith("safe_motion."):
         del sys.modules[_key]
 
 # ---------------------------------------------------------------------------
@@ -54,6 +51,10 @@ for _key in list(sys.modules.keys()):
 # ---------------------------------------------------------------------------
 
 import dod as _dod_mod
+
+importlib.reload(_dod_mod)
+if "dod.dod" in sys.modules:
+    importlib.reload(sys.modules["dod.dod"])
 
 dod = _dod_mod.DoD(ip=_IP, log_file=_LOG)
 print(f"[setup] dod       ready  (ip={_IP})")
