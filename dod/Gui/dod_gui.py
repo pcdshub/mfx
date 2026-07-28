@@ -1,25 +1,3 @@
-"""
-dod_gui.py -- a window for the DoD robot. ALL robot logic lives in safe_demo.py;
-this file is only the window.
-
-    button "RUN TASK"     ->  safe_demo.run_task(...)
-    position readout      ->  safe_demo.read_live_position(...)
-    drive range           ->  safe_demo.read_drive_range(...)
-    task dropdown         ->  safe_demo.read_task_names(...)
-
-Run ON mfx-mezz01, inside the hutch-python session (py39):
-    %run dod_gui.py --ip 172.21.39.172
-
-Run it ONCE -- each %run opens another window.
-
-SAFETY
-  - The position readout polls and is read-only.
-  - "RUN TASK" is the only thing that runs a task, and it pops a confirm
-    dialog first. The task moves the robot itself if it needs to.
-  - Dry run is ON by default.
-  - The routine runs on a background thread because do_move() blocks.
-"""
-
 import argparse
 import threading
 import tkinter as tk
