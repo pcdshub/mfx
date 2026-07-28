@@ -156,6 +156,31 @@ Prints a summary of the loaded configuration and current state:
 
 ---
 
+### Visualising a path before moving
+
+```python
+# Preview only — no motion
+dod.plot_path('Sample_1')
+
+# Preview then execute
+dod.do_move('Sample_1', plot=True)
+
+# Preview from a known position without a live robot connection
+dod.plot_path('Sample_1', start_xy=(131084, 8370))
+```
+
+Opens an interactive matplotlib window showing:
+
+- The build plate and all exclusion zones (raw obstacle + clearance buffer)
+- All named registry positions as faint context dots
+- **Direct path** (gray dashed) — the actual Chebyshev trajectory (diagonal + axis-aligned) the robot would take with no obstacle avoidance
+- **Safe path** (blue solid) — the visibility-graph route, also expanded into its Chebyshev segments, with each intermediate waypoint marked
+- Start (green) and target (red star) markers
+
+Execution proceeds after the window is closed.  `start_xy` accepts `(x, y)` in µm (robot frame); if omitted the current robot position is queried live.
+
+---
+
 ### If a position divergence occurs
 
 `SafeRobot` detects the error, calls `stop_task()`, prints a description, and

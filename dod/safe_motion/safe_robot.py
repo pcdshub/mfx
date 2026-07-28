@@ -76,6 +76,7 @@ from .registry import (
 )
 from .obb import OBB
 from .graph import VisibilityGraph
+from .chebyshev import chebyshev_path_points
 
 
 class SafeRobot(DoD):
@@ -281,6 +282,217 @@ class SafeRobot(DoD):
 
         print("=" * w)
 
+    def plot_path(
+        self,
+        target_name: str,
+        start_xy: Optional[tuple] = None,
+    ) -> None:
+        """Visualise the direct and safe-mode paths to *target_name*.
+
+        Both paths are drawn using the Chebyshev motion model (diagonal +
+        axis-aligned segments), which reflects the robot's actual trajectory.
+
+        Parameters
+        ----------
+        target_name:
+            Name of the destination position (must be in the registry).
+        start_xy:
+            Optional ``(x, y)`` tuple in µm (robot frame) to use as the
+            start position.  If omitted, the robot's current position is
+            queried live.
+        """
+        import math
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        from matplotlib.patches import Polygon as MplPolygon
+
+        if target_name not in self._registry:
+            raise KeyError(f"[SafeRobot] plot_path: '{target_name}' not in registry.")
+
+        # Start position
+        if start_xy is not None:
+            sx, sy = float(start_xy[0]), float(start_xy[1])
+        else:
+            cur = self._get_current_xyz()
+            sx, sy = cur["X"], cur["Y"]
+
+        target = self._registry[target_name]
+        tx, ty = float(target["X"]), float(target["Y"])
+
+        S = 1000.0  # µm → mm
+
+        # --- OBB corner helper (no external dep) ---
+        def _corners(cx, cy, w, h, angle_deg):
+            hw, hh = w / 2.0, h / 2.0
+            rad = math.radians(angle_deg)
+            ca, sa = math.cos(rad), math.sin(rad)
+            return [
+                (cx + dx * ca - dy * sa, cy + dx * sa + dy * ca)
+                for dx, dy in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+            ]
+
+        # --- Figure ---
+        fig, ax = plt.subplots(figsize=(13, 7))
+        ax.set_aspect("equal")
+        ax.set_facecolor("#fafafa")
+
+        # Build plate
+        px, py = self._graph.plate_x, self._graph.plate_y
+        ax.add_patch(
+            plt.Rectangle(
+                (0, 0),
+                px / S,
+                py / S,
+                linewidth=2,
+                edgecolor="black",
+                facecolor="#eeeeee",
+                zorder=0,
+            )
+        )
+
+        # Obstacles
+        for obs in self._obstacles:
+            buf = _corners(
+                obs.cx,
+                obs.cy,
+                obs.w + 2 * self._clearance_um,
+                obs.h + 2 * self._clearance_um,
+                obs.angle,
+            )
+            ax.add_patch(
+                MplPolygon(
+                    [(x / S, y / S) for x, y in buf],
+                    closed=True,
+                    linewidth=1,
+                    linestyle="--",
+                    edgecolor="#cc4444",
+                    facecolor="#ffdddd",
+                    alpha=0.35,
+                    zorder=1,
+                )
+            )
+            raw = _corners(obs.cx, obs.cy, obs.w, obs.h, obs.angle)
+            ax.add_patch(
+                MplPolygon(
+                    [(x / S, y / S) for x, y in raw],
+                    closed=True,
+                    linewidth=1.5,
+                    edgecolor="#880000",
+                    facecolor="#ff7777",
+                    alpha=0.75,
+                    zorder=2,
+                )
+            )
+
+        # All registry positions as faint context dots
+        named = {k: v for k, v in self._registry.items() if not k.startswith("_wp_")}
+        for name, entry in named.items():
+            ax.scatter(
+                entry["X"] / S, entry["Y"] / S, s=20, color="gray", alpha=0.4, zorder=3
+            )
+            ax.text(
+                entry["X"] / S,
+                entry["Y"] / S,
+                f"  {name}",
+                fontsize=6,
+                color="gray",
+                va="center",
+                zorder=3,
+            )
+
+        # --- Direct Chebyshev path (no safe mode) ---
+        direct_pts = chebyshev_path_points([(sx, sy), (tx, ty)])
+        dx_mm = [p[0] / S for p in direct_pts]
+        dy_mm = [p[1] / S for p in direct_pts]
+        ax.plot(
+            dx_mm,
+            dy_mm,
+            color="gray",
+            linewidth=1.5,
+            linestyle="--",
+            zorder=4,
+            label="direct (no safe mode)",
+        )
+        for p in direct_pts[1:-1]:  # mid-points (kink)
+            ax.scatter(p[0] / S, p[1] / S, s=25, color="gray", marker="x", zorder=5)
+
+        # --- Safe Chebyshev path (via visibility graph) ---
+        waypoints = self._graph.query((sx, sy), (tx, ty))
+        if waypoints is not None:
+            safe_pts = chebyshev_path_points(waypoints)
+            spx = [p[0] / S for p in safe_pts]
+            spy = [p[1] / S for p in safe_pts]
+            ax.plot(
+                spx, spy, color="steelblue", linewidth=2, zorder=6, label="safe path"
+            )
+            # Mark each planned waypoint
+            for wp in waypoints[1:-1]:
+                ax.scatter(
+                    wp[0] / S, wp[1] / S, s=35, color="steelblue", marker="D", zorder=7
+                )
+        else:
+            ax.text(
+                px / S / 2,
+                py / S / 2,
+                "NO SAFE PATH FOUND",
+                ha="center",
+                va="center",
+                fontsize=14,
+                color="red",
+                fontweight="bold",
+                zorder=7,
+            )
+
+        # Start and end markers
+        ax.scatter(
+            sx / S, sy / S, s=120, color="green", zorder=8, label="start (current)"
+        )
+        ax.scatter(
+            tx / S,
+            ty / S,
+            s=120,
+            color="red",
+            marker="*",
+            zorder=8,
+            label=f"target: {target_name}",
+        )
+        ax.annotate(
+            "START",
+            (sx / S, sy / S),
+            xytext=(6, 6),
+            textcoords="offset points",
+            fontsize=8,
+            color="green",
+            fontweight="bold",
+            zorder=8,
+        )
+        ax.annotate(
+            f"TARGET\n{target_name}",
+            (tx / S, ty / S),
+            xytext=(6, 6),
+            textcoords="offset points",
+            fontsize=8,
+            color="red",
+            fontweight="bold",
+            zorder=8,
+        )
+
+        # Legend and axes
+        margin = 15.0
+        ax.set_xlim(-margin, px / S + margin)
+        ax.set_ylim(-margin, py / S + margin)
+        ax.set_xlabel("Robot X (mm)")
+        ax.set_ylabel("Robot Y (mm)")
+        ax.set_title(
+            f"SafeRobot path preview — target: '{target_name}'  "
+            f"[safe_mode={'ON' if self.safe_mode else 'OFF'}]",
+            fontsize=10,
+        )
+        ax.legend(loc="upper right", fontsize=8)
+        ax.grid(True, linestyle=":", alpha=0.4)
+        plt.tight_layout()
+        plt.show()
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -381,7 +593,7 @@ class SafeRobot(DoD):
     # ------------------------------------------------------------------
 
     @_with_reconnect
-    def do_move(self, position, safety_test=False, verbose=False):
+    def do_move(self, position, safety_test=False, verbose=False, plot=False):
         """Move to a named position, routing through the path planner in safe mode.
 
         Safe-mode policy:
@@ -391,8 +603,15 @@ class SafeRobot(DoD):
           4. Verify actual position after each waypoint.
 
         Passthrough (safe_mode=False): delegates directly to DoD.do_move().
+
+        plot:
+            If True, call plot_path(position) before executing.  Displays
+            the direct Chebyshev path and the safe path in an interactive
+            window; execution proceeds after the window is closed.
         """
         self._check_safe_mode_locked()
+        if plot:
+            self.plot_path(position)
         if not self.safe_mode:
             return super().do_move(position, safety_test=safety_test, verbose=verbose)
 
