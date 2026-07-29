@@ -1140,19 +1140,21 @@ class DoD:
             verbose=verbose,
         )
 
-    @_with_reconnect
-    def set_nozzle_selected(self, nozzle, verbose=False):
+    def set_nozzle_selected(self, nozzles, param_nozzle=None, verbose=False):
         """
-        Select the active nozzle for dispensing and task execution.
+        Select one or more nozzles for dispensing and task execution.
 
-        Sends a ``SelectNozzle`` command to the robot.  The selected nozzle
-        is the one that fires when dispensing is triggered and the one used
-        by tasks that operate on a single nozzle.
+        For a single nozzle, sends a ``SelectNozzle`` command (fast path).
+        For multiple nozzles, routes through ``SetNozzleParameters`` so that
+        the robot's ``Selected`` field can carry a comma-separated list.  In
+        the multi-nozzle case, ``Volt``, ``Pulse``, and ``Freq`` are taken from
+        a single reference channel (``param_nozzle``) because
+        ``SetNozzleParameters`` applies those fields to one channel at a time.
 
         .. note::
-            ``nozzle`` must be one of the currently activated (armed) channels.
-            Use :meth:`get_nozzle_status` to check ``'Activated Nozzles'`` if
-            unsure.  The robot returns a reject if the channel is not activated.
+            All supplied channels must be in the currently activated (armed)
+            set.  Use :meth:`get_nozzle_status` to check ``'Activated Nozzles'``
+            or :meth:`set_nozzle_active` to arm additional channels first.
 
         .. note::
             ``SelectNozzle`` and ``SetNozzleParameters`` interact — each
@@ -1163,8 +1165,14 @@ class DoD:
 
         Parameters
         ----------
-        nozzle : int
-            Channel number to select, e.g. ``1``, ``2``, or ``3``.
+        nozzles : int or list of int
+            Channel number(s) to select, e.g. ``2`` or ``[1, 2, 3]``.
+        param_nozzle : int or None, optional
+            The single channel whose current ``Volt``/``Pulse``/``Freq`` values
+            are used in the ``SetNozzleParameters`` call (multi-nozzle path
+            only).  If ``None`` (default), the first channel in ``nozzles`` is
+            used.  Must be in the armed set.  Ignored when only one nozzle is
+            supplied.
         verbose : bool, optional
             If ``True``, return the full server response.  Default is ``False``.
 
@@ -1177,35 +1185,76 @@ class DoD:
         Raises
         ------
         ValueError
-            If ``nozzle`` is not in the currently activated nozzle set.
+            If any channel in ``nozzles`` (or ``param_nozzle``) is not in the
+            currently activated nozzle set.
         ConnectionError
             If the robot server cannot be reached.
 
         Examples
         --------
-        Select nozzle 2 for dispensing:
+        Select a single nozzle (fast path, unchanged behaviour):
 
         >>> dod.set_nozzle_selected(2)
 
-        Select nozzle 1 and inspect the response:
+        Select nozzles 1 and 2, using nozzle 1's parameters:
+
+        >>> dod.set_nozzle_selected([1, 2])
+
+        Select nozzles 1 and 2, but send nozzle 2's Volt/Pulse/Freq:
+
+        >>> dod.set_nozzle_selected([1, 2], param_nozzle=2)
+
+        Inspect the full server response:
 
         >>> r = dod.set_nozzle_selected(1, verbose=True)
         """
-        raw = self.get_nozzle_status()
-        active_str, _, _ = self._parse_nozzle_status(raw)
-        active_channels = [int(ch) for ch in active_str.split(",") if ch]
-        if nozzle not in active_channels:
-            raise ValueError(
-                f"Nozzle {nozzle} is not in the active nozzle set {active_channels}. "
-                f"Use set_nozzle_active() to arm it first."
-            )
-        rr = self.client.connect("Test")
-        r = self.client.select_nozzle(nozzle)
-        rr = self.client.disconnect()
-        if verbose:
-            return r
+        # Normalise to list
+        if isinstance(nozzles, int):
+            nozzle_list = [nozzles]
         else:
-            return r.RESULTS
+            nozzle_list = list(nozzles)
+
+        # Read current nozzle status once
+        raw = self.get_nozzle_status()
+        active_str, _, params = self._parse_nozzle_status(raw)
+        active_channels = [int(ch) for ch in active_str.split(",") if ch]
+
+        # Validate all requested channels are armed
+        for ch in nozzle_list:
+            if ch not in active_channels:
+                raise ValueError(
+                    f"Nozzle {ch} is not in the active nozzle set {active_channels}. "
+                    f"Use set_nozzle_active() to arm it first."
+                )
+
+        # --- Single-nozzle fast path ---
+        if len(nozzle_list) == 1:
+            rr = self.client.connect("Test")
+            r = self.client.select_nozzle(nozzle_list[0])
+            rr = self.client.disconnect()
+            if verbose:
+                return r
+            else:
+                return r.RESULTS
+
+        # --- Multi-nozzle path via SetNozzleParameters ---
+        # Resolve which channel's Volt/Pulse/Freq to use
+        ref_ch = param_nozzle if param_nozzle is not None else nozzle_list[0]
+        if ref_ch not in active_channels:
+            raise ValueError(
+                f"param_nozzle {ref_ch} is not in the active nozzle set "
+                f"{active_channels}. Use set_nozzle_active() to arm it first."
+            )
+        current = params[ref_ch]
+        selected_str = ",".join(str(ch) for ch in sorted(nozzle_list))
+        return self._set_nozzle_parameters(
+            active_str=active_str,
+            selected_str=selected_str,
+            volt=current["volt"],
+            pulse=current["pulse"],
+            freq=current["freq"],
+            verbose=verbose,
+        )
 
     @_with_reconnect
     def take_probe(
