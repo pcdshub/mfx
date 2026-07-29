@@ -42,7 +42,7 @@ def _client_do(dod, fn, *args):
 
 
 # ---------------------------------------------------------------------------
-# READS -- never move anything, never invent a value
+# Only reads it never moves anything, and never invents a value
 # ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
     r = dod.get_current_position()
@@ -82,6 +82,18 @@ def read_station_names(dod):
 
 def read_task_names(dod):
     return [str(t) for t in list(_unwrap(dod.get_task_names()))]
+
+
+def read_pulse_names(dod):
+    r = None
+    if hasattr(dod, "get_pulse_names"):
+        r = dod.get_pulse_names()
+    else:
+        r = _client_do(dod, "get_pulse_names")
+    names = _unwrap(r)
+    if isinstance(names, dict):
+        names = list(names.values())[0] if len(names) == 1 else list(names)
+    return [str(n) for n in list(names)]
 
 
 def read_nozzle_state(dod):
@@ -141,9 +153,6 @@ def dialog_is_open(status):
     return (ref not in (0, "0", None)) or bool(msg)
 
 
-# ---------------------------------------------------------------------------
-# ROUTINE -- shared by the terminal and the GUI
-# ---------------------------------------------------------------------------
 def preflight(dod, station, task=None, log=print):
     """Checks before motion. True only if everything genuinely passed."""
     log("=== PREFLIGHT (read-only) ===")
@@ -391,61 +400,60 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
     return {"ok": True, "result": r}
 
 
-def set_nozzle_params(dod, volts=None, pulse=None, frequency=None,
-                      select=None, dry_run=True, log=print, confirm=_terminal_confirm):
-    ns = dod.get_nozzle_status()
-    if not isinstance(ns, dict):
-        log("could not read nozzle status (%s) -- refusing to set blind" % type(ns))
+def set_nozzle_params(dod, nozzle, volts=None, pulse=None, frequency=None,
+                      dry_run=True, log=print, confirm=_terminal_confirm):
+    try:
+        ch = int(nozzle)
+    except (TypeError, ValueError):
+        log("bad nozzle %r -- must be a channel number" % nozzle)
+        return {"ok": False, "reason": "bad nozzle"}
+
+    # make sure the nozzle is armed
+    try:
+        armed = read_activated_nozzles(dod)
+        if str(ch) not in armed:
+            log("nozzle %s is not activated (armed: %s) -- arm it first." % (ch, armed))
+            return {"ok": False, "reason": "not activated"}
+    except Exception as e:
+        log("could not read activated nozzles: %s" % e)
         return {"ok": False, "reason": "no nozzle status"}
 
-    activated = ns.get("Activated Nozzles")
-    selected = ns.get("Selected Nozzles")
-    packed = ns.get("ID,Volt,Pulse,Freq,Volume")
+    changes = []
+    if volts is not None:
+        changes.append(("voltage", "set_nozzle_voltage", int(volts)))
+    if pulse is not None and str(pulse).strip() != "":
+        changes.append(("pulse", "set_nozzle_pulse", str(pulse)))
+    if frequency is not None:
+        changes.append(("frequency", "set_nozzle_freq", int(frequency)))
 
-    cur_v = cur_p = cur_f = None
-    if isinstance(packed, (list, tuple)) and len(packed) >= 4:
-        cur_v, cur_p, cur_f = packed[1], packed[2], packed[3]
+    if not changes:
+        log("nothing to set -- give at least one of volts/pulse/freq.")
+        return {"ok": False, "reason": "nothing to set"}
 
-    new_v = int(volts) if volts is not None else (int(float(cur_v)) if cur_v is not None else 80)
-    new_p = str(pulse) if pulse is not None else (str(cur_p) if cur_p is not None else "20")
-    new_f = int(frequency) if frequency is not None else (int(float(cur_f)) if cur_f is not None else 30000)
-
-    def _channels(v, default):
-        if v is None:
-            return default
-        if isinstance(v, (list, tuple)):
-            def _boolish(x):
-                return isinstance(x, bool) or (isinstance(x, str)
-                                               and x.strip().lower() in ("true", "false"))
-            def _truthy(x):
-                return x is True or (isinstance(x, str) and x.strip().lower() == "true")
-            if v and all(_boolish(x) for x in v):
-                nums = [str(i + 1) for i, x in enumerate(v) if _truthy(x)]
-                return ",".join(nums) if nums else default
-            return ",".join(str(x).strip() for x in v
-                            if str(x).strip() and str(x).strip().lower() != "false")
-        return str(v)
-
-    act_s = _channels(activated, "1")
-    sel_s = str(select) if select is not None else _channels(selected, "1")
-
-    log("=== SET NOZZLE PARAMS ===")
-    log("   active=%s selected=%s volts=%d pulse=%s freq=%d"
-        % (act_s, sel_s, new_v, new_p, new_f))
+    log("=== SET NOZZLE %s PARAMS ===" % ch)
+    for label, _, val in changes:
+        log("   %s -> %s" % (label, val))
+    if pulse is not None and str(pulse).strip() and ch in (1, 2):
+        log("   (nozzle %d loads a named waveform -- may take ~5 s)" % ch)
 
     if dry_run:
-        log("[DRY RUN] would set volts=%d pulse=%s freq=%d on nozzle(s) %s"
-            % (new_v, new_p, new_f, sel_s))
+        for label, method, val in changes:
+            log("[DRY RUN] would call dod.%s(%d, %r)" % (method, ch, val))
         return {"ok": True, "dry_run": True}
 
-    if not confirm("Set nozzle parameters?\n\nvolts=%d  pulse=%s  freq=%d\nselected=%s"
-                   % (new_v, new_p, new_f, sel_s)):
+    if not confirm("Set nozzle %d:\n\n%s\n\nProceed?"
+                   % (ch, "\n".join("%s = %s" % (l, v) for l, _, v in changes))):
         log("aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    r = _client_do(dod, "set_nozzle_parameters", act_s, sel_s, new_v, new_p, new_f)
-    log("   params set -> %s" % (_readable(r),))
-    return {"ok": True, "result": r}
+    for label, method, val in changes:
+        fn = getattr(dod, method, None)
+        if fn is None:
+            log("   robot has no %s -- skipped %s" % (method, label))
+            continue
+        r = fn(ch, val)
+        log("   %s set -> %s" % (label, _readable(r)))
+    return {"ok": True}
 
 
 def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confirm):

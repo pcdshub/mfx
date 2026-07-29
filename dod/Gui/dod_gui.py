@@ -8,7 +8,8 @@ from datetime import datetime
 from safe_demo import (connect_dod, read_live_position, read_drive_range,
                        read_task_names, preflight,
                        run_task, describe_task, jog_axis, set_nozzle_params, task_risk,
-                       read_activated_nozzles, select_nozzle, set_dispensing)
+                       read_activated_nozzles, select_nozzle, set_dispensing,
+                       read_pulse_names)
 
 POLL_MS = 1000
 
@@ -25,6 +26,7 @@ class DodGui:
         self._build()
         self._load_tasks()
         self._load_nozzles()
+        self._load_pulses()
         self._read_drive_range()
         self._poll()
 
@@ -128,23 +130,35 @@ class DodGui:
         self.nozzle = tk.StringVar()
         self.nozzle_box = ttk.Combobox(nf, textvariable=self.nozzle, width=5, state="readonly")
         self.nozzle_box.grid(row=0, column=1, padx=(0, 4))
+        self.nozzle_box.bind("<<ComboboxSelected>>", self._on_nozzle_change)
         tk.Button(nf, text="SELECT", bg="#1565c0", fg="white", font=("Segoe UI", 10, "bold"),
                   command=self.select_nozzle_btn).grid(row=0, column=2, padx=(0, 12))
 
         self.volts = tk.StringVar(value="80")
-        self.pulse = tk.StringVar(value="20")
+        self.pulse = tk.StringVar(value="")
         self.freq = tk.StringVar(value="30000")
-        for col, (lab, var, w) in enumerate([("volts:", self.volts, 6),
-                                             ("pulse:", self.pulse, 6),
-                                             ("freq:", self.freq, 8)]):
-            ttk.Label(nf, text=lab).grid(row=0, column=3 + col * 2, padx=(4, 2), pady=6, sticky="e")
-            ttk.Entry(nf, textvariable=var, width=w).grid(row=0, column=4 + col * 2, padx=(0, 4))
+
+        # volts (number entry)
+        ttk.Label(nf, text="volts:").grid(row=0, column=3, padx=(4, 2), pady=6, sticky="e")
+        ttk.Entry(nf, textvariable=self.volts, width=6).grid(row=0, column=4, padx=(0, 4))
+
+        # pulse -- nozzles 1&2 take a NAME (dropdown); nozzles 3&4 take a NUMBER
+        # (typed). The field switches mode based on the selected nozzle.
+        ttk.Label(nf, text="pulse:").grid(row=0, column=5, padx=(4, 2), pady=6, sticky="e")
+        self.pulse_box = ttk.Combobox(nf, textvariable=self.pulse, width=20, state="readonly")
+        self.pulse_box.grid(row=0, column=6, padx=(0, 4))
+        self._pulse_names = []   # filled by _load_pulses
+
+        # freq (number entry)
+        ttk.Label(nf, text="freq:").grid(row=0, column=7, padx=(4, 2), pady=6, sticky="e")
+        ttk.Entry(nf, textvariable=self.freq, width=8).grid(row=0, column=8, padx=(0, 4))
+
         tk.Button(nf, text="SET PARAMS", bg="#1565c0", fg="white",
                   font=("Segoe UI", 10, "bold"), command=self.set_params).grid(
                       row=0, column=9, padx=8, pady=6)
-        tk.Label(nf, text="select dropdown shows only ACTIVATED channels. params: one call sets all three.",
-                 fg="#607d8b", font=("Segoe UI", 9)).grid(row=1, column=0, columnspan=10,
-                                                       sticky="w", padx=4, pady=(0, 4))
+        self.pulse_hint = tk.Label(nf, text="pulse depends on the selected nozzle",
+                                   fg="#607d8b", font=("Segoe UI", 9), bg="#eceff1")
+        self.pulse_hint.grid(row=1, column=0, columnspan=10, sticky="w", padx=4, pady=(0, 4))
 
         # dispensing row
         ttk.Label(nf, text="dispensing:").grid(row=2, column=0, padx=(6, 2), pady=(2, 6), sticky="e")
@@ -257,6 +271,43 @@ class DodGui:
         except Exception as e:
             self.log("could not read activated nozzles: %s" % e)
 
+    def _load_pulses(self):
+        try:
+            names = read_pulse_names(self.dod)
+            self._pulse_names = names
+            self.pulse_box["values"] = names
+            if names:
+                self.pulse.set(names[0])
+            self.log("loaded %d pulse shapes from the robot" % len(names))
+        except Exception as e:
+            self._pulse_names = []
+            self.log("could not read pulse names: %s" % e)
+            self.log("   -> pulse dropdown is empty until names load")
+        # set the field mode for whatever nozzle is currently selected
+        self._on_nozzle_change()
+
+    def _on_nozzle_change(self, event=None):
+        """
+        Nozzles 1 & 2 use a NAMED pulse shape -> dropdown of names.
+        Nozzles 3 & 4 use a NUMBER (waveform duration) -> free typing.
+        Switch the pulse field to match the selected nozzle.
+        """
+        ch = self.nozzle.get().strip()
+        named = ch in ("1", "2")
+        if named:
+            self.pulse_box["values"] = self._pulse_names
+            self.pulse_box.config(state="readonly")   # pick from the list
+            if self._pulse_names and self.pulse.get() not in self._pulse_names:
+                self.pulse.set(self._pulse_names[0])
+            self.pulse_hint.config(text="nozzle %s: pulse is a NAME (pick from list)" % (ch or "?"))
+        else:
+            self.pulse_box["values"] = []
+            self.pulse_box.config(state="normal")      # type a number
+            # clear a leftover name so a number can be typed
+            if self.pulse.get() in self._pulse_names:
+                self.pulse.set("")
+            self.pulse_hint.config(text="nozzle %s: pulse is a NUMBER (e.g. 48)" % (ch or "?"))
+
     def select_nozzle_btn(self):
         if self.busy:
             self.log("busy -- ignoring")
@@ -297,19 +348,23 @@ class DodGui:
         if self.busy:
             self.log("busy -- ignoring")
             return
+        ch = self.nozzle.get().strip()
+        if not ch:
+            self.log("pick a nozzle in the 'select' dropdown first -- params apply to that nozzle")
+            return
         try:
             v = int(self.volts.get())
-            p = self.pulse.get().strip()
             f = int(self.freq.get())
         except ValueError:
-            self.log("volts and freq must be integers; pulse is a string")
+            self.log("volts and freq must be whole numbers")
             return
+        p = self.pulse.get().strip()
         self.busy = True
-        threading.Thread(target=self._params_worker, args=(v, p, f), daemon=True).start()
+        threading.Thread(target=self._params_worker, args=(ch, v, p, f), daemon=True).start()
 
-    def _params_worker(self, v, p, f):
+    def _params_worker(self, ch, v, p, f):
         try:
-            set_nozzle_params(self.dod, volts=v, pulse=p, frequency=f,
+            set_nozzle_params(self.dod, ch, volts=v, pulse=p, frequency=f,
                               dry_run=self.dry.get(), log=self.log, confirm=self.confirm)
         except Exception as e:
             self.log("SET PARAMS FAILED: %s" % e)
