@@ -1117,6 +1117,7 @@ class DoD:
         >>> dod.set_nozzle_active([1])
         """
         raw = self.get_nozzle_status()
+        previous_mode = raw.get("Dispensing", "Off")
         _, selected_str, params = self._parse_nozzle_status(raw)
         new_active_str = ",".join(str(ch) for ch in sorted(active_list))
 
@@ -1131,7 +1132,12 @@ class DoD:
         else:
             current = {"volt": 0, "pulse": "0", "freq": 120}
 
-        return self._set_nozzle_parameters(
+        # Changing the armed nozzle set while dispensing is active leaves the
+        # robot in an undefined state; turn off first and restore afterwards.
+        if previous_mode != "Off":
+            self.set_nozzle_dispensing("Off")
+
+        r = self._set_nozzle_parameters(
             active_str=new_active_str,
             selected_str=selected_str,
             volt=current["volt"],
@@ -1139,6 +1145,11 @@ class DoD:
             freq=current["freq"],
             verbose=verbose,
         )
+
+        if previous_mode != "Off":
+            self.set_nozzle_dispensing(previous_mode)
+
+        return r
 
     def set_nozzle_selected(self, nozzles, param_nozzle=None, verbose=False):
         """
@@ -1439,11 +1450,20 @@ class DoD:
         ns = self.client.get_nozzle_status()
         active_str, _, _ = self._parse_nozzle_status(ns.RESULTS)
         active_channels = [int(ch) for ch in active_str.split(",") if ch]
+        current_mode = ns.RESULTS.get("Dispensing", "Off")
 
-        if mode == "Free":
-            r = self.client.dispensing("Free")
-        elif mode == "Trigger":
-            r = self.client.dispensing("Trigger")
+        if mode in ("Free", "Trigger"):
+            # Firmware requires all active-to-active mode transitions to pass
+            # through Off; direct transitions are silently ignored.
+            if current_mode != "Off":
+                r = self.client.dispensing("Off")
+                time.sleep(0.5)
+                for ch in active_channels:
+                    r = self.client.select_nozzle(ch)
+                    time.sleep(0.5)
+                    r = self.client.dispensing("Off")
+                    time.sleep(0.5)
+            r = self.client.dispensing(mode)
         else:
             # Turn off each activated nozzle individually to ensure all are off.
             # A short wait after each command gives the robot time to process
