@@ -42,7 +42,7 @@ def _client_do(dod, fn, *args):
 
 
 # ---------------------------------------------------------------------------
-# Only reads it never moves anything, and never invents a value
+# READS -- never move anything, never invent a value
 # ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
     r = dod.get_current_position()
@@ -85,6 +85,12 @@ def read_task_names(dod):
 
 
 def read_pulse_names(dod):
+    """
+    The robot's list of PULSE SHAPE names, e.g. 'sciPULSE_ST40', 'VISC01'.
+    The pulse parameter is a NAME from this list (for sciPULSE channels), not a
+    plain number. Tries dod.get_pulse_names() first, then the raw client call
+    wrapped in connect/disconnect.
+    """
     r = None
     if hasattr(dod, "get_pulse_names"):
         r = dod.get_pulse_names()
@@ -153,6 +159,9 @@ def dialog_is_open(status):
     return (ref not in (0, "0", None)) or bool(msg)
 
 
+# ---------------------------------------------------------------------------
+# ROUTINE -- shared by the terminal and the GUI
+# ---------------------------------------------------------------------------
 def preflight(dod, station, task=None, log=print):
     """Checks before motion. True only if everything genuinely passed."""
     log("=== PREFLIGHT (read-only) ===")
@@ -400,8 +409,49 @@ def select_nozzle(dod, channel, dry_run=True, log=print, confirm=_terminal_confi
     return {"ok": True, "result": r}
 
 
+def parse_nozzle_params(ns):
+    """
+    Pull per-channel {volt, pulse, freq} out of a get_nozzle_status() reply.
+
+    The 'ID,Volt,Pulse,Freq,Volume' field comes back either as ONE flat row
+    ['1','80','20','30000','0'] or as a LIST of rows, one per nozzle.
+    Returns {channel_int: {'volt':str,'pulse':str,'freq':str}}.
+    """
+    out = {}
+    if not isinstance(ns, dict):
+        return out
+    packed = ns.get("ID,Volt,Pulse,Freq,Volume")
+    if not isinstance(packed, (list, tuple)) or not packed:
+        return out
+    rows = packed if isinstance(packed[0], (list, tuple)) else [packed]
+    for row in rows:
+        if len(row) >= 4:
+            try:
+                ch = int(str(row[0]).strip())
+            except (TypeError, ValueError):
+                continue
+            out[ch] = {"volt": str(row[1]).strip(),
+                       "pulse": str(row[2]).strip(),
+                       "freq": str(row[3]).strip()}
+    return out
+
+
 def set_nozzle_params(dod, nozzle, volts=None, pulse=None, frequency=None,
                       dry_run=True, log=print, confirm=_terminal_confirm):
+    """
+    Set voltage / pulse / frequency for ONE nozzle, using the robot's real
+    per-parameter methods (each does its own read-merge-write internally):
+        dod.set_nozzle_voltage(nozzle, volt)
+        dod.set_nozzle_pulse(nozzle, pulse)
+        dod.set_nozzle_freq(nozzle, freq)
+
+    Only the parameters you pass are changed; the others are left alone.
+
+    PULSE RULE (from the robot source):
+      - channels 1 and 2 take a NAMED pulse shape (e.g. 'sciPULSE_LV01')
+      - all other channels take a NUMERIC string (e.g. '48')
+      Channels 1-2 also take ~5 s to load the waveform (the robot method waits).
+    """
     try:
         ch = int(nozzle)
     except (TypeError, ValueError):
@@ -437,8 +487,12 @@ def set_nozzle_params(dod, nozzle, volts=None, pulse=None, frequency=None,
         log("   (nozzle %d loads a named waveform -- may take ~5 s)" % ch)
 
     if dry_run:
-        for label, method, val in changes:
-            log("[DRY RUN] would call dod.%s(%d, %r)" % (method, ch, val))
+        if all(hasattr(dod, m) for _, m, _ in changes):
+            for label, method, val in changes:
+                log("[DRY RUN] would call dod.%s(%d, %r)" % (method, ch, val))
+        else:
+            log("[DRY RUN] would call set_nozzle_parameters for nozzle %d "
+                "with %s" % (ch, ", ".join("%s=%s" % (l, v) for l, _, v in changes)))
         return {"ok": True, "dry_run": True}
 
     if not confirm("Set nozzle %d:\n\n%s\n\nProceed?"
@@ -446,14 +500,45 @@ def set_nozzle_params(dod, nozzle, volts=None, pulse=None, frequency=None,
         log("aborted.")
         return {"ok": False, "reason": "not confirmed"}
 
-    for label, method, val in changes:
-        fn = getattr(dod, method, None)
-        if fn is None:
-            log("   robot has no %s -- skipped %s" % (method, label))
-            continue
-        r = fn(ch, val)
-        log("   %s set -> %s" % (label, _readable(r)))
-    return {"ok": True}
+    # Does this deployed DoD have the per-parameter wrapper methods?
+    have_wrappers = all(hasattr(dod, m) for _, m, _ in changes)
+
+    if have_wrappers:
+        for label, method, val in changes:
+            r = getattr(dod, method)(ch, val)
+            log("   %s set -> %s" % (label, _readable(r)))
+        return {"ok": True}
+
+    # ---- FALLBACK: this robot only has the raw client.set_nozzle_parameters.
+    # One call sets everything, so fill unspecified fields from the nozzle's
+    # CURRENT values so we don't wipe them.
+    log("   (this robot has no per-parameter setters -- using "
+        "set_nozzle_parameters instead)")
+    try:
+        ns = dod.get_nozzle_status()
+    except Exception as e:
+        log("   could not re-read nozzle status: %s" % e)
+        return {"ok": False, "reason": "no nozzle status"}
+
+    cur = parse_nozzle_params(ns).get(ch, {})
+    send_v = str(int(volts)) if volts is not None else cur.get("volt", "80")
+    send_p = (str(pulse) if pulse is not None and str(pulse).strip() != ""
+              else cur.get("pulse", "20"))
+    send_f = str(int(frequency)) if frequency is not None else cur.get("freq", "120")
+
+    act_s = ",".join(armed)          # armed channels, e.g. "1,2,3,4"
+    sel_s = str(ch)                  # these params apply to THIS nozzle
+
+    log("   sending active=%s selected=%s volts=%s pulse=%s freq=%s"
+        % (act_s, sel_s, send_v, send_p, send_f))
+    try:
+        r = _client_do(dod, "set_nozzle_parameters", act_s, sel_s,
+                       int(send_v), send_p, int(send_f))
+    except Exception as e:
+        log("   set_nozzle_parameters failed: %s" % e)
+        return {"ok": False, "reason": "call failed"}
+    log("   params set -> %s" % (_readable(r),))
+    return {"ok": True, "result": r}
 
 
 def jog_axis(dod, axis, delta, dry_run=True, log=print, confirm=_terminal_confirm):
