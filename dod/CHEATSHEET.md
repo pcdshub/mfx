@@ -12,7 +12,8 @@ Hardware (robot server at 172.21.39.172:9999)
 DropsDriver / HTTPTransceiver       ← vendor layer (do not edit)
         ↑ wrapped by
 DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
-  └─ dod.codi ──→ CoDI  (codi.py)  ← 4 SmarAct motors + named presets
+  ├─ dod.codi ──→ CoDI  (codi.py)  ← 4 SmarAct motors + named presets
+  └─ SafeRobot  (safe_motion/)     ← obstacle-avoiding subclass of DoD
 ```
 
 ---
@@ -73,8 +74,8 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 > **Pulse:** ch 1–2 use waveform names (e.g. `'sciPULSE_LV01'`); ch 3+ use numeric strings (e.g. `'48'`). Use `dod.get_pulse_names()` to list valid names.
 > Each setter reads current state first — only the named parameter changes.
 > `set_nozzle_selected` raises `ValueError` if the nozzle is not armed.
-> **Waveform load time:** `set_nozzle_pulse` on ch 1 or 2 blocks for 5 s after sending the command — the robot needs this time to load the named waveform.
-> **`take_probe` requires `ProbeUptake` task on robot.** Raises `RuntimeError` if absent (`check_task=True` default). Blocks until done; default timeout = `max(30, volume)` s. Pass `timeout=` to override.
+> **Waveform load time:** `set_nozzle_pulse` on ch 1 or 2 blocks for 5 s after sending — the robot needs this time to load the waveform.
+> **`take_probe` requires `ProbeUptake` task on robot.** Raises `RuntimeError` if absent. Default timeout = `max(30, volume)` s.
 
 ## Environmental Controls
 
@@ -82,9 +83,6 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 |---|---|---|
 | `dod.set_humidity(value)` | Set target relative humidity | %rH, integer, 0–100 |
 | `dod.set_cooling_temp(temp)` | Set cooling device temperature | °C (float) or `'dewpoint'` |
-
-> `set_humidity` raises `ValueError` outside `[0, 100]`.
-> `set_cooling_temp` raises `ValueError` if `temp` is neither a number nor `'dewpoint'`.
 
 ---
 
@@ -95,8 +93,7 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | `dod.set_led(duration, delay)` | Set strobe pulse width and delay (current nozzle) | µs |
 | `dod.set_led_per_nozzle(nozzle, duration, delay)` | Select nozzle then set its strobe params | µs |
 
-> **Ranges:** `duration` 1–65000 µs; `delay` 0–6500 µs. `ValueError` if out of range.
-> `set_led_per_nozzle` raises `ValueError` if the nozzle is not armed.
+> **Ranges:** `duration` 1–65 000 µs; `delay` 0–6 500 µs. `ValueError` if out of range.
 > No read-back — track values in calling code if needed.
 
 ---
@@ -113,8 +110,6 @@ DoD  (dod_dev_documented.py)        ← motion, nozzle, tasks, timing
 | `dod.clear_abort()` | Clear abort state after a stop |
 
 > **Abort mid-run:** `dod.safety_abort = True`  (takes effect within ~0.5 s)
-
-> **`handle_dialog` modes:** `'raise'` (default) — print dialog and return paused dict; `'auto_ok'` — auto-close single-button only; `'auto_1'` / `'auto_2'` — auto-close all with that button.
 
 ---
 
@@ -142,14 +137,21 @@ dod.reset_error()             # only if Status still 'Error' afterwards
 
 | Command | What it does |
 |---|---|
-| `dod.codi.get_CoDI_predefined()` | List all named presets |
-| `dod.codi.get_CoDI_pos()` | Read current position + matched preset name |
-| `dod.codi.set_CoDI_pos('name')` | Move to preset (blocks until done) |
-| `dod.codi.set_CoDI_pos('name', wait=False)` | Move without blocking |
-| `dod.codi.set_CoDI_current_pos('name')` | Save current position as new preset |
-| `dod.codi.set_CoDI_current_z()` | Push current z to **all** presets |
+| `dod.codi.get_presets()` | List all named presets |
+| `dod.codi.get_pos()` | Read current position + matched preset name |
+| `dod.codi.move_to_preset('name')` | Move to preset (blocks until done, 30 s timeout) |
+| `dod.codi.move_to_preset('name', wait=False)` | Move without blocking |
+| `dod.codi.add_preset('name', base, left, right, z)` | Add or overwrite a named preset |
+| `dod.codi.save_current_pos('name')` | Save current motor positions as a new preset |
+| `dod.codi.update_z_all_presets()` | Push current z to all presets |
+| `dod.codi.reload_presets()` | Reload presets from hutch-python motor objects |
+| `dod.codi.remove_preset('name')` | Remove a preset from the local dictionary |
 
 Default presets: **`aspiration`** · **`angled_vert`** · **`angled_hor`**
+
+> **Deprecated aliases:** `get_CoDI_predefined`, `get_CoDI_pos`, `set_CoDI_pos`,
+> `set_CoDI_current_pos`, `set_CoDI_current_z` still work but emit
+> `DeprecationWarning`. Use the names above.
 
 ---
 
@@ -168,16 +170,49 @@ Default presets: **`aspiration`** · **`angled_vert`** · **`angled_hor`**
 
 ---
 
-## Timing  *(all values in nanoseconds)*
+## CoDI Alignment (`codi_align`)
+
+```python
+from dod.codi import codi_align
+codi_align(codi)              # P and Z modes only
+codi_align(codi, dod=dod)     # all 4 modes
+```
+
+| Mode | Key | Step | What it controls |
+|---|---|---|---|
+| **P** Position | `p` | 0 | All 4 axes; `1`–`4` select axis |
+| **T** Timing | `t` | 1 | EVR timing-zero per nozzle; `1`/`2` toggle |
+| **Z** Overlap | `z` | 2 | `trans_z` only; `[`/`]`/`m` mark range + jump to midpoint |
+| **R** Reaction | `r` | 3 | Reaction time; right = more reaction time |
+
+| Key | Action |
+|---|---|
+| Left / Right | Move (negative / positive) |
+| Up / Down or `+` / `-` | Step size ×0.5 / ×2 |
+| `[` / `]` / `m` | Mark range start / end / jump to midpoint (T and Z modes) |
+| `=` | Enter value directly in µs (T and R modes) |
+| `s` | Save current CoDI position as preset |
+| `h` | Key map |
+| `?` | Alignment procedure walkthrough (Steps 0–3) |
+| `q` | Quit; prompts for e-log post |
+
+Default step sizes: rotation **0.05°** · trans_z **0.010 mm** · timing **10 µs**
+
+---
+
+## Timing  *(display in µs; internal storage in ns)*
 
 | Command | What it does |
 |---|---|
-| `dod.set_timing_rel_reaction(ns)` | Set drop-to-X-ray reaction delay |
-| `dod.set_timing_rel_LED(ns)` | Set LED delay relative to X-ray |
-| `dod.set_timing_zero_nozzle(1, ns)` | Set time-zero for nozzle 1 or 2 |
-| `dod.set_timing_relative_nozzle(1, ns)` | Adjust nozzle 1 or 2 by offset |
-| `dod.set_timing_abs_Xray(ns)` | Update X-ray timing reference |
-| `dod.logging_string()` | Generate e-log entry (timing + CoDI state) |
+| `dod.set_reaction_timing_rel(ns)` | Set drop-to-X-ray reaction delay |
+| `dod.set_led_timing_rel(ns)` | Set LED delay relative to X-ray |
+| `dod.set_nozzle_timing_zero(1, ns)` | Set time-zero reference for nozzle 1 or 2 |
+| `dod.set_nozzle_timing_rel(1, ns)` | Adjust nozzle 1 or 2 by relative offset |
+| `dod.set_nozzle_timing_abs(1, ns)` | Set nozzle 1 or 2 to absolute value |
+| `dod.set_xray_timing_ref(ns)` | Update X-ray timing reference |
+| `dod.print_timing()` | Print all timing values to console (µs) |
+| `dod.logging_string()` | Return e-log string (timing + CoDI state) |
+| `dod.logging_string(post_elog=True)` | Return and post to MFX e-log |
 
 Key attributes (read or set directly):
 
@@ -187,6 +222,32 @@ Key attributes (read or set directly):
 | `dod.timing_delay_LED` | LED delay vs X-ray | 1 000 ns |
 | `dod.timing_delay_nozzle_1` | Nozzle 1 delay vs X-ray | from PV |
 | `dod.timing_delay_nozzle_2` | Nozzle 2 delay vs X-ray | from PV |
+
+---
+
+## SafeRobot (Safe Motion)
+
+```python
+from dod.safe_motion import SafeRobot
+dod = SafeRobot(
+    robot_config_path='/path/to/robot_config.ini',
+    exclusion_zone_config='/path/to/exclusion_zones.json',
+)
+print(dod._sentinel_str)   # verify config is current
+dod.safe_mode = True        # enable obstacle avoidance
+```
+
+| Command | What it does |
+|---|---|
+| `dod.safe_mode = True/False` | Enable / disable obstacle-avoiding motion |
+| `dod.print_status()` | Show safe mode state, zones, positions, and preconditions |
+| `dod.plot_path('name')` | Preview planned path without moving |
+| `dod.do_move('name', plot=True)` | Preview then execute |
+| `dod.acknowledge_divergence()` | Clear position-divergence lock after verifying robot state |
+
+> When `safe_mode = False` all calls pass through to `DoD` with zero overhead.
+> `do_move` in safe mode executes waypoint-by-waypoint and verifies position after each step.
+> Raw jogs (`move_x/y_rel`) are blocked above `small_move_threshold` (default 100 µm) — use `do_move` for larger moves.
 
 ---
 
@@ -201,5 +262,5 @@ Key attributes (read or set directly):
 
 ## ⚠️ Known Limitations
 
-- **Forbidden-region checks are not yet active** — `safety_test=True` does not block unsafe moves.
-- `do_task(safety_check=True)` — safety check not yet implemented; use default `safety_check=False`.
+- **Forbidden-region checks in `DoD` base class are not yet active** — `safety_test=True` does not block unsafe moves. Use `SafeRobot` with `safe_mode=True` for real obstacle avoidance.
+- `HTTPTransceiver.send()` prints the endpoint to stdout on every HTTP call — this cannot be suppressed without editing the unowned vendor file.

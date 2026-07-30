@@ -17,7 +17,7 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [CoDI Alignment Wrapper](#codi-alignment-wrapper)
   - [Timing](#timing)
   - [Dry-run Mode](#dry-run-mode-off-hutch-development)
-  - [Safety](#safety)
+  - [SafeRobot (Safe Motion)](#saferobot-safe-motion)
   - [Connection Issues](#connection-issues)
 - [For Developers](#for-developers)
   - [Architecture](#architecture)
@@ -31,6 +31,7 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [LED Strobe Methods](#led-strobe-methods)
   - [dod.py vs dod\_dev\_documented.py](#dodpy-vs-dod_dev_documentedpy)
   - [Dry-run Architecture](#dry-run-architecture-developer-reference)
+  - [Safe Motion Package](#safe-motion-package)
 - [Known Issues](#known-issues)
 
 ---
@@ -390,20 +391,113 @@ The setter propagates automatically to `dod.codi`.
 
 ---
 
-### Safety
+### SafeRobot (Safe Motion)
 
-> ⚠️ **The software forbidden-region enforcement is not yet operational.**
-> All move methods accept a `safety_test=True` parameter, but the check is not
-> fully implemented. Physical motion limits must be respected manually.
+`SafeRobot` is a subclass of `DoD` that adds obstacle-avoiding path planning.
+When `safe_mode` is enabled, all motion methods are checked against a set of
+user-defined exclusion zones before executing. When `safe_mode` is off, every
+call passes through to `DoD` with zero overhead.
 
-The intended safety model defines rectangular forbidden regions in the robot x–y plane.
-Three regions are pre-configured at startup:
+> **One-time setup required.** Before `SafeRobot` can be used in safe mode,
+> the setup script must be run to generate waypoints and write them into the
+> robot config. See [Safe Motion Package](#safe-motion-package) in the
+> developer section.
 
-| Region | x range (µm) | y range (µm) | Applies to |
-|---|---|---|---|
-| Minimum y boundary | 0 – 300 000 | 0 – 10 000 | Both rotation states |
-| Maximum y boundary | 0 – 300 000 | 50 000 – 500 000 | Both rotation states |
-| Horizontal-forbidden zone | 0 – 300 000 | 50 000 – 50 000 | Horizontal rotation only |
+#### Session Startup with SafeRobot
+
+```python
+import sys
+sys.path.insert(0, '/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx')
+
+from dod.safe_motion import SafeRobot
+
+dod = SafeRobot(
+    robot_config_path='/path/to/robot_config.ini',   # or .json sidecar
+    exclusion_zone_config='/path/to/exclusion_zones.json',
+)
+```
+
+`safe_mode` starts `False` — all moves pass through to `DoD` until explicitly enabled.
+
+#### Verifying the Sentinel
+
+```python
+print(dod._sentinel_str)   # e.g. '20260727181742'
+```
+
+This should match the timestamp printed by the setup script. A mismatch means
+the robot config was modified after the last setup run — re-run the setup
+script before enabling safe mode.
+
+#### Enabling Safe Mode
+
+```python
+dod.safe_mode = True    # enable obstacle-avoiding motion
+dod.safe_mode = False   # disable — passthrough to DoD, zero overhead
+```
+
+#### Normal Operation
+
+```python
+dod.do_move('Sample_1')       # path-planned, waypoint-by-waypoint, post-move verified
+dod.move_x_rel(50)            # endpoint check (≤ threshold), then executes
+dod.move_x_rel(5000)          # blocked — exceeds threshold; use do_move() instead
+dod.do_task('wash_nozzle')    # precondition check (must be at Home), then executes
+```
+
+#### Motion Method Policies (safe mode)
+
+| Method | Policy |
+|---|---|
+| `do_move(name)` | Full path plan via visibility graph; executes waypoints sequentially; verifies position after each step |
+| `move_x_rel(dx)` | Blocked if `\|dx\|` > `small_move_threshold`; endpoint check only if within threshold |
+| `move_y_rel(dy)` | Same |
+| `move_rel(dx, dy, dz)` | Delegates to single-axis overrides above; hutch/robot conversion preserved |
+| `move_x_abs(x)` | Computes displacement vs current position; applies same threshold policy |
+| `move_y_abs(y)` | Same |
+| `move_z_abs(z)` | Z bounds check only (Z is decoupled from XY exclusion zones) |
+| `move_z_rel(dz)` | Same |
+| `do_task(name)` | Must be on the task precondition whitelist; verifies start position before executing |
+| `take_probe(...)` | Same whitelist approach using key `'take_probe'` |
+
+`small_move_threshold` is set in `exclusion_zones.json` (default 100 µm).
+
+#### Inspecting Configuration
+
+```python
+dod.print_status()
+```
+
+Prints: `safe_mode` state and lock, sentinel timestamp, position tolerance,
+small move limit, each exclusion zone, task preconditions, and all named
+positions with XYZ coordinates.
+
+#### Visualising a Path
+
+```python
+dod.plot_path('Sample_1')                        # preview only — no motion
+dod.do_move('Sample_1', plot=True)               # preview then execute
+dod.plot_path('Sample_1', start_xy=(131084, 8370))  # preview from known position
+```
+
+Opens a matplotlib window showing exclusion zones, the direct (Chebyshev)
+trajectory, and the safe (visibility-graph) path with waypoints.
+
+#### Position Divergence
+
+`SafeRobot` verifies position after every waypoint. If the error on any axis
+exceeds `position_tolerance_um` (default 500 µm):
+
+1. `stop_task()` is called immediately.
+2. `safe_mode_locked` is set to `True`.
+3. All subsequent safe-mode calls raise `RuntimeError`.
+
+To resume:
+
+```python
+dod.acknowledge_divergence()   # prints summary, clears lock
+dod.safe_mode = True           # re-enable manually after confirming robot state
+```
 
 ---
 
@@ -443,17 +537,27 @@ DoD  (dod.py / dod_dev_documented.py)   ← owned
   ├─ led:      set_led, set_led_per_nozzle
   ├─ env:      set_humidity, set_cooling_temp
   ├─ tasks:    do_task, get_task_names, get_task_details
-  ├─ safety:   set/get/test_forbidden_region  [not yet operational]
   ├─ timing:   set_nozzle_timing_*, set_reaction_timing_rel,
   │            set_led_timing_rel, set_xray_timing_ref,
   │            _format_timing, print_timing, logging_string
   │            [_MockTrigger in dry-run]
-  └─ dod.codi ──→ CoDI  (codi.py)  ← owned
-                    ├─ dryrun property
-                    ├─ four SmarAct motors  [_MockMotor in dry-run]
-                    │    rot_base, rot_left, rot_right, trans_z
-                    ├─ named preset dictionary (CoDI_pos_predefined)
-                    └─ codi_align(codi, dod=None)  ← top-level function
+  ├─ dod.codi ──→ CoDI  (codi.py)  ← owned
+  │               ├─ dryrun property
+  │               ├─ four SmarAct motors  [_MockMotor in dry-run]
+  │               │    rot_base, rot_left, rot_right, trans_z
+  │               ├─ named preset dictionary (CoDI_pos_predefined)
+  │               └─ codi_align(codi, dod=None)  ← top-level function
+  │
+  └─ SafeRobot  (safe_motion/safe_robot.py)  ← owned, subclass of DoD
+      ├─ safe_mode property  (default False — passthrough to DoD)
+      ├─ do_move  → path plan via visibility graph → waypoints
+      ├─ move_x/y_rel/abs  → small-move threshold + endpoint check
+      ├─ do_task / take_probe  → precondition check
+      ├─ print_status, plot_path, acknowledge_divergence
+      ├─ registry.py    ← robot INI/JSON config → position registry
+      ├─ graph.py       ← visibility graph + Dijkstra path planner
+      ├─ chebyshev.py   ← Chebyshev motion model + path-clear check
+      └─ obb.py         ← oriented bounding box geometry
 ```
 
 ---
@@ -467,6 +571,16 @@ DoD  (dod.py / dod_dev_documented.py)   ← owned
 | `dod_dev_documented.py` | Primary `DoD` class. Fully documented with numpy-style docstrings. `log_file` default points to the deployed path. |
 | `dod.py` | Local test copy. Identical to `dod_dev_documented.py` except `log_file` defaults to `/tmp/dod.log`. |
 | `codi.py` | `CoDI` class. Fully documented with numpy-style docstrings. |
+| `safe_motion/safe_robot.py` | `SafeRobot` subclass. Obstacle-avoiding motion layer. |
+| `safe_motion/registry.py` | Robot INI/JSON config parser → position registry. |
+| `safe_motion/graph.py` | Visibility graph + Dijkstra path planner. |
+| `safe_motion/chebyshev.py` | Chebyshev motion model + path-clear check. |
+| `safe_motion/obb.py` | Oriented bounding box geometry. |
+| `safe_motion/exclusion_zones.json` | Config template — copy and edit for your setup. |
+
+The setup script lives in `Ops_supp/DoD_dev/setup_safe_motion.py` (not deployed
+into `MFX_Hutch_Python` — run it from the dev environment before each obstacle
+layout change).
 
 #### Context files (do not edit)
 
@@ -998,6 +1112,119 @@ if self._dryrun:
     return  # or continue with state update only
 # ... live hardware call ...
 ```
+
+---
+
+### Safe Motion Package
+
+#### One-time Setup (repeat after every obstacle layout change)
+
+**Step 1 — Edit `exclusion_zones.json`**
+
+Copy `safe_motion/exclusion_zones.json` and edit for your setup:
+
+| Key | Description |
+|---|---|
+| `build_plate` | `x_um`, `y_um`, `z_um` — plate dimensions in robot frame |
+| `clearance_um` | Global safety buffer around every obstacle boundary (default 5 000 µm) |
+| `small_move_threshold_um` | Max displacement for raw jog moves (default 100 µm) |
+| `waypoint_speeds` | `vX`/`vY`/`vZ` written into every generated waypoint (default 25 000/25 000/5 000 µm/s) |
+| `task_preconditions` | `{"task_name": "required_start_position_name"}` |
+| `obstacles` | List of OBB objects — see below |
+
+Each obstacle is an oriented bounding box:
+
+```json
+{
+  "_name": "human-readable label (ignored by code)",
+  "cx_um": 100000,
+  "cy_um": 40000,
+  "w_um":  40000,
+  "h_um":  20000,
+  "angle_deg": 0.0
+}
+```
+
+- `cx_um`/`cy_um` — **centre** in robot frame. To specify by corner: `cx = x_min + w/2`.
+- `w_um`/`h_um` — full width and height (not half-widths).
+- `angle_deg` — CCW rotation from robot +X. Use `0.0` for axis-aligned.
+
+**Step 2 — Run the setup script**
+
+The setup script is at `Ops_supp/DoD_dev/setup_safe_motion.py`.
+
+```bash
+# Review output before writing
+python setup_safe_motion.py \
+    --config path/to/exclusion_zones.json \
+    --robot-ini path/to/robot_config.ini \
+    --dry-run
+
+# Write when satisfied
+python setup_safe_motion.py \
+    --config path/to/exclusion_zones.json \
+    --robot-ini path/to/robot_config.ini
+```
+
+The script is idempotent — re-running strips old `_wp_*` entries and rewrites
+them. It also writes a `robot_config.json` sidecar (positions + sentinel only)
+alongside the INI. Commit the `.json` to version control instead of the full INI.
+
+> **Do not hand-edit the INI from `--dry-run` output.** The terminal expands
+> tabs to spaces; use the live write to produce the actual file.
+
+> **Windows line endings.** The script writes CRLF regardless of host platform —
+> safe to transfer to the Windows robot PC without conversion.
+
+**Step 3 — Restart the robot software**
+
+The robot must reload its config for the new waypoint positions to become active.
+
+---
+
+#### Coordinate System
+
+All exclusion zone coordinates and the position registry use **robot frame**:
+
+| Robot axis | Hutch axis |
+|---|---|
+| Robot X | Hutch X |
+| Robot Y | Hutch Z |
+| Robot Z | −Hutch Y |
+
+`move_rel(coordinates='hutch')` conversion is handled by `DoD` — `SafeRobot`
+does not change this behaviour.
+
+---
+
+#### Sentinel Timestamp
+
+The setup script writes a dummy position `_last_edit_YYYYMMDDHHMMSS` into the
+robot INI config alongside the waypoints. `SafeRobot` stores this on startup as
+`robot._sentinel_str`. A mismatch between this value and the timestamp in the
+position registry indicates the robot config was modified outside the setup
+script. Automated mismatch checking and a pre-flight dialog are planned for a
+future version.
+
+---
+
+#### Full Instantiation Reference
+
+```python
+from dod.safe_motion import SafeRobot
+
+robot = SafeRobot(
+    robot_config_path='/path/to/robot_config.ini',  # or .json sidecar
+    exclusion_zone_config='/path/to/exclusion_zones.json',
+    position_tolerance_um=500.0,   # post-move verify tolerance (default 500 µm)
+    ip='172.21.39.172',
+    port=9999,
+)
+```
+
+`robot_config_path` accepts the full INI or the `.json` sidecar. At
+instantiation `SafeRobot` parses the config, builds the position registry and
+visibility graph, and sets `safe_mode = False`.
 
 ---
 
