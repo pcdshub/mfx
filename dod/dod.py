@@ -3015,12 +3015,13 @@ class DoD:
         self.timing_LED = self.timing_Xray + self.timing_delay_LED
 
         if self._dryrun:
-            print(
-                f"[DRY RUN] _timing_update: timing PVs not written "
-                f"(nozzle_1={self.timing_nozzle_1:.0f} ns, "
-                f"nozzle_2={self.timing_nozzle_2:.0f} ns, "
-                f"LED={self.timing_LED:.0f} ns)"
-            )
+            if not getattr(self, "_dryrun_quiet", False):
+                print(
+                    f"[DRY RUN] _timing_update: timing PVs not written "
+                    f"(nozzle_1={self.timing_nozzle_1:.0f} ns, "
+                    f"nozzle_2={self.timing_nozzle_2:.0f} ns, "
+                    f"LED={self.timing_LED:.0f} ns)"
+                )
             return
 
         self.trigger_nozzle_1.ns_delay.put(self.timing_nozzle_1)
@@ -3355,7 +3356,10 @@ class DoD:
 
         if post_elog:
             if self._dryrun:
-                print("[DRY RUN] logging_string: elog post suppressed")
+                print(
+                    "[DRY RUN] logging_string: elog post suppressed — message that would be posted:"
+                )
+                print(post_str)
             else:
                 from mfx.db import elog
 

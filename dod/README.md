@@ -235,6 +235,7 @@ dod.close_current_dialog(1)   # or 2
 |---|---|
 | `dod.codi.get_presets()` | List all stored named presets |
 | `dod.codi.get_pos()` | Read current position; returns `(name, rot_base, rot_left, rot_right, trans_z)` |
+| `dod.codi.get_pos(precision_digits=2)` | Same, with custom rounding precision for name-matching (default: 1) |
 | `dod.codi.move_to_preset('preset_name')` | Move to a named preset (blocks until done, 30 s timeout) |
 | `dod.codi.move_to_preset('preset_name', wait=False)` | Move without blocking |
 | `dod.codi.move_to_preset('preset_name', timeout=60)` | Move with custom timeout in seconds |
@@ -245,6 +246,13 @@ dod.close_current_dialog(1)   # or 2
 | `dod.codi.remove_preset('name')` | Remove a preset from the local dictionary |
 
 Default presets: `'aspiration'`, `'angled_vert'`, `'angled_hor'`.
+
+> **`get_pos` name matching:** The returned name is `None` if no preset matches
+> the current position within `precision_digits` decimal places.  Increase
+> `precision_digits` to require a tighter match.
+
+> **`dryrun` property:** `dod.codi.dryrun` can be read or set directly.
+> Setting `dod.dryrun = True/False` propagates automatically to `dod.codi`.
 
 > **Deprecated aliases:** The old `CoDI_*` method names (`get_CoDI_predefined`,
 > `set_CoDI_pos`, etc.) still work but emit `DeprecationWarning`.  They will be
@@ -306,7 +314,9 @@ All values are in **nanoseconds** unless otherwise noted.
 
 ### CoDI Alignment Wrapper
 
-`codi_align` is an interactive terminal-based alignment tool with four modes:
+`codi_align` is an interactive terminal-based alignment tool with four modes
+corresponding to the four alignment steps. Press `?` inside the tool for a
+full procedure walkthrough.
 
 ```python
 from dod.codi import codi_align
@@ -314,22 +324,31 @@ codi_align(codi)              # position and overlap modes only
 codi_align(codi, dod=dod)     # full 4-mode alignment (requires DoD for T and R)
 ```
 
-| Mode | Key | What it does |
-|---|---|---|
-| **P** – Position | `p` | Step all four CoDI axes. Keys `1`–`4` select the active axis. Arrow keys move it. |
-| **T** – Timing | `t` | Step the EVR timing-zero for nozzle 1 or 2. Keys `1`/`2` toggle nozzle. Requires `dod`. |
-| **Z** – Overlap | `z` | `trans_z` only. `[` marks overlap start, `]` marks overlap end, `m` moves to midpoint. |
-| **R** – Reaction | `r` | Step `reaction_timing_rel`. Positive = more reaction time. Requires `dod`. |
+| Mode | Key | What it does | Step |
+|---|---|---|---|
+| **P** – Position | `p` | Step all four CoDI axes. Keys `1`–`4` select the active axis. | Step 0 |
+| **T** – Timing | `t` | Step EVR timing-zero for nozzle 1 or 2. Keys `1`/`2` toggle nozzle. `[`/`]`/`m` mark timing range and jump to midpoint. `=` prompts for direct µs value. Requires `dod`. | Step 1 |
+| **Z** – Overlap | `z` | `trans_z` only. `[` marks overlap start, `]` marks overlap end, `m` moves to midpoint. | Step 2 |
+| **R** – Reaction | `r` | Step `reaction_timing_rel`. Right = more reaction time. `=` prompts for direct µs value. Requires `dod`. | Step 3 |
+
+Default step sizes: rotation axes **0.05°**, `trans_z` **0.010 mm**, timing **10 µs**.
 
 **Shared controls:**
 
 | Key | Action |
 |---|---|
-| Arrow keys | Move in current mode (up/right = positive, down/left = negative) |
-| `+` / `-` | Double / halve step size of active axis |
+| Left / Right arrows | Move active axis (negative / positive) |
+| Up / Down arrows | Halve / double step size of active axis |
+| `+` / `-` | Aliases for Up / Down step-size adjustment |
 | `s` | Save current CoDI position as a named preset (prompts for name) |
-| `h` | Print full key map |
+| `h` | Print key map |
+| `?` | Print alignment procedure walkthrough (Steps 0–3) |
 | `q` | Quit; prompts whether to post session summary to e-log |
+
+> **Dry-run behaviour:** When `codi.dryrun` is `True`, simulated motor positions
+> are tracked in memory so the status line reflects each incremental step.
+> On quit, if `y` is entered for the e-log prompt, the message that would be
+> posted is printed to the console instead.
 
 ---
 
@@ -340,9 +359,9 @@ or any EPICS/robot connections:
 
 ```python
 import sys
-sys.path.insert(0, "/sdf/home/d/dehe/Ops_supp/Hutch_python")
+sys.path.insert(0, "/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx")
 
-from codi import CoDI
+from dod.codi import CoDI
 from dod.dod import DoD
 
 codi = CoDI(dryrun=True)
@@ -351,11 +370,14 @@ codi = dod.codi   # or use the standalone CoDI above
 ```
 
 When `dryrun=True`:
-- `CoDI` uses `_MockMotor` objects — no SmarAct / EPICS connections
+- `CoDI` uses `_MockMotor` objects — no SmarAct / EPICS connections.
+  Simulated positions are tracked in memory (`_pos`), so incremental steps
+  in `codi_align` are reflected in the status line rather than always showing zero.
 - `DoD` uses `_MockClient` (no HTTP) and `_MockTrigger` (no EVR PVs)
 - All motor moves, DAQ server calls, and timing PV writes print `[DRY RUN]` messages and no-op
 - Python state (`timing_delay_*`, `CoDI_pos_predefined`, etc.) is updated normally
-- `codi_align(codi, dod=dod)` works for all four modes
+- `codi_align(codi, dod=dod)` works for all four modes; on quit, the elog message
+  is printed to the console instead of posted
 
 `dryrun` can also be toggled after construction on live hardware (Case B):
 
@@ -966,7 +988,7 @@ In `codi.py`, `_MockMotor` substitutes `SmarAct` motors:
 
 | Mock class | Replaces | Notes |
 |---|---|---|
-| `_MockMotor` | `SmarAct` | `wm()=0.0`; `umvr/mv/umv` no-ops; `presets.set/add_hutch` no-ops |
+| `_MockMotor` | `SmarAct` | Tracks simulated position in `_pos`; `wm()` returns `_pos`; `umvr` increments it; `mv/umv` set it absolutely; `presets.set/add_hutch` no-ops |
 
 Gate guard pattern used throughout — Python state is always updated; hardware calls are suppressed when `self._dryrun is True`:
 
@@ -993,3 +1015,5 @@ if self._dryrun:
 | **`print(endpoint)` in `HTTPTransceiver.send()`.** Writes directly to stdout on every HTTP call; cannot be suppressed without editing the unowned file. | Low | Open |
 | **`take_probe` silent-nothing if `ProbeUptake` absent.** The `check_task=True` default guards against this but the task could be present yet misconfigured. | Medium | Mitigated by check_task guard |
 | **`safety_test` parameter not yet removed from motion methods.** `do_move`, `move_x/y/z_abs`, etc. still accept `safety_test=False` but the check is unimplemented. Removal deferred (Bug #9) pending coordinated refactor across `dod.py` and `safe_robot.py`. | Medium | Deferred |
+| **R-mode stepping not cumulative in `codi_align`.** `set_reaction_timing_rel` replaces `timing_delay_reaction` rather than incrementing it, so each R-mode keypress set the value to ±step instead of accumulating. | Medium | Fixed — `codi_align` now passes `dod.timing_delay_reaction + step` |
+| **`[DRY RUN] _timing_update` prints flood terminal in `codi_align`.** Each T/R-mode keypress triggered a `print()` in raw-terminal mode, scrolling the status display. | Low | Fixed — `codi_align` sets `dod._dryrun_quiet = True` for the duration of the session |

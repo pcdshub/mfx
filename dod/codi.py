@@ -9,6 +9,10 @@ class _MockMotor:
         throughout their lifetime.  Setting ``dryrun=False`` later removes gate
         suppression but the mock objects remain — the instance cannot silently
         transition to live hardware.
+
+    In dry-run mode the simulated position is tracked in ``_pos`` so that
+    status lines and range-marker logic in ``codi_align`` reflect each
+    incremental step rather than always showing zero.
     """
 
     class _MockPresets:
@@ -23,19 +27,20 @@ class _MockMotor:
 
     def __init__(self, name="mock"):
         self.name = name
+        self._pos = 0.0
         self.presets = self._MockPresets()
 
     def wm(self):
-        return 0.0
+        return self._pos
 
     def umvr(self, delta, **kw):
-        pass
+        self._pos += delta
 
     def mv(self, pos, **kw):
-        pass
+        self._pos = float(pos)
 
     def umv(self, pos, **kw):
-        pass
+        self._pos = float(pos)
 
 
 class CoDI:
@@ -614,6 +619,8 @@ class CoDI:
         """
         if self._dryrun:
             print(f"[DRY RUN] move_z_rel: relative move suppressed (z_rel={z_rel})")
+            if isinstance(self.CoDI_trans_z, _MockMotor):
+                self.CoDI_trans_z.umvr(z_rel)
             return
         self.CoDI_trans_z.umvr(z_rel)
 
@@ -645,6 +652,8 @@ class CoDI:
             print(
                 f"[DRY RUN] move_rot_left_rel: relative move suppressed (rot_rel={rot_rel})"
             )
+            if isinstance(self.CoDI_rot_left, _MockMotor):
+                self.CoDI_rot_left.umvr(rot_rel)
             return
         self.CoDI_rot_left.umvr(rot_rel)
 
@@ -676,6 +685,8 @@ class CoDI:
             print(
                 f"[DRY RUN] move_rot_right_rel: relative move suppressed (rot_rel={rot_rel})"
             )
+            if isinstance(self.CoDI_rot_right, _MockMotor):
+                self.CoDI_rot_right.umvr(rot_rel)
             return
         self.CoDI_rot_right.umvr(rot_rel)
 
@@ -707,6 +718,8 @@ class CoDI:
             print(
                 f"[DRY RUN] move_rot_base_rel: relative move suppressed (rot_rel={rot_rel})"
             )
+            if isinstance(self.CoDI_rot_base, _MockMotor):
+                self.CoDI_rot_base.umvr(rot_rel)
             return
         self.CoDI_rot_base.umvr(rot_rel)
 
@@ -920,22 +933,30 @@ def codi_align(codi, dod=None):
     -----
     P  (position)
         All four CoDI axes.  Axis selected by keys ``1``–``4``.
-        Arrow keys move the selected axis.
+        Left/right arrows move the selected axis.
     T  (timing)
         Step the EVR timing-zero delay for nozzle 1 or 2.
         Toggle nozzle with ``1`` / ``2``.  Requires *dod*.
+        Timing-zero is the EVR delay at which the nozzle's droplet centers
+        arrive perfectly overlapped at the collision point.
+        ``[`` / ``]`` optionally mark a timing range for the active nozzle;
+        ``m`` moves to the midpoint of that range (if both markers are set).
+        ``=`` prompts for a direct µs value.
     Z  (overlap)
         ``trans_z`` only.  ``[`` marks overlap start, ``]`` marks overlap
         end, ``m`` moves immediately to midpoint.
     R  (reaction)
         Step ``reaction_timing_rel``.  Positive = more reaction time.
-        Requires *dod*.
+        Requires *dod*.  ``=`` prompts for a direct µs value.
 
     Shared controls
     ---------------
-    ``+`` / ``-``  Increase / decrease step size of the active axis.
+    Left / Right   Move active axis (negative / positive).
+    Up / Down      Decrease / increase step size of the active axis.
+    ``+`` / ``-``  Aliases for Up / Down step-size adjustment.
     ``s``          Save current CoDI position as a named preset.
-    ``h``          Print full key map.
+    ``h``          Print key map.
+    ``?``          Print alignment procedure walkthrough.
     ``q``          Quit; prompts to post to e-log.
 
     Examples
@@ -979,28 +1000,67 @@ def codi_align(codi, dod=None):
     t_nozzle = 1  # T-mode nozzle (1 or 2)
     z_start = None  # Z-mode overlap start
     z_end = None  # Z-mode overlap end
+    t_range = {1: [None, None], 2: [None, None]}  # T-mode range markers per nozzle
 
     # Per-axis step sizes (in natural units: degrees or mm)
     p_steps = {
-        "rot_base": 0.100,
-        "rot_left": 0.100,
-        "rot_right": 0.100,
+        "rot_base": 0.050,
+        "rot_left": 0.050,
+        "rot_right": 0.050,
         "trans_z": 0.010,
     }
-    t_step_ns = 100.0  # timing zero step (ns); displayed as µs
-    r_step_ns = 100.0  # reaction step (ns); displayed as µs
+    t_step_ns = 10000.0  # timing zero step (ns); displayed as µs
+    r_step_ns = 10000.0  # reaction step (ns); displayed as µs
 
     _HELP = """
   ─── codi_align key map ─────────────────────────────────────
   Mode switch:   p=Position  t=Timing  z=Z-overlap  r=Reaction
-  Move:          arrow keys (up/right = positive, down/left = negative)
+  Move:          left/right arrows  (left = negative, right = positive)
+  Step size:     up/down arrows  or  + / -  (active axis, ×2 / ×0.5)
   Axis select:   1/2/3/4  (P-mode: rot_base/left/right/z; T-mode: nozzle)
-  Step size:     + increase   - decrease  (active axis only)
-  Z-mode:        [  mark overlap start    ]  mark overlap end
-                 m  move to midpoint (immediate)
+  T/Z-mode:      [  mark range start    ]  mark range end
+                 m  move to midpoint (if both markers set, else no-op)
+  T/R-mode:      =  enter a direct value in µs
   Save preset:   s
-  Help:          h
+  Key map:       h
+  Procedure:     ?
   Quit:          q (prompts for elog post)
+  ────────────────────────────────────────────────────────────
+"""
+
+    _PROC = """
+  ─── CoDI alignment procedure ───────────────────────────────
+  Step 0  P-mode  Coarse mechanical positioning.
+          Adjust rot_base, rot_left, rot_right, trans_z until
+          both streams are close enough to collide.
+          Observation is visual / stroboscopic (no automated
+          feedback signal).
+
+  Step 1  T-mode  Per-nozzle timing-zero calibration.
+          Find the EVR delay for each nozzle such that its
+          droplet centers arrive perfectly overlapped at the
+          collision point (timing-zero).  Accounts for
+          electronic delay and droplet travel time.
+          Toggle between nozzle 1 and 2 with keys 1 / 2.
+          Iterate until both nozzles are calibrated.
+          Optional: use [ / ] to bracket the overlap range,
+          then m to jump to the midpoint.
+
+  Step 2  Z-mode  Fine z-overlap scan (triggered mode).
+          With both nozzles injecting in triggered mode, sweep
+          trans_z to find the z range where droplets overlap.
+          Mark low endpoint [, high endpoint ], then press m
+          to move to the midpoint (best collision position).
+
+  Step 3  R-mode  Reaction time adjustment.
+          Sets the delay between droplet collision and X-ray
+          probe.  Increasing reaction time pushes the collision
+          earlier (more time for the mixture to react before
+          the X-ray fires).  Right arrow = more reaction time.
+          All values displayed in µs.  Use = for direct entry.
+
+  Recommended order: Step 0 → 1 → (Step 0 base-only if
+  needed) → 2 → 3.  Steps may be re-entered in any order.
   ────────────────────────────────────────────────────────────
 """
 
@@ -1027,11 +1087,17 @@ def codi_align(codi, dod=None):
             v2 = dod.timing_delay_nozzle_2 / 1000
         except Exception:
             v1 = v2 = 0.0
-        nz_s = f"[{t_nozzle}*]" if t_nozzle else ""
         step_us = t_step_ns / 1000
+        t0, t1 = t_range[t_nozzle]
+        if t0 is not None and t1 is not None:
+            range_s = f" | range:[{t0 / 1000:.3f}→{t1 / 1000:.3f}] mid={((t0 + t1) / 2) / 1000:.3f}µs"
+        elif t0 is not None:
+            range_s = f" | start:{t0 / 1000:.3f}µs (press ] for end)"
+        else:
+            range_s = ""
         return (
-            f"T{_dryrun_tag()} | nozzle={t_nozzle} | step={step_us:.3f}µs | "
-            f"nozzle_1={v1:.3f}µs  nozzle_2={v2:.3f}µs"
+            f"T{_dryrun_tag()} | nozzle={t_nozzle}* | step={step_us:.3f}µs | "
+            f"nozzle_1={v1:.3f}µs  nozzle_2={v2:.3f}µs{range_s}"
         )
 
     def _z_status():
@@ -1086,7 +1152,18 @@ def codi_align(codi, dod=None):
     # -----------------------------------------------------------------------
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
-    print("\ncodi_align started. Press 'h' for help, 'q' to quit.\n")
+
+    # Suppress per-keystroke [DRY RUN] _timing_update prints while inside the
+    # interactive loop — they flood the raw-terminal display.  Restored on exit.
+    _prev_dryrun_quiet = (
+        getattr(dod, "_dryrun_quiet", False) if dod is not None else False
+    )
+    if dod is not None:
+        dod._dryrun_quiet = True
+
+    print(
+        "\ncodi_align started. Press 'h' for key map, '?' for procedure, 'q' to quit.\n"
+    )
     _print_status()
 
     try:
@@ -1125,21 +1202,33 @@ def codi_align(codi, dod=None):
                     if n in (1, 2):
                         t_nozzle = n
 
-            # --- step adjustment --------------------------------------------
-            elif char in "+-":
-                factor = 2.0 if char == "+" else 0.5
+            # --- step size (up/down arrows; +/- are aliases) ----------------
+            elif char in ("\x1b[A", "+"):  # up / + = step size increase
+                factor = 2.0
                 if mode == "P":
                     ax = _P_AXES[p_axis_idx]
                     p_steps[ax] = round(p_steps[ax] * factor, 4)
                 elif mode == "T":
                     t_step_ns = round(t_step_ns * factor, 3)
-                elif mode in ("Z",):
+                elif mode == "Z":
                     p_steps["trans_z"] = round(p_steps["trans_z"] * factor, 4)
                 elif mode == "R":
                     r_step_ns = round(r_step_ns * factor, 3)
 
-            # --- movement (arrow keys) --------------------------------------
-            elif char in ("\x1b[A", "\x1b[C"):  # up / right = positive
+            elif char in ("\x1b[B", "-"):  # down / - = step size decrease
+                factor = 0.5
+                if mode == "P":
+                    ax = _P_AXES[p_axis_idx]
+                    p_steps[ax] = round(p_steps[ax] * factor, 4)
+                elif mode == "T":
+                    t_step_ns = round(t_step_ns * factor, 3)
+                elif mode == "Z":
+                    p_steps["trans_z"] = round(p_steps["trans_z"] * factor, 4)
+                elif mode == "R":
+                    r_step_ns = round(r_step_ns * factor, 3)
+
+            # --- movement (left/right arrow keys) ---------------------------
+            elif char == "\x1b[C":  # right = positive
                 direction = +1
                 if mode == "P":
                     ax = _P_AXES[p_axis_idx]
@@ -1149,9 +1238,11 @@ def codi_align(codi, dod=None):
                 elif mode == "Z":
                     codi.move_z_rel(p_steps["trans_z"] * direction)
                 elif mode == "R" and dod is not None:
-                    dod.set_reaction_timing_rel(r_step_ns * direction)
+                    dod.set_reaction_timing_rel(
+                        dod.timing_delay_reaction + r_step_ns * direction
+                    )
 
-            elif char in ("\x1b[B", "\x1b[D"):  # down / left = negative
+            elif char == "\x1b[D":  # left = negative
                 direction = -1
                 if mode == "P":
                     ax = _P_AXES[p_axis_idx]
@@ -1161,17 +1252,43 @@ def codi_align(codi, dod=None):
                 elif mode == "Z":
                     codi.move_z_rel(p_steps["trans_z"] * direction)
                 elif mode == "R" and dod is not None:
-                    dod.set_reaction_timing_rel(r_step_ns * direction)
+                    dod.set_reaction_timing_rel(
+                        dod.timing_delay_reaction + r_step_ns * direction
+                    )
 
-            # --- Z-mode overlap markers ------------------------------------
+            # --- overlap / range markers (Z-mode and T-mode) ---------------
             elif char == "[" and mode == "Z":
                 z_start = codi.CoDI_trans_z.wm()
                 sys.stdout.write(f"\r\033[K[Z] overlap start marked: {z_start:.3f} mm")
                 sys.stdout.flush()
 
+            elif char == "[" and mode == "T" and dod is not None:
+                val = (
+                    dod.timing_delay_nozzle_1
+                    if t_nozzle == 1
+                    else dod.timing_delay_nozzle_2
+                )
+                t_range[t_nozzle][0] = val
+                sys.stdout.write(
+                    f"\r\033[K[T] nozzle {t_nozzle} range start marked: {val / 1000:.3f} µs"
+                )
+                sys.stdout.flush()
+
             elif char == "]" and mode == "Z":
                 z_end = codi.CoDI_trans_z.wm()
                 sys.stdout.write(f"\r\033[K[Z] overlap end marked: {z_end:.3f} mm")
+                sys.stdout.flush()
+
+            elif char == "]" and mode == "T" and dod is not None:
+                val = (
+                    dod.timing_delay_nozzle_1
+                    if t_nozzle == 1
+                    else dod.timing_delay_nozzle_2
+                )
+                t_range[t_nozzle][1] = val
+                sys.stdout.write(
+                    f"\r\033[K[T] nozzle {t_nozzle} range end marked: {val / 1000:.3f} µs"
+                )
                 sys.stdout.flush()
 
             elif char == "m" and mode == "Z":
@@ -1188,6 +1305,43 @@ def codi_align(codi, dod=None):
                     )
                     sys.stdout.flush()
 
+            elif char == "m" and mode == "T" and dod is not None:
+                t0, t1 = t_range[t_nozzle]
+                if t0 is not None and t1 is not None:
+                    midpoint_ns = (t0 + t1) / 2
+                    sys.stdout.write(
+                        f"\r\033[K[T] nozzle {t_nozzle} moving to midpoint"
+                        f" {midpoint_ns / 1000:.3f} µs"
+                    )
+                    sys.stdout.flush()
+                    dod.set_nozzle_timing_abs(t_nozzle, midpoint_ns)
+                else:
+                    sys.stdout.write(
+                        f"\r\033[K[T] set both [ and ] for nozzle {t_nozzle}"
+                        " before pressing m"
+                    )
+                    sys.stdout.flush()
+
+            # --- direct numeric entry (= key; T and R modes) ---------------
+            elif char == "=" and mode in ("T", "R") and dod is not None:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                sys.stdout.write("\r\033[K")
+                if mode == "T":
+                    raw = input(f"Set nozzle {t_nozzle} timing (µs): ").strip()
+                else:
+                    raw = input("Set reaction time (µs): ").strip()
+                tty.setraw(fd)
+                try:
+                    val_ns = float(raw) * 1000
+                    if mode == "T":
+                        dod.set_nozzle_timing_abs(t_nozzle, val_ns)
+                    else:
+                        dod.set_reaction_timing_rel(val_ns)
+                    sys.stdout.write(f"\r\033[K[set to {float(raw):.3f} µs]")
+                except ValueError:
+                    sys.stdout.write("\r\033[K[invalid input — no change]")
+                sys.stdout.flush()
+
             # --- save preset -----------------------------------------------
             elif char == "s":
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -1199,10 +1353,15 @@ def codi_align(codi, dod=None):
                     sys.stdout.write(f"\r\033[K[saved preset '{preset_name}']")
                     sys.stdout.flush()
 
-            # --- help -------------------------------------------------------
+            # --- help / procedure -------------------------------------------
             elif char == "h":
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
                 print(f"\r{_HELP}")
+                tty.setraw(fd)
+
+            elif char == "?":
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                print(f"\r{_PROC}")
                 tty.setraw(fd)
 
             # --- quit -------------------------------------------------------
@@ -1228,3 +1387,5 @@ def codi_align(codi, dod=None):
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         except Exception:
             pass
+        if dod is not None:
+            dod._dryrun_quiet = _prev_dryrun_quiet
