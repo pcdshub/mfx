@@ -32,6 +32,61 @@ def _with_reconnect(func):
     return wrapper
 
 
+# ---------------------------------------------------------------------------
+# Dry-run stubs — used when DoD(dryrun=True) is instantiated off-hutch.
+# ---------------------------------------------------------------------------
+
+
+class _MockServerResponse:
+    """Minimal server-response stub for dry-run mode."""
+
+    STATUS = "DRY_RUN"
+    RESULTS = {
+        "PositionReal": [0.0, 0.0, 0.0],
+        "PositionName": "DRY_RUN",
+        "Status": "DRY_RUN",
+        "TaskNames": [],
+        "PositionNames": [],
+    }
+
+
+class _MockClient:
+    """
+    No-op robot HTTP client for dry-run mode.
+
+    Any method call returns a ``_MockServerResponse``.  A catch-all
+    ``__getattr__`` means the mock is forward-compatible with new
+    ``myClient`` methods without needing maintenance.
+    """
+
+    def __getattr__(self, name):
+        def _noop(*args, **kw):
+            return _MockServerResponse()
+
+        return _noop
+
+
+class _MockDelay:
+    """No-op EVR channel-access delay attribute."""
+
+    def get(self):
+        return 0.0
+
+    def put(self, value):
+        pass
+
+
+class _MockTrigger:
+    """No-op EVR trigger for dry-run mode."""
+
+    def __init__(self, pv="mock", name="mock"):
+        self.ns_delay = _MockDelay()
+
+
+# ---------------------------------------------------------------------------
+# Module-level constant
+# ---------------------------------------------------------------------------
+
 # Period of the 120 Hz beam in nanoseconds; used in timing calculations.
 _PERIOD_120HZ_NS = 1e9 / 120
 
@@ -161,31 +216,36 @@ class DoD:
             0, 300000, self.y_safety, self.y_max, rotation_state="horizontal"
         )
 
-        # Redirect dod.DropsDriver and dod.HTTPTransceiver log output to a file
-        # so INFO messages do not appear on the console. propagate=False prevents
-        # the records from also reaching the root (console) handler.
-        _dod_log_fmt = logging.Formatter(
-            "%(asctime)s  %(name)s  %(levelname)s  %(message)s"
-        )
-        for _log_name in ("dod.DropsDriver", "dod.HTTPTransceiver"):
-            _lgr = logging.getLogger(_log_name)
-            # Idempotency guard: avoid adding a duplicate FileHandler if DoD()
-            # is instantiated more than once in the same session.
-            if not any(isinstance(h, logging.FileHandler) for h in _lgr.handlers):
-                _fh = logging.FileHandler(log_file)
-                _fh.setFormatter(_dod_log_fmt)
-                _lgr.addHandler(_fh)
-            _lgr.propagate = False
+        if dryrun:
+            # Case A: off-hutch dry-run — mock all hardware connections
+            self.client = _MockClient()
+        else:
+            # Redirect dod.DropsDriver and dod.HTTPTransceiver log output to a
+            # file so INFO messages do not appear on the console.
+            # propagate=False prevents the records from also reaching the root
+            # (console) handler.
+            _dod_log_fmt = logging.Formatter(
+                "%(asctime)s  %(name)s  %(levelname)s  %(message)s"
+            )
+            for _log_name in ("dod.DropsDriver", "dod.HTTPTransceiver"):
+                _lgr = logging.getLogger(_log_name)
+                # Idempotency guard: avoid adding a duplicate FileHandler if
+                # DoD() is instantiated more than once in the same session.
+                if not any(isinstance(h, logging.FileHandler) for h in _lgr.handlers):
+                    _fh = logging.FileHandler(log_file)
+                    _fh.setFormatter(_dod_log_fmt)
+                    _lgr.addHandler(_fh)
+                _lgr.propagate = False
 
-        # Initializing the robot client that is used for communication
-        self.client = myClient(
-            ip=ip, port=port, supported_json=supported_json, reload=False
-        )
+            # Initializing the robot client for communication
+            self.client = myClient(
+                ip=ip, port=port, supported_json=supported_json, reload=False
+            )
 
-        # create config parser handler
-        json_handler = JsonFileHandler(supported_json)
-        # load configs and launch web server
-        json_handler.reload_endpoints()
+            # create config parser handler
+            json_handler = JsonFileHandler(supported_json)
+            # load configs and launch web server
+            json_handler.reload_endpoints()
 
         # Set parameters for reconnecting function
         self.ip = ip
@@ -199,18 +259,35 @@ class DoD:
 
             self.codi = CoDI(dryrun=self._dryrun)
 
-        # Timing section
-        from pcdsdevices.evr import Trigger
+        # Timing section — EVR trigger objects
+        if dryrun:
+            self.trigger_Xray = _MockTrigger(
+                "MFX:LAS:EVR:01:TRIG7", name="trigger_X-ray_simulator"
+            )
+            self.trigger_nozzle_1 = _MockTrigger(
+                "MFX:LAS:EVR:01:TRIG2", name="trigger_nozzle_1"
+            )
+            self.trigger_nozzle_2 = _MockTrigger(
+                "MFX:LAS:EVR:01:TRIG3", name="trigger_nozzle_2"
+            )
+            self.trigger_LED = _MockTrigger(
+                "MFX:LAS:EVR:01:TRIG1", name="trigger_LED_array"
+            )
+        else:
+            from pcdsdevices.evr import Trigger
 
-        # Trigger objects
-        self.trigger_Xray = Trigger(
-            "MFX:LAS:EVR:01:TRIG7", name="trigger_X-ray_simulator"
-        )
-        self.trigger_nozzle_1 = Trigger("MFX:LAS:EVR:01:TRIG2", name="trigger_nozzle_1")
-        self.trigger_nozzle_2 = Trigger("MFX:LAS:EVR:01:TRIG3", name="trigger_nozzle_2")
-        self.trigger_LED = Trigger("MFX:LAS:EVR:01:TRIG1", name="trigger_LED_array")
+            self.trigger_Xray = Trigger(
+                "MFX:LAS:EVR:01:TRIG7", name="trigger_X-ray_simulator"
+            )
+            self.trigger_nozzle_1 = Trigger(
+                "MFX:LAS:EVR:01:TRIG2", name="trigger_nozzle_1"
+            )
+            self.trigger_nozzle_2 = Trigger(
+                "MFX:LAS:EVR:01:TRIG3", name="trigger_nozzle_2"
+            )
+            self.trigger_LED = Trigger("MFX:LAS:EVR:01:TRIG1", name="trigger_LED_array")
 
-        # Timing parameters
+        # Timing parameters — seeded from PVs on live hardware; 0.0 in dry-run
         self.timing_Xray = self.trigger_Xray.ns_delay.get()
         self.timing_nozzle_1 = self.trigger_nozzle_1.ns_delay.get()
         self.timing_nozzle_2 = self.trigger_nozzle_2.ns_delay.get()

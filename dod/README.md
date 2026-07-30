@@ -14,7 +14,9 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [DoD Commands](#dod-commands)
   - [Error Recovery](#error-recovery)
   - [CoDI Commands](#codi-commands)
+  - [CoDI Alignment Wrapper](#codi-alignment-wrapper)
   - [Timing](#timing)
+  - [Dry-run Mode](#dry-run-mode-off-hutch-development)
   - [Safety](#safety)
   - [Connection Issues](#connection-issues)
 - [For Developers](#for-developers)
@@ -23,11 +25,12 @@ communicates with the robot server over HTTP and exposes two classes — `DoD` a
   - [hutch-python Loading](#hutch-python-loading)
   - [\_with\_reconnect Decorator](#_with_reconnect-decorator)
   - [Logging Redirect](#logging-redirect)
-  - [exec-based Preset Access](#exec-based-preset-access)
+  - [Preset Access](#preset-access)
   - [Relative Motion and PositionReal Format](#relative-motion-and-positionreal-format)
   - [Nozzle Parameter Methods](#nozzle-parameter-methods)
   - [LED Strobe Methods](#led-strobe-methods)
   - [dod.py vs dod\_dev\_documented.py](#dodpy-vs-dod_dev_documentedpy)
+  - [Dry-run Architecture](#dry-run-architecture-developer-reference)
 - [Known Issues](#known-issues)
 
 ---
@@ -230,15 +233,22 @@ dod.close_current_dialog(1)   # or 2
 
 | Command | Description |
 |---|---|
-| `dod.codi.get_CoDI_predefined()` | List all stored named presets |
-| `dod.codi.get_CoDI_pos()` | Read current position; returns `(name, rot_base, rot_left, rot_right, trans_z)` |
-| `dod.codi.set_CoDI_pos('preset_name')` | Move to a named preset (blocks until done) |
-| `dod.codi.set_CoDI_pos('preset_name', wait=False)` | Move without blocking |
-| `dod.codi.set_CoDI_current_pos('name')` | Save current position as a new preset |
-| `dod.codi.set_CoDI_current_z()` | Apply current z to all stored presets |
-| `dod.codi.remove_CoDI_pos('name')` | Remove a preset from the local dictionary |
+| `dod.codi.get_presets()` | List all stored named presets |
+| `dod.codi.get_pos()` | Read current position; returns `(name, rot_base, rot_left, rot_right, trans_z)` |
+| `dod.codi.move_to_preset('preset_name')` | Move to a named preset (blocks until done, 30 s timeout) |
+| `dod.codi.move_to_preset('preset_name', wait=False)` | Move without blocking |
+| `dod.codi.move_to_preset('preset_name', timeout=60)` | Move with custom timeout in seconds |
+| `dod.codi.add_preset('name', base, left, right, z)` | Add or overwrite a named preset |
+| `dod.codi.save_current_pos('name')` | Save current motor positions as a new preset |
+| `dod.codi.update_z_all_presets()` | Apply current z to all stored presets |
+| `dod.codi.reload_presets()` | Reload hutch-python motor presets into the local dictionary |
+| `dod.codi.remove_preset('name')` | Remove a preset from the local dictionary |
 
 Default presets: `'aspiration'`, `'angled_vert'`, `'angled_hor'`.
+
+> **Deprecated aliases:** The old `CoDI_*` method names (`get_CoDI_predefined`,
+> `set_CoDI_pos`, etc.) still work but emit `DeprecationWarning`.  They will be
+> removed after one beamtime cycle.  Update call sites to the new names above.
 
 #### Manual Moves
 
@@ -275,16 +285,86 @@ All values are in **nanoseconds** unless otherwise noted.
 
 | Command | Description |
 |---|---|
-| `dod.set_timing_rel_reaction(ns)` | Set the drop-to-X-ray reaction delay |
-| `dod.set_timing_rel_LED(ns)` | Set the LED delay relative to X-ray |
-| `dod.set_timing_zero_nozzle(1, ns)` | Set time-zero reference for nozzle 1 or 2 |
-| `dod.set_timing_relative_nozzle(1, ns)` | Adjust nozzle 1 or 2 timing by an offset |
-| `dod.set_timing_abs_Xray(ns)` | Update the X-ray timing reference |
-| `dod.set_timing_update()` | Recalculate and apply all trigger delays |
-| `dod.logging_string()` | Generate e-log string with current timing and CoDI state |
+| `dod.set_reaction_timing_rel(ns)` | Set the drop-to-X-ray reaction delay |
+| `dod.set_led_timing_rel(ns)` | Set the LED delay relative to X-ray |
+| `dod.set_nozzle_timing_zero(1, ns)` | Set the time-zero reference for nozzle 1 or 2 (LED alignment step) |
+| `dod.set_nozzle_timing_rel(1, ns)` | Adjust nozzle 1 or 2 timing by a relative offset |
+| `dod.set_nozzle_timing_abs(1, ns)` | Set nozzle 1 or 2 delay to an absolute value |
+| `dod.set_xray_timing_ref(ns)` | Update the X-ray timing reference used in nozzle delay math |
+| `dod.print_timing()` | Print all current timing values (in µs) to the console |
+| `dod.logging_string()` | Return e-log string with current timing and CoDI state |
+| `dod.logging_string(post_elog=True)` | Return and post to the MFX e-log |
+| `dod.logging_string(post_elog=True, tag='CoDI', run_number=42)` | Post with custom tag and run number |
 
 > **Note:** If a calculated nozzle delay is negative, one full 120 Hz period
-> (~8.33 ms) is added automatically.
+> (`_PERIOD_120HZ_NS` ≈ 8.33 ms) is added automatically.
+>
+> **`_timing_update()`** is now private (leading underscore).  It is called
+> automatically by all timing setters — do not call it directly.
+
+---
+
+### CoDI Alignment Wrapper
+
+`codi_align` is an interactive terminal-based alignment tool with four modes:
+
+```python
+from dod.codi import codi_align
+codi_align(codi)              # position and overlap modes only
+codi_align(codi, dod=dod)     # full 4-mode alignment (requires DoD for T and R)
+```
+
+| Mode | Key | What it does |
+|---|---|---|
+| **P** – Position | `p` | Step all four CoDI axes. Keys `1`–`4` select the active axis. Arrow keys move it. |
+| **T** – Timing | `t` | Step the EVR timing-zero for nozzle 1 or 2. Keys `1`/`2` toggle nozzle. Requires `dod`. |
+| **Z** – Overlap | `z` | `trans_z` only. `[` marks overlap start, `]` marks overlap end, `m` moves to midpoint. |
+| **R** – Reaction | `r` | Step `reaction_timing_rel`. Positive = more reaction time. Requires `dod`. |
+
+**Shared controls:**
+
+| Key | Action |
+|---|---|
+| Arrow keys | Move in current mode (up/right = positive, down/left = negative) |
+| `+` / `-` | Double / halve step size of active axis |
+| `s` | Save current CoDI position as a named preset (prompts for name) |
+| `h` | Print full key map |
+| `q` | Quit; prompts whether to post session summary to e-log |
+
+---
+
+### Dry-run Mode (off-hutch development)
+
+Both `DoD` and `CoDI` can be instantiated on S3DF without a hutch-python session
+or any EPICS/robot connections:
+
+```python
+import sys
+sys.path.insert(0, "/sdf/home/d/dehe/Ops_supp/Hutch_python")
+
+from codi import CoDI
+from dod.dod import DoD
+
+codi = CoDI(dryrun=True)
+dod  = DoD(dryrun=True, modules='codi', log_file='/tmp/dod.log')
+codi = dod.codi   # or use the standalone CoDI above
+```
+
+When `dryrun=True`:
+- `CoDI` uses `_MockMotor` objects — no SmarAct / EPICS connections
+- `DoD` uses `_MockClient` (no HTTP) and `_MockTrigger` (no EVR PVs)
+- All motor moves, DAQ server calls, and timing PV writes print `[DRY RUN]` messages and no-op
+- Python state (`timing_delay_*`, `CoDI_pos_predefined`, etc.) is updated normally
+- `codi_align(codi, dod=dod)` works for all four modes
+
+`dryrun` can also be toggled after construction on live hardware (Case B):
+
+```python
+dod.dryrun = True    # suppress all hardware writes; python state still updates
+dod.dryrun = False   # re-enable hardware writes
+```
+
+The setter propagates automatically to `dod.codi`.
 
 ---
 
@@ -329,22 +409,29 @@ dod.reconnect()
 
 ```
 Hardware (robot server at 172.21.39.172:9999)
-        ↑ HTTP GET
+        ↑ HTTP GET          [_MockClient in dry-run]
 DropsDriver.py   (myClient)         ← context only
 HTTPTransceiver.py                  ← context only
         ↑ wrapped by
-DoD  (dod_dev_documented.py)        ← owned
+DoD  (dod.py / dod_dev_documented.py)   ← owned
   ├─ _with_reconnect decorator
+  ├─ dryrun property  (propagates to codi)
   ├─ motion:   do_move, move_x/y/z_abs
   ├─ nozzle:   set_nozzle_dispensing, get_nozzle_status
   ├─ led:      set_led, set_led_per_nozzle
   ├─ env:      set_humidity, set_cooling_temp
   ├─ tasks:    do_task, get_task_names, get_task_details
   ├─ safety:   set/get/test_forbidden_region  [not yet operational]
-  ├─ timing:   set_timing_* methods (EVR via pcdsdevices)
+  ├─ timing:   set_nozzle_timing_*, set_reaction_timing_rel,
+  │            set_led_timing_rel, set_xray_timing_ref,
+  │            _format_timing, print_timing, logging_string
+  │            [_MockTrigger in dry-run]
   └─ dod.codi ──→ CoDI  (codi.py)  ← owned
-                    ├─ four SmarAct motors (rot_base, rot_left, rot_right, trans_z)
-                    └─ named preset dictionary (CoDI_pos_predefined)
+                    ├─ dryrun property
+                    ├─ four SmarAct motors  [_MockMotor in dry-run]
+                    │    rot_base, rot_left, rot_right, trans_z
+                    ├─ named preset dictionary (CoDI_pos_predefined)
+                    └─ codi_align(codi, dod=None)  ← top-level function
 ```
 
 ---
@@ -637,18 +724,15 @@ instantiated more than once in the same session.
 
 ---
 
-### exec-based Preset Access
+### Preset Access
 
-`CoDI.__init__` and `update_CoDI_predefined` use `exec` strings to read motor preset
-attributes by name, e.g.:
+`CoDI` uses `getattr()` to read motor preset attributes by name:
 
 ```python
-exec("preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + ".pos")
+preset_rot_base = getattr(self.CoDI_rot_base.presets.positions, preset).pos
 ```
 
-This is a known limitation of the hutch-python preset API, which does not expose a
-programmatic lookup by string key. The approach works but is fragile — any change to
-the preset API attribute structure would break it silently.
+The previous `exec`-based approach (`exec("preset_rot_base = self.CoDI_rot_base.presets.positions." + preset + ".pos")`) has been removed.  The `getattr` form is safe, debuggable, and raises `AttributeError` cleanly if a preset name is absent rather than failing silently.
 
 ---
 
@@ -867,13 +951,45 @@ to `dod.py`.
 
 ---
 
+### Dry-run Architecture (developer reference)
+
+Three mock classes in `dod.py` enable construction-time dry-run:
+
+| Mock class | Replaces | Notes |
+|---|---|---|
+| `_MockClient` | `myClient` | `__getattr__` returns a callable that returns `_MockServerResponse()` for any method call |
+| `_MockTrigger` | `pcdsdevices.evr.Trigger` | Has `ns_delay` → `_MockDelay` with `.get()=0.0` and `.put()` no-op |
+| `_MockDelay` | EVR `ns_delay` channel | Used by `_MockTrigger` |
+| `_MockServerResponse` | `ServerResponse` | Has `.STATUS="DRY_RUN"` and `.RESULTS` dict with safe defaults |
+
+In `codi.py`, `_MockMotor` substitutes `SmarAct` motors:
+
+| Mock class | Replaces | Notes |
+|---|---|---|
+| `_MockMotor` | `SmarAct` | `wm()=0.0`; `umvr/mv/umv` no-ops; `presets.set/add_hutch` no-ops |
+
+Gate guard pattern used throughout — Python state is always updated; hardware calls are suppressed when `self._dryrun is True`:
+
+```python
+if self._dryrun:
+    print(f"[DRY RUN] method_name: action suppressed")
+    return  # or continue with state update only
+# ... live hardware call ...
+```
+
+---
+
 ## Known Issues
 
 | Issue | Severity | Status |
 |---|---|---|
-| **Forbidden region enforcement not operational.** `safety_test=True` in all motion methods prints a warning but does not reliably block unsafe moves. | High | Open |
-| **`do_task` unbound variable.** If called with `safety_check=True`, `r` was never assigned before the `while r.STATUS[...]` loop, causing `UnboundLocalError`. | High | Fixed (Session 5) |
-| **`logging_string()` requires `modules='codi'`.** If `DoD` is instantiated without `modules='codi'`, `self.codi` does not exist and `logging_string()` raises `AttributeError`. Resolved in the current hutch-python config by passing `modules='codi'`. | Medium | Resolved by config |
-| **`move_rel` returns `None` when all deltas are zero.** No move command is issued and the return value is `None` rather than a `ServerResponse`. Document and handle in calling code if needed. | Low | Open |
+| **Forbidden region enforcement not operational.** `safety_test=True` in all motion methods prints a warning but does not block unsafe moves. | High | Open |
+| **`do_task` safety_check stub removed.** The `safety_check` parameter has been removed from both `DoD.do_task` and `SafeRobot.do_task`; the unimplemented stub is gone. | High | Fixed (2026-07-29) |
+| **`exec`-based preset access.** `CoDI.__init__` and `update_CoDI_predefined` used `exec()` strings to read motor preset attributes — fragile and opaque. | High | Fixed (2026-07-29) — replaced with `getattr()` |
+| **Inverted safety region mapping.** `test_forbidden_region` applied the horizontal list at 0° and the vertical list at 90° — the opposite of physical reality. | High | Fixed (2026-07-29) |
+| **Broken CoDI import in `test_forbidden_region`.** `from dod.codi import CoDI_base` caused `ImportError` at runtime. | High | Fixed (2026-07-29) — replaced with `self.codi.CoDI_rot_base.wm()` |
+| **`logging_string()` requires `modules='codi'`.** If `DoD` is instantiated without `modules='codi'`, `self.codi` does not exist. `logging_string()` now guards with `hasattr(self, 'codi')`. | Medium | Fixed (guarded) |
+| **`move_rel` returns `None` when all deltas are zero.** No move command is issued and the return value is `None` rather than a `ServerResponse`. | Low | Open |
 | **`print(endpoint)` in `HTTPTransceiver.send()`.** Writes directly to stdout on every HTTP call; cannot be suppressed without editing the unowned file. | Low | Open |
-| **`take_probe` silent-nothing if `ProbeUptake` absent.** If the `ProbeUptake` task is not loaded on the robot, `TakeProbe` returns no reject and does nothing. The `check_task=True` default guards against this but the task could be present yet misconfigured. | Medium | Mitigated by check_task guard |
+| **`take_probe` silent-nothing if `ProbeUptake` absent.** The `check_task=True` default guards against this but the task could be present yet misconfigured. | Medium | Mitigated by check_task guard |
+| **`safety_test` parameter not yet removed from motion methods.** `do_move`, `move_x/y/z_abs`, etc. still accept `safety_test=False` but the check is unimplemented. Removal deferred (Bug #9) pending coordinated refactor across `dod.py` and `safe_robot.py`. | Medium | Deferred |
