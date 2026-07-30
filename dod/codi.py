@@ -1,3 +1,43 @@
+class _MockMotor:
+    """
+    No-op motor substitute used when ``CoDI`` is instantiated with
+    ``dryrun=True`` off-hutch.  All read methods return safe defaults;
+    all write methods are no-ops.
+
+    .. warning::
+        Objects instantiated with ``dryrun=True`` (Case A) use ``_MockMotor``
+        throughout their lifetime.  Setting ``dryrun=False`` later removes gate
+        suppression but the mock objects remain — the instance cannot silently
+        transition to live hardware.
+    """
+
+    class _MockPresets:
+        class positions:
+            pass
+
+        def set(self, name):
+            pass
+
+        def add_hutch(self, name, **kw):
+            pass
+
+    def __init__(self, name="mock"):
+        self.name = name
+        self.presets = self._MockPresets()
+
+    def wm(self):
+        return 0.0
+
+    def umvr(self, delta, **kw):
+        pass
+
+    def mv(self, pos, **kw):
+        pass
+
+    def umv(self, pos, **kw):
+        pass
+
+
 class CoDI:
     """
     Colliding Droplet Injector (CoDI) interface for the MFX hutch.
@@ -38,9 +78,6 @@ class CoDI:
     CoDI_pos_predefined : dict
         Mapping of preset name (str) to a 4-tuple
         ``(rot_base, rot_left, rot_right, trans_z)``.
-    safety_abort : bool
-        Flag reserved for future use; can be set externally to signal an abort
-        during task execution.
 
     Examples
     --------
@@ -53,7 +90,7 @@ class CoDI:
     >>> codi = CoDI(reload_presets=True)
     """
 
-    def __init__(self, reload_presets=False):
+    def __init__(self, reload_presets=False, dryrun=False):
         """
         Initialise the CoDI interface and load motor presets.
 
@@ -65,38 +102,57 @@ class CoDI:
             hutch-python motor preset store and populate ``CoDI_pos_predefined``
             from them.  If ``False`` (default), read the existing presets from
             the motors.
+        dryrun : bool, optional
+            If ``True`` at construction time (Case A), ``_MockMotor`` objects
+            are used instead of ``SmarAct`` — no EPICS connections are
+            attempted.  Safe for off-hutch development.  This flag is sticky:
+            setting ``dryrun=False`` later removes actuation gates but does
+            not replace the mock motors with live hardware.
+            If ``False`` (default), real ``SmarAct`` motors are instantiated.
+            ``dryrun`` may also be toggled post-construction (Case B) to
+            suppress actuation calls on live motors.
 
         Raises
         ------
         RuntimeError
-            If a motor PV cannot be connected during instantiation.
+            If a motor PV cannot be connected during instantiation
+            (live hardware only; not raised in dry-run mode).
 
         Examples
         --------
         >>> codi = CoDI()
         >>> codi = CoDI(reload_presets=True)
+        >>> codi = CoDI(dryrun=True)   # off-hutch, no EPICS
         """
-        from pcdsdevices.device import ObjectComponent as OCpt
-        from pcdsdevices.epics_motor import SmarAct, Motor
-        import time
+        self._dryrun = bool(dryrun)
 
-        # CoDI motor PVs loading
-        self.CoDI_rot_left = SmarAct("MFX:MCS2:01:m3", name="CoDI_rot_left")
-        self.CoDI_rot_right = SmarAct("MFX:MCS2:01:m1", name="CoDI_rot_right")
-        self.CoDI_rot_base = SmarAct("MFX:MCS2:01:m2", name="CoDI_rot_base")
-        self.CoDI_trans_z = SmarAct("MFX:MCS2:01:m4", name="CoDI_trans_z")
+        if dryrun:
+            # Case A: off-hutch dry-run — substitute mock motors
+            self.CoDI_rot_left = _MockMotor("CoDI_rot_left")
+            self.CoDI_rot_right = _MockMotor("CoDI_rot_right")
+            self.CoDI_rot_base = _MockMotor("CoDI_rot_base")
+            self.CoDI_trans_z = _MockMotor("CoDI_trans_z")
+        else:
+            from pcdsdevices.device import ObjectComponent as OCpt
+            from pcdsdevices.epics_motor import SmarAct, Motor
+
+            # CoDI motor PVs loading
+            self.CoDI_rot_left = SmarAct("MFX:MCS2:01:m3", name="CoDI_rot_left")
+            self.CoDI_rot_right = SmarAct("MFX:MCS2:01:m1", name="CoDI_rot_right")
+            self.CoDI_rot_base = SmarAct("MFX:MCS2:01:m2", name="CoDI_rot_base")
+            self.CoDI_trans_z = SmarAct("MFX:MCS2:01:m4", name="CoDI_trans_z")
 
         # Predefined positions CoDI
         self.CoDI_pos_predefined = dict()
 
-        if reload_presets == True:
+        if reload_presets:
             # self.CoDI_pos_predefined['aspiration'] = (0.0,0.0,0.0,0.0)
             # self.CoDI_pos_predefined['angled_vert'] = (0.0,45.0,45.0,0.0)
             # self.CoDI_pos_predefined['angled_hor'] = (90.0,45.0,45.0,0.0)
 
-            self.set_CoDI_predefined("aspiration", 0.0, 0.0, 0.0, 0.0)
-            self.set_CoDI_predefined("angled_vert", 0.0, 45.0, 45.0, 0.0)
-            self.set_CoDI_predefined("angled_hor", 90.0, 45.0, 45.0, 0.0)
+            self.add_preset("aspiration", 0.0, 0.0, 0.0, 0.0)
+            self.add_preset("angled_vert", 0.0, 45.0, 45.0, 0.0)
+            self.add_preset("angled_hor", 90.0, 45.0, 45.0, 0.0)
         else:
             all_presets = vars(
                 self.CoDI_rot_left.presets.positions
@@ -104,34 +160,22 @@ class CoDI:
             for preset, preset_value in all_presets.items():
                 try:
                     # get preset position
-                    exec_base = (
-                        "preset_rot_base = self.CoDI_rot_base.presets.positions."
-                        + preset
-                        + ".pos"
-                    )
-                    exec_rot_left = (
-                        "preset_rot_left = self.CoDI_rot_left.presets.positions."
-                        + preset
-                        + ".pos"
-                    )
-                    exec_rot_right = (
-                        "preset_rot_right = self.CoDI_rot_right.presets.positions."
-                        + preset
-                        + ".pos"
-                    )
-                    exec_trans_z = (
-                        "preset_trans_z = self.CoDI_trans_z.presets.positions."
-                        + preset
-                        + ".pos"
-                    )
-                    exec(exec_base)
-                    exec(exec_rot_left)
-                    exec(exec_rot_right)
-                    exec(exec_trans_z)
+                    preset_rot_base = getattr(
+                        self.CoDI_rot_base.presets.positions, preset
+                    ).pos
+                    preset_rot_left = getattr(
+                        self.CoDI_rot_left.presets.positions, preset
+                    ).pos
+                    preset_rot_right = getattr(
+                        self.CoDI_rot_right.presets.positions, preset
+                    ).pos
+                    preset_trans_z = getattr(
+                        self.CoDI_trans_z.presets.positions, preset
+                    ).pos
 
                     # Save to local database
                     print(preset)
-                    self.set_CoDI_predefined(
+                    self.add_preset(
                         preset,
                         preset_rot_base,
                         preset_rot_left,
@@ -145,10 +189,16 @@ class CoDI:
                         + ", as it is not defined in all motors"
                     )
 
-        # Flag that can be used later on for safety aborts during task execution
-        self.safety_abort = False
+    @property
+    def dryrun(self):
+        """bool: When ``True``, all hardware/file writes are suppressed."""
+        return self._dryrun
 
-    def get_CoDI_predefined(self):
+    @dryrun.setter
+    def dryrun(self, value):
+        self._dryrun = bool(value)
+
+    def get_presets(self):
         """
         Return the local preset position dictionary.
 
@@ -160,13 +210,13 @@ class CoDI:
 
         Examples
         --------
-        >>> presets = codi.get_CoDI_predefined()
+        >>> presets = codi.get_presets()
         >>> print(presets)
         {'aspiration': (0.0, 0.0, 0.0, 0.0), 'angled_vert': (0.0, 45.0, 45.0, 0.0)}
         """
         return self.CoDI_pos_predefined
 
-    def update_CoDI_predefined(self):
+    def reload_presets(self):
         """
         Reload all hutch-python motor presets and rebuild the local position dictionary.
 
@@ -176,8 +226,8 @@ class CoDI:
         cannot be read from one of the other motors is skipped.
 
         .. note::
-            This method uses ``exec`` to access motor preset attributes by name,
-            which is a known limitation of the current hutch-python preset API.
+            Presets found on ``CoDI_rot_left`` that are absent on another motor
+            are silently skipped.
 
         Returns
         -------
@@ -191,62 +241,43 @@ class CoDI:
 
         Examples
         --------
-        >>> codi.update_CoDI_predefined()
-        >>> print(codi.get_CoDI_predefined())
+        >>> codi.reload_presets()
+        >>> print(codi.get_presets())
         """
         # Predefined positions CoDI
         self.CoDI_pos_predefined = dict()
 
-        all_presets = vars(self.CoDI_rot_left.presets.positions)  # Needs to be fixed
+        all_presets = vars(self.CoDI_rot_left.presets.positions)
         for preset in all_presets.keys():
-            # try:
-            # get preset position
-            self.exec_base = (
-                "preset_rot_base = self.CoDI_rot_base.presets.positions."
-                + preset
-                + ".pos"
-            )
-            self.exec_rot_left = (
-                "preset_rot_left = self.CoDI_rot_left.presets.positions."
-                + preset
-                + ".pos"
-            )
-            self.exec_rot_right = (
-                "preset_rot_right = self.CoDI_rot_right.presets.positions."
-                + preset
-                + ".pos"
-            )
-            self.exec_trans_z = (
-                "preset_trans_z = self.CoDI_trans_z.presets.positions."
-                + preset
-                + ".pos"
-            )
-            print(self.exec_base)
-            exec(self.exec_base)
+            try:
+                # get preset position
+                preset_rot_base = getattr(
+                    self.CoDI_rot_base.presets.positions, preset
+                ).pos
+                preset_rot_left = getattr(
+                    self.CoDI_rot_left.presets.positions, preset
+                ).pos
+                preset_rot_right = getattr(
+                    self.CoDI_rot_right.presets.positions, preset
+                ).pos
+                preset_trans_z = getattr(
+                    self.CoDI_trans_z.presets.positions, preset
+                ).pos
 
-            exec(self.exec_rot_left)
-            print(self.exec_rot_left)
+                # Save to local database
+                self.add_preset(
+                    preset,
+                    preset_rot_base,
+                    preset_rot_left,
+                    preset_rot_right,
+                    preset_trans_z,
+                )
+            except Exception:
+                print(
+                    "skipping preset " + preset + ", as it is not defined in all motors"
+                )
 
-            exec(self.exec_rot_right)
-            print(self.exec_rot_left)
-
-            exec(self.exec_trans_z)
-            print(self.exec_trans_z)
-            print(preset_trans_z)
-
-            # Save to local database
-            print(preset)
-            self.set_CoDI_predefined(
-                preset,
-                preset_rot_base,
-                preset_rot_left,
-                preset_rot_right,
-                preset_trans_z,
-            )
-            # except:
-            #     print('skipping preset '+ preset + ', as it is not defined in all motors')
-
-    def set_CoDI_predefined(self, name, base, left, right, z):
+    def add_preset(self, name, base, left, right, z):
         """
         Define or update a named preset position for the CoDI.
 
@@ -275,13 +306,17 @@ class CoDI:
         --------
         Define a new preset named ``'exchange'``:
 
-        >>> codi.set_CoDI_predefined('exchange', 0.0, 30.0, 30.0, 5.0)
+        >>> codi.add_preset('exchange', 0.0, 30.0, 30.0, 5.0)
 
         Overwrite an existing preset:
 
-        >>> codi.set_CoDI_predefined('aspiration', 0.0, 0.0, 0.0, 0.0)
+        >>> codi.add_preset('aspiration', 0.0, 0.0, 0.0, 0.0)
         """
         self.CoDI_pos_predefined.update({name: (base, left, right, z)})
+
+        if self._dryrun:
+            print(f"[DRY RUN] add_preset: preset file not written (name='{name}')")
+            return
 
         # Presets using MFX presets functionalities
         self.CoDI_rot_left.presets.add_hutch(name, value=left)
@@ -289,7 +324,7 @@ class CoDI:
         self.CoDI_rot_base.presets.add_hutch(name, value=base)
         self.CoDI_trans_z.presets.add_hutch(name, value=z)
 
-    def get_CoDI_pos(self, precision_digits=1):
+    def get_pos(self, precision_digits=1):
         """
         Return the current CoDI motor positions and match to a named preset.
 
@@ -323,12 +358,12 @@ class CoDI:
         --------
         Read the current position and print the preset name:
 
-        >>> name, base, left, right, z = codi.get_CoDI_pos()
+        >>> name, base, left, right, z = codi.get_pos()
         >>> print(f'Preset: {name}, base: {base:.1f} deg')
 
         Use finer precision for matching:
 
-        >>> name, base, left, right, z = codi.get_CoDI_pos(precision_digits=2)
+        >>> name, base, left, right, z = codi.get_pos(precision_digits=2)
         """
         pos_rot_base = self.CoDI_rot_base.wm()
         pos_rot_left = self.CoDI_rot_left.wm()
@@ -359,13 +394,13 @@ class CoDI:
 
         return pos_name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z
 
-    def set_CoDI_pos(self, pos_name, wait=True):
+    def move_to_preset(self, pos_name, wait=True, timeout=30):
         """
         Move the CoDI to a named preset position.
 
         Retrieves the target coordinates from ``CoDI_pos_predefined`` and issues
         move commands to all four motors using the hutch-python preset interface.
-        If ``wait=True``, blocks until :meth:`get_CoDI_pos` reports the target
+        If ``wait=True``, blocks until :meth:`get_pos` reports the target
         preset name, polling every second.
 
         Parameters
@@ -376,6 +411,10 @@ class CoDI:
         wait : bool, optional
             If ``True`` (default), block until the motion is complete.
             If ``False``, return immediately after issuing the move commands.
+        timeout : float, optional
+            Maximum number of seconds to wait for motion to complete when
+            ``wait=True``.  Default is ``30``.  A warning is printed and the
+            wait loop exits if the timeout is exceeded.
 
         Returns
         -------
@@ -390,11 +429,11 @@ class CoDI:
         --------
         Move to the ``'angled_vert'`` preset and wait for completion:
 
-        >>> codi.set_CoDI_pos('angled_vert')
+        >>> codi.move_to_preset('angled_vert')
 
         Issue the move without waiting:
 
-        >>> codi.set_CoDI_pos('angled_vert', wait=False)
+        >>> codi.move_to_preset('angled_vert', wait=False)
         """
         import time
 
@@ -403,34 +442,33 @@ class CoDI:
             self.CoDI_pos_predefined[pos_name]
         )
 
-        # Move motors
-
-        # Old way
-        # self.CoDI_rot_base.mv(pos_rot_base, wait=False)
-        # self.CoDI_rot_left.mv(pos_rot_left,  wait=False)
-        # self.CoDI_rot_right.mv(pos_rot_right, wait=False)
-        # self.CoDI_trans_z.mv(pos_trans_z, wait=False)
+        if self._dryrun:
+            print(f"[DRY RUN] move_to_preset: '{pos_name}' not executed on motors")
+            return
 
         # Move using hutch python presets
-        exec_base = "self.CoDI_rot_base.mv_" + pos_name + "()"
-        exec(exec_base)
-        exec_left = "self.CoDI_rot_left.mv_" + pos_name + "()"
-        exec(exec_left)
-        exec_right = "self.CoDI_rot_right.mv_" + pos_name + "()"
-        exec(exec_right)
-        exec_z = "self.CoDI_trans_z.mv_" + pos_name + "()"
-        exec(exec_z)
+        self.CoDI_rot_base.presets.set(pos_name)
+        self.CoDI_rot_left.presets.set(pos_name)
+        self.CoDI_rot_right.presets.set(pos_name)
+        self.CoDI_trans_z.presets.set(pos_name)
 
-        if wait == True:
+        if wait:
             (
                 test_name,
                 test_pos_rot_base,
                 test_pos_rot_left,
                 test_pos_rot_right,
                 test_pos_trans_z,
-            ) = self.get_CoDI_pos()
+            ) = self.get_pos()
             i = 0
+            start = time.time()
             while pos_name != test_name:
+                if time.time() - start > timeout:
+                    print(
+                        f"[CoDI] Warning: motion to '{pos_name}' timed out "
+                        f"after {timeout} s."
+                    )
+                    break
                 time.sleep(1)
                 print("\r waiting for motion to end: %i s" % i, end="\r")
                 i = i + 1
@@ -440,16 +478,17 @@ class CoDI:
                     test_pos_rot_left,
                     test_pos_rot_right,
                     test_pos_trans_z,
-                ) = self.get_CoDI_pos()
-            print("Motion ended")
+                ) = self.get_pos()
+            else:
+                print("Motion ended")
 
-    def set_CoDI_current_pos(self, name):
+    def save_current_pos(self, name):
         """
         Save the current motor positions as a named preset.
 
         Reads the current positions from all four motors via
-        :meth:`get_CoDI_pos` and registers them as a new (or updated) preset
-        using :meth:`set_CoDI_predefined`.
+        :meth:`get_pos` and registers them as a new (or updated) preset
+        using :meth:`add_preset`.
 
         Parameters
         ----------
@@ -464,16 +503,14 @@ class CoDI:
         --------
         Save the current CoDI position as ``'sample_exchange'``:
 
-        >>> codi.set_CoDI_current_pos('sample_exchange')
+        >>> codi.save_current_pos('sample_exchange')
         """
         pos_name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z = (
-            self.get_CoDI_pos()
+            self.get_pos()
         )
-        self.set_CoDI_predefined(
-            name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z
-        )
+        self.add_preset(name, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z)
 
-    def set_CoDI_current_z(self, verbose=True):
+    def update_z_all_presets(self, verbose=True):
         """
         Update the z-translation value of all stored presets to the current z position.
 
@@ -496,18 +533,18 @@ class CoDI:
         --------
         After re-aligning z, apply the new position to all presets:
 
-        >>> codi.set_CoDI_current_z()
+        >>> codi.update_z_all_presets()
 
         Silent update without printing:
 
-        >>> codi.set_CoDI_current_z(verbose=False)
+        >>> codi.update_z_all_presets(verbose=False)
         """
         # get current z position:
         pos_trans_z_new = self.CoDI_trans_z.wm()
 
         # get all keys from the positions
         # Use list() to materialise the keys before iterating, in case the dict
-        # is modified in-place by set_CoDI_predefined during the loop.
+        # is modified in-place by add_preset during the loop.
         position_keys = list(self.CoDI_pos_predefined.keys())
 
         # go through all positions and change the z-value to the current z value
@@ -515,15 +552,15 @@ class CoDI:
             pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z = (
                 self.CoDI_pos_predefined[key]
             )
-            self.set_CoDI_predefined(
+            self.add_preset(
                 key, pos_rot_base, pos_rot_left, pos_rot_right, pos_trans_z_new
             )
 
         # Print the new predefined positions as a sanity check
-        if verbose == True:
-            print(self.get_CoDI_predefined())
+        if verbose:
+            print(self.get_presets())
 
-    def remove_CoDI_pos(self, name):
+    def remove_preset(self, name):
         """
         Remove a named preset from the local position dictionary.
 
@@ -547,7 +584,7 @@ class CoDI:
 
         Examples
         --------
-        >>> codi.remove_CoDI_pos('exchange')
+        >>> codi.remove_preset('exchange')
         """
         del self.CoDI_pos_predefined[name]
 
@@ -575,10 +612,9 @@ class CoDI:
 
         >>> codi.move_z_rel(-0.2)
         """
-        # get current z position:
-        pos_trans_z = self.CoDI_trans_z.wm()
-
-        # set new position
+        if self._dryrun:
+            print(f"[DRY RUN] move_z_rel: relative move suppressed (z_rel={z_rel})")
+            return
         self.CoDI_trans_z.umvr(z_rel)
 
     def move_rot_left_rel(self, rot_rel):
@@ -605,10 +641,11 @@ class CoDI:
 
         >>> codi.move_rot_left_rel(-2.0)
         """
-        # get current position:
-        pos_rot_left = self.CoDI_rot_left.wm()
-
-        # set new position:
+        if self._dryrun:
+            print(
+                f"[DRY RUN] move_rot_left_rel: relative move suppressed (rot_rel={rot_rel})"
+            )
+            return
         self.CoDI_rot_left.umvr(rot_rel)
 
     def move_rot_right_rel(self, rot_rel):
@@ -635,10 +672,11 @@ class CoDI:
 
         >>> codi.move_rot_right_rel(-2.0)
         """
-        # get current position:
-        pos_rot_right = self.CoDI_rot_right.wm()
-
-        # set new position:
+        if self._dryrun:
+            print(
+                f"[DRY RUN] move_rot_right_rel: relative move suppressed (rot_rel={rot_rel})"
+            )
+            return
         self.CoDI_rot_right.umvr(rot_rel)
 
     def move_rot_base_rel(self, rot_rel):
@@ -665,10 +703,11 @@ class CoDI:
 
         >>> codi.move_rot_base_rel(-90.0)
         """
-        # get current position:
-        pos_rot_base = self.CoDI_rot_base.wm()
-
-        # set new position:
+        if self._dryrun:
+            print(
+                f"[DRY RUN] move_rot_base_rel: relative move suppressed (rot_rel={rot_rel})"
+            )
+            return
         self.CoDI_rot_base.umvr(rot_rel)
 
     def move_z_abs(self, z_abs):
@@ -763,13 +802,429 @@ class CoDI:
         # set new position:
         self.CoDI_rot_base.umv(rot_abs)
 
+    # ------------------------------------------------------------------
+    # Deprecated aliases — kept for one beamtime cycle.
+    # Remove after all call sites are updated.
+    # ------------------------------------------------------------------
 
-"""
-robot1.get_CoDI_predefined()
-robot1.set_CoDI_predefined('test',1,1,1,1)
-robot1.get_CoDI_predefined()
-robot1.get_CoDI_pos()
+    def get_CoDI_predefined(self):
+        """Deprecated: use :meth:`get_presets` instead."""
+        import warnings
 
-robot1.get_CoDI_pos()
-robot1.set_CoDI_current_pos('test2')
+        warnings.warn(
+            "get_CoDI_predefined() is deprecated; use get_presets().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_presets()
+
+    def set_CoDI_predefined(self, name, base, left, right, z):
+        """Deprecated: use :meth:`add_preset` instead."""
+        import warnings
+
+        warnings.warn(
+            "set_CoDI_predefined() is deprecated; use add_preset().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.add_preset(name, base, left, right, z)
+
+    def update_CoDI_predefined(self):
+        """Deprecated: use :meth:`reload_presets` instead."""
+        import warnings
+
+        warnings.warn(
+            "update_CoDI_predefined() is deprecated; use reload_presets().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.reload_presets()
+
+    def get_CoDI_pos(self, precision_digits=1):
+        """Deprecated: use :meth:`get_pos` instead."""
+        import warnings
+
+        warnings.warn(
+            "get_CoDI_pos() is deprecated; use get_pos().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_pos(precision_digits=precision_digits)
+
+    def set_CoDI_pos(self, pos_name, wait=True, timeout=30):
+        """Deprecated: use :meth:`move_to_preset` instead."""
+        import warnings
+
+        warnings.warn(
+            "set_CoDI_pos() is deprecated; use move_to_preset().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.move_to_preset(pos_name, wait=wait, timeout=timeout)
+
+    def set_CoDI_current_pos(self, name):
+        """Deprecated: use :meth:`save_current_pos` instead."""
+        import warnings
+
+        warnings.warn(
+            "set_CoDI_current_pos() is deprecated; use save_current_pos().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.save_current_pos(name)
+
+    def set_CoDI_current_z(self, verbose=True):
+        """Deprecated: use :meth:`update_z_all_presets` instead."""
+        import warnings
+
+        warnings.warn(
+            "set_CoDI_current_z() is deprecated; use update_z_all_presets().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.update_z_all_presets(verbose=verbose)
+
+    def remove_CoDI_pos(self, name):
+        """Deprecated: use :meth:`remove_preset` instead."""
+        import warnings
+
+        warnings.warn(
+            "remove_CoDI_pos() is deprecated; use remove_preset().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.remove_preset(name)
+
+
+# ---------------------------------------------------------------------------
+# F4 — Guided CoDI alignment wrapper
+# ---------------------------------------------------------------------------
+
+
+def codi_align(codi, dod=None):
+    """
+    Interactive mode-based alignment wrapper for the CoDI injector.
+
+    Provides four freely-switchable alignment modes corresponding to the four
+    steps of the CoDI alignment procedure.  Uses raw terminal I/O (no curses).
+
+    Parameters
+    ----------
+    codi : CoDI
+        A live (or dry-run) ``CoDI`` instance.
+    dod : DoD or None, optional
+        A ``DoD`` instance.  Required to enable T (timing) and R (reaction)
+        modes.  If ``None``, those modes are unavailable.
+
+    Modes
+    -----
+    P  (position)
+        All four CoDI axes.  Axis selected by keys ``1``–``4``.
+        Arrow keys move the selected axis.
+    T  (timing)
+        Step the EVR timing-zero delay for nozzle 1 or 2.
+        Toggle nozzle with ``1`` / ``2``.  Requires *dod*.
+    Z  (overlap)
+        ``trans_z`` only.  ``[`` marks overlap start, ``]`` marks overlap
+        end, ``m`` moves immediately to midpoint.
+    R  (reaction)
+        Step ``reaction_timing_rel``.  Positive = more reaction time.
+        Requires *dod*.
+
+    Shared controls
+    ---------------
+    ``+`` / ``-``  Increase / decrease step size of the active axis.
+    ``s``          Save current CoDI position as a named preset.
+    ``h``          Print full key map.
+    ``q``          Quit; prompts to post to e-log.
+
+    Examples
+    --------
+    >>> from dod.codi import codi_align
+    >>> codi_align(codi)              # position and overlap only
+    >>> codi_align(codi, dod=dod)     # full 4-mode alignment
+    """
+    import sys
+    import tty
+    import termios
+
+    # -----------------------------------------------------------------------
+    # Axis metadata
+    # -----------------------------------------------------------------------
+    _P_AXES = ["rot_base", "rot_left", "rot_right", "trans_z"]
+    _P_UNITS = {
+        "rot_base": "°",
+        "rot_left": "°",
+        "rot_right": "°",
+        "trans_z": "mm",
+    }
+    _P_MOTORS = {
+        "rot_base": lambda: codi.CoDI_rot_base.wm(),
+        "rot_left": lambda: codi.CoDI_rot_left.wm(),
+        "rot_right": lambda: codi.CoDI_rot_right.wm(),
+        "trans_z": lambda: codi.CoDI_trans_z.wm(),
+    }
+    _P_MOVE = {
+        "rot_base": lambda d: codi.move_rot_base_rel(d),
+        "rot_left": lambda d: codi.move_rot_left_rel(d),
+        "rot_right": lambda d: codi.move_rot_right_rel(d),
+        "trans_z": lambda d: codi.move_z_rel(d),
+    }
+
+    # -----------------------------------------------------------------------
+    # State
+    # -----------------------------------------------------------------------
+    mode = "P"
+    p_axis_idx = 0  # index into _P_AXES; keys 1-4 set this
+    t_nozzle = 1  # T-mode nozzle (1 or 2)
+    z_start = None  # Z-mode overlap start
+    z_end = None  # Z-mode overlap end
+
+    # Per-axis step sizes (in natural units: degrees or mm)
+    p_steps = {
+        "rot_base": 0.100,
+        "rot_left": 0.100,
+        "rot_right": 0.100,
+        "trans_z": 0.010,
+    }
+    t_step_ns = 100.0  # timing zero step (ns); displayed as µs
+    r_step_ns = 100.0  # reaction step (ns); displayed as µs
+
+    _HELP = """
+  ─── codi_align key map ─────────────────────────────────────
+  Mode switch:   p=Position  t=Timing  z=Z-overlap  r=Reaction
+  Move:          arrow keys (up/right = positive, down/left = negative)
+  Axis select:   1/2/3/4  (P-mode: rot_base/left/right/z; T-mode: nozzle)
+  Step size:     + increase   - decrease  (active axis only)
+  Z-mode:        [  mark overlap start    ]  mark overlap end
+                 m  move to midpoint (immediate)
+  Save preset:   s
+  Help:          h
+  Quit:          q (prompts for elog post)
+  ────────────────────────────────────────────────────────────
 """
+
+    def _dryrun_tag():
+        return " [DRY RUN MODE]" if codi.dryrun else ""
+
+    def _p_status():
+        parts = []
+        for i, ax in enumerate(_P_AXES):
+            try:
+                pos = _P_MOTORS[ax]()
+                pos_s = f"{pos:.3f}{_P_UNITS[ax]}"
+            except Exception:
+                pos_s = "?.???"
+            star = "*" if i == p_axis_idx else " "
+            parts.append(f"[{i + 1}]{star}{ax}={pos_s}(step={p_steps[ax]:.3f})")
+        return f"P{_dryrun_tag()} | {' '.join(parts)}"
+
+    def _t_status():
+        if dod is None:
+            return "T mode unavailable (no dod provided)"
+        try:
+            v1 = dod.timing_delay_nozzle_1 / 1000
+            v2 = dod.timing_delay_nozzle_2 / 1000
+        except Exception:
+            v1 = v2 = 0.0
+        nz_s = f"[{t_nozzle}*]" if t_nozzle else ""
+        step_us = t_step_ns / 1000
+        return (
+            f"T{_dryrun_tag()} | nozzle={t_nozzle} | step={step_us:.3f}µs | "
+            f"nozzle_1={v1:.3f}µs  nozzle_2={v2:.3f}µs"
+        )
+
+    def _z_status():
+        try:
+            pos = codi.CoDI_trans_z.wm()
+            pos_s = f"{pos:.3f}mm"
+        except Exception:
+            pos_s = "?.???"
+        overlap_s = ""
+        if z_start is not None and z_end is not None:
+            overlap_s = f" | overlap:[{z_start:.3f}→{z_end:.3f}] mid={((z_start + z_end) / 2):.3f}"
+        elif z_start is not None:
+            overlap_s = f" | start:{z_start:.3f} (press ] for end)"
+        step_s = f"{p_steps['trans_z']:.3f}mm"
+        return f"Z{_dryrun_tag()} | trans_z={pos_s} step={step_s}{overlap_s}"
+
+    def _r_status():
+        if dod is None:
+            return "R mode unavailable (no dod provided)"
+        try:
+            v = dod.timing_delay_reaction / 1000
+        except Exception:
+            v = 0.0
+        step_us = r_step_ns / 1000
+        return (
+            f"R{_dryrun_tag()} | reaction_time={v:.3f}µs "
+            f"(+= more reaction) | step={step_us:.3f}µs"
+        )
+
+    def _print_status():
+        if mode == "P":
+            s = _p_status()
+        elif mode == "T":
+            s = _t_status()
+        elif mode == "Z":
+            s = _z_status()
+        else:
+            s = _r_status()
+        sys.stdout.write(f"\r\033[K{s}")
+        sys.stdout.flush()
+
+    def _read_char(fd):
+        char = sys.stdin.read(1)
+        if char == "\x1b":
+            char += sys.stdin.read(2)
+            if char in ("\x1b[1", "\x1b[2", "\x1b[3", "\x1b[4", "\x1b[5", "\x1b[6"):
+                char += sys.stdin.read(3)
+        return char
+
+    # -----------------------------------------------------------------------
+    # Main loop
+    # -----------------------------------------------------------------------
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    print("\ncodi_align started. Press 'h' for help, 'q' to quit.\n")
+    _print_status()
+
+    try:
+        tty.setraw(fd)
+        while True:
+            char = _read_char(fd)
+
+            # --- mode switch ------------------------------------------------
+            if char == "p":
+                mode = "P"
+            elif char == "t":
+                if dod is None:
+                    sys.stdout.write(
+                        "\r\033[K[T mode requires dod — call codi_align(codi, dod=dod)]"
+                    )
+                    sys.stdout.flush()
+                else:
+                    mode = "T"
+            elif char == "z":
+                mode = "Z"
+            elif char == "r":
+                if dod is None:
+                    sys.stdout.write(
+                        "\r\033[K[R mode requires dod — call codi_align(codi, dod=dod)]"
+                    )
+                    sys.stdout.flush()
+                else:
+                    mode = "R"
+
+            # --- axis / nozzle select (1-4) ---------------------------------
+            elif char in "1234":
+                n = int(char)
+                if mode == "P":
+                    p_axis_idx = n - 1
+                elif mode == "T":
+                    if n in (1, 2):
+                        t_nozzle = n
+
+            # --- step adjustment --------------------------------------------
+            elif char in "+-":
+                factor = 2.0 if char == "+" else 0.5
+                if mode == "P":
+                    ax = _P_AXES[p_axis_idx]
+                    p_steps[ax] = round(p_steps[ax] * factor, 4)
+                elif mode == "T":
+                    t_step_ns = round(t_step_ns * factor, 3)
+                elif mode in ("Z",):
+                    p_steps["trans_z"] = round(p_steps["trans_z"] * factor, 4)
+                elif mode == "R":
+                    r_step_ns = round(r_step_ns * factor, 3)
+
+            # --- movement (arrow keys) --------------------------------------
+            elif char in ("\x1b[A", "\x1b[C"):  # up / right = positive
+                direction = +1
+                if mode == "P":
+                    ax = _P_AXES[p_axis_idx]
+                    _P_MOVE[ax](p_steps[ax] * direction)
+                elif mode == "T" and dod is not None:
+                    dod.set_nozzle_timing_rel(t_nozzle, t_step_ns * direction)
+                elif mode == "Z":
+                    codi.move_z_rel(p_steps["trans_z"] * direction)
+                elif mode == "R" and dod is not None:
+                    dod.set_reaction_timing_rel(r_step_ns * direction)
+
+            elif char in ("\x1b[B", "\x1b[D"):  # down / left = negative
+                direction = -1
+                if mode == "P":
+                    ax = _P_AXES[p_axis_idx]
+                    _P_MOVE[ax](p_steps[ax] * direction)
+                elif mode == "T" and dod is not None:
+                    dod.set_nozzle_timing_rel(t_nozzle, t_step_ns * direction)
+                elif mode == "Z":
+                    codi.move_z_rel(p_steps["trans_z"] * direction)
+                elif mode == "R" and dod is not None:
+                    dod.set_reaction_timing_rel(r_step_ns * direction)
+
+            # --- Z-mode overlap markers ------------------------------------
+            elif char == "[" and mode == "Z":
+                z_start = codi.CoDI_trans_z.wm()
+                sys.stdout.write(f"\r\033[K[Z] overlap start marked: {z_start:.3f} mm")
+                sys.stdout.flush()
+
+            elif char == "]" and mode == "Z":
+                z_end = codi.CoDI_trans_z.wm()
+                sys.stdout.write(f"\r\033[K[Z] overlap end marked: {z_end:.3f} mm")
+                sys.stdout.flush()
+
+            elif char == "m" and mode == "Z":
+                if z_start is not None and z_end is not None:
+                    midpoint = (z_start + z_end) / 2
+                    sys.stdout.write(
+                        f"\r\033[K[Z] moving to midpoint {midpoint:.3f} mm"
+                    )
+                    sys.stdout.flush()
+                    codi.move_z_abs(midpoint)
+                else:
+                    sys.stdout.write(
+                        "\r\033[K[Z] set both [ (start) and ] (end) before pressing m"
+                    )
+                    sys.stdout.flush()
+
+            # --- save preset -----------------------------------------------
+            elif char == "s":
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                sys.stdout.write("\r\033[K")
+                preset_name = input("Preset name: ").strip()
+                tty.setraw(fd)
+                if preset_name:
+                    codi.save_current_pos(preset_name)
+                    sys.stdout.write(f"\r\033[K[saved preset '{preset_name}']")
+                    sys.stdout.flush()
+
+            # --- help -------------------------------------------------------
+            elif char == "h":
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                print(f"\r{_HELP}")
+                tty.setraw(fd)
+
+            # --- quit -------------------------------------------------------
+            elif char in ("q", "\x03"):  # q or Ctrl-C
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                sys.stdout.write("\r\033[K")
+                answer = input("Post session summary to elog? [y/N]: ").strip().lower()
+                if answer == "y" and dod is not None:
+                    dod.logging_string(post_elog=True)
+                    print("[elog posted]")
+                elif answer == "y" and dod is None:
+                    print("[no dod provided — cannot post to elog]")
+                print("codi_align exited.")
+                return
+
+            _print_status()
+
+    except Exception as exc:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        raise exc
+    finally:
+        try:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        except Exception:
+            pass

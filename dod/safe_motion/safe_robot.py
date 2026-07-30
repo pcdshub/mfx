@@ -882,7 +882,6 @@ class SafeRobot(DoD):
     def do_task(
         self,
         task_name,
-        safety_check=False,
         handle_dialog="raise",
         verbose=False,
         poll_interval=2.0,
@@ -905,7 +904,6 @@ class SafeRobot(DoD):
         if not self.safe_mode:
             return super().do_task(
                 task_name,
-                safety_check=safety_check,
                 handle_dialog=handle_dialog,
                 verbose=verbose,
                 poll_interval=poll_interval,
@@ -923,7 +921,6 @@ class SafeRobot(DoD):
 
         return super().do_task(
             task_name,
-            safety_check=False,
             handle_dialog=handle_dialog,
             verbose=verbose,
             poll_interval=poll_interval,

@@ -32,6 +32,10 @@ def _with_reconnect(func):
     return wrapper
 
 
+# Period of the 120 Hz beam in nanoseconds; used in timing calculations.
+_PERIOD_120HZ_NS = 1e9 / 120
+
+
 class DoD:
     """
     Class definition of the DoD (Drop-on-Demand) robot.
@@ -133,10 +137,9 @@ class DoD:
         port=9999,
         supported_json="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/supported.json",
         log_file="/cds/group/pcds/pyps/apps/hutch-python/mfx/dod/dod.log",
+        dryrun=False,
     ):
-        from dod.ServerResponse import ServerResponse
-
-        import time
+        self._dryrun = bool(dryrun)
 
         # User input parameters:
         # Safety parameters in hutch coordinate system.
@@ -194,12 +197,10 @@ class DoD:
         if modules == "codi":
             from dod.codi import CoDI
 
-            self.codi = CoDI()
+            self.codi = CoDI(dryrun=self._dryrun)
 
         # Timing section
         from pcdsdevices.evr import Trigger
-
-        self.delay = None
 
         # Trigger objects
         self.trigger_Xray = Trigger(
@@ -229,6 +230,17 @@ class DoD:
             - self.timing_delay_sciPulse
             - self.timing_delay_reaction
         )
+
+    @property
+    def dryrun(self):
+        """bool: When ``True``, all hardware/network/file writes are suppressed."""
+        return self._dryrun
+
+    @dryrun.setter
+    def dryrun(self, value):
+        self._dryrun = bool(value)
+        if hasattr(self, "codi"):
+            self.codi.dryrun = self._dryrun
 
     @_with_reconnect
     def stop_task(self, verbose=True):
@@ -270,7 +282,7 @@ class DoD:
         self.safety_abort = False
         r = self.client.stop_task()
         r = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
 
     @_with_reconnect
@@ -312,7 +324,7 @@ class DoD:
         self.safety_abort = False
         rr = self.client.disconnect()
 
-        if verbose == True:
+        if verbose:
             return r
 
     def reconnect(self, reload=False, verbose=False):
@@ -402,7 +414,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_status()
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -498,7 +510,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_task_details(task_name)
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -535,7 +547,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_task_names()
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -573,7 +585,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_position_names()
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -614,7 +626,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_current_positions()
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -653,7 +665,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_nozzle_status()
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -1477,7 +1489,7 @@ class DoD:
                 time.sleep(0.5)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -1762,7 +1774,7 @@ class DoD:
         rr = self.client.connect("Test")
         r = self.client.get_drive_range()
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -1807,11 +1819,17 @@ class DoD:
         >>> r = dod.do_move('sample_position', verbose=True)
         >>> print(r)
         """
+        if self._dryrun:
+            print(
+                f"[DRY RUN] do_move: move not sent to DAQ server (position='{position}')"
+            )
+            return None
+
         r = self.client.connect("Test")
         r = self.client.get_current_positions()
         current_real_position = r.RESULTS["PositionReal"]
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move(position)
         else:
             print("safety test of move has yet to be implemented")
@@ -1823,7 +1841,7 @@ class DoD:
         new_real_position = r.RESULTS["PositionReal"]
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -1875,7 +1893,7 @@ class DoD:
         y_current = current_real_position["Y"]
         z_current = current_real_position["Z"]
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move_x(position_x)
         else:
             print("safety test of move has yet to be implemented")
@@ -1886,7 +1904,7 @@ class DoD:
         self.busy_wait(25)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -1938,7 +1956,7 @@ class DoD:
         y_current = current_real_position["Y"]
         z_current = current_real_position["Z"]
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move_y(position_y)
         else:
             print("safety test of move has yet to be implemented")
@@ -1949,7 +1967,7 @@ class DoD:
         self.busy_wait(25)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -2001,7 +2019,7 @@ class DoD:
         y_current = current_real_position["Y"]
         z_current = current_real_position["Z"]
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move_z(position_z)
         else:
             print("safety test of move has yet to be implemented")
@@ -2012,7 +2030,7 @@ class DoD:
         self.busy_wait(25)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -2081,7 +2099,7 @@ class DoD:
 
         target_x = x_current + delta_x
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move_x(target_x)
         else:
             print("safety test of move has yet to be implemented")
@@ -2093,7 +2111,7 @@ class DoD:
             self.busy_wait(25)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -2162,7 +2180,7 @@ class DoD:
 
         target_y = y_current + delta_y
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move_y(target_y)
         else:
             print("safety test of move has yet to be implemented")
@@ -2174,7 +2192,7 @@ class DoD:
             self.busy_wait(25)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -2243,7 +2261,7 @@ class DoD:
 
         target_z = z_current + delta_z
 
-        if safety_test == False:
+        if not safety_test:
             r = self.client.move_z(target_z)
         else:
             print("safety test of move has yet to be implemented")
@@ -2255,7 +2273,7 @@ class DoD:
             self.busy_wait(25)
 
         rr = self.client.disconnect()
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -2358,7 +2376,6 @@ class DoD:
     def do_task(
         self,
         task_name,
-        safety_check=False,
         handle_dialog="raise",
         verbose=False,
         poll_interval=2.0,
@@ -2366,19 +2383,15 @@ class DoD:
         """
         Execute a named task on the robot.
 
-        Blocks until the task completes, ``safety_abort`` is set to ``True``,
-        or a robot dialog requires operator attention.  If a dialog appears
-        during execution, behaviour is controlled by ``handle_dialog``.
+         Blocks until the task completes, ``safety_abort`` is set to ``True``,
+         or a robot dialog requires operator attention.  If a dialog appears
+         during execution, behaviour is controlled by ``handle_dialog``.
 
-        Parameters
-        ----------
-        task_name : str
-            Name of the task to execute.
-        safety_check : bool, optional
-            If ``True``, perform a safety check before executing the task.
-            Safety check is not yet implemented; passing ``True`` will print a
-            warning. Default is ``False``.
-        handle_dialog : str, optional
+         Parameters
+         ----------
+         task_name : str
+             Name of the task to execute.
+         handle_dialog : str, optional
             Controls how robot dialogs (``Status == "Dialog"``) are handled
             during task execution.  The dialog reference, message, and button
             labels are always printed to the console regardless of this setting.
@@ -2446,12 +2459,12 @@ class DoD:
         >>> r = dod.do_task('wash_nozzle', verbose=True)
         >>> print(r.ERROR_CODE)
         """
+        if self._dryrun:
+            print(f"[DRY RUN] do_task: task '{task_name}' not executed on DAQ server")
+            return None
+
         rr = self.client.connect("Test")
-        if safety_check == False:
-            r = self.client.execute_task(task_name)
-        else:
-            print("safety check needs to be implemented")
-            r = self.client.get_status()
+        r = self.client.execute_task(task_name)
 
         # Wait for task to be done; also handle Dialog state mid-task.
         while r.STATUS["Status"] in ("Busy", "Dialog"):
@@ -2509,7 +2522,7 @@ class DoD:
             print(f"[DoD] Robot busy — checking again in {poll_interval} s ...")
             time.sleep(poll_interval)
             r = self.client.get_status()
-            if self.safety_abort == True:
+            if self.safety_abort:
                 r = self.client.stop_task()
                 print("User aborted task execution")
                 return r
@@ -2522,7 +2535,7 @@ class DoD:
         else:
             print("error while performing task!")
 
-        if verbose == True:
+        if verbose:
             return r
         else:
             return r.RESULTS
@@ -2851,19 +2864,17 @@ class DoD:
         >>> if not safe:
         ...     print('Target position is forbidden.')
         """
-        from dod.codi import CoDI_base
-
         # Get current rotation state
-        pos_rot_base = round(CoDI_base.wm(), 0)
+        pos_rot_base = round(self.codi.CoDI_rot_base.wm(), 0)
 
         # Initialize safe flag (True = safe)
         flag_safe_endpoint = True
 
         # Select the relevant forbidden region list based on rotation state
         if pos_rot_base == 90:
-            test_list_safety = self.forbidden_regions_vertical
-        elif pos_rot_base == 0:
             test_list_safety = self.forbidden_regions_horizontal
+        elif pos_rot_base == 0:
+            test_list_safety = self.forbidden_regions_vertical
         else:
             test_list_safety = (
                 self.forbidden_regions_horizontal + self.forbidden_regions_vertical
@@ -2884,13 +2895,15 @@ class DoD:
 
         return flag_safe_endpoint
 
-    def set_timing_update(self):
+    def _timing_update(self):
         """
         Recalculate and apply all trigger delays based on current timing parameters.
 
-        Updates nozzle 1, nozzle 2, and LED trigger delays using the stored
-        absolute and relative timing values. If a calculated nozzle delay is
-        negative, one full 120 Hz period (approximately 8.33 ms) is added.
+        Private worker — called by all public timing setters after updating a
+        stored parameter.  Updates nozzle 1, nozzle 2, and LED trigger delays
+        using the stored absolute and relative timing values.  If a calculated
+        nozzle delay is negative, one full 120 Hz period
+        (``_PERIOD_120HZ_NS`` ≈ 8.33 ms) is added.
 
         Returns
         -------
@@ -2900,13 +2913,6 @@ class DoD:
         ------
         ConnectionError
             If any EVR trigger PV cannot be written.
-
-        Examples
-        --------
-        Apply updated timings after changing a delay parameter:
-
-        >>> dod.timing_delay_reaction = 5000
-        >>> dod.set_timing_update()
         """
         # Nozzle 1
         self.timing_nozzle_1 = (
@@ -2916,8 +2922,7 @@ class DoD:
             - self.timing_delay_reaction
         )
         if self.timing_nozzle_1 < 0:
-            self.timing_nozzle_1 = self.timing_nozzle_1 + 1 / 120 * 1000000000
-        self.trigger_nozzle_1.ns_delay.put(self.timing_nozzle_1)
+            self.timing_nozzle_1 = self.timing_nozzle_1 + _PERIOD_120HZ_NS
 
         # Nozzle 2
         self.timing_nozzle_2 = (
@@ -2927,27 +2932,38 @@ class DoD:
             - self.timing_delay_reaction
         )
         if self.timing_nozzle_2 < 0:
-            self.timing_nozzle_2 = self.timing_nozzle_2 + 1 / 120 * 1000000000
-        self.trigger_nozzle_2.ns_delay.put(self.timing_nozzle_2)
+            self.timing_nozzle_2 = self.timing_nozzle_2 + _PERIOD_120HZ_NS
 
         # LED
         self.timing_LED = self.timing_Xray + self.timing_delay_LED
+
+        if self._dryrun:
+            print(
+                f"[DRY RUN] _timing_update: timing PVs not written "
+                f"(nozzle_1={self.timing_nozzle_1:.0f} ns, "
+                f"nozzle_2={self.timing_nozzle_2:.0f} ns, "
+                f"LED={self.timing_LED:.0f} ns)"
+            )
+            return
+
+        self.trigger_nozzle_1.ns_delay.put(self.timing_nozzle_1)
+        self.trigger_nozzle_2.ns_delay.put(self.timing_nozzle_2)
         self.trigger_LED.ns_delay.put(self.timing_LED)
 
-    def set_timing_zero_nozzle(self, nozzle, timing_rel):
+    def set_nozzle_timing_zero(self, nozzle, timing):
         """
         Set the time-zero delay for a nozzle based on LED alignment.
 
         Sets the absolute reference delay for the specified nozzle as measured
-        from the LED alignment procedure, then calls :meth:`set_timing_update`
+        from the LED alignment procedure, then calls :meth:`_timing_update`
         to apply the change.
 
         Parameters
         ----------
         nozzle : int
             Nozzle number to configure. Must be ``1`` or ``2``.
-        timing_rel : float
-            Relative delay in nanoseconds from the robot LED alignment.
+        timing : float
+            Absolute delay in nanoseconds from the robot LED alignment.
 
         Returns
         -------
@@ -2956,30 +2972,29 @@ class DoD:
         Raises
         ------
         ValueError
-            Prints a warning if an invalid nozzle number is provided.
+            If ``nozzle`` is not ``1`` or ``2``.
 
         Examples
         --------
         Set time zero for nozzle 1 based on alignment result:
 
-        >>> dod.set_timing_zero_nozzle(1, 12500.0)
+        >>> dod.set_nozzle_timing_zero(1, 12500.0)
         """
         if nozzle == 1:
-            self.timing_delay_nozzle_1 = timing_rel
+            self.timing_delay_nozzle_1 = timing
         elif nozzle == 2:
-            self.timing_delay_nozzle_2 = timing_rel
+            self.timing_delay_nozzle_2 = timing
         else:
-            print("no valid nozzle selected.")
-            return
+            raise ValueError(f"Invalid nozzle {nozzle!r}: must be 1 or 2.")
 
         # Update timings
-        self.set_timing_update()
+        self._timing_update()
 
-    def set_timing_rel_LED(self, timing_rel):
+    def set_led_timing_rel(self, timing_rel):
         """
         Set the relative timing of the LED with respect to the X-rays.
 
-        Updates ``timing_delay_LED`` and calls :meth:`set_timing_update` to
+        Updates ``timing_delay_LED`` and calls :meth:`_timing_update` to
         apply the change to the EVR trigger.
 
         Parameters
@@ -3000,18 +3015,18 @@ class DoD:
         --------
         Set the LED to fire 1000 ns after the X-ray pulse:
 
-        >>> dod.set_timing_rel_LED(1000.0)
+        >>> dod.set_led_timing_rel(1000.0)
         """
         self.timing_delay_LED = timing_rel
 
         # Update timings
-        self.set_timing_update()
+        self._timing_update()
 
-    def set_timing_rel_reaction(self, timing_rel):
+    def set_reaction_timing_rel(self, timing_rel):
         """
         Set the relative reaction delay with respect to the X-rays.
 
-        Updates ``timing_delay_reaction`` and calls :meth:`set_timing_update`
+        Updates ``timing_delay_reaction`` and calls :meth:`_timing_update`
         to propagate the change to all nozzle triggers.
 
         Parameters
@@ -3032,20 +3047,21 @@ class DoD:
         --------
         Set a 5000 ns reaction delay:
 
-        >>> dod.set_timing_rel_reaction(5000.0)
+        >>> dod.set_reaction_timing_rel(5000.0)
         """
         self.timing_delay_reaction = timing_rel
 
         # Update timings
-        self.set_timing_update()
+        self._timing_update()
 
-    def set_timing_abs_Xray(self, timing_abs):
+    def set_xray_timing_ref(self, timing_abs):
         """
-        Set the absolute X-ray timing used for nozzle delay calculations.
+        Set the absolute X-ray timing reference used for nozzle delay calculations.
 
         Updates the stored X-ray timing reference and calls
-        :meth:`set_timing_update` to recalculate and apply all dependent
-        trigger delays. Does not directly write to the X-ray trigger PV.
+        :meth:`_timing_update` to recalculate and apply all dependent
+        trigger delays.  Does not directly write to the X-ray trigger PV;
+        ``timing_abs`` is a local reference value used in nozzle delay math.
 
         Parameters
         ----------
@@ -3065,19 +3081,19 @@ class DoD:
         --------
         Update the X-ray timing reference to 700000 ns:
 
-        >>> dod.set_timing_abs_Xray(700000.0)
+        >>> dod.set_xray_timing_ref(700000.0)
         """
         self.timing_Xray = timing_abs
 
         # Update timings
-        self.set_timing_update()
+        self._timing_update()
 
-    def set_timing_relative_nozzle(self, nozzle, timing_rel):
+    def set_nozzle_timing_rel(self, nozzle, timing_rel):
         """
         Adjust the timing of a nozzle by a relative offset.
 
         Increments the current delay of the specified nozzle by ``timing_rel``
-        and calls :meth:`set_timing_update` to apply the change.
+        and calls :meth:`_timing_update` to apply the change.
 
         Parameters
         ----------
@@ -3094,102 +3110,178 @@ class DoD:
         Raises
         ------
         ValueError
-            Prints a warning if an invalid nozzle number is provided.
+            If ``nozzle`` is not ``1`` or ``2``.
 
         Examples
         --------
         Advance nozzle 1 by 500 ns:
 
-        >>> dod.set_timing_relative_nozzle(1, 500.0)
+        >>> dod.set_nozzle_timing_rel(1, 500.0)
 
         Delay nozzle 2 by 200 ns:
 
-        >>> dod.set_timing_relative_nozzle(2, -200.0)
+        >>> dod.set_nozzle_timing_rel(2, -200.0)
         """
         if nozzle == 1:
-            current_timing = self.timing_delay_nozzle_1
             self.timing_delay_nozzle_1 = self.timing_delay_nozzle_1 + timing_rel
         elif nozzle == 2:
-            current_timing = self.timing_delay_nozzle_2
             self.timing_delay_nozzle_2 = self.timing_delay_nozzle_2 + timing_rel
         else:
-            print("no valid nozzle selected.")
-            return
+            raise ValueError(f"Invalid nozzle {nozzle!r}: must be 1 or 2.")
 
         # Update timings
-        self.set_timing_update()
+        self._timing_update()
 
-    def logging_string(self):
+    def set_nozzle_timing_abs(self, nozzle, timing_abs):
+        """
+        Set the absolute EVR delay for a nozzle directly.
+
+        Assigns ``timing_abs`` to the stored nozzle delay and calls
+        :meth:`_timing_update` to apply the change.  This is the direct
+        operational setter for in-run adjustments; use
+        :meth:`set_nozzle_timing_zero` for the LED-calibration step.
+
+        Parameters
+        ----------
+        nozzle : int
+            Nozzle number to configure. Must be ``1`` or ``2``.
+        timing_abs : float
+            Absolute nozzle delay in nanoseconds.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``nozzle`` is not ``1`` or ``2``.
+
+        Examples
+        --------
+        Set nozzle 1 delay to 15000 ns:
+
+        >>> dod.set_nozzle_timing_abs(1, 15000.0)
+        """
+        if nozzle == 1:
+            self.timing_delay_nozzle_1 = timing_abs
+        elif nozzle == 2:
+            self.timing_delay_nozzle_2 = timing_abs
+        else:
+            raise ValueError(f"Invalid nozzle {nozzle!r}: must be 1 or 2.")
+
+        # Update timings
+        self._timing_update()
+
+    def _format_timing(self):
+        """
+        Format all timing parameters as a multi-line string.
+
+        All values are displayed in **µs** (``raw_ns / 1000``).  This is the
+        single source of truth for timing display used by :meth:`print_timing`
+        and :meth:`logging_string`.
+
+        Returns
+        -------
+        str
+            Formatted multi-line string with all timing values in µs.
+        """
+        lines = [
+            "Timing parameters (all values in µs):",
+            f"  timing_Xray ref:       {self.timing_Xray / 1000:.3f} µs",
+            f"  timing_delay_reaction: {self.timing_delay_reaction / 1000:.3f} µs",
+            f"  timing_delay_nozzle_1: {self.timing_delay_nozzle_1 / 1000:.3f} µs",
+            f"  timing_delay_nozzle_2: {self.timing_delay_nozzle_2 / 1000:.3f} µs",
+            f"  timing_delay_LED:      {self.timing_delay_LED / 1000:.3f} µs",
+            "  ---",
+            f"  timing_nozzle_1 (abs): {self.timing_nozzle_1 / 1000:.3f} µs",
+            f"  timing_nozzle_2 (abs): {self.timing_nozzle_2 / 1000:.3f} µs",
+            f"  timing_LED (abs):      {self.timing_LED / 1000:.3f} µs",
+        ]
+        return "\n".join(lines)
+
+    def print_timing(self):
+        """
+        Print all current timing parameters to the console.
+
+        Calls :meth:`_format_timing` and prints the result.  Convenience
+        method for interactive use in a hutch-python session.
+
+        Examples
+        --------
+        >>> dod.print_timing()
+        """
+        print(self._format_timing())
+
+    def logging_string(self, post_elog=False, tag="DoD", run_number=None):
         """
         Generate a formatted string for posting to the e-log.
 
         Collects the current CoDI position and all timing parameters and
         formats them into a human-readable string suitable for logging.
+        Timing values are displayed in µs via :meth:`_format_timing`.
+
+        Parameters
+        ----------
+        post_elog : bool, optional
+            If ``True``, post the string to the MFX e-log in addition to
+            returning it.  Default is ``False``.  The ``mfx.db.elog`` import
+            is guarded inside this branch so the method remains usable
+            off-hutch.
+        tag : str, optional
+            Tag applied to the e-log post when ``post_elog=True``.
+            Default is ``'DoD'``.
+        run_number : int or None, optional
+            Run number to associate with the e-log post.  Passed through to
+            ``elog.post(run=run_number)``.  Default is ``None``.
 
         Returns
         -------
         str
             Multi-line string containing CoDI position data and timing
-            parameter values.
-
-        Raises
-        ------
-        AttributeError
-            If the ``codi`` module is not loaded (i.e. ``modules`` was not set
-            to ``'codi'`` at initialisation).
+            parameter values.  Always returned regardless of ``post_elog``.
 
         Examples
         --------
-        Post current state to the e-log:
+        Return the log string without posting:
 
         >>> log_entry = dod.logging_string()
         >>> print(log_entry)
+
+        Return and post to the e-log with the default tag:
+
+        >>> dod.logging_string(post_elog=True)
+
+        Post with a custom tag and run number:
+
+        >>> dod.logging_string(post_elog=True, tag='CoDI', run_number=42)
         """
         post_str = ""
 
         # CoDI angles (only available when DoD was instantiated with modules='codi'):
         if hasattr(self, "codi"):
-            position = self.codi.get_CoDI_pos()
+            position = self.codi.get_pos()
             position_str = (
-                "Codi Information: \n CoDI data: name: "
-                + str(position[0])
-                + "\n rot_base: "
-                + str(position[1])
-                + "\n rot_left: "
-                + str(position[2])
-                + "\n rot_right: "
-                + str(position[3])
-                + "\n z-transl: "
-                + str(position[4])
+                "CoDI Information:\n"
+                f"  name:      {position[0]}\n"
+                f"  rot_base:  {position[1]}\n"
+                f"  rot_left:  {position[2]}\n"
+                f"  rot_right: {position[3]}\n"
+                f"  z-transl:  {position[4]}"
             )
         else:
             position_str = "CoDI not loaded (DoD instantiated without modules='codi')"
-        post_str = post_str + position_str + " \n "
+        post_str = post_str + position_str + "\n\n"
 
         # Timings:
-        post_str = post_str + "Timing:" + " \n "
-        post_str = post_str + "timing_Xray:" + str(self.timing_Xray) + " \n "
-        post_str = post_str + "timing_nozzle_1:" + str(self.timing_nozzle_1) + " \n "
-        post_str = post_str + "timing_nozzle_2:" + str(self.timing_nozzle_2) + " \n "
-        post_str = post_str + "timing_LED:" + str(self.timing_LED) + " \n "
-        post_str = post_str + "timing_delay_LED:" + str(self.timing_delay_LED) + " \n "
-        post_str = (
-            post_str
-            + "timing_delay_reaction:"
-            + str(self.timing_delay_reaction)
-            + " \n "
-        )
-        post_str = (
-            post_str
-            + "timing_delay_nozzle_1:"
-            + str(self.timing_delay_nozzle_1)
-            + " \n "
-        )
-        post_str = (
-            post_str
-            + "timing_delay_nozzle_2:"
-            + str(self.timing_delay_nozzle_2)
-            + " \n "
-        )
+        post_str = post_str + self._format_timing() + "\n"
+
+        if post_elog:
+            if self._dryrun:
+                print("[DRY RUN] logging_string: elog post suppressed")
+            else:
+                from mfx.db import elog
+
+                elog.post(msg=post_str, tags=tag, run=run_number)
 
         return post_str
