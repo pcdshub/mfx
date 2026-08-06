@@ -156,6 +156,11 @@ class DoD:
         Returns: 
             False
         """
+        from dod.DropsDriver import myClient
+        from dod.JsonFileHandler import JsonFileHandler
+        from dod.ServerResponse import ServerResponse
+
+        import time
         # Initializing the robot client that is used for communication
         self.client = myClient(ip=self.ip, port=self.port, supported_json=self.supported_json, reload=reload)
         # create config parser handler
