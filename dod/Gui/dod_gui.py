@@ -14,11 +14,50 @@ from safe_demo import (connect_dod, read_live_position, read_drive_range,
 POLL_MS = 1000
 
 # ---- safe_motion configuration -------------------------------------------
-# EDIT THESE TWO PATHS to point at the real files on mezz01. If either is
-# missing, the GUI falls back to a plain DoD connection (safe mode + the
-# planned-path plot are then disabled, but everything else works normally).
-EXCLUSION_ZONES_JSON = "exclusion_zones.json"        # <-- EDIT: full path on mezz01
-ROBOT_CONFIG_PATH    = "robot_config.json"           # <-- EDIT: INI or .json sidecar
+# The exclusion_zones.json lives inside the safe_motion package
+# (mfx/dod/safe_motion/exclusion_zones.json), so we find it automatically
+# relative to the package instead of hard-coding a full path. Only set these
+# manually if your files live somewhere else -- a set value overrides the
+# auto-locate.
+EXCLUSION_ZONES_JSON = None    # None = auto-find next to the safe_motion package
+ROBOT_CONFIG_PATH    = None    # None = auto-find; set to your robot_config.json / .ini
+
+
+def _find_safe_motion_configs(log=print):
+    """
+    Locate the two config files. Returns (exclusion_json, robot_config) or
+    (None, None) if they can't be found. Prefers the manual constants above;
+    otherwise looks inside the imported safe_motion package directory.
+    """
+    import os
+    ez = EXCLUSION_ZONES_JSON
+    rc = ROBOT_CONFIG_PATH
+
+    # auto-locate relative to the safe_motion package
+    try:
+        import safe_motion
+        pkg_dir = os.path.dirname(os.path.abspath(safe_motion.__file__))
+    except Exception as e:
+        log("could not import safe_motion: %s" % e)
+        pkg_dir = None
+
+    if ez is None and pkg_dir:
+        cand = os.path.join(pkg_dir, "exclusion_zones.json")
+        if os.path.exists(cand):
+            ez = cand
+
+    if rc is None and pkg_dir:
+        # look for a robot_config.json or .ini beside the package or one level up
+        for name in ("robot_config.json", "robot_config.ini"):
+            for base in (pkg_dir, os.path.dirname(pkg_dir)):
+                cand = os.path.join(base, name)
+                if os.path.exists(cand):
+                    rc = cand
+                    break
+            if rc:
+                break
+
+    return ez, rc
 
 
 def connect_safe_or_plain(ip, log=print):
@@ -30,13 +69,16 @@ def connect_safe_or_plain(ip, log=print):
     import os
     try:
         from safe_motion import SafeRobot
-        if not os.path.exists(EXCLUSION_ZONES_JSON):
-            raise FileNotFoundError("exclusion zones json not found: %s" % EXCLUSION_ZONES_JSON)
-        if not os.path.exists(ROBOT_CONFIG_PATH):
-            raise FileNotFoundError("robot config not found: %s" % ROBOT_CONFIG_PATH)
+        ez, rc = _find_safe_motion_configs(log=log)
+        if not ez or not os.path.exists(ez):
+            raise FileNotFoundError("exclusion_zones.json not found (set EXCLUSION_ZONES_JSON)")
+        if not rc or not os.path.exists(rc):
+            raise FileNotFoundError("robot_config not found (set ROBOT_CONFIG_PATH)")
+        log("using config: %s" % ez)
+        log("using config: %s" % rc)
         robot = SafeRobot(
-            robot_config_path=ROBOT_CONFIG_PATH,
-            exclusion_zone_config=EXCLUSION_ZONES_JSON,
+            robot_config_path=rc,
+            exclusion_zone_config=ez,
             ip=ip,
         )
         log("connected as SafeRobot (safe mode available, starts OFF)")
