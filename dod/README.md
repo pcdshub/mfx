@@ -1,5 +1,6 @@
 # DoD Robot Interface — MFX
 
+Status Aug 6 2026
 This repository contains the Python interface for controlling the Drop-on-Demand (DoD)
 robot and the Colliding Droplet Injector (CoDI) at the MFX beamline. The interface
 communicates with the robot server over HTTP and exposes two classes — `DoD` and `CoDI`
