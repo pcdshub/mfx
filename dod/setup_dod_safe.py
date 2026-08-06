@@ -27,7 +27,7 @@ import importlib.util as _ilu
 # ---------------------------------------------------------------------------
 
 _DOD_DIR = "/cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod"
-_CODI_LOCAL = "/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx/dod/codi.py"
+_CODI_LOCAL = "/cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod/codi.py"
 _ROBOT_CONFIG = (
     "/cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod/safe_motion/RunSetting.rsu.json"
 )
