@@ -1,4 +1,3 @@
-
 import argparse
 import threading
 import tkinter as tk
@@ -14,10 +13,38 @@ from safe_demo import (connect_dod, read_live_position, read_drive_range,
 
 POLL_MS = 1000
 
-# Path to the safe_motion exclusion-zones JSON, for the "Show planned path"
-# plot. Edit this to point at the real file on mezz01. If it's missing, the
-# plot button just opens a small window saying so -- it never crashes the GUI.
-EXCLUSION_ZONES_JSON = "exclusion_zones.json"
+# ---- safe_motion configuration -------------------------------------------
+# EDIT THESE TWO PATHS to point at the real files on mezz01. If either is
+# missing, the GUI falls back to a plain DoD connection (safe mode + the
+# planned-path plot are then disabled, but everything else works normally).
+EXCLUSION_ZONES_JSON = "exclusion_zones.json"        # <-- EDIT: full path on mezz01
+ROBOT_CONFIG_PATH    = "robot_config.json"           # <-- EDIT: INI or .json sidecar
+
+
+def connect_safe_or_plain(ip, log=print):
+    """
+    Try to build a SafeRobot (so safe mode + plot_path are available). If the
+    package or config files aren't there, fall back to a plain DoD so the GUI
+    still opens. Returns (robot, is_safe_robot).
+    """
+    import os
+    try:
+        from safe_motion import SafeRobot
+        if not os.path.exists(EXCLUSION_ZONES_JSON):
+            raise FileNotFoundError("exclusion zones json not found: %s" % EXCLUSION_ZONES_JSON)
+        if not os.path.exists(ROBOT_CONFIG_PATH):
+            raise FileNotFoundError("robot config not found: %s" % ROBOT_CONFIG_PATH)
+        robot = SafeRobot(
+            robot_config_path=ROBOT_CONFIG_PATH,
+            exclusion_zone_config=EXCLUSION_ZONES_JSON,
+            ip=ip,
+        )
+        log("connected as SafeRobot (safe mode available, starts OFF)")
+        return robot, True
+    except Exception as e:
+        log("SafeRobot unavailable (%s) -- using plain DoD" % e)
+        from safe_demo import connect_dod
+        return connect_dod(ip), False
 
 
 class DodGui:
@@ -25,7 +52,7 @@ class DodGui:
         self.root = root
         self.ip = ip
         self.root.title("DoD Robot -- live (%s)" % ip)
-        self.dod = connect_dod(ip)
+        self.dod, self.is_safe_robot = connect_safe_or_plain(ip, log=print)
         self.busy = False
         self.drive_range = None
 
@@ -98,13 +125,22 @@ class DodGui:
                         variable=self.skip_confirm).grid(row=3, column=0, columnspan=2,
                                                          sticky="w", padx=4, pady=(0, 4))
 
+        # ---- safe mode toggle (only meaningful when connected as SafeRobot) ----
+        self.safe_mode = tk.BooleanVar(value=False)
+        self.safe_chk = ttk.Checkbutton(
+            gf, text="Safe mode (obstacle-avoiding moves via safe_motion)",
+            variable=self.safe_mode, command=self.toggle_safe_mode)
+        self.safe_chk.grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=(0, 4))
+        if not getattr(self, "is_safe_robot", False):
+            self.safe_chk.state(["disabled"])
+
         self.go_btn = tk.Button(gf, text="RUN TASK", bg="#2e7d32", fg="white",
                                 font=("Segoe UI", 12, "bold"), height=2, width=15,
                                 command=self.run_selected_task)
         self.go_btn.grid(row=0, column=2, rowspan=3, padx=8, pady=6)
 
-        # ---- safe-motion path preview (read-only) ----
-        ttk.Label(gf, text="target X,Y (um):").grid(row=4, column=0, padx=4, pady=(6, 4), sticky="e")
+        # ---- safe-motion path preview (opens Sebastian's matplotlib plot) ----
+        ttk.Label(gf, text="target position:").grid(row=4, column=0, padx=4, pady=(6, 4), sticky="e")
         self.plan_target = tk.StringVar()
         ttk.Entry(gf, textvariable=self.plan_target, width=18).grid(
             row=4, column=1, sticky="w", padx=4, pady=(6, 4))
@@ -413,31 +449,53 @@ class DodGui:
             self.busy = False
             self.go_btn.config(state="normal")
 
-    def show_path(self):
-        """Open the read-only safe-motion path plot (Sebastian's planner geometry)."""
-        try:
-            from path_plot import open_path_plot
-        except Exception as e:
-            self.log("path plot unavailable: %s" % e)
+    def toggle_safe_mode(self):
+        """Turn safe_mode on/off on the SafeRobot. No-op on a plain DoD."""
+        if not getattr(self, "is_safe_robot", False):
+            self.log("safe mode needs SafeRobot -- not available on this connection.")
+            self.safe_mode.set(False)
+            return
+        want = self.safe_mode.get()
+        # if a divergence locked safe mode, don't silently re-enable
+        if want and getattr(self.dod, "safe_mode_locked", False):
+            self.log("*** safe mode is LOCKED after a position divergence. ***")
+            self.log("    verify the robot, then acknowledge the divergence before re-enabling.")
+            self.safe_mode.set(False)
             return
         try:
-            here = read_live_position(self.dod)
-            start = (here["X"], here["Y"])
+            self.dod.safe_mode = want
+            self.log("safe mode %s" % ("ON -- moves are obstacle-checked" if want
+                                       else "OFF -- passthrough to DoD"))
         except Exception as e:
-            self.log("could not read position for plot: %s" % e)
-            start = None
-        goal = None
-        raw = self.plan_target.get().strip()
-        if raw:
+            self.log("could not set safe mode: %s" % e)
+            self.safe_mode.set(False)
+
+    def show_path(self):
+        """
+        Open Sebastian's real matplotlib path preview via SafeRobot.plot_path().
+        The target is a POSITION NAME (must be in the registry), e.g. 'Home'.
+        Start defaults to the robot's live position.
+        """
+        if not getattr(self, "is_safe_robot", False):
+            self.log("planned-path plot needs SafeRobot -- check the config paths "
+                     "at the top of dod_gui.py (safe_motion + exclusion_zones.json).")
+            return
+        target = self.plan_target.get().strip()
+        if not target:
+            self.log("type a target POSITION NAME first (e.g. Home, CameraStation) "
+                     "-- it must exist in the registry.")
+            return
+        self.log("opening path preview to '%s' (matplotlib window; close it to continue)" % target)
+
+        def _worker():
             try:
-                parts = raw.replace(" ", "").split(",")
-                goal = (float(parts[0]), float(parts[1]))
-            except Exception:
-                self.log("target must be 'X,Y' in um, e.g. 100000,40000")
-                return
-        self.log("opening path plot%s" % (" to %s" % (goal,) if goal else ""))
-        open_path_plot(self.root, EXCLUSION_ZONES_JSON, start=start, goal=goal,
-                       target_name=(raw if raw else None))
+                self.dod.plot_path(target)     # start defaults to live position
+            except KeyError:
+                self.log("'%s' is not in the registry -- check the exact position name." % target)
+            except Exception as e:
+                self.log("plot failed: %s" % e)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def run_selected_task(self):
         if self.busy:
