@@ -16,6 +16,8 @@ import random
 import csv
 from datetime import datetime
 
+VALID_NOZZLES = (1, 2, 3, 4)
+
 
 def save_results_csv(records, kind="routine"):
     """Save a list of result dicts to a timestamped CSV file. Returns the filename."""
@@ -125,6 +127,298 @@ def wash_cycle(dod, log=_noop, task="WashFlush_Medium"):
     log(f"[wash] ran {task}")
     log("[wash] complete")
     return {"ok": True}
+
+def flush_nozzles(
+        dod,
+        channels,
+        task="WashFlush_Medium",
+        go_to_wash=True,
+        restore_state=True,
+        log=_noop):
+    """
+    Activate the nozzles selected in the GUI popup as one group, run the
+    selected WashFlush task once, and restore the original nozzle state.
+
+    `go_to_wash` is retained for compatibility with existing callers. The
+    WashFlush task is responsible for its own physical wash sequence.
+    """
+
+    # Validate and normalize the popup selection.
+    try:
+        selected_nozzles = sorted({int(ch) for ch in channels})
+    except (TypeError, ValueError) as exc:
+        reason = f"invalid nozzle selection: {exc}"
+        log(f"[flush] ABORT: {reason}")
+        return {
+            "ok": False,
+            "stage": "validation",
+            "reason": reason,
+            "task": task,
+        }
+
+    if not selected_nozzles:
+        reason = "no nozzles selected"
+        log(f"[flush] ABORT: {reason}")
+        return {
+            "ok": False,
+            "stage": "validation",
+            "reason": reason,
+            "task": task,
+        }
+
+    invalid = [
+        ch for ch in selected_nozzles
+        if ch not in VALID_NOZZLES
+    ]
+
+    if invalid:
+        reason = (
+            f"channels {invalid} are invalid; "
+            f"valid nozzles are {list(VALID_NOZZLES)}"
+        )
+        log(f"[flush] ABORT: {reason}")
+        return {
+            "ok": False,
+            "stage": "validation",
+            "reason": reason,
+            "task": task,
+        }
+
+    # Save the state that existed before opening/running the flush.
+    previous_active = list(
+        getattr(dod, "activated_nozzles", [])
+    )
+    previous_selected = getattr(dod, "nozzle", None)
+
+    result = {
+        "ok": False,
+        "task": task,
+        "selected_nozzles": selected_nozzles,
+        "previous_active": previous_active,
+        "previous_selected": previous_selected,
+    }
+
+    restore_errors = []
+
+    try:
+        # Never dispense while nozzle state is changing or washing.
+        dod.dispense_off()
+        log("[flush] dispensing OFF")
+
+        # Activate all popup-selected nozzles together before the task.
+        try:
+            activation_result = dod.set_nozzle_active(
+                selected_nozzles
+            )
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"
+            result.update({
+                "stage": "activation",
+                "reason": reason,
+            })
+            log(f"[flush] ACTIVATION FAILED: {reason}")
+            return result
+
+        if (
+            activation_result is False
+            or (
+                isinstance(activation_result, dict)
+                and activation_result.get("ok") is False
+            )
+        ):
+            reason = (
+                activation_result.get("reason")
+                if isinstance(activation_result, dict)
+                else None
+            )
+
+            reason = reason or "failed to activate selected nozzles"
+
+            result.update({
+                "stage": "activation",
+                "reason": reason,
+                "activation_result": activation_result,
+            })
+
+            log(f"[flush] ACTIVATION FAILED: {reason}")
+            return result
+
+        log(
+            "[flush] activated popup-selected nozzles: "
+            f"{selected_nozzles}"
+        )
+
+        # The WashFlush task owns its internal movement and wash sequence.
+        # Do not attempt to move to the undefined WashStation1 position.
+        if go_to_wash:
+            log(
+                "[flush] wash-station positioning is handled by "
+                f"the robot task {task!r}"
+            )
+
+        available_tasks = getattr(dod, "available_tasks", None)
+
+        if (
+            available_tasks is not None
+            and task not in available_tasks
+        ):
+            reason = f"task {task!r} is not available"
+
+            result.update({
+                "stage": "task_lookup",
+                "reason": reason,
+            })
+
+            log(f"[flush] ABORT: {reason}")
+            return result
+
+        # Run the selected wash task once with the popup-selected nozzles active.
+        try:
+            task_result = dod.run_task(task)
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"
+
+            result.update({
+                "stage": "task",
+                "reason": reason,
+            })
+
+            log(f"[flush] TASK FAILED: {task} -- {reason}")
+            return result
+
+        task_failed = (
+            task_result is False
+            or (
+                isinstance(task_result, dict)
+                and task_result.get("ok") is False
+            )
+        )
+
+        if task_failed:
+            reason = (
+                task_result.get("reason")
+                if isinstance(task_result, dict)
+                else None
+            )
+
+            reason = reason or f"task {task!r} returned failure"
+
+            result.update({
+                "stage": "task",
+                "reason": reason,
+                "task_result": task_result,
+            })
+
+            log(f"[flush] TASK FAILED: {task} -- {reason}")
+            return result
+
+        result.update({
+            "ok": True,
+            "stage": "complete",
+            "task_result": task_result,
+        })
+
+        log(
+            f"[flush] completed {task} with active nozzles "
+            f"{selected_nozzles}"
+        )
+
+        return result
+
+    finally:
+        # This restoration runs after task success, failure, or exception.
+        try:
+            dod.dispense_off()
+        except Exception as exc:
+            restore_errors.append(
+                "dispense_off failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+        if restore_state:
+            try:
+                # Restore the exact activation set from before the flush.
+                restore_result = dod.set_nozzle_active(
+                    previous_active
+                )
+
+                restore_failed = (
+                    restore_result is False
+                    or (
+                        isinstance(restore_result, dict)
+                        and restore_result.get("ok") is False
+                    )
+                )
+
+                if restore_failed:
+                    reason = (
+                        restore_result.get("reason")
+                        if isinstance(restore_result, dict)
+                        else None
+                    )
+
+                    restore_errors.append(
+                        reason or
+                        "failed to restore activated nozzles"
+                    )
+
+                # Reselect the originally selected nozzle when it was active.
+                elif previous_selected in previous_active:
+                    select_result = dod.select_nozzle(
+                        previous_selected
+                    )
+
+                    select_failed = (
+                        select_result is False
+                        or (
+                            isinstance(select_result, dict)
+                            and select_result.get("ok") is False
+                        )
+                    )
+
+                    if select_failed:
+                        reason = (
+                            select_result.get("reason")
+                            if isinstance(select_result, dict)
+                            else None
+                        )
+
+                        restore_errors.append(
+                            reason or
+                            "failed to restore selected nozzle"
+                        )
+
+            except Exception as exc:
+                restore_errors.append(
+                    "state restoration failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+
+        result["restored_active"] = list(
+            getattr(dod, "activated_nozzles", [])
+        )
+        result["restored_selected"] = getattr(
+            dod,
+            "nozzle",
+            None,
+        )
+        result["restore_ok"] = not restore_errors
+
+        if restore_errors:
+            result["restore_errors"] = restore_errors
+            result["ok"] = False
+            result["stage"] = "restore"
+
+            log(
+                "[flush] RESTORE FAILED: "
+                + "; ".join(restore_errors)
+            )
+        else:
+            log(
+                "[flush] restored original nozzle state: "
+                f"active={previous_active}, "
+                f"selected={previous_selected}"
+            )
 
 
 def well_sequence(n, row="A", start=1):
