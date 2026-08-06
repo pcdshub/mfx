@@ -42,7 +42,7 @@ def _client_do(dod, fn, *args):
 
 
 # ---------------------------------------------------------------------------
-# READS -- never move anything, never invent a value
+# just reads it never moves anything, never invents a value
 # ---------------------------------------------------------------------------
 def read_live_position(dod, verbose=False):
     r = dod.get_current_position()
@@ -85,12 +85,6 @@ def read_task_names(dod):
 
 
 def read_pulse_names(dod):
-    """
-    The robot's list of PULSE SHAPE names, e.g. 'sciPULSE_ST40', 'VISC01'.
-    The pulse parameter is a NAME from this list (for sciPULSE channels), not a
-    plain number. Tries dod.get_pulse_names() first, then the raw client call
-    wrapped in connect/disconnect.
-    """
     r = None
     if hasattr(dod, "get_pulse_names"):
         r = dod.get_pulse_names()
@@ -435,23 +429,9 @@ def parse_nozzle_params(ns):
                        "freq": str(row[3]).strip()}
     return out
 
-
 def set_nozzle_params(dod, nozzle, volts=None, pulse=None, frequency=None,
                       dry_run=True, log=print, confirm=_terminal_confirm):
-    """
-    Set voltage / pulse / frequency for ONE nozzle, using the robot's real
-    per-parameter methods (each does its own read-merge-write internally):
-        dod.set_nozzle_voltage(nozzle, volt)
-        dod.set_nozzle_pulse(nozzle, pulse)
-        dod.set_nozzle_freq(nozzle, freq)
 
-    Only the parameters you pass are changed; the others are left alone.
-
-    PULSE RULE (from the robot source):
-      - channels 1 and 2 take a NAMED pulse shape (e.g. 'sciPULSE_LV01')
-      - all other channels take a NUMERIC string (e.g. '48')
-      Channels 1-2 also take ~5 s to load the waveform (the robot method waits).
-    """
     try:
         ch = int(nozzle)
     except (TypeError, ValueError):
@@ -509,9 +489,6 @@ def set_nozzle_params(dod, nozzle, volts=None, pulse=None, frequency=None,
             log("   %s set -> %s" % (label, _readable(r)))
         return {"ok": True}
 
-    # ---- FALLBACK: this robot only has the raw client.set_nozzle_parameters.
-    # One call sets everything, so fill unspecified fields from the nozzle's
-    # CURRENT values so we don't wipe them.
     log("   (this robot has no per-parameter setters -- using "
         "set_nozzle_parameters instead)")
     try:
