@@ -1,6 +1,14 @@
 import argparse
 import sys
 
+VALID_NOZZLES = ("1", "2", "3", "4")
+
+DEFAULT_WASH_TASKS = (
+    "WashFlush_Medium",
+    "WashFlush_Light_Narrow",
+    "WashFlush_Strong_Narrow",
+)
+
 
 def connect_dod(ip):
     from dod.dod import DoD
@@ -23,6 +31,19 @@ def _readable(r):
                 return str(v[key])
         return "ok"
     return "ok" if v is not None else "no reply"
+
+
+def _call_failed(result):
+    """True for the explicit failure formats these wrappers use."""
+    return result is False or (
+        isinstance(result, dict) and result.get("ok") is False
+    )
+
+
+def _call_reason(result, fallback):
+    if isinstance(result, dict):
+        return result.get("reason") or fallback
+    return fallback
 
 
 def _client_do(dod, fn, *args):
@@ -337,6 +358,73 @@ def read_activated_nozzles(dod):
         if s and s.lower() not in ("false",):
             out.append(s)
     return out
+
+
+def read_selected_nozzle(dod):
+    """Return the currently selected nozzle as a string, or None."""
+    ns = dod.get_nozzle_status()
+    if not isinstance(ns, dict):
+        raise RuntimeError("nozzle status is %s, not a dict" % type(ns))
+
+    selected = ns.get("Selected Nozzles")
+    if selected is None:
+        selected = ns.get("Selected Nozzle")
+
+    _bad = ("false", "none", "na", "n/a", "0")
+    if isinstance(selected, (list, tuple)):
+        for value in selected:
+            text = str(value).strip()
+            if text and text.lower() not in _bad:
+                return text
+        return None
+    if selected is not None:
+        text = str(selected).strip()
+        if text and text.lower() not in _bad:
+            return text
+
+    fallback = getattr(dod, "nozzle", None)
+    return None if fallback is None else str(fallback)
+
+
+def set_activated_nozzles(dod, channels, dry_run=True, log=print):
+    """Replace the robot's complete activated-nozzle group."""
+    try:
+        normalized = sorted({str(int(c)) for c in channels})
+    except (TypeError, ValueError) as exc:
+        reason = "invalid nozzle selection: %s" % exc
+        log(reason)
+        return {"ok": False, "reason": reason}
+
+    if not normalized:
+        log("no nozzles selected")
+        return {"ok": False, "reason": "no nozzles selected"}
+
+    invalid = [c for c in normalized if c not in VALID_NOZZLES]
+    if invalid:
+        reason = "invalid nozzles %s; valid nozzles are %s" % (
+            invalid, list(VALID_NOZZLES))
+        log(reason)
+        return {"ok": False, "reason": reason}
+
+    log("=== SET ACTIVATED NOZZLES: %s ===" % normalized)
+    if dry_run:
+        log("[DRY RUN] would activate nozzles %s" % normalized)
+        return {"ok": True, "dry_run": True, "channels": normalized}
+
+    setter = getattr(dod, "set_nozzle_active", None)
+    if setter is None:
+        reason = "connected DoD client does not provide set_nozzle_active()"
+        log(reason)
+        return {"ok": False, "reason": reason}
+
+    raw = setter([int(c) for c in normalized])
+    if _call_failed(raw):
+        reason = _call_reason(raw, "failed to set activated nozzles")
+        log(reason)
+        return {"ok": False, "reason": reason, "result": raw}
+
+    log("   activated nozzles -> %s" % _readable(raw))
+    return {"ok": True, "channels": normalized, "result": raw}
 
 
 def set_dispensing(dod, mode, dry_run=True, log=print, confirm=_terminal_confirm):
@@ -671,6 +759,87 @@ def run_task(dod, task, dry_run=True, log=print, confirm=_terminal_confirm):
         log("   could not read status: %s" % e)
     log("task complete.")
     return {"ok": True}
+
+
+def flush_nozzles(dod, channels, task="WashFlush_Medium",
+                  dry_run=True, restore_state=True,
+                  log=print, confirm=_terminal_confirm):
+    """Activate selected nozzles, run a wash task, and restore original state."""
+    try:
+        normalized = sorted({str(int(ch)) for ch in channels})
+    except (TypeError, ValueError) as exc:
+        reason = "invalid nozzle selection: %s" % exc
+        log("[flush] ABORT: %s" % reason)
+        return {"ok": False, "stage": "validation", "reason": reason, "task": task}
+
+    if not normalized:
+        reason = "no nozzles selected"
+        log("[flush] ABORT: %s" % reason)
+        return {"ok": False, "stage": "validation", "reason": reason, "task": task}
+
+    invalid = [ch for ch in normalized if ch not in VALID_NOZZLES]
+    if invalid:
+        reason = "invalid nozzles %s; valid nozzles are %s" % (
+            invalid, list(VALID_NOZZLES))
+        log("[flush] ABORT: %s" % reason)
+        return {"ok": False, "stage": "validation", "reason": reason, "task": task}
+
+    if not preflight(dod, None, task=task, log=log):
+        return {"ok": False, "stage": "preflight", "reason": "preflight failed", "task": task}
+
+    previous_active = read_activated_nozzles(dod)
+    previous_selected = read_selected_nozzle(dod)
+
+    result = {
+        "ok": False,
+        "task": task,
+        "selected_nozzles": normalized,
+        "previous_active": previous_active,
+        "previous_selected": previous_selected,
+    }
+
+    try:
+        r = set_dispensing(dod, "Off", dry_run=dry_run, log=log, confirm=confirm)
+        if _call_failed(r):
+            result.update({"stage": "dispensing_off", "reason": _call_reason(r, "failed to turn dispensing off"), "result": r})
+            return result
+
+        r = set_activated_nozzles(dod, normalized, dry_run=dry_run, log=log)
+        if _call_failed(r):
+            result.update({"stage": "activation", "reason": _call_reason(r, "failed to set activated nozzles"), "result": r})
+            return result
+
+        r = run_task(dod, task, dry_run=dry_run, log=log, confirm=confirm)
+        if _call_failed(r):
+            result.update({"stage": "run_task", "reason": _call_reason(r, "failed to run task"), "result": r})
+            return result
+
+        result["ok"] = True
+        result["result"] = r
+        return result
+    finally:
+        if restore_state:
+            restore_ok = True
+            restore_errors = []
+
+            r = set_activated_nozzles(dod, previous_active, dry_run=dry_run, log=log)
+            if _call_failed(r):
+                restore_ok = False
+                restore_errors.append(_call_reason(r, "failed to restore activated nozzles"))
+
+            if previous_selected is not None:
+                r = select_nozzle(dod, previous_selected, dry_run=dry_run, log=log, confirm=confirm)
+                if _call_failed(r):
+                    restore_ok = False
+                    restore_errors.append(_call_reason(r, "failed to restore selected nozzle"))
+
+            r = set_dispensing(dod, "Off", dry_run=dry_run, log=log, confirm=confirm)
+            if _call_failed(r):
+                restore_ok = False
+                restore_errors.append(_call_reason(r, "failed to turn dispensing off after restore"))
+
+            result["restore_ok"] = restore_ok
+            result["restore_errors"] = restore_errors
 
 
 # ---------------------------------------------------------------------------

@@ -152,10 +152,6 @@ class ControlGUI:
         ttk.Button(rtf, text="Region Check", command=self.run_region).grid(row=3, column=3, columnspan=2, padx=3)
         ttk.Button(rtf, text="Verify Positions", command=self.run_verify).grid(row=3, column=5, padx=3)
 
-        # flush/wash selected nozzles -- opens a pop-up to pick nozzles
-        ttk.Button(rtf, text="Flush Nozzles...", command=self.open_flush_dialog
-               ).grid(row=5, column=0, columnspan=2, padx=3, pady=(6, 2), sticky="w")
-
         # realistic task timing toggle -- affects how long routines take, so it
         # lives with the routines. ON = tasks take their real duration.
         self.realistic = tk.BooleanVar(value=not self.dod.fast)
@@ -282,57 +278,6 @@ class ControlGUI:
     def run_verify(self):
         self._threaded(lambda: self._report(R.verify_positions(self.dod, log=self.log)))
 
-    def open_flush_dialog(self):                                              # <-- NEW (whole method)
-        """Pop-up window to select which nozzles to flush and which wash task."""
-        win = tk.Toplevel(self.root)
-        win.title("Flush / Wash Nozzles")
-        win.transient(self.root)
-        win.grab_set()
-        win.resizable(False, False)
-
-        ttk.Label(win, text="Select nozzles to flush:",
-                  font=("Arial", 10, "bold")).grid(row=0, column=0, columnspan=4,
-                                                    sticky="w", padx=8, pady=(8, 2))
-        sel = {}
-        cf = ttk.Frame(win); cf.grid(row=1, column=0, columnspan=4, padx=8)
-        for ch in R.VALID_NOZZLES:
-            var = tk.BooleanVar(value=False)
-            sel[ch] = var
-            ttk.Checkbutton(cf, text=str(ch), variable=var).pack(side="left")
-
-        bf = ttk.Frame(win); bf.grid(row=2, column=0, columnspan=8, sticky="w", padx=8, pady=2)
-        ttk.Button(bf, text="All", width=6,
-                   command=lambda: [v.set(True) for v in sel.values()]).pack(side="left")
-        ttk.Button(bf, text="None", width=6,
-                   command=lambda: [v.set(False) for v in sel.values()]).pack(side="left")
-        ttk.Button(bf, text="Activated", width=10,
-                   command=lambda: [sel[c].set(c in self.dod.activated_nozzles)
-                                    for c in sel]).pack(side="left")
-
-        ttk.Label(win, text="Wash task:").grid(row=3, column=0, columnspan=2,
-                                               sticky="e", padx=8, pady=(6, 2))
-        task_var = tk.StringVar(value="WashFlush_Medium")
-        ttk.Combobox(win, textvariable=task_var,
-                     values=["WashFlush_Medium", "WashFlush_Light_Narrow",
-                             "WashFlush_Strong_Narrow"],
-                     width=24, state="readonly").grid(row=3, column=2, columnspan=6,
-                                                       sticky="w", padx=4, pady=(6, 2))
-
-        def start():
-            channels = [ch for ch, v in sel.items() if v.get()]
-            if not channels:
-                messagebox.showwarning("Flush", "Select at least one nozzle.",
-                                       parent=win)
-                return
-            task = task_var.get()
-            win.destroy()
-            self._threaded(lambda: self._report(
-                R.flush_nozzles(self.dod, channels, task=task, log=self.log)))
-
-        af = ttk.Frame(win); af.grid(row=4, column=0, columnspan=8, pady=8)
-        ttk.Button(af, text="Start Flush", command=start).pack(side="left", padx=6)
-        ttk.Button(af, text="Cancel", command=win.destroy).pack(side="left", padx=6)
-                                                                              # <-- NEW ends here
     def _report(self, result):
         self.log(f"result: {result}")
         self._refresh()

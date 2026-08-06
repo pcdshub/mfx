@@ -5,11 +5,14 @@ from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
 # every robot call comes from safe_demo -- nothing is reimplemented here
-from safe_demo import (connect_dod, read_live_position, read_drive_range,
-                       read_task_names, preflight,
-                       run_task, describe_task, jog_axis, set_nozzle_params, task_risk,
-                       read_activated_nozzles, select_nozzle, set_dispensing,
-                       read_pulse_names)
+from safe_demo import (
+    connect_dod, read_live_position, read_drive_range,
+    read_task_names, preflight,
+    run_task, describe_task, jog_axis, set_nozzle_params, task_risk,
+    read_activated_nozzles, select_nozzle, set_dispensing,
+    read_pulse_names,
+    flush_nozzles, VALID_NOZZLES, DEFAULT_WASH_TASKS,
+)
 
 POLL_MS = 1000
 
@@ -265,6 +268,14 @@ class DodGui:
                  fg="#b71c1c", font=("Segoe UI", 9)).grid(row=2, column=4, columnspan=6,
                                                        sticky="w", padx=6, pady=(2, 6))
 
+        # flush / wash selected nozzles
+        self.flush_btn = tk.Button(
+            nf, text="Flush Nozzles...", bg="#1565c0", fg="white",
+            font=("Segoe UI", 10, "bold"),
+            command=self.open_flush_dialog)
+        self.flush_btn.grid(row=3, column=0, columnspan=3,
+                            sticky="w", padx=6, pady=(2, 6))
+
         lf = ttk.LabelFrame(self.root, text="Log")
         lf.grid(row=4, column=0, columnspan=2, sticky="nsew", **pad)
         self.logbox = scrolledtext.ScrolledText(lf, width=82, height=22, font=("Consolas", 13), borderwidth=0,
@@ -274,6 +285,103 @@ class DodGui:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(4, weight=1)
         self.log("connected to %s" % self.ip)
+
+    def open_flush_dialog(self):
+        """Pop-up to pick nozzles + wash task, then start the flush."""
+        if self.busy:
+            self.log("busy -- ignoring flush request")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Flush / Wash Nozzles")
+        win.transient(self.root)
+        win.grab_set()
+        win.resizable(False, False)
+
+        ttk.Label(win, text="Select nozzles to flush:",
+                  font=self._font_ui_b).grid(row=0, column=0, columnspan=4,
+                                             sticky="w", padx=8, pady=(8, 2))
+        sel = {}
+        cf = ttk.Frame(win); cf.grid(row=1, column=0, columnspan=4, padx=8)
+        armed = read_activated_nozzles(self.dod)
+        for ch in VALID_NOZZLES:
+            var = tk.BooleanVar(value=False)
+            sel[ch] = var
+            ttk.Checkbutton(cf, text=ch, variable=var).pack(side="left")
+
+        bf = ttk.Frame(win); bf.grid(row=2, column=0, columnspan=8,
+                                     sticky="w", padx=8, pady=2)
+        ttk.Button(bf, text="All", width=6,
+                   command=lambda: [v.set(True) for v in sel.values()]
+                   ).pack(side="left")
+        ttk.Button(bf, text="None", width=6,
+                   command=lambda: [v.set(False) for v in sel.values()]
+                   ).pack(side="left")
+        ttk.Button(bf, text="Activated", width=10,
+                   command=lambda: [sel[c].set(c in armed) for c in sel]
+                   ).pack(side="left")
+
+        ttk.Label(win, text="Wash task:").grid(row=3, column=0, columnspan=2,
+                                               sticky="e", padx=8, pady=(6, 2))
+        task_var = tk.StringVar(value=DEFAULT_WASH_TASKS[0])
+        ttk.Combobox(win, textvariable=task_var, values=list(DEFAULT_WASH_TASKS),
+                     width=24, state="readonly").grid(row=3, column=2, columnspan=6,
+                                                       sticky="w", padx=4, pady=(6, 2))
+
+        def start():
+            channels = [ch for ch, v in sel.items() if v.get()]
+            if not channels:
+                messagebox.showwarning("Flush", "Select at least one nozzle.",
+                                       parent=win)
+                return
+            task = task_var.get()
+            win.destroy()
+            self.start_flush(channels, task)
+
+        af = ttk.Frame(win); af.grid(row=4, column=0, columnspan=8, pady=8)
+        ttk.Button(af, text="Start Flush", command=start).pack(side="left", padx=6)
+        ttk.Button(af, text="Cancel", command=win.destroy).pack(side="left", padx=6)
+
+    def start_flush(self, channels, task):
+        """Launch safe_demo.flush_nozzles in a worker thread."""
+        if self.busy:
+            self.log("busy -- ignoring flush request")
+            return
+        dry_run = bool(self.dry.get())
+        self.busy = True
+        self.go_btn.config(state="disabled")
+        self.flush_btn.config(state="disabled")
+        threading.Thread(target=self._flush_worker,
+                         args=(channels, task, dry_run), daemon=True).start()
+
+    def _flush_worker(self, channels, task, dry_run):
+        try:
+            result = flush_nozzles(self.dod, channels, task=task,
+                                   dry_run=dry_run, restore_state=True,
+                                   log=self.log, confirm=self.confirm)
+            self.log("[flush] result: %s" % result)
+        except Exception as exc:
+            self.log("FLUSH FAILED: %s: %s" % (type(exc).__name__, exc))
+        finally:
+            self.root.after(0, self._finish_flush)
+
+    def _finish_flush(self):
+        self.busy = False
+        self.go_btn.config(state="normal")
+        self.flush_btn.config(state="normal")
+        try:
+            active = read_activated_nozzles(self.dod)
+            current = self.nozzle.get().strip()
+            self.nozzle_box["values"] = active
+            if current in active:
+                self.nozzle.set(current)
+            elif active:
+                self.nozzle.set(active[0])
+            else:
+                self.nozzle.set("")
+            self._on_nozzle_change()
+        except Exception as exc:
+            self.log("could not refresh nozzles after flush: %s" % exc)
 
     def log(self, msg):
         """The `log` callback safe_demo's routine writes into."""
