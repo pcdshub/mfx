@@ -3,7 +3,7 @@ setup_dod_safe.py — DoD + CoDI + SafeRobot session setup for MFX hutch.
 
 Run at the start of a hutch-python session:
 
-    %run /sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx/dod/setup_dod_safe.py
+    %run /cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod/setup_dod_safe.py
 
 After running, the following objects are available in your namespace:
 
@@ -26,12 +26,12 @@ import importlib.util as _ilu
 # Configuration
 # ---------------------------------------------------------------------------
 
-_DOD_DIR = "/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx/dod"
-_CODI_LOCAL = "/sdf/home/d/dehe/Ops_supp/Hutch_python/codi.py"
+_DOD_DIR = "/cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod"
+_CODI_LOCAL = "/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx/dod/codi.py"
 _ROBOT_CONFIG = (
-    "/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx/dod/safe_motion/RunSetting.rsu.json"
+    "/cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod/safe_motion/RunSetting.rsu.json"
 )
-_EXCLUSION_ZONES = "/sdf/home/d/dehe/Ops_supp/MFX_Hutch_Python/mfx/dod/safe_motion/exclusion_zones.json"
+_EXCLUSION_ZONES = "/cds/home/d/dehe/Documents/MFX_Hutch_Python/mfx/dod/safe_motion/exclusion_zones.json"
 _IP = "172.21.39.172"
 _LOG = "/tmp/dod.log"
 
