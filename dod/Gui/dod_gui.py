@@ -1,3 +1,4 @@
+
 import argparse
 import threading
 import tkinter as tk
@@ -12,6 +13,11 @@ from safe_demo import (connect_dod, read_live_position, read_drive_range,
                        read_pulse_names)
 
 POLL_MS = 1000
+
+# Path to the safe_motion exclusion-zones JSON, for the "Show planned path"
+# plot. Edit this to point at the real file on mezz01. If it's missing, the
+# plot button just opens a small window saying so -- it never crashes the GUI.
+EXCLUSION_ZONES_JSON = "exclusion_zones.json"
 
 
 class DodGui:
@@ -96,6 +102,15 @@ class DodGui:
                                 font=("Segoe UI", 12, "bold"), height=2, width=15,
                                 command=self.run_selected_task)
         self.go_btn.grid(row=0, column=2, rowspan=3, padx=8, pady=6)
+
+        # ---- safe-motion path preview (read-only) ----
+        ttk.Label(gf, text="target X,Y (um):").grid(row=4, column=0, padx=4, pady=(6, 4), sticky="e")
+        self.plan_target = tk.StringVar()
+        ttk.Entry(gf, textvariable=self.plan_target, width=18).grid(
+            row=4, column=1, sticky="w", padx=4, pady=(6, 4))
+        tk.Button(gf, text="Show planned path", bg="#1565c0", fg="white",
+                  font=("Segoe UI", 10, "bold"), command=self.show_path).grid(
+                      row=4, column=2, padx=8, pady=(6, 4))
 
         # ---- jog panel ----
         jf = ttk.LabelFrame(self.root, text="Jog (raw move -- no safety check)")
@@ -397,6 +412,32 @@ class DodGui:
         finally:
             self.busy = False
             self.go_btn.config(state="normal")
+
+    def show_path(self):
+        """Open the read-only safe-motion path plot (Sebastian's planner geometry)."""
+        try:
+            from path_plot import open_path_plot
+        except Exception as e:
+            self.log("path plot unavailable: %s" % e)
+            return
+        try:
+            here = read_live_position(self.dod)
+            start = (here["X"], here["Y"])
+        except Exception as e:
+            self.log("could not read position for plot: %s" % e)
+            start = None
+        goal = None
+        raw = self.plan_target.get().strip()
+        if raw:
+            try:
+                parts = raw.replace(" ", "").split(",")
+                goal = (float(parts[0]), float(parts[1]))
+            except Exception:
+                self.log("target must be 'X,Y' in um, e.g. 100000,40000")
+                return
+        self.log("opening path plot%s" % (" to %s" % (goal,) if goal else ""))
+        open_path_plot(self.root, EXCLUSION_ZONES_JSON, start=start, goal=goal,
+                       target_name=(raw if raw else None))
 
     def run_selected_task(self):
         if self.busy:
