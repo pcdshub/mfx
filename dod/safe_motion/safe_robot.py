@@ -282,6 +282,7 @@ class SafeRobot(DoD):
 
         print("=" * w)
 
+    @_with_reconnect
     def plot_path(
         self,
         target_name: str,
@@ -505,11 +506,16 @@ class SafeRobot(DoD):
                 "Call acknowledge_divergence() to clear the lock before issuing new moves."
             )
 
+    @_with_reconnect
     def _get_current_xyz(self) -> dict:
         """Query the robot's current real position.
 
         Establishes a connection (idempotent) and returns
         ``{'X': float, 'Y': float, 'Z': float}`` in µm.
+
+        Decorated with ``_with_reconnect`` so that a stale TCP session is
+        recovered at the smallest possible granularity — callers do not need
+        their own reconnect guard solely for this query.
 
         Leaves the connection open for the subsequent super() call.
         """
@@ -592,7 +598,6 @@ class SafeRobot(DoD):
     # Motion overrides
     # ------------------------------------------------------------------
 
-    @_with_reconnect
     def do_move(self, position, safety_test=False, verbose=False, plot=False):
         """Move to a named position, routing through the path planner in safe mode.
 
@@ -603,6 +608,14 @@ class SafeRobot(DoD):
           4. Verify actual position after each waypoint.
 
         Passthrough (safe_mode=False): delegates directly to DoD.do_move().
+
+        ``_with_reconnect`` is intentionally NOT applied here.  The method
+        executes waypoints sequentially; a retry-from-scratch would re-execute
+        already-completed waypoints, potentially commanding the robot backward
+        through the planned path.  Reconnect protection is provided at the
+        appropriate granularity by:
+          - ``_get_current_xyz`` (decorated) for position queries, and
+          - ``super().do_move()`` (DoD, decorated) for each waypoint move.
 
         plot:
             If True, call plot_path(position) before executing.  Displays
