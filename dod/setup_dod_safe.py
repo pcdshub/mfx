@@ -37,7 +37,7 @@ _LOG = "/tmp/dod.log"
 
 # Set True for off-hutch development (uses _MockMotor, no EPICS connections).
 # Set False on-hutch with live hardware.
-_DRYRUN = True
+_DRYRUN = False
 
 # ---------------------------------------------------------------------------
 # sys.path
