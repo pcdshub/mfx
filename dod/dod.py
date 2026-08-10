@@ -1565,8 +1565,11 @@ class DoD:
                 r = self.client.dispensing("Off")
                 time.sleep(0.5)
 
-        self.client.disconnect()
-        return self.get_nozzle_status(verbose=verbose)
+        rr = self.client.disconnect()
+        if verbose:
+            return r
+        else:
+            return r.RESULTS
 
     @_with_reconnect
     def set_led(self, duration, delay, verbose=False):
