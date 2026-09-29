@@ -878,8 +878,8 @@ class BashUtilities:
         logger.info("Opening PPS touch panel (FEH 4-5)")
 
         cmd = (
-            "ssh -t mcclogin "
-            "ssh -t -l pps-feh4-5 lcls-srv02 "
+            "ssh -x mcclogin "
+            "ssh -x -l pps-feh4-5 lcls-srv02 "
             "'edm -eolc -x -noedit "
             '-m "hutch=4,panel=ops,title=Main" '
             "pps_feh45_touchcontrols_main.edl'"
@@ -893,8 +893,10 @@ class BashUtilities:
             subprocess.Popen(
                 cmd,
                 shell=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
             )
         logger.info("PPS touch panel launched")
 
