@@ -878,8 +878,8 @@ class BashUtilities:
         logger.info("Opening PPS touch panel (FEH 4-5)")
 
         cmd = (
-            "ssh -x mcclogin "
-            "ssh -x -l pps-feh4-5 lcls-srv02 "
+            "ssh -tt mcclogin "
+            "ssh -tt -l pps-feh4-5 lcls-srv02 "
             "'edm -eolc -x -noedit "
             '-m "hutch=4,panel=ops,title=Main" '
             "pps_feh45_touchcontrols_main.edl'"
