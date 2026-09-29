@@ -51,6 +51,8 @@ class BashUtilities:
         Analyze focus scan data
     startami(ami_num, daq_num) : None
         Start AMI monitoring interface
+    pps() : None
+        Open remote PPS touch panel (FEH 4-5) via mcclogin/lcls-srv02
 
     Examples
     --------
@@ -148,7 +150,7 @@ class BashUtilities:
             with open(
                 "/cds/home/opr/mfxopr/.cctbx.xfel/settings_old.phil",
                 "r",
-                encoding="UTF-8"
+                encoding="UTF-8",
             ) as f:
                 setting_lines = f.readlines()
 
@@ -175,7 +177,7 @@ class BashUtilities:
                 with open(
                     "/cds/home/opr/mfxopr/.cctbx.xfel/settings.phil",
                     "w",
-                    encoding="UTF-8"
+                    encoding="UTF-8",
                 ) as f:
                     f.writelines(setting_lines)
 
@@ -183,7 +185,7 @@ class BashUtilities:
                 with open(
                     "/cds/home/opr/mfxopr/.cctbx.xfel/settings_old.phil",
                     "w",
-                    encoding="UTF-8"
+                    encoding="UTF-8",
                 ) as f:
                     f.writelines(setting_lines)
 
@@ -200,7 +202,7 @@ class BashUtilities:
                 ],
                 shell=True,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT
+                stderr=subprocess.STDOUT,
             )
             logger.info("XFEL GUI launched successfully")
 
@@ -310,12 +312,13 @@ class BashUtilities:
         logger.info("Pedestal acquisition complete")
 
     def makepeds(
-            self,
-            username: str,
-            run_number: Optional[int] = None,
-            onshift: bool = False,
-            daq_num: int = 2,
-            det: str = 'all'):
+        self,
+        username: str,
+        run_number: Optional[int] = None,
+        onshift: bool = False,
+        daq_num: int = 2,
+        det: str = "all",
+    ):
         """
         Process pedestal data to generate calibration constants.
 
@@ -476,9 +479,7 @@ class BashUtilities:
                 from psdaq.control.DaqControl import DaqControl
 
                 daq.control = DaqControl(
-                    host=daq.control.host,
-                    platform=daq.control.platform,
-                    timeout=10000
+                    host=daq.control.host, platform=daq.control.platform, timeout=10000
                 )
 
                 instr = daq.control.getInstrument()
@@ -487,7 +488,7 @@ class BashUtilities:
                     return
 
                 start_state = daq.control.getState()
-                if start_state == 'error':
+                if start_state == "error":
                     logger.warning("DA is in error state")
                     return
 
@@ -596,16 +597,10 @@ class BashUtilities:
 
         logger.info(f"Executing: {cmd}")
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
-        logger.info(
-            "DAQ restart initiated. "
-            "Wait 1-2 minutes before reconnecting."
-        )
+        logger.info("DAQ restart initiated. Wait 1-2 minutes before reconnecting.")
 
     def stopdaq(self, daq_num: int = 2):
         """
@@ -672,15 +667,12 @@ class BashUtilities:
 
         logger.info(f"Executing: {cmd}")
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("DAQ stop initiated")
 
-    def lecroy(self, res: str = '2560x1440', num: int = 1):
+    def lecroy(self, res: str = "2560x1440", num: int = 1):
         """
         Open LeCroy oscilloscope remote desktop.
 
@@ -736,19 +728,12 @@ class BashUtilities:
         """
         logger.info(f"Opening LeCroy oscilloscope (resolution: {res})")
 
-        cmd = (
-            f"xfreerdp -g {res} "
-            f"-u lecroyuser -p pcds "
-            f"scope-ics-mfx-lecroy0{num}"
-        )
+        cmd = f"xfreerdp -g {res} -u lecroyuser -p pcds scope-ics-mfx-lecroy0{num}"
 
         logger.warning(cmd)
 
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("LeCroy RDP session launched")
@@ -775,15 +760,12 @@ class BashUtilities:
         """
         logger.info("Opening Mirror GUI")
 
-        cmd = ("~seaberg/screens/homs_overview/launcher.sh")
+        cmd = "~seaberg/screens/homs_overview/launcher.sh"
 
         logger.warning(cmd)
 
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("Mirror GUI launched")
@@ -810,15 +792,12 @@ class BashUtilities:
         """
         logger.info("Opening PPM GUI")
 
-        cmd = ("/cds/home/opr/mfxopr/bin/PPM_screen")
+        cmd = "/cds/home/opr/mfxopr/bin/PPM_screen"
 
         logger.warning(cmd)
 
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("PPM GUI launched")
@@ -845,18 +824,79 @@ class BashUtilities:
         """
         logger.info("Killing PPM GUI")
 
-        cmd = ("pkill -9 -f PPM_screen")
+        cmd = "pkill -9 -f PPM_screen"
 
         logger.warning(cmd)
 
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("PPM GUI terminated")
+
+    def pps(self, debug: bool = False):
+        """
+        Open remote PPS touch panel (FEH 4-5) as mfxopr.
+
+        Launches the EDM Personnel Protection System (PPS) touch
+        control panel for FEH hutches 4-5 by SSH-hopping through
+        mcclogin to lcls-srv02 as the pps-feh4-5 service account.
+
+        Parameters
+        ----------
+        debug : bool, optional
+            If True, run blocking in the foreground (os.system).
+            If False (default), run in the background (Popen) with
+            output suppressed.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        SSH Hop Path:
+        - mfxopr -> mcclogin -> lcls-srv02 (as pps-feh4-5)
+
+        Remote Command:
+        edm -eolc -x -noedit -m "hutch=4,panel=ops,title=Main"
+            pps_feh45_touchcontrols_main.edl
+
+        Requirements:
+        - X11 forwarding (ssh -Y/-X) for the EDM GUI to display
+        - SSH access configured for mfxopr -> mcclogin -> lcls-srv02
+          as pps-feh4-5
+
+        Examples
+        --------
+        >>> bs = BashUtilities()
+        >>> bs.pps()
+
+        Blocking (foreground) mode:
+        >>> bs.pps(debug=True)
+        """
+        logger.info("Opening PPS touch panel (FEH 4-5)")
+
+        cmd = (
+            "ssh -t mcclogin "
+            "ssh -t -l pps-feh4-5 lcls-srv02 "
+            "'edm -eolc -x -noedit "
+            '-m "hutch=4,panel=ops,title=Main" '
+            "pps_feh45_touchcontrols_main.edl'"
+        )
+
+        logger.warning(cmd)
+
+        if debug:
+            os.system(cmd)
+        else:
+            subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT
+            )
+        logger.info("PPS touch panel launched")
 
     def grabber(self):
         """
@@ -905,10 +945,7 @@ class BashUtilities:
         cmd = "/reg/g/pcds/engineering_tools/mfx/scripts/eloggrabber"
 
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("Elog grabber launched")
@@ -1017,15 +1054,12 @@ class BashUtilities:
         logger.info("Launching camera viewer")
 
         if pro:
-            cmd = 'bash /cds/home/opr/mfxopr/camViewerPro.sh'
+            cmd = "bash /cds/home/opr/mfxopr/camViewerPro.sh"
         else:
             cmd = "/reg/g/pcds/engineering_tools/latest-released/scripts/camViewer"
 
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
+            cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
         )
 
         logger.info("Camera viewer launched")
@@ -1044,18 +1078,19 @@ class BashUtilities:
             [name, PV_base, description, ...]
         """
         logging.info("Opening Camera List")
-        camlist = open("/reg/g/pcds/pyps/config/mfx/camviewer.cfg", "r", encoding="UTF-8")
+        camlist = open(
+            "/reg/g/pcds/pyps/config/mfx/camviewer.cfg", "r", encoding="UTF-8"
+        )
         cam_list = camlist.readlines()
-        avail_cams = [cam for cam in cam_list if cam.startswith('GE')]
-        self.camera_names = [['camera_name', 'camera_pv']]
+        avail_cams = [cam for cam in cam_list if cam.startswith("GE")]
+        self.camera_names = [["camera_name", "camera_pv"]]
         print("Available Cameras")
         for cam in avail_cams:
-            cam = re.split(';|,', cam)
-            self.camera_names.append([cam[4].strip(),cam[2]])
+            cam = re.split(";|,", cam)
+            self.camera_names.append([cam[4].strip(), cam[2]])
             print(f"Camera {cam[4].strip()} ....  {cam[2]}")
 
         return self.camera_names
-
 
     def camera_list(self):
         """
@@ -1066,26 +1101,31 @@ class BashUtilities:
         """
         camera_names = self.camera_list_out()
 
-
     def focus_scan(self, camera, record=False, daq_num=2):
         logging.info(
             "Preparing for Focus Scan\n"
             "Please check the following\n"
-            "One of the following cameras is selected\n\n")
+            "One of the following cameras is selected\n\n"
+        )
         self.camera_list()
         logging.info(
             "\nCamera orientation set to none\n"
             "Slits are open\n"
             "Blue crosshair in upper left corner\n"
-            "Red crosshair in bottom right corner\n")
+            "Red crosshair in bottom right corner\n"
+        )
 
         input("Press Enter to continue...")
 
         if camera not in [pv[1] for pv in self.camera_names]:
-            logging.error("Desired Camera not in List. Please double check camera name.")
+            logging.error(
+                "Desired Camera not in List. Please double check camera name."
+            )
 
         logging.info("Checking Focus Scan Plot")
-        os.system(f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -p")
+        os.system(
+            f"python /reg/g/pcds/pyps/apps/hutch-python/mfx/scripts/focus_scan.py {camera} -p"
+        )
         input("Press Enter to continue...")
 
         logging.info("Running Focus Scan")
@@ -1099,13 +1139,16 @@ class BashUtilities:
         os.system(cmd)
 
         tfs_position = input(
-            "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: ")
+            "Please enter your desired z-position for the TFS from the plot provided as an interger between 1 and 299: "
+        )
 
         if 0 < int(tfs_position) < 300:
             logging.info(f"Moving TFS to {tfs_position}")
-            os.system(f'caput MFX:TFS:MMS:21.VAL {tfs_position}')
+            os.system(f"caput MFX:TFS:MMS:21.VAL {tfs_position}")
         else:
-            logging.error(f"{tfs_position} is not a valid position please use an interger between 1 and 299")
+            logging.error(
+                f"{tfs_position} is not a valid position please use an interger between 1 and 299"
+            )
 
     def startami(self, ami_num: int = 1, daq_num: int = 1):
         """
@@ -1224,7 +1267,7 @@ class BashUtilities:
 
         logger.info("AMI launched")
 
-    def coyote_gui(self, cfg: str = 'coyote', debug: bool = False):
+    def coyote_gui(self, cfg: str = "coyote", debug: bool = False):
         """
         Launch Coyote GUI with current experiment configuration.
 
@@ -1253,29 +1296,29 @@ class BashUtilities:
 
         logger.warning(cmd)
         logger.warning(
-            'GUI configuration File: '
-            '/cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_assembly/coyote.toml')
+            "GUI configuration File: "
+            "/cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_assembly/coyote.toml"
+        )
         logger.warning(
-            'Chip config folder: '
-            '/cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_chip')
+            "Chip config folder: /cds/group/pcds/epics-dev/zlentz/bsmtraj/cfg_chip"
+        )
 
         if debug:
             os.system(cmd)
 
         else:
             subprocess.Popen(
-                cmd,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.STDOUT
+                cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
             )
         logger.info("Coyote GUI launched successfully")
+
 
 # Convenience instance for direct import
 bs = BashUtilities()
 
 
 # Convenience functions
+
 
 def xfel_gui():
     """Launch CCTBX XFEL GUI. See BashUtilities.xfel_gui()."""
@@ -1288,18 +1331,19 @@ def takepeds(daq_num: int = 2):
 
 
 def makepeds(
-        username: str,
-        run_number: Optional[int] = None,
-        onshift: bool = False,
-        daq_num: int = 2,
-        det: str = 'all'):
+    username: str,
+    run_number: Optional[int] = None,
+    onshift: bool = False,
+    daq_num: int = 2,
+    det: str = "all",
+):
     """Process pedestal data. See BashUtilities.makepeds()."""
     bs.makepeds(
         username=username,
         run_number=run_number,
         onshift=onshift,
         daq_num=daq_num,
-        det=det
+        det=det,
     )
 
 
@@ -1313,7 +1357,7 @@ def stopdaq(daq_num: int = 2):
     bs.stopdaq(daq_num=daq_num)
 
 
-def lecroy(res: str = '2560x1440'):
+def lecroy(res: str = "2560x1440"):
     """Open LeCroy oscilloscope. See BashUtilities.lecroy()."""
     bs.lecroy(res=res)
 
@@ -1346,6 +1390,7 @@ def focus_scan(camera: str, record: bool = False, daq_num: int = 2):
 def startami(ami_num: int = 1, daq_num: int = 1):
     """Start AMI. See BashUtilities.startami()."""
     bs.startami(ami_num=ami_num, daq_num=daq_num)
+
 
 # Module initialization
 logger.info("Bash utilities loaded and ready")
