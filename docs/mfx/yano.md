@@ -1,0 +1,3 @@
+# Yano
+
+::: mfx.yano

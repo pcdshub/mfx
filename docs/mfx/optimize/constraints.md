@@ -1,0 +1,3 @@
+# Constraints
+
+::: mfx.optimize.constraints

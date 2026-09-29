@@ -1,0 +1,3 @@
+# Average
+
+::: scripts.cctbx.average

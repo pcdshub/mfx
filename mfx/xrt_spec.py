@@ -125,7 +125,7 @@ class XRTspec:
         The energy-to-position conversion uses the following relationships:
             crystal_angle = 140.0 - 21.2*E + 1.02*E² + offset
             camera_angle = -1.9 + 2*crystal_angle
-            camera_y = -4.92 - 0.111*E
+            camera_y = -4.72 - 0.111*E
 
         where E is the photon energy in keV.
 
@@ -238,7 +238,7 @@ class XRTspec:
         camera_angle = -1.91 + 2 * crystal_angle
 
         # Calculate camera Y position (energy-dependent height correction)
-        camera_y = -4.92 - 0.111 * energy_keV
+        camera_y = -4.72 - 0.111 * energy_keV
 
         # Alter the crystal_angle without affecting the camera_angle
         if crystal_angle_offset != 0.0:
@@ -283,7 +283,7 @@ class XRTspec:
         Moves crystal angle, camera angle, and camera Y position.
         Formula: crystal_angle = 140.0 - 21.2*E + 1.02*E²
         camera_angle = -1.9 + 2*crystal_angle
-        camera_y = -4.92 - 0.111*E
+        camera_y = -4.72 - 0.111*E
 
         Performs safety check on XRT transmission after move.
         Returns to previous position if alarm detected.
@@ -292,9 +292,9 @@ class XRTspec:
         self.logger.warning(f'Calibrating XRT-Spec for {energy_keV:.3f} keV')
 
         # Stop camera if running
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Acquire':
-            os.system('caput CAMR:FEE1:441:Acquire Done')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Done')
 
         # Store current positions
         ref_crystal_angle = self.hxrsss.th.position
@@ -317,6 +317,32 @@ class XRTspec:
             self.hxrsss.tth.mv(ref_camera_angle)
             self.hxrsss.camy.mv(ref_camera_y)
             self.hxrsss.th.mv(ref_crystal_angle)
+
+    def move_feespec_energy_nonblocking(self, energy_keV, crystal_angle_offset=0.0):
+        """
+        Fire FEE spectrometer moves without waiting for completion.
+
+        Parameters
+        ----------
+        energy_keV : float
+            Target energy in keV
+        crystal_angle_offset : float, optional
+            Offset to add to the calculated crystal angle in degrees (default: 0.0)
+
+        Notes
+        -----
+        Issues non-blocking moves to crystal angle, camera angle, and camera Y.
+        Does NOT stop the camera or perform safety checks — those are deferred
+        to check_feespec_crystal_angle() which runs after the K move settles.
+        Use this to overlap spectrometer motion with the undulator move.
+        """
+        positions = self.get_feespec_positions(
+            energy_keV, crystal_angle_offset=crystal_angle_offset)
+        self.logger.info(
+            f'FEE spec move (non-blocking) to {energy_keV:.3f} keV')
+        self.hxrsss.tth.mv(positions['camera_angle'])
+        self.hxrsss.camy.mv(positions['camera_y'])
+        self.hxrsss.th.mv(positions['crystal_angle'])
 
     def check_feespec_crystal_angle(self, energy_keV, crystal_angle_offset=0.0):
         """
@@ -349,9 +375,9 @@ class XRTspec:
             return
 
         # Stop camera
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Acquire':
-            os.system('caput CAMR:FEE1:441:Acquire Done')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Done')
 
         self.hxrsss.th.umv(positions['crystal_angle'])
 
@@ -362,9 +388,9 @@ class XRTspec:
             self.hxrsss.th.mv(ref_crystal_angle)
 
         # Restart camera
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Done':
-            os.system('caput CAMR:FEE1:441:Acquire Acquire')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
 
     def track_feespec_camera(self, energy_keV, crystal_angle_offset=0.0):
         """
@@ -382,9 +408,9 @@ class XRTspec:
         Starts camera if currently stopped.
         Performs XRT transmission safety check.
         """
-        cam_status = os.popen("caget CAMR:FEE1:441:Acquire | awk '{print $2}'").read().strip()
+        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
         if cam_status == 'Done':
-            os.system('caput CAMR:FEE1:441:Acquire Acquire')
+            os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
 
         ref_camera_angle = self.hxrsss.tth.position
 
@@ -581,7 +607,7 @@ class XRTspec:
         .. [1] FEE Spectrometer calibration documentation (MFX beamline wiki)
         .. [2] XRT transmission monitoring procedures
         """
-        from mfx.db import pp
+        from mfx.db import mfx_pulsepicker
         from mfx.autorun import autorun
         from mfx.macros import get_exp, get_run
 
@@ -648,7 +674,7 @@ class XRTspec:
         # Get initial camera status
         try:
             cam_status = os.popen(
-                "caget CAMR:FEE1:441:Acquire | awk '{print $2}'"
+                "caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'"
             ).read().strip()
             camera_was_running = (cam_status == 'Acquire')
         except Exception as e:
@@ -660,7 +686,7 @@ class XRTspec:
         if record and cam_status != 'Acquire':
             self.logger.info("Starting camera...")
             try:
-                os.system('caput CAMR:FEE1:441:Acquire Acquire')
+                os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
                 sleep(2)  # Wait for camera to start
             except Exception as e:
                 raise RuntimeError(f"Failed to start camera: {e}")
@@ -672,10 +698,10 @@ class XRTspec:
         # Configure pulse picker
         if picker == 'open':
             self.logger.info("Opening pulse picker")
-            pp.open()
+            mfx_pulsepicker.open()
         elif picker == 'flip':
             self.logger.info("Setting pulse picker to flip-flop")
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         # Get starting run number
         run_number = get_run(station=station) + 1
@@ -866,7 +892,7 @@ class XRTspec:
                 cctbx.sshproxy(user)
 
         proc = [
-            f"ssh -Yt {user}@s3dflogin '"
+            f"ssh -Yt {user}@psana.sdf '"
             f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
             f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/energy_calib_output.py "
             f"-f {facility} -t series -e {exp} -r {run} -z {energy} -s {step} -n {num}'"

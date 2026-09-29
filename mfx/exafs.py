@@ -12,15 +12,28 @@ import json
 import logging
 from time import sleep, time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ophyd import EpicsSignalRO
-from pcdsdevices.beam_stats import BeamEnergyRequestACRWait
+try:
+    from ophyd import EpicsSignalRO
+    from pcdsdevices.beam_stats import BeamEnergyRequestACRWait
+    from tfs.sim_transfocator import make_tfs_sim
+    from tfs.transfocator import Transfocator
+    _HW_AVAILABLE = True
+except ImportError:
+    _HW_AVAILABLE = False
 
-from tfs.sim_transfocator import make_tfs_sim
-from tfs.transfocator import Transfocator
+
+class _SimMotor:
+    """Minimal simulated motor for offline testing."""
+    def __init__(self):
+        self.position = 0.0
+
+    def mv(self, value):
+        self.position = float(value)
 
 
 class Exafs:
@@ -61,35 +74,48 @@ class Exafs:
         Vernier device controller
     """
 
-    ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
+    if _HW_AVAILABLE:
+        ipm_sum = EpicsSignalRO("MFX:DG1:W8:01:SUM", name="dg1_sum")
 
-    acr_energy_v = BeamEnergyRequestACRWait(
-        name='acr_energy', prefix='MFX', acr_status_suffix='AO805'
-    )
-    acr_energy_k = BeamEnergyRequestACRWait(
-        name='acr_energy', prefix='MFX', acr_status_suffix='AO805', pv_index=2
-    )
+        acr_energy_v = BeamEnergyRequestACRWait(
+            name='acr_energy', prefix='MFX', acr_status_suffix='AO805'
+        )
+        acr_energy_k = BeamEnergyRequestACRWait(
+            name='acr_energy', prefix='MFX', acr_status_suffix='AO805', pv_index=2
+        )
 
-    def __init__(self):
+    def __init__(self, simulate=False):
         """
         Initialize EXAFS controller.
 
-        Creates logger, initializes DCCM and Vernier controllers,
-        sets up energy range builder, and configures simulation mode.
+        Parameters
+        ----------
+        simulate : bool, optional
+            If True, skip all hardware connections and use mock motors.
+            Allows fully offline instantiation for testing. (default: False)
         """
-        from mfx.dccm import DCCM
-        from hutch_python import sim
-        from mfx.xrt_spec import XRTspec
-        self.xrtspec = XRTspec()
         self.logger = logging.getLogger(__name__)
-        self.dccm = DCCM(name='DCCM')
+        self.simulate = simulate
         self.exafs_energy_range_builder = EXAFSEnergyRangeBuilder()
-        self.simulate = False
-        self.sim = sim.get_hw()
         self.tfs = None
         self.k_energy = None
         self.vernier_offset = None
         self.vernier_device = None
+
+        if simulate:
+            self.dccm = None
+            self.xrtspec = None
+            self.sim = SimpleNamespace(
+                fast_motor1=_SimMotor(),
+                slow_motor1=_SimMotor(),
+            )
+        else:
+            from mfx.dccm import DCCM
+            from hutch_python import sim
+            from mfx.xrt_spec import XRTspec
+            self.xrtspec = XRTspec()
+            self.dccm = DCCM(name='DCCM')
+            self.sim = sim.get_hw()
 
     # ==================== Core Motion Methods ====================
 
@@ -486,7 +512,7 @@ class Exafs:
         if self.simulate:
             return run_index + 1, True
 
-        from mfx.db import daq, pp
+        from mfx.db import daq, mfx_pulsepicker
         from mfx.macros import get_run
         from mfx.autorun import quote
         from psdaq.control.DaqControl import DaqControl
@@ -510,9 +536,9 @@ class Exafs:
         self.logger.info(f"Run {run_number}: {sample} - {quote()['quote']}")
 
         if picker == 'open':
-            pp.open()
+            mfx_pulsepicker.open()
         elif picker == 'flip':
-            pp.flipflop()
+            mfx_pulsepicker.flipflop()
 
         daq.control.setState("configured")
         while daq.control.getState() != "configured":
@@ -544,7 +570,7 @@ class Exafs:
         - Resumes DAQ when flux restored
         Uses BeamCheck from mfx.optimize.beam_status.
         """
-        if flux_threshold is None:
+        if flux_threshold is None or self.simulate:
             return
 
         from mfx.optimize.beam_status import BeamCheck
@@ -775,7 +801,7 @@ class Exafs:
         else:
             print(f"... ... not needed.")
 
-        if self.vernier_offset:
+        if self.vernier_offset is not None and self.vernier_offset is not False:
             self._move_dccm_energy_with_vernier((energy_eV + self.vernier_offset) / 1000)
 
     def _request_vernier_offset_measurement(self, energy, track_tchk_data, map_tchk_track):
@@ -931,7 +957,8 @@ class Exafs:
         return False
 
     def _move_k_if_necessary(self, energy_keV, k_stepsize, k_offset,
-                            reverse, min_k_keV, track_feespec):
+                            reverse, min_k_keV, track_feespec,
+                            crystal_angle_offset=0.0):
         """
         Move K if necessary and manage DAQ state.
 
@@ -949,6 +976,8 @@ class Exafs:
             Minimum K energy in keV
         track_feespec : bool
             Track FEE spectrometer
+        crystal_angle_offset : float, optional
+            FEE spectrometer crystal angle offset in degrees (default: 0.0)
 
         Notes
         -----
@@ -1192,14 +1221,14 @@ class Exafs:
         if self.simulate:
             k_energy = k_energy_start
         else:
-            from mfx.db import daq, pp
+            from mfx.db import daq, mfx_pulsepicker
             k_energy = self.acr_energy_k.get().setpoint
             daq.control.setState("configured")
             while daq.control.getState() != "configured":
                 sleep(0.01)
             daq.control.setRecord(False)
             daq.control.setState("running")
-            pp.close()
+            mfx_pulsepicker.close()
 
         self.logger.info('Returning to initial position')
         self._move_dccm_energy_with_vernier(energy_start)
@@ -1243,10 +1272,11 @@ class Exafs:
 
         self.logger.warning("Stopping run and cleaning up...")
         self._return_to_start(energy_start, k_energy_start)
-        self.xrtspec.move_feespec_energy(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
-        self.xrtspec.check_feespec_crystal_angle(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
+        if not self.simulate and self.xrtspec:
+            self.xrtspec.move_feespec_energy(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
+            self.xrtspec.check_feespec_crystal_angle(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Run ended prematurely')
 
     def _finalize_scan(self, energy_start, k_energy_start, crystal_angle_offset=0.0):
@@ -1266,10 +1296,11 @@ class Exafs:
         Logs completion message.
         """
         self._return_to_start(energy_start, k_energy_start)
-        self.xrtspec.move_feespec_energy(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
-        self.xrtspec.check_feespec_crystal_angle(
-            energy_start, crystal_angle_offset=crystal_angle_offset)
+        if not self.simulate and self.xrtspec:
+            self.xrtspec.move_feespec_energy(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
+            self.xrtspec.check_feespec_crystal_angle(
+                energy_start, crystal_angle_offset=crystal_angle_offset)
         self.logger.warning('Scan completed successfully\n')
 
     def _wait(self, wait_time):
@@ -1357,7 +1388,7 @@ class Exafs:
     # ==================== Main Scan Methods ====================
 
     def long_escan(self, simulate=False, start_eV=0.0, end_eV=None,
-                   min_k=2.0, max_k=12.0, energies_list=[], wait_time_list=[],
+                   min_k=2.0, max_k=12.0, energies_list=None, wait_time_list=None,
                    element='Fe', sample='?', tag=None, picker=None,
                    inspire=False, daq_delay=5, record=False, runs=1,
                    k_stepsize=120, reverse=False, min_k_keV=7.035,
@@ -1525,16 +1556,20 @@ class Exafs:
             log_fn(f"{param_display}: {'ON' if value else 'OFF'}")
 
         # Initialize devices if needed
-        from mfx.devices import LaserShutter
-
-        self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
-        self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='fe_foil')
-        self.nd_wheel = EpicsSignalRO("MFX:LAS:MMN:08", name="nd_wheel")
-        self.waveplate = EpicsSignalRO("MFX:LAS:MMN:10", name="waveplate")
+        if not simulate:
+            from mfx.devices import LaserShutter
+            self.opo_shutter = LaserShutter('MFX:USR:ao1:6', name='opo_shutter')
+            self.fe_foil = LaserShutter('MFX:USR:ao1:3', name='fe_foil')
+            self.nd_wheel = EpicsSignalRO("MFX:LAS:MMN:08", name="nd_wheel")
+            self.waveplate = EpicsSignalRO("MFX:LAS:MMN:10", name="waveplate")
 
         # Store initial positions
-        energy_start = self.dccm.energy_with_vernier.energy()
-        k_energy_start = self.acr_energy_k.get().setpoint
+        if simulate:
+            energy_start = (energies_list[0] / 1000.0) if energies_list else start_eV / 1000.0
+            k_energy_start = (energies_list[0] if energies_list else start_eV) + k_stepsize / 2 + k_offset
+        else:
+            energy_start = self.dccm.energy_with_vernier.energy()
+            k_energy_start = self.acr_energy_k.get().setpoint
 
         # Build energy arrays
         energies, wait_times = self._build_energy_and_wait_time(
@@ -1602,7 +1637,8 @@ class Exafs:
 
                     # Move K if necessary
                     self._move_k_if_necessary(
-                        energy_keV, k_stepsize, k_offset, reverse, min_k_keV, track_feespec
+                        energy_keV, k_stepsize, k_offset, reverse, min_k_keV,
+                        track_feespec, crystal_angle_offset
                     )
 
                     # Move TFS
@@ -1614,7 +1650,7 @@ class Exafs:
                         self.check_beam_status(flux_threshold)
 
                    # Move DCCM
-                    self._move_dccm_energy_with_vernier(energy_keV) 
+                    self._move_dccm_energy_with_vernier(energy_keV)
 
                     # Vernier alignment
                     if tchk == 'single':
@@ -1664,6 +1700,492 @@ class Exafs:
             )
 
         self._finalize_scan(energy_start, k_energy_start, crystal_angle_offset)
+
+    # ==================== K-Primary XAS Scan ====================
+
+    def k_xas_scan(self, start_eV=None, end_eV=None, element='Fe',
+                   k_step_eV=None, k_positions=None, k_move_mode='pause',
+                   dccm_window_eV=2.0, dccm_step_eV=1.0,
+                   dccm_offsets=None, dwell_time=3.0,
+                   record=False, picker=None,
+                   track_feespec=False, track_feespec_cam=False,
+                   track_feespec_blocking=True,
+                   flux_threshold=None,
+                   crystal_angle_offset=0.0,
+                   sample='?', simulate=False, runs=1):
+        """
+        K-primary XAS scan: undulator K is the primary scan axis,
+        DCCM steps within a small window around each K position.
+
+        Designed for commissioning undulator motion and evaluating
+        data quality during K transit. No vernier requests are made.
+
+        Parameters
+        ----------
+        start_eV : float or None, optional
+            Starting energy in eV (ignored if k_positions provided)
+        end_eV : float or None, optional
+            Ending energy in eV (ignored if k_positions provided)
+        element : str, optional
+            Element symbol (default: 'Fe')
+        k_step_eV : float or None, optional
+            K step size in eV. Defaults to 2*dccm_window_eV (seamless tiling).
+            Ignored if k_positions provided.
+        k_positions : array_like or None, optional
+            Explicit list of K energies in eV. If provided, overrides
+            start_eV/end_eV/k_step_eV. Rounded to 0.1 eV, deduplicated,
+            and sorted ascending.
+        k_move_mode : str, optional
+            'pause': Pause DAQ, move K, wait, resume DAQ (default)
+            'concurrent': Request K non-blocking, immediately step DCCM
+            'concurrent_settled': DAQ stays running, move K blocking (wait for settle), then step DCCM
+        dccm_window_eV : float, optional
+            DCCM scans ±this around K center (default: 2.0)
+        dccm_step_eV : float, optional
+            DCCM step size within window (default: 1.0)
+        dccm_offsets : list or None, optional
+            Explicit list of DCCM offsets in eV relative to K center.
+            If provided, overrides dccm_window_eV and dccm_step_eV.
+        dwell_time : float, optional
+            Collection time per DCCM point in seconds (default: 3.0)
+        record : bool, optional
+            Enable DAQ recording (default: False)
+        picker : str or None, optional
+            Pulse picker mode: 'open', 'flip', or None
+        track_feespec : bool, optional
+            Track FEE spectrometer at each K move (default: False)
+        track_feespec_cam : bool, optional
+            Track FEE spectrometer camera at each DCCM point (default: False)
+        track_feespec_blocking : bool, optional
+            If True (default), FEE spec moves block before the K move.
+            If False, FEE spec moves run in parallel with the K move
+            (non-blocking). Reduces dead time when spectrometer motion
+            is slow. Safety check still runs after K settles.
+        flux_threshold : float or None, optional
+            Minimum beam flux in mJ (default: None)
+        crystal_angle_offset : float, optional
+            FEE spectrometer crystal angle offset in degrees (default: 0.0)
+        sample : str, optional
+            Sample name (default: '?')
+        simulate : bool, optional
+            Run in simulation mode (default: False)
+        runs : int, optional
+            Number of scan repetitions (default: 1)
+
+        Returns
+        -------
+        list of dict
+            Summary of each collection point:
+            [{'k_target_eV': float, 'dccm_energy_eV': float,
+              'dccm_offset_eV': float, 'k_move_mode': str,
+              'run_index': int, 'point_index': int}, ...]
+
+        Notes
+        -----
+        K positions are computed as arange(start_eV, end_eV, k_step_eV).
+        Default k_step_eV = 2*dccm_window_eV gives seamless energy tiling
+        with no gaps between successive DCCM windows.
+
+        Uses dccm.energy (crystal-only) — no vernier requests are issued.
+        This is required for experiments where the vernier PV is rejected
+        by the accelerator.
+
+        In 'concurrent' mode, early DCCM points at each K position are
+        collected while the undulator is still settling. This allows
+        evaluating data quality during transit vs. after settling.
+
+        Examples
+        --------
+        Mode 1 — K at every point (undulator moves at each energy):
+
+        >>> roi_scan = [7095, 7098, 7101, 7104, 7106.3, 7106.6, ...]
+        >>> summary = exafs.k_xas_scan(k_positions=roi_scan,
+        ...     dccm_offsets=[0.0], dwell_time=1.0,
+        ...     track_feespec=True, simulate=True)
+
+        Mode 2 — DCCM probes window around each K position:
+
+        >>> summary = exafs.k_xas_scan(start_eV=7095, end_eV=7195,
+        ...     k_step_eV=4.0, dccm_window_eV=2.0, dccm_step_eV=1.0,
+        ...     track_feespec=True, simulate=True)
+
+        Concurrent K moves (collect during transit):
+
+        >>> summary = exafs.k_xas_scan(start_eV=7095, end_eV=7195,
+        ...     k_step_eV=1.0, dccm_offsets=[0.0],
+        ...     k_move_mode='concurrent', simulate=True)
+        """
+        self.simulate = simulate
+
+        # === Parameter defaults and validation ===
+        if k_move_mode not in ('pause', 'concurrent', 'concurrent_settled'):
+            raise ValueError(f"k_move_mode must be 'pause', 'concurrent', or 'concurrent_settled', got '{k_move_mode}'")
+
+        if dccm_offsets is None:
+            dccm_offsets = np.round(np.arange(
+                -dccm_window_eV, dccm_window_eV + dccm_step_eV / 2, dccm_step_eV
+            ), 1).tolist()
+            dccm_offsets = sorted(set(dccm_offsets))
+
+        # Compute K positions
+        if k_positions is not None:
+            k_positions_eV = sorted(set(np.round(k_positions, 1).tolist()))
+        else:
+            if start_eV is None or end_eV is None:
+                raise ValueError("Must provide either k_positions or both start_eV and end_eV")
+            if k_step_eV is None:
+                k_step_eV = 2 * dccm_window_eV
+            k_positions_eV = np.round(
+                np.arange(start_eV, end_eV + k_step_eV / 2, k_step_eV), 1
+            )
+            k_positions_eV = sorted(set(k_positions_eV.tolist()))
+
+        # Normalize dwell_time to per-K-position array
+        n_k = len(k_positions_eV)
+        if np.ndim(dwell_time) == 0:
+            dwell_times = np.full(n_k, float(dwell_time))
+        else:
+            dwell_times = np.asarray(dwell_time, dtype=float)
+            if len(dwell_times) != n_k:
+                raise ValueError(
+                    f"dwell_time list length ({len(dwell_times)}) must match "
+                    f"number of K positions ({n_k})"
+                )
+
+        # Total points
+        total_points = n_k * len(dccm_offsets) * runs
+
+        # === Print scan configuration ===
+        print("\n" + "=" * 60)
+        print("K-PRIMARY XAS SCAN (k_xas_scan)")
+        print("=" * 60)
+        print(f"  Element:         {element}")
+        print(f"  Energy range:    {k_positions_eV[0]:.1f} - {k_positions_eV[-1]:.1f} eV")
+        if k_step_eV is not None:
+            print(f"  K step:          {k_step_eV:.1f} eV")
+        else:
+            print(f"  K step:          custom ({n_k} positions)")
+        print(f"  K positions:     {n_k} ({k_positions_eV[0]:.1f} to {k_positions_eV[-1]:.1f} eV)")
+        print(f"  K move mode:     {k_move_mode}")
+        print(f"  DCCM offsets:    {dccm_offsets} eV")
+        print(f"  DCCM points/K:   {len(dccm_offsets)}")
+        if dwell_times[0] == dwell_times[-1]:
+            print(f"  Dwell time:      {dwell_times[0]:.2f} s")
+        else:
+            print(f"  Dwell time:      {dwell_times[0]:.2f} - {dwell_times[-1]:.2f} s ({n_k} values)")
+        print(f"  Runs:            {runs}")
+        print(f"  Total points:    {total_points}")
+        print(f"  Record:          {record}")
+        print(f"  Picker:          {picker}")
+        print(f"  Track FEE spec:  {track_feespec}")
+        print(f"  FEE spec block:  {track_feespec_blocking}")
+        print(f"  Track FEE cam:   {track_feespec_cam}")
+        print(f"  Flux threshold:  {flux_threshold}")
+        print(f"  Simulate:        {simulate}")
+        print(f"  Sample:          {sample}")
+        est_time = float(np.sum(dwell_times) * len(dccm_offsets) * runs)
+        if k_move_mode == 'pause':
+            est_time += n_k * runs * 4  # ~4s per K move
+        print(f"  Est. time:       {est_time:.0f}s ({est_time/60:.1f} min)")
+        print("=" * 60 + "\n")
+
+        # === Store initial positions ===
+        if simulate:
+            energy_start = 7.0  # dummy for sim
+            k_energy_start = k_positions_eV[0]
+        else:
+            energy_start = self.dccm.energy_with_vernier.energy()
+            k_energy_start = self.acr_energy_k.get().setpoint
+
+        # === Summary collector ===
+        summary = []
+        point_index = 0
+
+        # === Main scan loop ===
+        t_start = time()
+        try:
+            for run_idx in range(runs):
+                self.logger.warning(f"Starting run {run_idx + 1}/{runs}")
+
+                # Setup DAQ
+                run_number, daq_success = self._setup_daq_and_start_recording(
+                    sample, picker, False, record, run_idx
+                )
+                if not daq_success:
+                    self.logger.error("DAQ setup failed, aborting")
+                    break
+
+                for k_idx, k_target_eV in enumerate(k_positions_eV):
+                    k_target_keV = k_target_eV / 1000.0
+
+                    self.logger.warning(
+                        f"K position {k_idx + 1}/{len(k_positions_eV)}: "
+                        f"{k_target_eV:.1f} eV [{k_move_mode}]"
+                    )
+
+                    t_k_move = time()
+                    if k_move_mode == 'pause':
+                        self._k_xas_move_pause(
+                            k_target_eV, k_target_keV,
+                            track_feespec, crystal_angle_offset
+                        )
+                    elif k_move_mode == 'concurrent':
+                        self._k_xas_move_concurrent(
+                            k_target_eV, k_target_keV,
+                            track_feespec, crystal_angle_offset
+                        )
+                    elif k_move_mode == 'concurrent_settled':
+                        self._k_xas_move_concurrent_settled(
+                            k_target_eV, k_target_keV,
+                            track_feespec, crystal_angle_offset,
+                            track_feespec_blocking
+                        )
+                    k_move_elapsed = time() - t_k_move
+
+                    # Step DCCM through offsets
+                    for offset in dccm_offsets:
+                        dccm_energy_eV = k_target_eV + offset
+                        dccm_energy_keV = dccm_energy_eV / 1000.0
+
+                        self.logger.info(
+                            f"  DCCM: {dccm_energy_eV:.1f} eV "
+                            f"(offset {offset:+.1f})"
+                        )
+
+                        # Move DCCM (crystal only, no vernier)
+                        if simulate:
+                            self.sim.fast_motor1.mv(dccm_energy_keV)
+                        else:
+                            self.dccm.energy.move(dccm_energy_keV, wait=True)
+
+                        # Check beam
+                        if flux_threshold:
+                            self.check_beam_status(flux_threshold)
+
+                        # Track FEE spectrometer camera
+                        if track_feespec_cam:
+                            self.xrtspec.track_feespec_camera(
+                                dccm_energy_keV, crystal_angle_offset)
+
+                        # In concurrent_settled mode, dwell_time is a minimum
+                        # acquisition time — the K move already contributed
+                        # to acquisition since the DAQ stays running.
+                        if k_move_mode == 'concurrent_settled':
+                            remaining_dwell = max(0, dwell_times[k_idx] - k_move_elapsed)
+                            self._wait(remaining_dwell)
+                        else:
+                            self._wait(dwell_times[k_idx])
+
+                        # Record summary
+                        summary.append({
+                            'k_target_eV': k_target_eV,
+                            'dccm_energy_eV': dccm_energy_eV,
+                            'dccm_offset_eV': offset,
+                            'k_move_mode': k_move_mode,
+                            'run_index': run_idx,
+                            'point_index': point_index,
+                        })
+                        point_index += 1
+
+                # End of run — stop DAQ
+                if not simulate:
+                    from mfx.db import daq
+                    daq.control.setState("configured")
+                    while daq.control.getState() != "configured":
+                        sleep(0.01)
+                    daq.control.setRecord(False)
+
+                if runs > 1 and run_idx < runs - 1:
+                    self.logger.info("Inter-run delay (5s)")
+                    sleep(5)
+
+        except KeyboardInterrupt:
+            self.logger.warning("Scan aborted by user (Ctrl+C)")
+            if not simulate:
+                from mfx.db import daq, mfx_pulsepicker
+                try:
+                    daq.control.setState("configured")
+                    daq.control.setRecord(False)
+                    mfx_pulsepicker.close()
+                except Exception:
+                    pass
+
+        # === Return to initial positions ===
+        self.logger.info("Returning to initial positions")
+        if simulate:
+            self.sim.fast_motor1.mv(energy_start)
+            self.sim.slow_motor1.mv(k_energy_start)
+        else:
+            self.dccm.energy.move(energy_start, wait=True)
+            if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                self.acr_energy_k.move(k_energy_start)
+            if track_feespec:
+                self.xrtspec.move_feespec_energy(
+                    energy_start, crystal_angle_offset=crystal_angle_offset)
+
+        # === Print summary ===
+        elapsed = time() - t_start
+        time_per_point = elapsed / len(summary) if summary else 0.0
+        print("\n" + "=" * 60)
+        print("SCAN COMPLETE")
+        print("=" * 60)
+        print(f"  Total points collected: {len(summary)}")
+        print(f"  K positions visited:    {len(k_positions_eV) * min(runs, run_idx + 1)}")
+        print(f"  K move mode:            {k_move_mode}")
+        if summary:
+            print(f"  Energy range covered:   "
+                  f"{min(s['dccm_energy_eV'] for s in summary):.1f} - "
+                  f"{max(s['dccm_energy_eV'] for s in summary):.1f} eV")
+        print(f"  Total elapsed time:     {elapsed:.1f}s ({elapsed/60:.1f} min)")
+        print(f"  Time per point:         {time_per_point:.2f}s")
+        print("=" * 60 + "\n")
+
+        return summary
+
+    def _k_xas_move_pause(self, k_target_eV, k_target_keV,
+                          track_feespec, crystal_angle_offset):
+        """
+        Move K in 'pause' mode: pause DAQ, move K, wait, resume.
+
+        Parameters
+        ----------
+        k_target_eV : float
+            Target K energy in eV
+        k_target_keV : float
+            Target K energy in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+
+        Notes
+        -----
+        Sequence: pause DAQ → move FEE spec (optional) → move K
+        (blocking) → verify FEE → resume DAQ. Data collection stops
+        during K transit. Typical K move takes 2-5 s depending on
+        step size.
+        """
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_target_eV)
+            self.k_energy = k_target_eV
+            return
+
+        from mfx.db import daq
+
+        # Pause DAQ
+        if daq.control.getState() == "running":
+            daq.control.setState("paused")
+            while daq.control.getState() != "paused":
+                sleep(0.01)
+            sleep(0.5)
+
+        # Move FEE spec before K
+        if track_feespec:
+            self.xrtspec.move_feespec_energy(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Move K (blocking)
+        self.acr_energy_k.move(k_target_eV)
+        self.k_energy = k_target_eV
+
+        # Verify FEE spec
+        if track_feespec:
+            self.xrtspec.check_feespec_crystal_angle(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Resume DAQ
+        if daq.control.getState() == "paused":
+            daq.control.setState("running")
+            while daq.control.getState() != "running":
+                sleep(0.01)
+
+    def _k_xas_move_concurrent(self, k_target_eV, k_target_keV,
+                               track_feespec, crystal_angle_offset):
+        """
+        Move K in 'concurrent' mode: request K non-blocking, don't wait.
+
+        Parameters
+        ----------
+        k_target_eV : float
+            Target K energy in eV
+        k_target_keV : float
+            Target K energy in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+
+        Notes
+        -----
+        Issues acr_energy_k.move(wait=False) so data collection can
+        continue while the undulator settles. Early DCCM points in the
+        subsequent offset loop will be collected during K transit — useful
+        for evaluating whether in-transit data is scientifically usable.
+        """
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_target_eV)
+            self.k_energy = k_target_eV
+            return
+
+        # Move FEE spec (fast, do before K)
+        if track_feespec:
+            self.xrtspec.move_feespec_energy(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Request K move — non-blocking (don't wait for completion)
+        self.acr_energy_k.move(k_target_eV, wait=False)
+        self.k_energy = k_target_eV
+
+    def _k_xas_move_concurrent_settled(self, k_target_eV, k_target_keV,
+                                       track_feespec, crystal_angle_offset,
+                                       track_feespec_blocking=True):
+        """
+        Move K in 'concurrent_settled' mode: DAQ stays running, block on K move.
+
+        Parameters
+        ----------
+        k_target_eV : float
+            Target K energy in eV
+        k_target_keV : float
+            Target K energy in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+        track_feespec_blocking : bool, optional
+            If True (default), FEE spec moves complete before K move starts.
+            If False, FEE spec move fires non-blocking and runs in parallel
+            with the K move. Safety check still runs after K settles.
+
+        Notes
+        -----
+        Like 'concurrent' (no DAQ pause/resume) but waits for the undulator
+        to report settled before returning. The dwell timer does not start
+        until the undulator is at its target position. Data is still collected
+        during transit since the DAQ remains running.
+        """
+        if self.simulate:
+            self.sim.slow_motor1.mv(k_target_eV)
+            self.k_energy = k_target_eV
+            return
+
+        # Move FEE spec — blocking or non-blocking
+        if track_feespec:
+            if track_feespec_blocking:
+                self.xrtspec.move_feespec_energy(
+                    k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            else:
+                self.xrtspec.move_feespec_energy_nonblocking(
+                    k_target_keV, crystal_angle_offset=crystal_angle_offset)
+
+        # Move K — blocking (wait for undulator to settle)
+        self.acr_energy_k.move(k_target_eV)
+        self.k_energy = k_target_eV
+
+        # Verify FEE spec crystal angle after K settles
+        if track_feespec:
+            self.xrtspec.check_feespec_crystal_angle(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
 
 
 class EXAFSEnergyRangeBuilder:
@@ -1836,7 +2358,7 @@ class EXAFSEnergyRangeBuilder:
         )
 
         K_values = np.arange(min_K_value, max_K_value + K_spacing, K_spacing)
-        energy_K_range = [self.K_to_eV(K) for K in K_values]
+        energy_K_range = np.array([self.K_to_eV(K) for K in K_values])
 
         energy_in_edge = np.arange(
             preedge_end + edge_eV_increment, np.min(energy_K_range), edge_eV_increment
@@ -1856,20 +2378,26 @@ class EXAFSEnergyRangeBuilder:
             time_before_edge_arr, time_in_preedge_arr, time_in_edge_arr, time_EXAFS
         ))
 
-        # Store for plotting
+        # Round to 0.1 eV, remove duplicates, sort ascending
+        energy_range = np.round(energy_range, 1)
+        energy_range, unique_idx = np.unique(energy_range, return_index=True)
+        time_range = time_range[unique_idx]
+
+        # Store for plotting and trim if start_ev past preedge
         if start_ev >= preedge_end:
             self.logger.error(
                 "min_before_pre_edge must be less than preedge_end. skipping pre-edge regions.")
             index = np.argmin(np.abs(energy_range - start_ev))
-            self.energy_range = energy_range[index:]
-            self.time_range = time_range[index:]
-            self.energy_K_range = energy_K_range[index:]
-            self.K_values = K_values[index:]
-        else:
-            self.time_range = time_range
-            self.energy_range = energy_range
-            self.energy_K_range = energy_K_range
-            self.K_values = K_values
+            energy_range = energy_range[index:]
+            time_range = time_range[index:]
+            k_index = np.argmin(np.abs(energy_K_range - start_ev))
+            energy_K_range = energy_K_range[k_index:]
+            K_values = K_values[k_index:]
+
+        self.energy_range = energy_range
+        self.time_range = time_range
+        self.energy_K_range = energy_K_range
+        self.K_values = K_values
 
         if debug:
             self.plot_scan_profile(energy_range, time_range, energy_K_range, K_values)

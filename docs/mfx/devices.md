@@ -1,0 +1,3 @@
+# Devices
+
+::: mfx.devices

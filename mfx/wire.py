@@ -7,9 +7,11 @@ position verification, and intensity measurements.
 
 import os
 import logging
-from typing import Optional, List
-
 import numpy as np
+from typing import Optional, List
+from mfx.timing import Timing
+
+timing = Timing()
 
 logger = logging.getLogger(__name__)
 
@@ -119,29 +121,38 @@ class Wire:
     output : Analyze scan results
     """
 
-    def __init__(self):
+    def __init__(self, x_pv: str = "MFX:LJH:JET:X", y_pv: str = "MFX:LJH:JET:Y"):
         """
         Initialize Wire scanner controller.
-
-        Sets up motor PV connections for X and Y axes.
+        Parameters
+        ----------
+        x_pv : str, optional
+            EPICS PV for X motor (default: 'MFX:LJH:JET:X')
+        y_pv : str, optional
+            EPICS PV for Y motor (default: 'MFX:LJH:JET:Y')
         """
-        self.x_pv = 'MFX:USR:MMN:41'
-        self.y_pv = 'MFX:USR:MMN:42'
+        # self.x_pv = 'MFX:USR:MMN:41' #DoT motors
+        # self.y_pv = 'MFX:USR:MMN:42'
+        self.x_pv = x_pv
+        self.y_pv = y_pv
         logger.info("Wire scanner initialized")
 
     def scan(
-            self,
-            start: float,
-            end: float,
-            num_steps: int,
-            num_events: int = 120,
-            sample: str = 'wire',
-            tag: str = None,
-            picker: str = None,
-            inspire: bool = False,
-            record: bool = False,
-            daq_num: int = 2,
-            mcc: str = None):
+        self,
+        start: float,
+        end: float,
+        num_steps: int,
+        events_per_step: int = 120,
+        sample: str = "wire",
+        tag: str = None,
+        picker: str = None,
+        inspire: bool = False,
+        record: bool = False,
+        daq_num: int = 2,
+        pv: str = None,
+        camera: str = "alvium_dg3",
+        analysis: bool = True,
+    ):
         """
         Perform wire scan across beam.
 
@@ -158,7 +169,7 @@ class Wire:
         num_steps : int
             Number of scan steps
             Step size = (end - start) / (num_steps - 1)
-        num_events : int, optional
+        events_per_step : int, optional
             Number of events to collect per step (default: 120)
             At 120 Hz, this is 1 second per point
         sample : str, optional
@@ -176,8 +187,13 @@ class Wire:
             Enable data recording (default: False)
         daq_num : int, optional
             DAQ version: 1 (LCLS-I) or 2 (LCLS-II) (default: 2)
-        mcc : str or None, required
+        pv : str or None, required
             Motor to scan: 'x' or 'y'
+        camera : str, optional
+            Detector name for timing analysis camera (default: 'alvium_dg3')
+        analysis : bool, optional
+            Prompt for automatic analysis after scan completion,
+            by default True.
 
         Returns
         -------
@@ -186,7 +202,7 @@ class Wire:
         Raises
         ------
         SystemExit
-            If mcc not 'x' or 'y'
+            If pv not 'x' or 'y'
         ValueError
             If daq_num not in [1, 2]
 
@@ -199,7 +215,7 @@ class Wire:
         4. Configure DAQ with motor information
         5. For each step:
            a. Move motor to position
-           b. Collect num_events
+           b. Collect events_per_step
            c. Record data
         6. Close pulse picker
         7. Post results to elog
@@ -211,7 +227,7 @@ class Wire:
         - Intensities recorded per position
 
         Scan Duration:
-        - Total time ≈ num_steps × (num_events / rep_rate)
+        - Total time ≈ num_steps × (events_per_step / rep_rate)
         - Example: 41 steps × 120 events @ 120 Hz = 41 seconds
         - Plus motor move overhead (~0.5 s/step)
 
@@ -250,9 +266,9 @@ class Wire:
         ...     start=-2.0,
         ...     end=2.0,
         ...     num_steps=41,
-        ...     num_events=120,
+        ...     events_per_step=120,
         ...     sample='beam_profile_x',
-        ...     mcc='x',
+        ...     pv='x',
         ...     record=True
         ... )
 
@@ -261,9 +277,9 @@ class Wire:
         ...     start=-0.5,
         ...     end=0.5,
         ...     num_steps=101,
-        ...     num_events=240,
+        ...     events_per_step=240,
         ...     sample='fine_profile_y',
-        ...     mcc='y',
+        ...     pv='y',
         ...     record=True
         ... )
 
@@ -272,8 +288,8 @@ class Wire:
         ...     start=-1.0,
         ...     end=1.0,
         ...     num_steps=11,
-        ...     num_events=60,
-        ...     mcc='x',
+        ...     events_per_step=60,
+        ...     pv='x',
         ...     record=False
         ... )
 
@@ -282,8 +298,18 @@ class Wire:
         ...     start=-2.0,
         ...     end=2.0,
         ...     num_steps=41,
-        ...     mcc='x',
+        ...     pv='x',
         ...     picker='open',
+        ...     record=True
+        ... )
+
+        Scan with non-default camera:
+        >>> wire.scan(
+        ...     start=-2.0,
+        ...     end=2.0,
+        ...     num_steps=41,
+        ...     pv='x',
+        ...     camera='t_zero_alvium',
         ...     record=True
         ... )
 
@@ -295,34 +321,38 @@ class Wire:
         """
         from ophyd import EpicsSignal
         from pcdsdevices.pv_positioner import OnePVMotor
-        from mfx.db import RE, pp, daq
+        from mfx.db import RE, daq
+        from mfx.db import mfx_pulsepicker as mfx_pulsepicker
         from mfx.autorun import quote, post
         from mfx.macros import get_exp, get_run
 
         # Validate motor selection
-        if mcc is None:
-            logger.error("Must specify mcc='x' or mcc='y'")
+        if pv is None:
+            logger.error("Must specify pv='x' or pv='y' or custom pv")
             import sys
+
             sys.exit("No motor specified")
 
-        mcc = mcc.lower()
-        if mcc not in ['x', 'y']:
-            logger.error("mcc must be 'x' or 'y'")
-            import sys
-            sys.exit("Invalid motor selection")
+        if pv not in ["x", "y"]:
+            logger.warning(f"pv not 'x' or 'y'. using custom PV: {pv}")
 
         # Validate DAQ number
         if daq_num not in [1, 2]:
-            logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
+            logger.error("daq_num must be 1 (LCLS-I) or 2 (LCLS-II)")
             raise ValueError("Invalid daq_num")
 
         # Select motor PV
-        if mcc == 'x':
-            mcc_pv = self.x_pv
-            axis_name = 'X'
+        if pv.lower() == "x":
+            pv = self.x_pv
+            axis_name = "X"
+            motor_name = "wire_x"
+        elif pv.lower() == "y":
+            pv = self.y_pv
+            axis_name = "Y"
+            motor_name = "wire_y"
         else:
-            mcc_pv = self.y_pv
-            axis_name = 'Y'
+            pv = axis_name = pv.upper()
+            motor_name = pv.lower().replace(":", "_")
 
         logger.info(
             f"Starting {axis_name}-axis wire scan: "
@@ -334,20 +364,18 @@ class Wire:
             tag = sample
 
         # Configure pulse picker
-        if picker == 'open':
-            pp.open()
+        if picker == "open":
+            mfx_pulsepicker.open()
             logger.info("Pulse picker: OPEN")
-        elif picker == 'flip':
-            pp.flipflop()
+        elif picker == "flip":
+            mfx_pulsepicker.flipflop()
             logger.info("Pulse picker: FLIPFLOP")
 
         # Get run number
         station = 1 if daq_num == 1 else 0
         run_number = get_run(station=station) + 1
 
-        logger.info(
-            f"Run Number {run_number}: {sample}... {quote()['quote']}"
-        )
+        logger.info(f"Run Number {run_number}: {sample}... {quote()['quote']}")
 
         # Execute scan based on DAQ version
         if daq_num == 1:
@@ -355,18 +383,18 @@ class Wire:
             from nabs.plans import daq_scan
 
             # Create motor object
-            mcc_pv_motor = EpicsSignal(mcc_pv, name='mcc')
+            pv_motor = EpicsSignal(pv, name=motor_name)
 
             # Run scan
             RE(
                 daq_scan(
                     [],
-                    mcc_pv_motor,
+                    pv_motor,
                     start,
                     end,
                     num_steps,
-                    events=num_events,
-                    record=record
+                    events=events_per_step,
+                    record=record,
                 )
             )
 
@@ -378,34 +406,27 @@ class Wire:
             import bluesky.plans as bp
 
             # Create motor object
-            mcc_pv_motor = OnePVMotor(mcc_pv, name="mcc")
-            mcc_pv_motor.setpoint.kind = "hinted"
+            pv_motor = OnePVMotor(pv, name=motor_name)
+            pv_motor.setpoint.kind = "hinted"
+
+            original = pv_motor()
 
             # Configure DAQ
             daq.configure(
-                motors=[mcc_pv_motor],
-                group_mask=0x1,
-                events=num_events,
-                record=record
+                motors=[pv_motor], group_mask=0x1, events=events_per_step, record=record
             )
 
             # Run scan
-            RE(bp.scan(
-                [daq],
-                mcc_pv_motor,
-                start,
-                end,
-                num_steps
-            ))
+            RE(bp.scan([daq], pv_motor, start, end, num_steps))
 
         # Close pulse picker
-        pp.close()
+        mfx_pulsepicker.close()
         logger.info("Pulse picker: CLOSED")
 
         # Post to elog
         scan_note = (
-            f"Wire {axis_name}-scan: {start} to {end} mm, "
-            f"{num_steps} steps @ {num_events} events/step"
+            f"Wire {axis_name}: {start} to {end} mm, "
+            f"{num_steps} steps @ {events_per_step} events/step"
         )
 
         post(
@@ -415,636 +436,34 @@ class Wire:
             post=record,
             inspire=inspire,
             daq_num=daq_num,
-            add_note=scan_note
+            add_note=scan_note,
         )
 
         logger.warning(
-            'Wire scan completed. '
-            'Thank you for choosing the MFX beamline!\n'
+            "Wire scan completed. Thank you for choosing the MFX beamline!\n"
         )
 
-        # Prompt for analysis
-        logger.warning("Scan completed. Analyze output?")
-        answer = input("(y/n)? ")
+        exp = str(get_exp())
+        logger.warning(
+            f"timing.output(user='user', facility='s3df', "
+            f"exp='{exp}', run={run_number}, daq_num={daq_num})"
+        )
 
-        if answer.lower() == "y":
-            facility = input("Facility (S3DF/NERSC): ")
-            user = input("Username: ")
+        logger.info(f"Setting {pv} back to original: {original}")
+        pv_motor(original)
 
-            if facility.upper() in ['S3DF', 'NERSC']:
-                self.output(
+        if analysis:
+            logger.warning(f"Scan completed. Would you like to analyze the output?")
+            answer = input("(y/n)? ")
+
+            if answer.lower() == "y":
+                facility = input("Enter facility (s3df or nersc) to continue: ")
+                user = input("Enter username to continue: ")
+                timing.output(
                     user=user,
-                    facility=facility.upper(),
-                    exp=get_exp(),
-                    run=run_number
+                    facility=facility,
+                    exp=exp,
+                    run=run_number,
+                    daq_num=daq_num,
+                    camera=camera,
                 )
-            else:
-                logger.warning(f"Unknown facility: {facility}")
-
-    def output(
-            self,
-            user: str,
-            facility: str = 'S3DF',
-            run_type: str = 'scan',
-            exp: str = None,
-            run: int = None):
-        """
-        Analyze wire scan results.
-
-        Submits analysis job to computing facility to process
-        wire scan data and generate beam profile plots.
-
-        Parameters
-        ----------
-        user : str
-            Username for SSH and computing access
-        facility : str, optional
-            Computing facility: 'S3DF' or 'NERSC' (default: 'S3DF')
-        run_type : str, optional
-            Analysis type (default: 'scan')
-            Currently only 'scan' is supported
-        exp : str or None, optional
-            Experiment name (e.g., 'mfxls1234')
-            If None, uses current experiment
-        run : int or None, optional
-            Run number to analyze
-            If None, uses most recent run
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If facility not 'S3DF' or 'NERSC'
-
-        Notes
-        -----
-        Analysis Process:
-        1. SSH to computing facility
-        2. Load run data from HDF5
-        3. Extract motor positions
-        4. Extract detector intensities
-        5. Generate profile plots
-        6. Fit beam profile (Gaussian, etc.)
-        7. Extract beam parameters
-        8. Save results
-
-        Analysis Scripts:
-        - S3DF: /sdf/group/lcls/ds/tools/mfx/scripts/wire_scan_analysis.py
-        - NERSC: Similar path on NERSC filesystem
-
-        Output Products:
-        - Profile plots (PNG/PDF)
-        - Fitted parameters (text/CSV)
-        - Beam width (FWHM)
-        - Beam centroid
-        - Peak intensity
-
-        Beam Profile Fits:
-        - Gaussian: Most common for focused beams
-        - Flat-top: For unfocused beams
-        - Error function: For edge scans
-
-        SSH Requirements:
-        - Valid account on facility
-        - SSH keys configured
-        - Network access
-        - NERSC may require token (sshproxy)
-
-        Processing Time:
-        - Typical : 1-5 minutes
-        - Check status: squeue -u $USER
-
-        Results Location:
-        - Experiment analysis directory
-        - /reg/d/pscdata/mfx/{exp}/scratch/
-
-        Examples
-        --------
-        Analyze on S3DF:
-        >>> wire = Wire()
-        >>> wire.output(
-        ...     user='myuser',
-        ...     facility='S3DF',
-        ...     exp='mfxls1234',
-        ...     run=123
-        ... )
-
-        Analyze most recent run:
-        >>> wire.output(user='myuser', facility='S3DF')
-
-        Analyze on NERSC:
-        >>> wire.output(
-        ...     user='myuser',
-        ...     facility='NERSC',
-        ...     exp='mfxls1234',
-        ...     run=123
-        ... )
-
-        See Also
-        --------
-        scan : Perform wire scan
-        """
-        from mfx.db import daq
-        from mfx.macros import get_exp
-        import mfx.cctbx as cctbx
-
-        logger.info("Submitting wire scan analysis")
-
-        # Get experiment name
-        if exp is None:
-            exp = str(get_exp())
-
-        # Get run number
-        if run is None:
-            run = daq.run_number()
-
-        # Validate facility
-        facility = facility.upper()
-        if facility not in ['S3DF', 'NERSC']:
-            logger.error(
-                f"Unknown facility: {facility}. Use 'S3DF' or 'NERSC'"
-            )
-            raise ValueError("Invalid facility")
-
-        # Handle NERSC SSH proxy
-        if facility == 'NERSC':
-            logger.warning("Have you renewed your SSH token today?")
-            token = input("(y/n)? ")
-
-            if token.lower() == "n":
-                cctbx.sshproxy(user)
-
-        # Build and execute analysis command
-        if facility == 'S3DF':
-            cmd = (
-                f"ssh -Yt {user}@s3dflogin '"
-                f"source /sdf/group/lcls/ds/ana/sw/conda1/manage/bin/psconda.sh && "
-                f"python /sdf/group/lcls/ds/tools/mfx/scripts/cctbx/"
-                f"energy_calib_output.py "
-                f"-f {facility} -t {run_type} -e {exp} -r {run}'"
-            )
-        else:  # NERSC
-            cmd = (
-                f"ssh -Yt {user}@perlmutter-p1.nersc.gov "
-                f"python /global/cfs/cdirs/lcls/mfxopr/scripts/"
-                f"wire_scan_analysis.py "
-                f"-f {facility} -t {run_type} -e {exp} -r {run}"
-            )
-
-        logger.info(f"Executing: {cmd}")
-        os.system(cmd)
-
-        logger.info(
-            f"Analysis submitted to {facility}. "
-            "Check results in experiment directory."
-        )
-
-    class get:
-        """
-        Read current wire motor positions.
-
-        Provides static methods to query current X and Y positions
-        of the wire scanner motors.
-
-        Methods
-        -------
-        x() : str
-            Get current X position
-        y() : str
-            Get current Y position
-
-        Examples
-        --------
-        >>> x_pos = Wire.get.x()
-        >>> y_pos = Wire.get.y()
-        >>> print(f"Wire at ({x_pos}, {y_pos}) mm")
-
-        See Also
-        --------
-        put : Move motors to positions
-        """
-
-        def __init__(self):
-            """Initialize get interface."""
-            pass
-
-        @staticmethod
-        def x() -> str:
-            """
-            Get current X motor position.
-
-            Returns
-            -------
-            str
-                X position in mm
-
-            Notes
-            -----
-            Uses caget to read EPICS PV.
-            Returns position as string from PV.
-
-            Examples
-            --------
-            >>> x_pos = Wire.get.x()
-            >>> print(f"X position: {x_pos} mm")
-
-            See Also
-            --------
-            y : Get Y position
-            put.x : Set X position
-            """
-            os.system('caget MFX:USR:MMN:41')
-            value = os.popen(
-                "caget MFX:USR:MMN:41 | awk '{print $2}'"
-            ).read().strip()
-            return value
-
-        @staticmethod
-        def y() -> str:
-            """
-            Get current Y motor position.
-
-            Returns
-            -------
-            str
-                Y position in mm
-
-            Notes
-            -----
-            Uses caget to read EPICS PV.
-            Returns position as string from PV.
-
-            Examples
-            --------
-            >>> y_pos = Wire.get.y()
-            >>> print(f"Y position: {y_pos} mm")
-
-            See Also
-            --------
-            x : Get X position
-            put.y : Set Y position
-            """
-            os.system('caget MFX:USR:MMN:42')
-            value = os.popen(
-                "caget MFX:USR:MMN:42 | awk '{print $2}'"
-            ).read().strip()
-            return value
-
-    class put:
-        """
-        Move wire motors to specified positions.
-
-        Provides static methods to move X and Y motors
-        to desired positions.
-
-        Methods
-        -------
-        x(value) : None
-            Move X motor to position
-        y(value) : None
-            Move Y motor to position
-
-        Notes
-        -----
-        Motion is non-blocking by default.
-        Use get methods to verify final position.
-
-        Safety:
-        - No limit checking in this class
-        - Motor limits enforced by EPICS
-        - Be cautious near beam
-
-        Examples
-        --------
-        >>> Wire.put.x(0.0)  # Move X to zero
-        >>> Wire.put.y(-1.5)  # Move Y to -1.5 mm
-
-        See Also
-        --------
-        get : Read current positions
-        """
-
-        def __init__(self):
-            """Initialize put interface."""
-            pass
-
-        @staticmethod
-        def x(value: float):
-            """
-            Move X motor to specified position.
-
-            Parameters
-            ----------
-            value : float
-                Target X position in mm
-
-            Returns
-            -------
-            None
-
-            Notes
-            -----
-            Uses caput to write to EPICS PV.
-            Motion is asynchronous (non-blocking).
-
-            Motor Limits:
-            - Enforced by EPICS
-            - Typically ±5 mm
-            - Check motor configuration
-
-            Safety:
-            - Verify position before moving
-            - Check beam status
-            - Avoid collisions
-
-            Examples
-            --------
-            Move to center:
-            >>> Wire.put.x(0.0)
-
-            Move to +2 mm:
-            >>> Wire.put.x(2.0)
-
-            Move and verify:
-            >>> Wire.put.x(1.5)
-            >>> import time
-            >>> time.sleep(1)  # Wait for motion
-            >>> pos = Wire.get.x()
-            >>> print(f"Moved to {pos} mm")
-
-            See Also
-            --------
-            get.x : Read X position
-            y : Move Y motor
-            """
-            os.system(f'caput MFX:USR:MMN:41 {value}')
-            logger.info(f"Moving wire X to {value} mm")
-
-        @staticmethod
-        def y(value: float):
-            """
-            Move Y motor to specified position.
-
-            Parameters
-            ----------
-            value : float
-                Target Y position in mm
-
-            Returns
-            -------
-            None
-
-            Notes
-            -----
-            Uses caput to write to EPICS PV.
-            Motion is asynchronous (non-blocking).
-
-            Motor Limits:
-            - Enforced by EPICS
-            - Typically ±5 mm
-            - Check motor configuration
-
-            Safety:
-            - Verify position before moving
-            - Check beam status
-            - Avoid collisions
-
-            Examples
-            --------
-            Move to center:
-            >>> Wire.put.y(0.0)
-
-            Move to -1 mm:
-            >>> Wire.put.y(-1.0)
-
-            Move and verify:
-            >>> Wire.put.y(0.5)
-            >>> import time
-            >>> time.sleep(1)  # Wait for motion
-            >>> pos = Wire.get.y()
-            >>> print(f"Moved to {pos} mm")
-
-            See Also
-            --------
-            get.y : Read Y position
-            x : Move X motor
-            """
-            os.system(f'caput MFX:USR:MMN:42 {value}')
-            logger.info(f"Moving wire Y to {value} mm")
-
-
-# Convenience instance for direct import
-wire = Wire()
-
-
-def wire_scan(
-        start: float,
-        end: float,
-        num_steps: int,
-        mcc: str,
-        num_events: int = 120,
-        record: bool = False,
-        **kwargs):
-    """
-    Convenience function to perform wire scan.
-
-    Parameters
-    ----------
-    start : float
-        Starting position in mm
-    end : float
-        Ending position in mm
-    num_steps : int
-        Number of scan steps
-    mcc : str
-        Motor to scan: 'x' or 'y'
-    num_events : int, optional
-        Events per step (default: 120)
-    record : bool, optional
-        Enable recording (default: False)
-    **kwargs
-        Additional arguments passed to Wire.scan()
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> wire_scan(-2.0, 2.0, 41, mcc='x', record=True)
-    >>> wire_scan(-1.0, 1.0, 21, mcc='y', num_events=240)
-
-    See Also
-    --------
-    Wire.scan : Full implementation
-    """
-    wire.scan(
-        start=start,
-        end=end,
-        num_steps=num_steps,
-        num_events=num_events,
-        mcc=mcc,
-        record=record,
-        **kwargs
-    )
-
-
-def get_wire_position() -> tuple:
-    """
-    Get current wire (X, Y) position.
-
-    Returns
-    -------
-    tuple
-        (x_position, y_position) in mm
-
-    Examples
-    --------
-    >>> x, y = get_wire_position()
-    >>> print(f"Wire at ({x}, {y}) mm")
-
-    See Also
-    --------
-    set_wire_position : Move wire to position
-    Wire.get : Get individual positions
-    """
-    x = float(Wire.get.x())
-    y = float(Wire.get.y())
-    return (x, y)
-
-
-def set_wire_position(x: Optional[float] = None, y: Optional[float] = None):
-    """
-    Move wire to specified position.
-
-    Parameters
-    ----------
-    x : float or None, optional
-        X position in mm (None = don't move X)
-    y : float or None, optional
-        Y position in mm (None = don't move Y)
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    Move both axes:
-    >>> set_wire_position(x=0.0, y=0.0)
-
-    Move X only:
-    >>> set_wire_position(x=1.5)
-
-    Move Y only:
-    >>> set_wire_position(y=-0.5)
-
-    See Also
-    --------
-    get_wire_position : Read current position
-    Wire.put : Move individual motors
-    """
-    if x is not None:
-        Wire.put.x(x)
-
-    if y is not None:
-        Wire.put.y(y)
-
-
-def analyze_wire_scan(
-        user: str,
-        facility: str = 'S3DF',
-        exp: str = None,
-        run: int = None):
-    """
-    Convenience function to analyze wire scan.
-
-    Parameters
-    ----------
-    user : str
-        Username for computing facility
-    facility : str, optional
-        'S3DF' or 'NERSC' (default: 'S3DF')
-    exp : str or None, optional
-        Experiment name
-    run : int or None, optional
-        Run number
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> analyze_wire_scan('myuser', exp='mfxls1234', run=123)
-    >>> analyze_wire_scan('myuser', facility='NERSC')
-
-    See Also
-    --------
-    Wire.output : Full implementation
-    """
-    wire.output(
-        user=user,
-        facility=facility,
-        exp=exp,
-        run=run
-    )
-
-
-def home_wire():
-    """
-    Move wire to home position (0, 0).
-
-    Returns
-    -------
-    None
-
-    Examples
-    --------
-    >>> home_wire()
-
-    See Also
-    --------
-    set_wire_position : Move to arbitrary position
-    """
-    logger.info("Homing wire scanner to (0, 0)")
-    set_wire_position(x=0.0, y=0.0)
-
-
-def park_wire(x_park: float = -10.0, y_park: float = -10.0):
-    """
-    Park wire scanner out of beam path.
-
-    Parameters
-    ----------
-    x_park : float, optional
-        X park position in mm (default: -10.0)
-    y_park : float, optional
-        Y park position in mm (default: -10.0)
-
-    Returns
-    -------
-    None
-
-    Notes
-    -----
-    Parks wire at specified position, typically
-    well outside the beam path for safety.
-
-    Default park position is (-10, -10) mm,
-    which should be clear of typical beam.
-
-    Examples
-    --------
-    >>> park_wire()  # Use default
-    >>> park_wire(x_park=-5.0, y_park=-5.0)  # Custom
-
-    See Also
-    --------
-    home_wire : Return to center position
-    """
-    logger.info(f"Parking wire scanner at ({x_park}, {y_park}) mm")
-    set_wire_position(x=x_park, y=y_park)

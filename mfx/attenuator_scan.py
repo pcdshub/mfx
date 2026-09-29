@@ -164,7 +164,7 @@ def attenuator_scan(
     autorun : Standard data acquisition
     delay_scan : Time-delay scanning
     """
-    from mfx.db import att, pp, daq
+    from mfx.db import att, mfx_pulsepicker, daq
     from mfx.autorun import quote, post
     from mfx.macros import get_run
 
@@ -212,10 +212,10 @@ def attenuator_scan(
     # Operate pulse picker
     if picker == 'open':
         logger.info("Opening pulse picker")
-        pp.open()
+        mfx_pulsepicker.open()
     elif picker == 'flip':
         logger.info("Setting pulse picker to flip-flop mode")
-        pp.flipflop()
+        mfx_pulsepicker.flipflop()
 
     # Main scan loop
     for run_idx in range(runs):
@@ -306,7 +306,7 @@ def attenuator_scan(
             )
 
         # Close pulse picker after run
-        pp.close()
+        mfx_pulsepicker.close()
 
         # Wait before next run
         if run_idx < runs - 1:

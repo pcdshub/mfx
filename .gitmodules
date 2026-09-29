@@ -1,3 +1,9 @@
 [submodule "dev/DropletOnDemand"]
 	path = dev/DropletOnDemand
 	url = git@github.com:joshc-slac/DropletOnDemand.git
+[submodule "mfx/jet_tracking"]
+	path = mfx/jet_tracking
+	url = https://github.com/pcdshub/jet_tracking.git
+[submodule "mfx/roadrunner"]
+	path = mfx/roadrunner
+	url = https://gitlab.desy.de/fsbmx/janus.git

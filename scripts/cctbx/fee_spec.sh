@@ -14,7 +14,8 @@ case $facility in
 
   NERSC)
     mfx_dir="/global/common/software/lcls/mfx"
-    source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    # source /global/common/software/cctbx/alcc-recipes/cctbx/activate.sh
+    source /pscratch/sd/c/cctbx/brewster/20260501/alcc-recipes/cctbx/activate.sh
     python /global/homes/c/cctbx/energy/fee_spec.py ${runs}
     ;;
 esac

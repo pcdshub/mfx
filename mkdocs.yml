@@ -1,0 +1,220 @@
+site_name: MFX Documentation
+site_description: API documentation for mfx
+site_author: LCLS MFX Team
+repo_url: https://github.com/pcdshub/mfx
+repo_name: pcdshub/mfx
+copyright: © 2025 LCLS
+theme:
+  name: material
+  logo: media/logo_2.png
+  favicon: media/logo.png
+  palette:
+  - scheme: slate
+    primary: orange
+    accent: deep orange
+    toggle:
+      icon: material/brightness-4
+      name: Switch to light mode
+  - scheme: default
+    primary: orange
+    accent: deep orange
+    toggle:
+      icon: material/brightness-7
+      name: Switch to dark mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+  - navigation.tabs
+  - navigation.tabs.sticky
+  - navigation.sections
+  - navigation.expand
+  - navigation.path
+  - navigation.indexes
+  - navigation.top
+  - navigation.tracking
+  - search.suggest
+  - search.highlight
+  - search.share
+  - toc.follow
+  - toc.integrate
+  - content.code.copy
+  - content.code.annotate
+  - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/flame-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: numpy
+          show_source: true
+          show_root_heading: true
+          show_root_full_path: false
+          show_root_toc_entry: true
+          show_object_full_path: false
+          show_category_heading: true
+          show_symbol_type_heading: true
+          show_symbol_type_toc: true
+          members_order: alphabetical
+          group_by_category: true
+          show_if_no_docstring: true
+          show_signature: true
+          show_signature_annotations: true
+          separate_signature: true
+          line_length: 80
+          merge_init_into_class: true
+          docstring_section_style: table
+          heading_level: 2
+- offline
+markdown_extensions:
+- abbr
+- admonition
+- attr_list
+- def_list
+- footnotes
+- md_in_html
+- tables
+- toc
+- pymdownx.arithmatex:
+    generic: true
+- pymdownx.betterem
+- pymdownx.caret
+- pymdownx.mark
+- pymdownx.tilde
+- pymdownx.critic
+- pymdownx.details
+- pymdownx.emoji
+- pymdownx.highlight:
+    anchor_linenums: true
+    line_spans: __span
+    pygments_lang_class: true
+- pymdownx.inlinehilite
+- pymdownx.keys
+- pymdownx.smartsymbols
+- pymdownx.snippets
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: '!!python/name:pymdownx.superfences.fence_code_format'
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.tasklist
+extra:
+  social:
+  - icon: fontawesome/brands/github
+    link: https://github.com/pcdshub/mfx
+  generator: false
+extra_css:
+- stylesheets/extra.css
+nav:
+- Home: index.md
+- Code Summary: code_summary.md
+- Dod:
+  - dod/DropsDriver.md
+  - dod/HTTPTransceiver.md
+  - dod/JsonFileHandler.md
+  - dod/ServerResponse.md
+  - dod/SupporEndsHandler.md
+  - dod/TestJsonFileHandler.md
+  - dod/TestResponse.md
+  - dod/codi.md
+  - dod/common.md
+  - dod/dod.md
+  - dod/mfxDOD_old.md
+  - dod/mfx_dod_old.md
+  - dod/testServer.md
+  - dod/testServerSpawner.md
+- Mfx:
+  - mfx/attenuator_scan.md
+  - mfx/autorun.md
+  - mfx/bash_utilities.md
+  - mfx/beamline.md
+  - mfx/cctbx.md
+  - mfx/dccm.md
+  - mfx/debug.md
+  - mfx/delay_scan.md
+  - mfx/devices.md
+  - mfx/energy_control.md
+  - mfx/exafs.md
+  - mfx/find.md
+  - mfx/junk.md
+  - mfx/macros.md
+  - mfx/mfx_timing.md
+  - mfx/notch_scan.md
+  - mfx/om.md
+  - mfx/scan.md
+  - mfx/timetool.md
+  - mfx/timing.md
+  - mfx/vernier.md
+  - mfx/vonhamos.md
+  - mfx/wire.md
+  - mfx/xas.md
+  - mfx/xlj_fast.md
+  - mfx/xrt_spec.md
+  - mfx/yano.md
+  - Optimize:
+    - mfx/optimize/beam.md
+    - mfx/optimize/beam_status.md
+    - mfx/optimize/beamline_hw.md
+    - mfx/optimize/blop_scans.md
+    - mfx/optimize/constraints.md
+    - mfx/optimize/devices.md
+    - mfx/optimize/errors.md
+    - mfx/optimize/interactive.md
+    - mfx/optimize/mirror_pointing.md
+    - mfx/optimize/plots.md
+    - mfx/optimize/type_checking.md
+    - mfx/optimize/undpoint.md
+    - mfx/optimize/user_select.md
+    - mfx/optimize/utils.md
+    - mfx/optimize/vernier_calibration.md
+    - mfx/optimize/xopt_scans.md
+  - Plans:
+    - mfx/plans/serp_seq_scan.md
+- Scripts:
+  - scripts/analyze_timing.md
+  - scripts/conf_edit.md
+  - scripts/detector_image.md
+  - scripts/focus_scan.md
+  - scripts/generate_code_summary.md
+  - scripts/generate_mkdocs.md
+  - scripts/get_info.md
+  - Auto Idle:
+    - scripts/auto_idle/idler.md
+  - Cctbx:
+    - scripts/cctbx/average.md
+    - scripts/cctbx/cctbx_start.md
+    - scripts/cctbx/energy_calib_output.md
+    - scripts/cctbx/fee_calib.md
+    - scripts/cctbx/fee_spec.md
+    - scripts/cctbx/fee_summed.md
+    - scripts/cctbx/geom_refine.md
+    - scripts/cctbx/image_viewer.md
+    - scripts/cctbx/mask.md
+  - Door Watcher:
+    - scripts/door_watcher/door_watcher.md
+- Tfs:
+  - tfs/lens.md
+  - tfs/offline_calculator.md
+  - tfs/sim_transfocator.md
+  - tfs/tfs_plots.md
+  - tfs/transfocator.md
+  - tfs/transfocator_scan.md
+  - tfs/utils.md

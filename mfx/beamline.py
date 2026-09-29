@@ -109,13 +109,18 @@ with safe_load('yano-kern_code'):
     from mfx.yano import *
     yano = Yano()
 
+with safe_load('tape_drive_motors'):
+    from pcdsdevices.device_types import Newport
+    tapedrive_x = Newport('MFX:USR:MMN:42', name='tapedrive_x')   # give descriptions later
+    tapedrive_y = Newport('MFX:USR:MMN:41', name='tapedrive_y')
+
 with safe_load('Droplet_on_Demand_Colliding_Droplets'):
     from dod.codi import *
     codi = CoDI()
 
 with safe_load('Droplet_on_Demand'):
     from dod.dod import *
-    dod = DoD(modules = 'codi')
+    dod = DoD(ip = "172.21.39.172")
 
 with safe_load('Debugging Scripts'):
     from mfx.debug import *
@@ -134,6 +139,15 @@ with safe_load('XLJ_Fast'):
     xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
     xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
     xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
+
+with safe_load('Wolter_mirror_motion'):
+    from pcdsdevices.epics_motor import IMS
+    wolter_x = IMS("MFX:USR:MMS:22", name="wolter_x")
+    wolter_y = IMS("MFX:USR:MMS:20", name="wolter_y")
+    wolter_z = IMS("MFX:USR:MMS:21", name="wolter_z")
+    wolter_rx = IMS("MFX:USR:MMS:17", name="wolter_rx")
+    wolter_ry = IMS("MFX:USR:MMS:19", name="wolter_ry")
+    wolter_rz = IMS("MFX:USR:MMS:18", name="wolter_rz")
 
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
@@ -166,7 +180,7 @@ with safe_load('Get_Info'):
 
 with safe_load('Wire_Scan'):
     from mfx.wire import *
-    wire = Wire()
+    wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
 
 with safe_load('EXAFS'):
     from mfx.exafs import *
@@ -183,19 +197,23 @@ with safe_load('EXAFS_Builder'):
 with safe_load('energy_control'):
     from mfx.energy_control import *
 
+with safe_load('Timing'):
+    from mfx.timing import *
+    timing = Timing()
+
 with safe_load("laser wp power"):
     from pcdsdevices.lxe import LaserEnergyPositioner
     from hutch_python.utils import get_current_experiment
     from pcdsdevices.device import Component as Cpt
     from pcdsdevices.epics_motor import Newport
 
-    # Hack the LXE class to make it work with Newports
-    class LXE(LaserEnergyPositioner):
-        motor = Cpt(Newport, "")
+    # # Hack the LXE class to make it work with Newports
+    # class LXE(LaserEnergyPositioner):
+    #     motor = Cpt(Newport, "")
 
     lxe_calib_file = (f"/reg/neh/operator/mfxopr/experiments/{get_current_experiment('mfx')}/wpcalib")
     try:
-        lxe = LXE("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
+        lxe = Newport("MFX:LAS:MMN:08", calibration_file=lxe_calib_file, name="lxe")
     except OSError:
         print(f"Could not load file: {lxe_calib_file}")
         raise FileNotFoundError
@@ -230,35 +248,49 @@ with safe_load('add laser motor groups'):
     from pcdsdevices.device_types import Newport
     from pcdsdevices.device_types import DelayNewport
     from pcdsdevices.usb_encoder import UsDigitalUsbEncoder
-    from mfx.db import mfx_lxt_fast1
-    lxt_fast=mfx_lxt_fast1
+    from mfx.db import mfx_lxt_fast1, mfx_lxt_fast2
 
     #opa_comp = Newport('MFX:LAS:MMN:01', name='opa_comp') # linear motor for OPA compressor
     # this is the timetool compensationn stage. You might want this one
+
     class las():
         #opa_comp = opa_comp # waveplate for the main compressor
         # Time tool motors
         # initialize motors here for tab completion if wanted
         with safe_load('add more laser motors'):
-            lasmot2 = Newport('MFX:LAS:MMN:02', name='lasmot2') # give descriptions later
+            lasmot2 = Newport('MFX:LAS:MMN:02', name='lasmot2')   # give descriptions later
             lasmot3 = Newport('MFX:LAS:MMN:03', name='lasmot3')
             lasmot4 = Newport('MFX:LAS:MMN:04', name='lasmot4')
             lasmot5 = Newport('MFX:LAS:MMN:05', name='lasmot5')
             lasmot7 = Newport('MFX:LAS:MMN:07', name='lasmot7')
             lasmot8 = Newport('MFX:LAS:MMN:08', name='lasmot8')
-            lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')
-            lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
-            lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
+            #lens_v = Newport('MFX:LAS:MMN:12', name='lens_v')     # check w/James
+            #lens_f = Newport('MFX:LAS:MMN:09', name='lens_f')
+            #lens_h = Newport('MFX:LAS:MMN:11', name='lens_h')
             #lens_g = Newport('MFX:LAS:MMN:12', name='lens_g')
+            lens_h = Newport('MFX:LAS:MMN:09', name='lens_h') #changed Apr 4
+            lens_v = Newport('MFX:LAS:MMN:10', name='lens_v') #same
+            lens_f = Newport('MFX:LAS:MMN:11', name='lens_f') #same
+            mirlens_v = Newport('MFX:HRA:MMN:25', name='mirlens_v')
+            mirlens_h = Newport('MFX:HRA:MMN:26', name='mirlens_h')
+            mirlens_f = Newport('MFX:HRA:MMN:27', name='mirlens_f')
+            oap_f = Newport('MFX:HRA:MMN:28', name='oap_f')
+            oap_v = Newport('MFX:HRA:MMN:29', name='oap_v')
+            oap_h = Newport('MFX:HRA:MMN:30', name='oap_h')
+            focus_track = Newport('MFX:HRA:MMN:31', name='focus_track')
 
         with safe_load('Fast delay encoders'):
-            lxt_fast1_enc = UsDigitalUsbEncoder('MFX:USDUSB4:01:CH0', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast1_enc = UsDigitalUsbEncoder(
+                'MFX:USDUSB4:01:CH2', name='lxt_fast_enc1', linked_axis=mfx_lxt_fast1)
+            lxt_fast2_enc = UsDigitalUsbEncoder(
+                'MFX:USDUSB4:01:CH1', name='lxt_fast_enc2', linked_axis=mfx_lxt_fast2)
 
-        # timing virtual motors for x-ray laser delay adjustment
-        lxt = lxt # virtual motor that moves the laser timing system phase shifter
-        txt = txt
-        lxt_ttc = lxt_ttc
-        lxt_fast1 = mfx_lxt_fast1
+    # timing virtual motors for x-ray laser delay adjustment
+    lxt = lxt # virtual motor that moves the laser timing system phase shifter
+    txt = txt
+    lxt_ttc = lxt_ttc
+    lxt_fast1 = mfx_lxt_fast1
+    lxt_fast2 = mfx_lxt_fast2
 
 def mfx_reload(module_name):
     import importlib
@@ -298,9 +330,9 @@ def mfx_reload(module_name):
         from mfx.find import Find
         find = Find()
 
-    if module_name == 'mfx.wire':
+    if module_name == 'mfx.wire': #This is double trouble
         from mfx.wire import Wire
-        wire = Wire()
+        wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
 
     if module_name == 'mfx.debug':
         from mfx.debug import Debug
@@ -313,6 +345,10 @@ def mfx_reload(module_name):
     if module_name == 'mfx.xrt_spec':
         from mfx.xrt_spec import XRTspec
         xrtspec = XRTspec()
+
+    if module_name == 'mfx.timing':
+        from mfx.timing import Timing
+        timing = Timing()
 
 #aliases added by Leland 071523
 with safe_load('Make Aliases'):
@@ -330,7 +366,7 @@ with safe_load('Make Aliases'):
     from mfx.db import mfx_dia_ipm as ipm0
     from mfx.db import mfx_dg1_ipm as ipm1
     from mfx.db import mfx_dg2_ipm as ipm2
-    from mfx.db import mfx_pulsepicker as pp
+    from mfx.db import mfx_pulsepicker as mfx_pulsepicker
     #from mfx.db import mfx_prefocus as crl1
     crl1=mfx_prefocus
     from mfx.db import um6_pim as xcs_yag1

@@ -26,11 +26,11 @@ class Jungfrau(Dcfg):
         """
         Programatically sets up get_name and set_name methods during init.
         """
-        # Need to pass src if not MfxEndstation.0:Jungfrau.0 
+        # Need to pass src if not MfxEndstation.0:Jungfrau.0
         #In [34]: psana.DetInfo(48,0,43,1)
         # Out[34]: DetInfo(MfxEndstation.0:Jungfrau.1)
         self.src = src
-        Dcfg.__init__(self, hutch, *aliases, src=src, typeid=0x3006b) 
+        Dcfg.__init__(self, hutch, *aliases, src=src, typeid=0x3006b)
         self._add_methods("gainMode", "gainMode")
         self._jfGainMode = {'FixedGain1': 1,
                            'FixedGain2': 2,
@@ -67,36 +67,36 @@ def takeJungfrauPedestals(record=True, nEvts=1000):
 
     for jf in jfs:
         currMode=jf.get_gainmode()
-        print 'current mode for {} : {}'.format(jf.src, jf.gainName(currMode))
+        print('current mode for {} : {}'.format(jf.src, jf.gainName(currMode)))
     for thisgainmode in gainmodes:
         for jf in jfs:
-            print 'Collecting pedestal for {} with mode {}'.format(jf.src,  thisgainmode)
+            print('Collecting pedestal for {} with mode {}'.format(jf.src,  thisgainmode))
             if isinstance(thisgainmode, basestring):
                 thisgainmode_string = thisgainmode
                 thisgainmode = jf._jfGainMode[thisgainmode]
             else:
                 thisgainmode_string = jf.gainName(thisgainmode)
-            print 'switching gainmode to ',thisgainmode_string
+            print('switching gainmode to ',thisgainmode_string)
             if jf.get_gainmode()!= thisgainmode:
                 jf.set_gainmode(thisgainmode)
                 jf.commit()
 
                 if jf.get_gainmode() != thisgainmode:
-                    print 'waiting for gain to switch from ',jf.gainName(jf.get_gainmode()),' to ', thisgainmode_string
+                    print('waiting for gain to switch from ',jf.gainName(jf.get_gainmode()),' to ', thisgainmode_string)
                 while jf.get_gainmode() != thisgainmode:
                     time.sleep(0.5)
 
         daq.configure(events=0, record=record)
-        print 'take run for gain ',thisgainmode_string
+        print('take run for gain ',thisgainmode_string)
         daq.begin(events=nEvts)
         daq.end()
         daq.endrun()
-        print 'took run %d for gain %s with %d events'%(daq.runnumber(),thisgainmode_string, nEvts)
+        print('took run %d for gain %s with %d events'%(daq.runnumber(),thisgainmode_string, nEvts))
 
     for jf in jfs:
         jf.set_gainmode(0)
         jf.commit()
-    print 'now call makepeds -J -r ',int(daq.runnumber())-2
+    print('now call makepeds -J -r ',int(daq.runnumber())-2)
     daq.disconnect()
 
 if __name__ == '__main__':

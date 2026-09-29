@@ -623,6 +623,40 @@ def get_run(hutch='mfx', station: int = 0) -> int:
     return run
 
 
+def wolter_positions(distance_IP_detector: float):
+    '''
+    Calculate vertical position changes for Wolter mirror based on distance from IP to detector.
+
+    Uses a lift ratio of 0.02395 mm lift per mm distance to calculate the required vertical
+    position changes for the Wolter mirror and associated components based on the distance
+    from the interaction point (IP) to the detector. The calculations are based on the geometry
+    of the beamline and the positions of the components relative to the IP and detector. The
+    distances used in the calculations are:
+    - Distance from Wolter mirror to IP: 817.3 mm
+    - Distance from IP to detector: variable (input parameter)
+    - Distance from Wolter mirror to motor 1: 817.3 mm + distance from IP to detector + 270 mm
+    - Distance from motor 1 to motor 2: 250 mm
+
+    Parameters
+    ----------
+    distance_IP_detector : float
+        Distance from interaction point (IP) to detector in mm
+    '''
+    distance_Wolter_IP = 817.3
+    distance_detector_motor_1 = 270
+    distance_motor_1_motor_2 = 250
+    lift_ratio = 0.02395 #[mm lift per distance mm]
+    Delta_y_IP = round(distance_Wolter_IP*lift_ratio, 2)
+    Delta_y_det = round((distance_Wolter_IP + distance_IP_detector)*lift_ratio, 2)
+    Delta_y_motor_1 = round((distance_Wolter_IP + distance_IP_detector + distance_detector_motor_1)*lift_ratio, 2)
+    Delta_y_motor_2 = round((distance_Wolter_IP + distance_IP_detector + distance_detector_motor_1 + distance_motor_1_motor_2)*lift_ratio, 2)
+
+    print(f'Delta_y_IP: {Delta_y_IP}')
+    print(f'Delta_y_det: {Delta_y_det}')
+    print(f'Delta_y_motor_1: {Delta_y_motor_1}')
+    print(f'Delta_y_motor_2: {Delta_y_motor_2}')
+
+
 class FakeDetector:
     """
     Fake detector for simulations and testing.
