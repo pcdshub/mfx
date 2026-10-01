@@ -1,7 +1,7 @@
 # Code Repository Summary
 
 !!! info "Auto-Generated Documentation"
-    Last updated: 2026-07-22 12:35:25
+    Last updated: 2026-10-01 16:28:47
 
 ## Table of Contents
 
@@ -423,6 +423,8 @@
    `def ppm(self)`
 
    `def ppm_kill(self)`
+
+   `def pps(self, debug: bool = False)`
 
    `def grabber(self)`
 
@@ -3998,4 +4000,4 @@
 ## Repository Statistics
 
 - **Total Modules:** 196
-- **Total Functions:** 1783
+- **Total Functions:** 1784
