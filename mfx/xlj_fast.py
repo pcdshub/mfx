@@ -21,19 +21,28 @@ logger = logging.getLogger(__name__)
 
 
 # Key code constants for arrow keys and special keys
+#
+# NOTE: 'shift_up'/'shift_down'/'shift_right'/'shift_left' are kept for
+# legacy support, but after the GNOME -> KDE (Konsole) migration these
+# Shift+Arrow escape sequences are no longer passed through by the Konsole
+# terminal emulator. Numpad-style alternatives are provided below and wired
+# up alongside the legacy keys everywhere they are used:
+#   '8' == shift_up      '2' == shift_down
+#   '4' == shift_left     '6' == shift_right
+# If you are using Konsole, use 8/2/4/6 (numpad) instead of Shift+Arrow.
 KEYS = {
-    'up': "\x1b[A",
-    'down': "\x1b[B",
-    'right': "\x1b[C",
-    'left': "\x1b[D",
-    'shift_up': "\x1b[1;2A",
-    'shift_down': "\x1b[1;2B",
-    'shift_right': "\x1b[1;2C",
-    'shift_left': "\x1b[1;2D",
-    'plus': "+",
-    'equal': "=",
-    'minus': "-",
-    'under': "_",
+    "up": "\x1b[A",
+    "down": "\x1b[B",
+    "right": "\x1b[C",
+    "left": "\x1b[D",
+    "shift_up": "\x1b[1;2A",  # legacy; use '8' on Konsole
+    "shift_down": "\x1b[1;2B",  # legacy; use '2' on Konsole
+    "shift_right": "\x1b[1;2C",  # legacy; use '6' on Konsole
+    "shift_left": "\x1b[1;2D",  # legacy; use '4' on Konsole
+    "plus": "+",
+    "equal": "=",
+    "minus": "-",
+    "under": "_",
 }
 
 
@@ -114,27 +123,37 @@ class XLJController:
 
     Notes
     -----
+    Konsole compatibility:
+    - After the GNOME -> KDE migration, Konsole does not pass through
+      Shift+Arrow key escape sequences.
+    - Shift+Up/Shift+Down and Shift+Right/Shift+Left remain supported as
+      legacy keys (e.g. on gnome-terminal), but numpad-style alternatives
+      are provided for Konsole users: 8=Shift+Up, 2=Shift+Down,
+      6=Shift+Right, 4=Shift+Left.
+
     Control Modes:
 
     Translation (X, Y, Z):
     - Arrow keys: Move X and Y
-    - Shift+Up/Down: Move Z
+    - Shift+Up/Down (legacy) or 8/2: Move Z
     - Direct spatial control
     - Units: mm
 
     Rotation (RX, RY, RZ):
     - Arrow keys: Rotate RX and RY
-    - Shift+Up/Down: Rotate RZ
+    - Shift+Up/Down (legacy) or 8/2: Rotate RZ
     - Angular adjustments
     - Units: degrees
 
     6-Axis (X, Y, Z, RX, RY, RZ):
     - Arrow keys: Move X and Y
-    - Shift+Up/Down: Move Z
+    - Shift+Up/Down (legacy) or 8/2: Move Z
     - W/S: Rotate RY (horizontal) or RX (vertical)
     - A/D: Rotate RX (horizontal) or RY (vertical)
     - Shift+W/S: Rotate RZ
     - Full control of all DOF
+    - Note: W/S/A/D remain dedicated to rotation in this mode, so Z
+      movement uses 8/2 (not W/S) to avoid a key collision on Konsole
 
     Orientation:
     - Horizontal: Standard camera view
@@ -145,8 +164,8 @@ class XLJController:
     Step Size Control:
     - +/=: Double current step
     - -/_: Halve current step
-    - Shift+Right: Double step
-    - Shift+Left: Halve step
+    - Shift+Right (legacy) or 6: Double step
+    - Shift+Left (legacy) or 4: Halve step
     - Dynamic adjustment during use
 
     Visual Feedback:
@@ -171,11 +190,12 @@ class XLJController:
     """
 
     def __init__(
-            self,
-            motors: List,
-            orientation: str = 'horizontal',
-            scale: float = 0.1,
-            mode: str = 'translation'):
+        self,
+        motors: List,
+        orientation: str = "horizontal",
+        scale: float = 0.1,
+        mode: str = "translation",
+    ):
         """
         Initialize XLJ controller.
 
@@ -197,11 +217,11 @@ class XLJController:
         self.xlj = None  # Set by caller if needed
 
         # Setup key mappings based on mode
-        if mode == 'translation':
+        if mode == "translation":
             self._setup_translation_keys()
-        elif mode == 'rotation':
+        elif mode == "rotation":
             self._setup_rotation_keys()
-        elif mode == '6axis':
+        elif mode == "6axis":
             self._setup_6axis_keys()
         else:
             raise ValueError(f"Unknown mode: {mode}")
@@ -217,11 +237,11 @@ class XLJController:
         name = motor.name.lower()
 
         # Most robust: check suffixes in motor name
-        if name.endswith('_x') or name.endswith(':x') or 'jet:x' in name:
+        if name.endswith("_x") or name.endswith(":x") or "jet:x" in name:
             return self.xlj.jet.x
-        if name.endswith('_y') or name.endswith(':y') or 'jet:y' in name:
+        if name.endswith("_y") or name.endswith(":y") or "jet:y" in name:
             return self.xlj.jet.y
-        if name.endswith('_z') or name.endswith(':z') or 'jet:z' in name:
+        if name.endswith("_z") or name.endswith(":z") or "jet:z" in name:
             return self.xlj.jet.z
 
         return None  # rotations etc
@@ -248,7 +268,10 @@ class XLJController:
         if round(jet_pos, decimals) != round(mot_pos, decimals):
             logger.error(
                 "Position mismatch before move: %s=%.4f, %s=%.4f",
-                "xlj.jet", jet_pos, motor.name, mot_pos
+                "xlj.jet",
+                jet_pos,
+                motor.name,
+                mot_pos,
             )
             # Resync to jet position (OG behavior)
             try:
@@ -258,120 +281,162 @@ class XLJController:
                 logger.debug("", exc_info=True)
 
     def _setup_translation_keys(self):
-        """Setup key mappings for translation mode (X, Y, Z)."""
-        if self.orientation == 'horizontal':
+        """Setup key mappings for translation mode (X, Y, Z).
+
+        '8'/'2' are Konsole-friendly numpad alternatives to the legacy
+        Shift+Up/Shift+Down keys for moving the Z axis.
+        """
+        if self.orientation == "horizontal":
             self.move_map = {
-                KEYS['left']: ('x', -1),
-                KEYS['right']: ('x', 1),
-                KEYS['down']: ('y', -1),
-                KEYS['up']: ('y', 1),
-                KEYS['shift_up']: ('z', -1),
-                KEYS['shift_down']: ('z', 1),
+                KEYS["left"]: ("x", -1),
+                KEYS["right"]: ("x", 1),
+                KEYS["down"]: ("y", -1),
+                KEYS["up"]: ("y", 1),
+                KEYS["shift_up"]: ("z", -1),
+                KEYS["shift_down"]: ("z", 1),
+                "8": ("z", -1),  # Konsole alt. for shift_up
+                "2": ("z", 1),  # Konsole alt. for shift_down
             }
         else:  # vertical
             self.move_map = {
-                KEYS['right']: ('x', -1),
-                KEYS['left']: ('x', 1),
-                KEYS['down']: ('y', 1),
-                KEYS['up']: ('y', -1),
-                KEYS['shift_up']: ('z', -1),
-                KEYS['shift_down']: ('z', 1),
+                KEYS["right"]: ("x", -1),
+                KEYS["left"]: ("x", 1),
+                KEYS["down"]: ("y", 1),
+                KEYS["up"]: ("y", -1),
+                KEYS["shift_up"]: ("z", -1),
+                KEYS["shift_down"]: ("z", 1),
+                "8": ("z", -1),  # Konsole alt. for shift_up
+                "2": ("z", 1),  # Konsole alt. for shift_down
             }
 
         self.move_keys = tuple(self.move_map.keys())
-        self.motor_names = ['X', 'Y', 'Z']
+        self.motor_names = ["X", "Y", "Z"]
 
     def _setup_rotation_keys(self):
-        """Setup key mappings for rotation mode (RX, RY, RZ)."""
-        if self.orientation == 'horizontal':
+        """Setup key mappings for rotation mode (RX, RY, RZ).
+
+        '8'/'2' are Konsole-friendly numpad alternatives to the legacy
+        Shift+Up/Shift+Down keys for rotating the RZ axis.
+        """
+        if self.orientation == "horizontal":
             self.move_map = {
-                KEYS['left']: ('rx', -1),
-                KEYS['right']: ('rx', 1),
-                KEYS['down']: ('ry', -1),
-                KEYS['up']: ('ry', 1),
-                KEYS['shift_up']: ('rz', -1),
-                KEYS['shift_down']: ('rz', 1),
+                KEYS["left"]: ("rx", -1),
+                KEYS["right"]: ("rx", 1),
+                KEYS["down"]: ("ry", -1),
+                KEYS["up"]: ("ry", 1),
+                KEYS["shift_up"]: ("rz", -1),
+                KEYS["shift_down"]: ("rz", 1),
+                "8": ("rz", -1),  # Konsole alt. for shift_up
+                "2": ("rz", 1),  # Konsole alt. for shift_down
             }
         else:  # vertical
             self.move_map = {
-                KEYS['right']: ('rx', -1),
-                KEYS['left']: ('rx', 1),
-                KEYS['down']: ('ry', 1),
-                KEYS['up']: ('ry', -1),
-                KEYS['shift_up']: ('rz', -1),
-                KEYS['shift_down']: ('rz', 1),
+                KEYS["right"]: ("rx", -1),
+                KEYS["left"]: ("rx", 1),
+                KEYS["down"]: ("ry", 1),
+                KEYS["up"]: ("ry", -1),
+                KEYS["shift_up"]: ("rz", -1),
+                KEYS["shift_down"]: ("rz", 1),
+                "8": ("rz", -1),  # Konsole alt. for shift_up
+                "2": ("rz", 1),  # Konsole alt. for shift_down
             }
 
         self.move_keys = tuple(self.move_map.keys())
-        self.motor_names = ['RX', 'RY', 'RZ']
+        self.motor_names = ["RX", "RY", "RZ"]
 
     def _setup_6axis_keys(self):
-        """Setup key mappings for 6-axis mode (X, Y, Z, RX, RY, RZ)."""
-        if self.orientation == 'horizontal':
+        """Setup key mappings for 6-axis mode (X, Y, Z, RX, RY, RZ).
+
+        '8'/'2' are Konsole-friendly numpad alternatives to the legacy
+        Shift+Up/Shift+Down keys for moving the Z axis. Note: W/S/A/D
+        remain dedicated to RX/RY rotation in this mode, so Z movement
+        uses 8/2 rather than W/S to avoid a collision.
+        """
+        if self.orientation == "horizontal":
             self.move_map = {
-                KEYS['left']: ('x', -1),
-                KEYS['right']: ('x', 1),
-                KEYS['down']: ('y', -1),
-                KEYS['up']: ('y', 1),
-                KEYS['shift_up']: ('z', -1),
-                KEYS['shift_down']: ('z', 1),
-                'w': ('ry', 1),
-                's': ('ry', -1),
-                'd': ('rx', 1),
-                'a': ('rx', -1),
-                'W': ('rz', -1),
-                'S': ('rz', 1),
+                KEYS["left"]: ("x", -1),
+                KEYS["right"]: ("x", 1),
+                KEYS["down"]: ("y", -1),
+                KEYS["up"]: ("y", 1),
+                KEYS["shift_up"]: ("z", -1),
+                KEYS["shift_down"]: ("z", 1),
+                "8": ("z", -1),  # Konsole alt. for shift_up
+                "2": ("z", 1),  # Konsole alt. for shift_down
+                "w": ("ry", 1),
+                "s": ("ry", -1),
+                "d": ("rx", 1),
+                "a": ("rx", -1),
+                "W": ("rz", -1),
+                "S": ("rz", 1),
             }
         else:  # vertical
             self.move_map = {
-                KEYS['right']: ('x', -1),
-                KEYS['left']: ('x', 1),
-                KEYS['down']: ('y', 1),
-                KEYS['up']: ('y', -1),
-                KEYS['shift_up']: ('z', -1),
-                KEYS['shift_down']: ('z', 1),
-                'w': ('rx', -1),
-                's': ('rx', 1),
-                'd': ('ry', -1),
-                'a': ('ry', 1),
-                'W': ('rz', -1),
-                'S': ('rz', 1),
+                KEYS["right"]: ("x", -1),
+                KEYS["left"]: ("x", 1),
+                KEYS["down"]: ("y", 1),
+                KEYS["up"]: ("y", -1),
+                KEYS["shift_up"]: ("z", -1),
+                KEYS["shift_down"]: ("z", 1),
+                "8": ("z", -1),  # Konsole alt. for shift_up
+                "2": ("z", 1),  # Konsole alt. for shift_down
+                "w": ("rx", -1),
+                "s": ("rx", 1),
+                "d": ("ry", -1),
+                "a": ("ry", 1),
+                "W": ("rz", -1),
+                "S": ("rz", 1),
             }
 
         self.move_keys = tuple(self.move_map.keys())
-        self.motor_names = ['X', 'Y', 'Z', 'RX', 'RY', 'RZ']
+        self.motor_names = ["X", "Y", "Z", "RX", "RY", "RZ"]
 
     @property
     def scale_keys(self):
-        """Return tuple of scale adjustment keys."""
+        """Return tuple of scale adjustment keys.
+
+        '4'/'6' are Konsole-friendly numpad alternatives to the legacy
+        Shift+Left/Shift+Right keys for halving/doubling the step size.
+        """
         return (
-            KEYS['plus'], KEYS['minus'], KEYS['equal'], KEYS['under'],
-            KEYS['shift_right'], KEYS['shift_left']
+            KEYS["plus"],
+            KEYS["minus"],
+            KEYS["equal"],
+            KEYS["under"],
+            KEYS["shift_right"],
+            KEYS["shift_left"],
+            "6",  # Konsole alt. for shift_right
+            "4",  # Konsole alt. for shift_left
         )
 
     def print_help(self):
-        """Display control instructions."""
-        print("\n" + "="*60)
-        print(f"XLJ {self.mode.upper()} MODE CONTROL")
-        print("="*60)
+        """Display control instructions.
 
-        if self.mode == 'translation':
+        Note: On Konsole (KDE's terminal, used after the GNOME -> KDE
+        migration), Shift+Arrow key combinations are not passed through
+        to the application. Use the numpad-style alternatives below
+        (8/2/4/6) instead when running under Konsole.
+        """
+        print("\n" + "=" * 60)
+        print(f"XLJ {self.mode.upper()} MODE CONTROL")
+        print("=" * 60)
+
+        if self.mode == "translation":
             print("Arrow Keys:")
             print("  ← → : Move X axis")
             print("  ↑ ↓ : Move Y axis")
-            print(" Shift+↑ ↓ : Move Z axis upstream/downstream")
+            print("  Shift+↑ ↓ (legacy) or 8/2 : Move Z axis upstream/downstream")
 
-        elif self.mode == 'rotation':
+        elif self.mode == "rotation":
             print("Arrow Keys:")
             print("  ← → : Rotate RX axis")
             print("  ↑ ↓ : Rotate RY axis")
-            print("  Shift+↑ ↓ : Rotate RZ axis")
+            print("  Shift+↑ ↓ (legacy) or 8/2 : Rotate RZ axis")
 
-        elif self.mode == '6axis':
+        elif self.mode == "6axis":
             print("Translation:")
             print("  ← → : Move X axis")
             print("  ↑ ↓ : Move Y axis")
-            print("  Shift+↑ ↓ : Move Z axis")
+            print("  Shift+↑ ↓ (legacy) or 8/2 : Move Z axis")
             print("\nRotation (horizontal camera):")
             print("  W/S : Rotate RY axis")
             print("  A/D : Rotate RX axis")
@@ -384,13 +449,17 @@ class XLJController:
         print("\nStep Size:")
         print("  + or = : Double step size")
         print("  - or _ : Halve step size")
-        print("  Shift+→ : Double step size")
-        print("  Shift+← : Halve step size")
+        print("  Shift+→ (legacy) or 6 : Double step size")
+        print("  Shift+← (legacy) or 4 : Halve step size")
+
+        print("\nKonsole note:")
+        print("  Shift+Arrow keys do not register on Konsole (KDE).")
+        print("  Use the numpad keys 8/2/4/6 as alternatives.")
 
         print("\nOther:")
         print("  h : Show this help")
         print("  q : Quit")
-        print("="*60)
+        print("=" * 60)
 
     def format_status_line(self) -> str:
         # Similar spirit to OG: concise, consistent formatting
@@ -458,7 +527,9 @@ class XLJController:
                     mot_pos = float(motor())
 
                     if round(jet_pos, 2) != round(mot_pos, 2):
-                        logger.error(f"xlj.jet.{axis} = {jet_pos}, {motor.name} = {mot_pos}")
+                        logger.error(
+                            f"xlj.jet.{axis} = {jet_pos}, {motor.name} = {mot_pos}"
+                        )
                         motor.umv(jet_pos)
             except Exception as exc:
                 logger.error("Error in position sync check for %s: %s", motor.name, exc)
@@ -477,7 +548,6 @@ class XLJController:
             logger.debug("", exc_info=True)
             print(f"\nError: {exc}")
 
-
     def run(self):
         """
         Interactive control loop with OG-style one-line status output.
@@ -485,6 +555,7 @@ class XLJController:
         - Press 'h' prints the full help (your print_help) and returns to status line
         - Unknown keys print help (like OG)
         """
+
         def motor_pos(m):
             try:
                 if hasattr(m, "wm"):
@@ -497,7 +568,9 @@ class XLJController:
 
         def status_line():
             # OG-ish formatting: fixed decimals unless extremely small
-            template = "{name}: {pos:.4f}" if self.scale >= 1e-4 else "{name}: {pos:.4e}"
+            template = (
+                "{name}: {pos:.4f}" if self.scale >= 1e-4 else "{name}: {pos:.4e}"
+            )
             parts = []
             for m in self.motors:
                 name = getattr(m, "name", "motor")
@@ -529,7 +602,7 @@ class XLJController:
                 # Read 1 char or escape sequence
                 char = sys.stdin.read(1)
                 if char == "\x1b":
-                    char += sys.stdin.read(2)      # e.g. \x1b[A
+                    char += sys.stdin.read(2)  # e.g. \x1b[A
                     if char == "\x1b[1":
                         char += sys.stdin.read(3)  # e.g. \x1b[1;2A
 
@@ -540,7 +613,7 @@ class XLJController:
 
                 # Help
                 if char == "h":
-                    print()          # don't overwrite status line
+                    print()  # don't overwrite status line
                     self.print_help()
                     continue
 
@@ -550,11 +623,12 @@ class XLJController:
                     self.execute_move(axis, direction)
                     continue
 
-                # Scale
-                if char in (KEYS["plus"], KEYS["equal"], KEYS["shift_right"]):
+                # Scale ('6' and '4' are Konsole-friendly numpad
+                # alternatives to the legacy shift_right/shift_left keys)
+                if char in (KEYS["plus"], KEYS["equal"], KEYS["shift_right"], "6"):
                     self.update_scale(2.0)
                     continue
-                if char in (KEYS["minus"], KEYS["under"], KEYS["shift_left"]):
+                if char in (KEYS["minus"], KEYS["under"], KEYS["shift_left"], "4"):
                     self.update_scale(0.5)
                     continue
 
@@ -570,7 +644,8 @@ class XLJController:
 
 # High-level control functions
 
-def xlj_fast(orientation: str = 'horizontal', scale: float = 0.1):
+
+def xlj_fast(orientation: str = "horizontal", scale: float = 0.1):
     """
     Interactive XLJ translation control (X, Y, Z).
 
@@ -594,10 +669,14 @@ def xlj_fast(orientation: str = 'horizontal', scale: float = 0.1):
     -----
     Controls:
     - Arrow keys: Move X and Y
-    - Shift+↑ ↓ : Move Z upstream/downstream
-    - +/- : Adjust step size
+    - Shift+↑ ↓ (legacy) or 8/2 : Move Z upstream/downstream
+    - +/- or Shift+→/← (legacy) or 6/4 : Adjust step size
     - h : Help
     - q : Quit
+
+    Konsole note: Shift+Arrow keys do not register on Konsole (KDE's
+    terminal, used since the GNOME -> KDE migration). Use the numpad
+    keys 8/2 (Z move) and 4/6 (step size) instead.
 
     Examples
     --------
@@ -614,14 +693,14 @@ def xlj_fast(orientation: str = 'horizontal', scale: float = 0.1):
     xlj_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_z")
 
     motors = [xlj_x, xlj_y, xlj_z]
-    ctrl = XLJController(motors, orientation, scale, 'translation')
-    ctrl.xlj = BeckhoffJet('MFX:LJH', name='xlj')
+    ctrl = XLJController(motors, orientation, scale, "translation")
+    ctrl.xlj = BeckhoffJet("MFX:LJH", name="xlj")
 
     logger.info("Starting XLJ translation control")
     ctrl.run()
 
 
-def xlj_fast_rot(orientation: str = 'horizontal', scale: float = 0.1):
+def xlj_fast_rot(orientation: str = "horizontal", scale: float = 0.1):
     """
     Interactive XLJ rotation control (RX, RY, RZ).
 
@@ -643,10 +722,14 @@ def xlj_fast_rot(orientation: str = 'horizontal', scale: float = 0.1):
     -----
     Controls:
     - Arrow keys: Rotate RX and RY
-    - Shift+↑ ↓ : Rotate RZ
-    - +/- : Adjust step size
+    - Shift+↑ ↓ (legacy) or 8/2 : Rotate RZ
+    - +/- or Shift+→/← (legacy) or 6/4 : Adjust step size
     - h : Help
     - q : Quit
+
+    Konsole note: Shift+Arrow keys do not register on Konsole (KDE's
+    terminal, used since the GNOME -> KDE migration). Use the numpad
+    keys 8/2 (RZ rotate) and 4/6 (step size) instead.
 
     Examples
     --------
@@ -663,13 +746,13 @@ def xlj_fast_rot(orientation: str = 'horizontal', scale: float = 0.1):
     xlj_rz = IMS("MFX:HRA:MMS:03", name="xlj_rz")
 
     motors = [xlj_rx, xlj_ry, xlj_rz]
-    ctrl = XLJController(motors, orientation, scale, 'rotation')
+    ctrl = XLJController(motors, orientation, scale, "rotation")
 
     logger.info("Starting XLJ rotation control")
     ctrl.run()
 
 
-def xlj_6axis(orientation: str = 'horizontal', scale: float = 0.1):
+def xlj_6axis(orientation: str = "horizontal", scale: float = 0.1):
     """
     Interactive XLJ 6-axis control (X, Y, Z, RX, RY, RZ).
 
@@ -692,13 +775,19 @@ def xlj_6axis(orientation: str = 'horizontal', scale: float = 0.1):
     -----
     Controls:
     - Arrow keys: Move X and Y
-    - Shift+↑ ↓ : Move Z
+    - Shift+↑ ↓ (legacy) or 8/2 : Move Z
     - W/S: Rotate RY (horizontal) or RX (vertical)
     - A/D: Rotate RX (horizontal) or RY (vertical)
     - Shift+W/S: Rotate RZ
-    - +/- : Adjust step size
+    - +/- or Shift+→/← (legacy) or 6/4 : Adjust step size
     - h : Help
     - q : Quit
+
+    Konsole note: Shift+Arrow keys do not register on Konsole (KDE's
+    terminal, used since the GNOME -> KDE migration). Use the numpad
+    keys 8/2 (Z move) and 4/6 (step size) instead. W/S/A/D remain
+    dedicated to RY/RX rotation in this mode, so Z movement uses 8/2
+    rather than W/S to avoid a key collision.
 
     Examples
     --------
@@ -718,8 +807,8 @@ def xlj_6axis(orientation: str = 'horizontal', scale: float = 0.1):
     xlj_rz = IMS("MFX:HRA:MMS:03", name="xlj_rz")
 
     motors = [xlj_x, xlj_y, xlj_z, xlj_rx, xlj_ry, xlj_rz]
-    ctrl = XLJController(motors, orientation, scale, '6axis')
-    ctrl.xlj = BeckhoffJet('MFX:LJH', name='xlj')
+    ctrl = XLJController(motors, orientation, scale, "6axis")
+    ctrl.xlj = BeckhoffJet("MFX:LJH", name="xlj")
 
     logger.info("Starting XLJ 6-axis control")
     ctrl.run()
