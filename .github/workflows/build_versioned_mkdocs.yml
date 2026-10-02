@@ -1,3 +1,14 @@
+# MkDocs Build/Deploy for GitHub Pages.
+#
+# IMPORTANT: Repo Settings -> Pages -> Build and deployment -> Source MUST be
+# set to "GitHub Actions" (not "Deploy from a branch"). If Pages source is set
+# to a branch instead, GitHub's built-in Jekyll `pages-build-deployment`
+# workflow auto-triggers on every push and races this workflow's deploy,
+# intermittently serving a raw/Jekyll-rendered README instead of the Material
+# mkdocs site. A `.nojekyll` file is kept at the repo root on the
+# `documentation` branch (and is also auto-added by `mkdocs gh-deploy` on the
+# `gh-pages` branch) as a safety net against this, but the Settings source
+# must still be "GitHub Actions" for a reliable, single-pipeline deploy.
 name: MkDocs Build
 on:
   push:
