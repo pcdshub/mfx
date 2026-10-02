@@ -196,7 +196,6 @@ nav:
       - Actions:
         - mfx/roadrunner/janus/actions/acq.md
         - mfx/roadrunner/janus/actions/acq_ed_rot_step.md
-        - mfx/roadrunner/janus/actions/acq_fluorescence.md
         - mfx/roadrunner/janus/actions/acq_lcls_xtal_grid_fly.md
         - mfx/roadrunner/janus/actions/acq_lcls_xtal_grid_step.md
         - mfx/roadrunner/janus/actions/acq_lcls_xtal_rotational.md
@@ -270,7 +269,6 @@ nav:
         - mfx/roadrunner/janus/widgets/advanced_motor_controls.md
         - mfx/roadrunner/janus/widgets/camera_controls.md
         - mfx/roadrunner/janus/widgets/continuous_focus_control.md
-        - mfx/roadrunner/janus/widgets/diana.md
         - mfx/roadrunner/janus/widgets/discrete_position_control.md
         - mfx/roadrunner/janus/widgets/gonio_controls.md
         - mfx/roadrunner/janus/widgets/humidity.md

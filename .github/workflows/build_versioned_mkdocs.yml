@@ -39,8 +39,26 @@ jobs:
       # submodule is initialized here since it's the only one with doc stubs
       # (mfx/jet_tracking and dev/DropletOnDemand are also submodules but
       # have no doc references, so they're left uninitialized).
+      #
+      # Several directories inside the upstream janus repo (the submodule
+      # root itself, plus mfx/roadrunner/janus/widgets/ui/) have no
+      # __init__.py, so griffe (mkdocstrings' Python handler) can't resolve
+      # them as proper sub-packages of mfx (regular packages don't
+      # implicitly absorb unlisted subdirectories as submodules the way
+      # namespace packages do). We can't commit a fix into the submodule
+      # itself (it's pinned to an upstream commit via gitlink), so this
+      # loop creates an empty __init__.py in every directory under
+      # mfx/roadrunner that contains .py files but lacks one, fresh on the
+      # runner every build. If upstream janus later adds its own
+      # __init__.py files, this loop becomes a harmless no-op for them.
       - name: Init roadrunner submodule
-        run: git submodule update --init mfx/roadrunner
+        run: |
+          git submodule update --init mfx/roadrunner
+          find mfx/roadrunner -type d | while read -r d; do
+            if find "$d" -iname "*.py" | grep -q . && [ ! -f "$d/__init__.py" ]; then
+              touch "$d/__init__.py"
+            fi
+          done
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: 3.9
