@@ -321,7 +321,8 @@ class Vernier:
                 inspire=inspire,
                 picker=picker,
                 close=False,
-                daq_num=daq_num)
+                daq_num=daq_num,
+                elog_sample=False)
             sleep(daq_delay)
 
         logger.warning('Finished with all runs thank you for choosing the MFX beamline!\n')
