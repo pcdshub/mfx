@@ -1712,7 +1712,8 @@ class Exafs:
                    track_feespec_blocking=True,
                    flux_threshold=None,
                    crystal_angle_offset=0.0,
-                   sample='?', simulate=False, runs=1):
+                   sample='?', simulate=False, runs=1,
+                   step_timing=True, post_timing=True):
         """
         K-primary XAS scan: undulator K is the primary scan axis,
         DCCM steps within a small window around each K position.
@@ -1771,6 +1772,12 @@ class Exafs:
             Run in simulation mode (default: False)
         runs : int, optional
             Number of scan repetitions (default: 1)
+        step_timing : bool, optional
+            Record per-step wall-clock timing (default: True). See
+            mfx.undulator_timing.
+        post_timing : bool, optional
+            Post the timing table to the elog after each run (default: True).
+            Ignored when record is False or simulate is True.
 
         Returns
         -------
@@ -1915,6 +1922,11 @@ class Exafs:
                     self.logger.error("DAQ setup failed, aborting")
                     break
 
+                self._step_timer = None
+                if step_timing:
+                    from mfx.undulator_timing import StepTimer
+                    self._step_timer = StepTimer(k_move_mode)
+
                 for k_idx, k_target_eV in enumerate(k_positions_eV):
                     k_target_keV = k_target_eV / 1000.0
 
@@ -1922,6 +1934,9 @@ class Exafs:
                         f"K position {k_idx + 1}/{len(k_positions_eV)}: "
                         f"{k_target_eV:.1f} eV [{k_move_mode}]"
                     )
+
+                    if self._step_timer:
+                        self._step_timer.start_step(k_target_eV)
 
                     t_k_move = time()
                     if k_move_mode == 'pause':
@@ -1953,10 +1968,13 @@ class Exafs:
                         )
 
                         # Move DCCM (crystal only, no vernier)
+                        t_dccm = time()
                         if simulate:
                             self.sim.fast_motor1.mv(dccm_energy_keV)
                         else:
                             self.dccm.energy.move(dccm_energy_keV, wait=True)
+                        if self._step_timer and offset == dccm_offsets[0]:
+                            self._step_timer.set('dccm_s', time() - t_dccm)
 
                         # Check beam
                         if flux_threshold:
@@ -1970,6 +1988,9 @@ class Exafs:
                         # In concurrent_settled mode, dwell_time is a minimum
                         # acquisition time — the K move already contributed
                         # to acquisition since the DAQ stays running.
+                        if self._step_timer and offset == dccm_offsets[0]:
+                            self._step_timer.end_step()
+
                         if k_move_mode == 'concurrent_settled':
                             remaining_dwell = max(0, dwell_times[k_idx] - k_move_elapsed)
                             self._wait(remaining_dwell)
@@ -1995,6 +2016,11 @@ class Exafs:
                         sleep(0.01)
                     daq.control.setRecord(False)
 
+                if self._step_timer:
+                    from mfx.undulator_timing import report
+                    report(self._step_timer, run_number,
+                           post=post_timing and record and not simulate)
+
                 if runs > 1 and run_idx < runs - 1:
                     self.logger.info("Inter-run delay (5s)")
                     sleep(5)
@@ -2009,6 +2035,11 @@ class Exafs:
                     mfx_pulsepicker.close()
                 except Exception:
                     pass
+            # keep the steps that finished before the abort
+            if getattr(self, '_step_timer', None) and self._step_timer.rows:
+                from mfx.undulator_timing import report
+                report(self._step_timer, run_number,
+                       post=post_timing and record and not simulate)
 
         # === Return to initial positions ===
         self.logger.info("Returning to initial positions")
@@ -2018,7 +2049,11 @@ class Exafs:
         else:
             self.dccm.energy.move(energy_start, wait=True)
             if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
+                t_ret = time()
                 self.acr_energy_k.move(k_energy_start)
+                self.logger.warning(
+                    f"Return K request to {k_energy_start:.1f} eV took "
+                    f"{time() - t_ret:.1f} s")
             if track_feespec:
                 self.xrtspec.move_feespec_energy(
                     energy_start, crystal_angle_offset=crystal_angle_offset)
@@ -2041,6 +2076,17 @@ class Exafs:
         print("=" * 60 + "\n")
 
         return summary
+
+    def _tset(self, key, t0):
+        timer = getattr(self, '_step_timer', None)
+        if timer:
+            timer.set(key, time() - t0)
+
+    def _k_request(self, k_target_eV, **kwargs):
+        timer = getattr(self, '_step_timer', None)
+        if timer:
+            return timer.timed_k_request(self.acr_energy_k, k_target_eV, **kwargs)
+        return self.acr_energy_k.move(k_target_eV, **kwargs)
 
     def _k_xas_move_pause(self, k_target_eV, k_target_keV,
                           track_feespec, crystal_angle_offset):
@@ -2073,31 +2119,39 @@ class Exafs:
         from mfx.db import daq
 
         # Pause DAQ
+        t0 = time()
         if daq.control.getState() == "running":
             daq.control.setState("paused")
             while daq.control.getState() != "paused":
                 sleep(0.01)
             sleep(0.5)
+        self._tset('daq_pause_s', t0)
 
         # Move FEE spec before K
         if track_feespec:
+            t0 = time()
             self.xrtspec.move_feespec_energy(
                 k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._tset('feespec_s', t0)
 
         # Move K (blocking)
-        self.acr_energy_k.move(k_target_eV)
+        self._k_request(k_target_eV)
         self.k_energy = k_target_eV
 
         # Verify FEE spec
         if track_feespec:
+            t0 = time()
             self.xrtspec.check_feespec_crystal_angle(
                 k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._tset('feespec_check_s', t0)
 
         # Resume DAQ
+        t0 = time()
         if daq.control.getState() == "paused":
             daq.control.setState("running")
             while daq.control.getState() != "running":
                 sleep(0.01)
+        self._tset('daq_resume_s', t0)
 
     def _k_xas_move_concurrent(self, k_target_eV, k_target_keV,
                                track_feespec, crystal_angle_offset):
@@ -2133,7 +2187,7 @@ class Exafs:
                 k_target_keV, crystal_angle_offset=crystal_angle_offset)
 
         # Request K move — non-blocking (don't wait for completion)
-        self.acr_energy_k.move(k_target_eV, wait=False)
+        self._k_request(k_target_eV, wait=False)
         self.k_energy = k_target_eV
 
     def _k_xas_move_concurrent_settled(self, k_target_eV, k_target_keV,
@@ -2171,21 +2225,25 @@ class Exafs:
 
         # Move FEE spec — blocking or non-blocking
         if track_feespec:
+            t0 = time()
             if track_feespec_blocking:
                 self.xrtspec.move_feespec_energy(
                     k_target_keV, crystal_angle_offset=crystal_angle_offset)
             else:
                 self.xrtspec.move_feespec_energy_nonblocking(
                     k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._tset('feespec_s', t0)
 
         # Move K — blocking (wait for undulator to settle)
-        self.acr_energy_k.move(k_target_eV)
+        self._k_request(k_target_eV)
         self.k_energy = k_target_eV
 
         # Verify FEE spec crystal angle after K settles
         if track_feespec:
+            t0 = time()
             self.xrtspec.check_feespec_crystal_angle(
                 k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._tset('feespec_check_s', t0)
 
 
 class EXAFSEnergyRangeBuilder:
