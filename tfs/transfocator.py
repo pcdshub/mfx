@@ -130,7 +130,13 @@ class MFXTransfocator(TransfocatorBase):
     # Translation
     translation = FormattedComponent(IMS, "MFX:TFS:MMS:21")
 
-    def __init__(self, prefix, *, nominal_sample=400.37, **kwargs):
+    # Nominal IP in the lens model's coordinates. 400.37 was calibrated
+    # while find_solution() ignored the prefocus lens when computing the
+    # image (before Nov 2025), which placed the image ~0.25 m too far
+    # downstream at 7-10 keV. Re-derived from 2025-2026 production
+    # configurations (no-prefocus at 7.0-7.2 keV and 750 um prefocus at
+    # 8.5-9.8 keV, >= 5-10 h at fixed stage): 400.13 +/- 0.06 m.
+    def __init__(self, prefix, *, nominal_sample=400.13, **kwargs):
         self.nominal_sample = nominal_sample
         super().__init__(prefix, **kwargs)
 
@@ -208,7 +214,7 @@ class MFXTransfocator(TransfocatorBase):
         ----------
         target : float, optional
             The target image of the lens array. By default this is
-            `nominal_sample i.e. 400.37`
+            `nominal_sample i.e. 400.13`
 
         energy_eV : int, optional
             Select the energy in eV.
@@ -276,7 +282,7 @@ class MFXTransfocator(TransfocatorBase):
 
     def try_combo(
             self,
-            target=400.37,
+            target=None,
             energy=None,
             show=True,
             prefocus = None,
@@ -289,7 +295,7 @@ class MFXTransfocator(TransfocatorBase):
         ----------
         target : float, optional
             The target image of the lens array. By default this is
-            `nominal_sample i.e. 399.88`
+            `nominal_sample i.e. 400.13`
 
         energy : int, optional
             Select the energy in eV.
