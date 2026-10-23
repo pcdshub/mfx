@@ -574,6 +574,234 @@ class MFXTransfocator(TransfocatorBase):
         print(f"Stage moved to position: z={z_mm:.3f}mm")
         return z_mm
 
+    def lens_minder(
+        self,
+        lenses=(10,),
+        *,
+        poll_s=1.0,
+        tolerance_mm=0.5,
+        close_beam=True,
+        att=None,
+        pulsepicker=None,
+        move_timeout=30.0,
+    ):
+        """
+        Keep the TFS lens y motors on their setpoints until stopped.
+
+        The y (vertical) motors of the TFS lens stacks drift slowly over time.
+        This method polls the selected y motors in a loop and moves any that
+        have drifted back to their setpoint, protecting the beam around each
+        move. It blocks until interrupted with Ctrl+C.
+
+        On every poll, each selected motor that is not moving
+        (``.DMOV == 1``) is checked. If ``|.RBV - .VAL| > tolerance_mm`` the
+        motor is corrected:
+
+        1. The attenuator transmission and the pulse picker state are read
+           immediately before the move, not when the minder was started,
+           so changes made while it is running are respected.
+        2. If ``close_beam`` is True, the beam is closed with
+           ``pulsepicker.close()`` and ``att(0)``. This protects the sample
+           and detectors even if the lens interlock is defeated. With
+           ``close_beam=False`` the lens interlock is relied on to close the
+           beam when the lens moves.
+        3. The motor setpoint (``.VAL``) is re-written and the method waits
+           for ``.DMOV`` (up to ``move_timeout``). An error is logged if the
+           readback is still outside ``tolerance_mm`` afterwards.
+        4. The attenuator transmission and the pulse picker state read in
+           step 1 are restored. This is done in a ``finally`` block, so the
+           beam state is restored even if the loop is interrupted (Ctrl+C)
+           during a correction.
+
+        The pulse picker state is restored with the matching command,
+        based on ``pulsepicker.mode`` (``:SD_SIMPLE``):
+
+        =====================  ========================
+        mode                   restored with
+        =====================  ========================
+        2 / ``'FLIP-FLOP'``    ``pulsepicker.flipflop()``
+        3 / ``'BURST'``        ``pulsepicker.burst()``
+        6 / ``'FOLLOWER'``     ``pulsepicker.follower()``
+        0 / ``'IDLE'``         ``open()`` or ``close()``, from the blade state
+        =====================  ========================
+
+        Motors that are moving (``.DMOV == 0``) are skipped, so the minder
+        does not interfere with moves made by the user or other code.
+
+        Parameters
+        ----------
+        lenses : int or iterable of int, optional
+            TFS lens numbers (2-10) whose y motor is watched. The motor PVs
+            come from ``tfs.lens.LENS_MOTOR_PVS`` (e.g. lens 2 is
+            ``MFX:TFS:MMS:04``, lens 10 is ``MFX:TFS:MMS:20``).
+            Default ``(10,)``.
+        poll_s : float, optional
+            Time between polls in seconds. Default 1.0.
+        tolerance_mm : float, optional
+            Allowed absolute difference between readback and setpoint in mm
+            before a correction is made. Default 0.5.
+        close_beam : bool, optional
+            If True, close the pulse picker and set the attenuator to 0
+            before each correction. Default True.
+        att : Attenuator, optional
+            Attenuator used to read, close and restore the transmission.
+            Default ``mfx.db.mfx_attenuator``.
+        pulsepicker : PulsePicker, optional
+            Pulse picker used to read, close and restore the beam state.
+            Default ``mfx.db.mfx_pulsepicker``.
+        move_timeout : float, optional
+            Maximum time in seconds to wait for each correction move to
+            finish. Default 30.0.
+
+        Returns
+        -------
+        int
+            Number of corrections made before the loop was stopped.
+
+        Raises
+        ------
+        ValueError
+            If a lens number is not in 2-10.
+
+        Notes
+        -----
+        Each correction briefly interrupts the beam. Choose ``tolerance_mm``
+        so that corrections are only made when the drift matters.
+
+        Examples
+        --------
+        Watch lens 10 every second with a +-0.5 mm window:
+
+        >>> tfs.lens_minder()
+
+        Watch lenses 8 and 10 every 2 s with a +-0.2 mm window:
+
+        >>> tfs.lens_minder([8, 10], poll_s=2, tolerance_mm=0.2)
+
+        Rely on the lens interlock to close the beam:
+
+        >>> tfs.lens_minder([4, 5, 8], close_beam=False)
+        """
+        import time as _time
+        from tfs.lens import LENS_MOTOR_PVS
+
+        lenses = [int(n) for n in (lenses if hasattr(lenses, "__iter__") else [lenses])]
+        bad = [n for n in lenses if n not in LENS_MOTOR_PVS]
+        if bad:
+            raise ValueError(f"Unknown TFS lens number(s) {bad}; valid are 2-10")
+
+        if att is None or pulsepicker is None:
+            from mfx.db import mfx_attenuator, mfx_pulsepicker
+
+            att = att if att is not None else mfx_attenuator
+            pulsepicker = pulsepicker if pulsepicker is not None else mfx_pulsepicker
+
+        motors = {}
+        for n in lenses:
+            pv = LENS_MOTOR_PVS[n]["y"]
+            motors[n] = dict(
+                pv=pv,
+                rbv=EpicsSignalRO(f"{pv}.RBV", name=f"tfs_{n:02d}_y_rbv"),
+                val=EpicsSignal(f"{pv}.VAL", name=f"tfs_{n:02d}_y_val"),
+                dmov=EpicsSignalRO(f"{pv}.DMOV", name=f"tfs_{n:02d}_y_dmov"),
+            )
+        for m in motors.values():
+            for sig in (m["rbv"], m["val"], m["dmov"]):
+                sig.wait_for_connection(timeout=5.0)
+
+        # pulsepicker.mode (:SD_SIMPLE) values, as used by pcdsdevices
+        # PulsePicker.flipflop()/burst()/follower() when waiting for the mode.
+        pp_modes = {2: "FLIP", "FLIP-FLOP": "FLIP", 3: "BURST", "BURST": "BURST",
+                    6: "FOLLOW", "FOLLOWER": "FOLLOW"}
+
+        def _pp_state():
+            """Return a restorable pulse picker state."""
+            for as_string in (True, False):
+                try:
+                    mode = pulsepicker.mode.get(as_string=as_string)
+                except Exception:
+                    continue
+                key = mode.strip().upper() if isinstance(mode, str) else mode
+                if key in pp_modes:
+                    return pp_modes[key]
+            # IDLE (0): no running mode, so restore the blade state
+            try:
+                return "OPEN" if pulsepicker.position == "OPEN" else "CLOSED"
+            except Exception:
+                return "CLOSED"
+
+        def _pp_restore(state):
+            actions = {
+                "FLIP": pulsepicker.flipflop,
+                "BURST": pulsepicker.burst,
+                "FOLLOW": pulsepicker.follower,
+                "OPEN": pulsepicker.open,
+                "CLOSED": pulsepicker.close,
+            }
+            actions[state]()
+
+        def _correct(n, m, setpoint, readback):
+            # Read att and pulse picker now, immediately before this move (not
+            # when the minder starts), so changes made while it runs are kept.
+            att_prev = float(att.position)
+            pp_prev = _pp_state()
+            logger.warning(
+                f"lens_minder: TFS:{n:02d} y ({m['pv']}) RBV={readback:.3f} "
+                f"VAL={setpoint:.3f} (off by {readback - setpoint:+.3f} mm). "
+                f"Saved att={att_prev:.3g}, pulsepicker={pp_prev}."
+            )
+            try:
+                if close_beam:
+                    logger.warning(
+                        "lens_minder: closing beam: att(0), pulsepicker.close()"
+                    )
+                    pulsepicker.close()
+                    att.move(0, wait=True)
+                m["val"].put(setpoint, wait=True)
+                t0 = _time.monotonic()
+                _time.sleep(0.2)
+                while not m["dmov"].get():
+                    if _time.monotonic() - t0 > move_timeout:
+                        logger.error(
+                            f"lens_minder: TFS:{n:02d} y move timed out after {move_timeout} s"
+                        )
+                        break
+                    _time.sleep(0.1)
+                after = m["rbv"].get()
+                if abs(after - setpoint) > tolerance_mm:
+                    logger.error(
+                        f"lens_minder: TFS:{n:02d} y still off: RBV={after:.3f} VAL={setpoint:.3f}"
+                    )
+                else:
+                    logger.warning(
+                        f"lens_minder: TFS:{n:02d} y back on setpoint: RBV={after:.3f}"
+                    )
+            finally:
+                logger.warning(
+                    f"lens_minder: restoring att={att_prev:.3g}, pulsepicker={pp_prev}"
+                )
+                att.move(att_prev, wait=True)
+                _pp_restore(pp_prev)
+
+        logger.warning(
+            f"lens_minder: watching y motors of TFS lenses {lenses} every {poll_s} s, "
+            f"tolerance +-{tolerance_mm} mm, close_beam={close_beam}. Ctrl+C to stop."
+        )
+        n_fix = 0
+        try:
+            while True:
+                for n, m in motors.items():
+                    if not m["dmov"].get():
+                        continue  # motor is moving (e.g. a user move); leave it alone
+                    setpoint, readback = m["val"].get(), m["rbv"].get()
+                    if abs(readback - setpoint) > tolerance_mm:
+                        _correct(n, m, setpoint, readback)
+                        n_fix += 1
+                _time.sleep(poll_s)
+        except KeyboardInterrupt:
+            logger.warning(f"lens_minder: stopped by user after {n_fix} correction(s).")
+        return n_fix
+
     def set_reference_combo(self, energy_eV, show=False, **kwargs):
         """
         kwargs:
