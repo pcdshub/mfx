@@ -401,7 +401,7 @@ class Exafs:
 
     def _init_tfs(self, energies, margin_mm, ref_focal_length_um, ref_z_stage_mm,
                   avoid_forbidden, enable_prefocus, map_focus_track,
-                  lens_beam_energy_offset, target=400.37):
+                  lens_beam_energy_offset, target=400.13):
         """
         Initialize transfocator system.
 
@@ -424,7 +424,7 @@ class Exafs:
         lens_beam_energy_offset : float
             Lens beam energy offset in eV
         target : float, optional
-            Target focal position (default: 400.37)
+            Target focal position (default: 400.13)
 
         Notes
         -----
@@ -1398,7 +1398,7 @@ class Exafs:
                    map_tchk_track=False, map_lens_beam_energy_offset=False,
                    lens_beam_energy_offset=0.0, track_focus=False, crystal_angle_offset=0.0,
                    tfs_margin_mm=5.0, ref_focal_length_um=None,
-                   ref_z_stage_mm=None, tfs_target=400.37,
+                   ref_z_stage_mm=None, tfs_target=400.13,
                    avoid_forbidden_combo=True, enable_prefocus=True,
                    track_feespec=False, track_feespec_cam=False,
                    undulator_point=False, undulator_on_diagnostic="dg1",
@@ -1483,7 +1483,7 @@ class Exafs:
         ref_z_stage_mm : float or None, optional
             Reference Z stage position in mm
         tfs_target : float, optional
-            TFS target position (default: 400.37)
+            TFS target position (default: 400.13)
         avoid_forbidden_combo : bool, optional
             Avoid forbidden lens combinations (default: True)
         enable_prefocus : bool, optional
