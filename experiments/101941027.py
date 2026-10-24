@@ -68,10 +68,20 @@ class User:
         max_idx = 2 ** len(shot_label_evts) - 1
         if number_of_shots > max_idx:
             raise ValueError(f"number_of_shots must be <= {max_idx}")
-        # 203 = laser on: shot index 0 (no label bits set)
-        sequencer_steps = [[203, 1, 0, 0, "laser_on_shot_0"]]
+        # Each step's code fires delta_beam buckets after the previous step, and
+        # the sequence (re)starts on the sync marker bucket (code 43 at 10 Hz).
+        # So the steps below land on sync+1 ... sync+N+1, and the final step
+        # lands on the NEXT sync bucket. The laser-on shot (203) is therefore
+        # placed last so it coincides with code 43.
+        #
+        # Index = buckets since the most recent laser shot:
+        #   204 = laser off: index 1..number_of_shots (sync+1 ... sync+N)
+        #   203 = laser on:  index 0, no label bits (sync+N+1 = next 43)
+        # number_of_shots + 1 must equal the buckets per sync period
+        # (12 for 120 Hz beam / 10 Hz sync, i.e. number_of_shots=11). In the very first cycle after
+        # seq.start() the laser-off shots have no preceding laser shot.
+        sequencer_steps = []
 
-        # 204 = laser off: shots numbered 1..number_of_shots after the laser shot
         for idx in range(1, number_of_shots + 1):
             sequencer_steps.append([204, 1, 0, 0, f"laser_off_shot_{idx}"])
             shot_label_idx = self.int_to_bool_array(idx, length=8)  # Get boolean array
@@ -79,6 +89,10 @@ class User:
             for i, is_active in enumerate(shot_label_idx):
                 if is_active:  # Only add if this bit is set
                     sequencer_steps.append([shot_label_evts[i], 0, 0, 0])
+
+        # 203 = laser on: index 0 (no label bits), same bucket as code 43
+        sequencer_steps.append([203, 1, 0, 0, "laser_on_shot_0"])
+
         seq.sync_marker.put(self.sync_markers[sync_marker])
         seq.sequence.put_seq(sequencer_steps)
         seq.start()
