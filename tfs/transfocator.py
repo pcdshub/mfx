@@ -584,6 +584,7 @@ class MFXTransfocator(TransfocatorBase):
         att=None,
         pulsepicker=None,
         move_timeout=30.0,
+        att_timeout=30.0,
     ):
         """
         Keep the TFS lens y motors on their setpoints until stopped.
@@ -604,7 +605,8 @@ class MFXTransfocator(TransfocatorBase):
            ``pulsepicker.close()`` and ``att(0)``. This protects the sample
            and detectors even if the lens interlock is defeated. With
            ``close_beam=False`` the lens interlock is relied on to close the
-           beam when the lens moves.
+           beam when the lens moves. If neither the pulse picker nor the
+           attenuator can be confirmed closed, the lens is not moved.
         3. The motor setpoint (``.VAL``) is re-written and the method waits
            for ``.DMOV`` (up to ``move_timeout``). An error is logged if the
            readback is still outside ``tolerance_mm`` afterwards.
@@ -612,6 +614,17 @@ class MFXTransfocator(TransfocatorBase):
            step 1 are restored. This is done in a ``finally`` block, so the
            beam state is restored even if the loop is interrupted (Ctrl+C)
            during a correction.
+
+        Attenuator moves are made robust against floating point noise:
+        transmissions at or below 1e-9 (e.g. the 3.97e-76 read back after
+        ``att(0)``) are treated as 0, others are rounded to 4 significant
+        figures, and no move is sent if the attenuator is already at the
+        target (the attenuator IOC does not report done for such a move,
+        which otherwise leaves the device stuck "moving"). Before each
+        attenuator move the method waits up to ``att_timeout`` for any
+        previous move to finish, and clears a stale "moving" state if the
+        IOC already reports done. A failed correction is logged and the
+        loop continues.
 
         The pulse picker state is restored with the matching command,
         based on ``pulsepicker.mode`` (``:SD_SIMPLE``):
@@ -652,6 +665,9 @@ class MFXTransfocator(TransfocatorBase):
         move_timeout : float, optional
             Maximum time in seconds to wait for each correction move to
             finish. Default 30.0.
+        att_timeout : float, optional
+            Maximum time in seconds to wait for each attenuator move, and for
+            a previous attenuator move to finish. Default 30.0.
 
         Returns
         -------
@@ -740,23 +756,82 @@ class MFXTransfocator(TransfocatorBase):
             }
             actions[state]()
 
+        # Attenuator transmissions below this are treated as fully blocked
+        # (att(0) reads back values like 3.97e-76, not exactly 0).
+        att_zero = 1e-9
+
+        def _att_target(value):
+            """Snap a transmission to a value the attenuator can be asked for."""
+            value = float(value)
+            if value <= att_zero:
+                return 0.0
+            return float(f"{min(value, 1.0):.4g}")
+
+        def _att_at(target):
+            """True if the attenuator is already at ``target``."""
+            current = float(att.position)
+            if target == 0.0:
+                return current <= att_zero
+            return abs(current - target) <= 1e-3 * target
+
+        def _att_wait_idle():
+            """Wait for the attenuator to finish moving.
+
+            The attenuator IOC does not report done for a move to a
+            transmission it is already at, which can leave ophyd thinking a
+            move is still in progress. If the IOC says it is done but ophyd
+            still reports moving, clear the stale state the same way
+            pcdsdevices' AttBase._setup_move does.
+            """
+            t0 = _time.monotonic()
+            while att.moving and _time.monotonic() - t0 < att_timeout:
+                if att.done.get() == att.done_value:
+                    logger.warning(
+                        "lens_minder: clearing stale attenuator 'moving' state "
+                        f"(position={att.position:.3g}, goal={att.setpoint.get():.3g})")
+                    att._move_changed(value=1 - att.done_value)
+                    att._move_changed(value=att.done_value)
+                    break
+                _time.sleep(0.1)
+            return not att.moving
+
+        def _att_set(value):
+            """Move the attenuator to ``value`` unless it is already there."""
+            target = _att_target(value)
+            if _att_at(target):
+                return True
+            if not _att_wait_idle():
+                logger.error(
+                    f"lens_minder: attenuator still moving after {att_timeout} s; "
+                    f"cannot set it to {target:.4g}")
+                return False
+            att.move(target, wait=True, timeout=att_timeout)
+            return True
+
         def _correct(n, m, setpoint, readback):
             # Read att and pulse picker now, immediately before this move (not
             # when the minder starts), so changes made while it runs are kept.
-            att_prev = float(att.position)
+            att_prev = _att_target(att.position)
             pp_prev = _pp_state()
             logger.warning(
                 f"lens_minder: TFS:{n:02d} y ({m['pv']}) RBV={readback:.3f} "
                 f"VAL={setpoint:.3f} (off by {readback - setpoint:+.3f} mm). "
-                f"Saved att={att_prev:.3g}, pulsepicker={pp_prev}."
+                f"Saved att={att_prev:.4g}, pulsepicker={pp_prev}."
             )
             try:
                 if close_beam:
                     logger.warning(
-                        "lens_minder: closing beam: att(0), pulsepicker.close()"
+                        "lens_minder: closing beam: pulsepicker.close(), att(0)"
                     )
                     pulsepicker.close()
-                    att.move(0, wait=True)
+                    try:
+                        _att_set(0.0)
+                    except Exception as ex:
+                        logger.error(f"lens_minder: could not set attenuator to 0: {ex}")
+                    if pulsepicker.position != "CLOSED" and not _att_at(0.0):
+                        logger.error(
+                            f"lens_minder: beam not confirmed closed; skipping move of TFS:{n:02d} y")
+                        return False
                 m["val"].put(setpoint, wait=True)
                 t0 = _time.monotonic()
                 _time.sleep(0.2)
@@ -776,12 +851,19 @@ class MFXTransfocator(TransfocatorBase):
                     logger.warning(
                         f"lens_minder: TFS:{n:02d} y back on setpoint: RBV={after:.3f}"
                     )
+                return True
             finally:
                 logger.warning(
-                    f"lens_minder: restoring att={att_prev:.3g}, pulsepicker={pp_prev}"
+                    f"lens_minder: restoring att={att_prev:.4g}, pulsepicker={pp_prev}"
                 )
-                att.move(att_prev, wait=True)
-                _pp_restore(pp_prev)
+                try:
+                    _att_set(att_prev)
+                except Exception as ex:
+                    logger.error(f"lens_minder: could not restore attenuator to {att_prev:.4g}: {ex}")
+                try:
+                    _pp_restore(pp_prev)
+                except Exception as ex:
+                    logger.error(f"lens_minder: could not restore pulse picker to {pp_prev}: {ex}")
 
         logger.warning(
             f"lens_minder: watching y motors of TFS lenses {lenses} every {poll_s} s, "
@@ -795,8 +877,12 @@ class MFXTransfocator(TransfocatorBase):
                         continue  # motor is moving (e.g. a user move); leave it alone
                     setpoint, readback = m["val"].get(), m["rbv"].get()
                     if abs(readback - setpoint) > tolerance_mm:
-                        _correct(n, m, setpoint, readback)
-                        n_fix += 1
+                        try:
+                            if _correct(n, m, setpoint, readback):
+                                n_fix += 1
+                        except Exception:
+                            logger.exception(
+                                f"lens_minder: correction of TFS:{n:02d} y failed; continuing")
                 _time.sleep(poll_s)
         except KeyboardInterrupt:
             logger.warning(f"lens_minder: stopped by user after {n_fix} correction(s).")
