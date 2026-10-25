@@ -7,6 +7,7 @@ for translational (X, Y, Z) and rotational (RX, RY, RZ) axes.
 
 import logging
 import sys
+import warnings
 import tty
 import termios
 from typing import List, Tuple, Dict, Optional, Callable
@@ -79,6 +80,62 @@ class BypassPositionCheck(PVPositionerDone):
 
     setpoint = Cpt(EpicsSignal, ":PLC:fPosition")
     actuate = Cpt(EpicsSignal, ":PLC:bMoveCmd")
+
+
+_DEPRECATION_MSG = (
+    "{name}.{method}() is DEPRECATED and can move the jet a long way on the "
+    "first step. {name} has no readback: its position is the last value "
+    "written through {name} (:PLC:fPosition), not the real jet position. If "
+    "the jet was moved any other way (xlj.jet GUI, motor record, scripts), "
+    "relative moves (tweak, mvr, umvr) step from that stale value and the "
+    "jet jumps back to it (e.g. on 2026-10-24 the first tweak step moved "
+    "xlj_fast_y from 3.05 to 6.55 mm). Use xlj_fast() instead (or "
+    "xlj_fast('vertical') / xlj_6axis()), which re-syncs to the real jet "
+    "position before every step."
+)
+
+
+class DeprecatedXLJFastMotor(BypassPositionCheck):
+    """
+    Deprecated stand-alone XLJ fast motor (``xlj_fast_x/y/z``).
+
+    .. deprecated::
+        Use :func:`xlj_fast` (or :func:`xlj_6axis`) for interactive jet
+        moves instead.
+
+    Same as :class:`BypassPositionCheck`, but warns whenever it is used for
+    a relative move.
+
+    Danger
+    ------
+    This positioner has no readback. Its ``position`` / ``wm()`` is the last
+    value written through it (``:PLC:fPosition``), not where the jet is. If
+    the jet was moved by anything else (the ``xlj.jet`` GUI, the motor
+    record, other scripts), ``tweak()``, ``mvr()`` and ``umvr()`` step from
+    that stale value, so the first step can drive the jet a long way back to
+    the old setpoint. Example: on 2026-10-24 the jet was at 3.05 mm and the
+    first ``xlj_fast_y.tweak()`` step of -0.05 mm moved it to 6.55 mm.
+
+    :func:`xlj_fast` avoids this by comparing with the real jet position
+    (``xlj.jet``) and re-syncing before every step.
+    """
+
+    def _warn_deprecated(self, method):
+        msg = _DEPRECATION_MSG.format(name=self.name, method=method)
+        warnings.warn(msg, DeprecationWarning, stacklevel=3)
+        logger.warning(msg)
+
+    def tweak(self, *args, **kwargs):
+        self._warn_deprecated("tweak")
+        return super().tweak(*args, **kwargs)
+
+    def mvr(self, *args, **kwargs):
+        self._warn_deprecated("mvr")
+        return super().mvr(*args, **kwargs)
+
+    def umvr(self, *args, **kwargs):
+        self._warn_deprecated("umvr")
+        return super().umvr(*args, **kwargs)
 
 
 class XLJController:
