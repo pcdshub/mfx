@@ -44,6 +44,58 @@ def ladder(start_eV, steps=(0.2, 1, 5, 25, 100), n=5):
     return np.round(e, 1)
 
 
+# precomputed list sent to ACR for the 2026-10-26 shift (requested eV)
+ACR_LIST_EV = (6970.0, 7160.0, 0.5)
+
+
+def acr_list(lo=ACR_LIST_EV[0], hi=ACR_LIST_EV[1], step=ACR_LIST_EV[2]):
+    """Every energy on the precomputed ACR list, eV, rounded to 0.1."""
+    n = int(round((hi - lo) / step))
+    return np.round(lo + step * np.arange(n + 1), 1)
+
+
+def check_on_list(positions, allowed=None):
+    """
+    Raise ValueError if any position is off the precomputed ACR list.
+
+    The listener only has phase-shifter and balancing solutions for listed
+    energies, so an off-list request falls back to the slow path or fails.
+    Returns the positions rounded to 0.1 eV.
+    """
+    allowed = acr_list() if allowed is None else np.round(allowed, 1)
+    pos = np.round(np.asarray(positions, dtype=float), 1)
+    bad = sorted(set(pos[~np.isin(pos, allowed)].tolist()))
+    if bad:
+        raise ValueError(f"{len(bad)} positions off the ACR list: {bad[:10]}")
+    return pos
+
+
+def grid(lo, hi, step):
+    """Ascending positions lo..hi inclusive, checked against the ACR list."""
+    n = int(round((hi - lo) / step))
+    return check_on_list(lo + step * np.arange(n + 1))
+
+
+def window_ladder(start_eV=6990.0, lo=ACR_LIST_EV[0], hi=ACR_LIST_EV[1]):
+    """
+    Step-size ladder that fits inside the ACR list window, in visiting order.
+
+    Five steps each of 0.5, 1, 5 and 25 eV going up, five 100 eV steps
+    alternating down and up, one move to the low end, then four full-window
+    steps (190 eV for the 10-26 list). Use with k_order='given'.
+    """
+    e = [float(start_eV)]
+    for s in (0.5, 1, 5, 25):
+        for _ in range(5):
+            e.append(e[-1] + s)
+    for i in range(5):
+        e.append(e[-1] - 100 if i % 2 == 0 else e[-1] + 100)
+    e.append(lo)
+    for i in range(4):
+        e.append(hi if i % 2 == 0 else lo)
+    return check_on_list(e)
+
+
 class StepTimer:
     """Collects one row per K step for a single DAQ run."""
 
