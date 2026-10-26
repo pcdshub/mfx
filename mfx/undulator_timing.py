@@ -76,6 +76,20 @@ def grid(lo, hi, step):
     return check_on_list(lo + step * np.arange(n + 1))
 
 
+def sweep(lo, hi, step, cycles=1):
+    """
+    Up-and-down sweep lo -> hi -> lo, repeated `cycles` times, in visiting order.
+
+    Each cycle ends where it started, so k_xas_scan makes no long return move
+    when K sits at lo before the call. Interior points are visited twice per
+    cycle from opposite directions, hi once. Use with k_order='given'.
+    """
+    up = list(grid(lo, hi, step))
+    tri = up + up[-2::-1]
+    e = tri + [x for _ in range(cycles - 1) for x in tri[1:]]
+    return check_on_list(e)
+
+
 def window_ladder(start_eV=6990.0, lo=ACR_LIST_EV[0], hi=ACR_LIST_EV[1]):
     """
     Step-size ladder that fits inside the ACR list window, in visiting order.
