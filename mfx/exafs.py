@@ -1713,7 +1713,8 @@ class Exafs:
                    flux_threshold=None,
                    crystal_angle_offset=0.0,
                    sample='?', simulate=False, runs=1,
-                   step_timing=True, post_timing=True):
+                   step_timing=True, post_timing=True,
+                   pink=False, k_order='ascending', seed=None):
         """
         K-primary XAS scan: undulator K is the primary scan axis,
         DCCM steps within a small window around each K position.
@@ -1778,6 +1779,19 @@ class Exafs:
         post_timing : bool, optional
             Post the timing table to the elog after each run (default: True).
             Ignored when record is False or simulate is True.
+        pink : bool, optional
+            Pink beam (DCCM removed). Skips every DCCM move, including the
+            return to start, and forces dccm_offsets to [0.0]. The
+            dccm_energy_eV field in the summary then holds the K target.
+            Check that the DCCM is out before calling (default: False).
+        k_order : str, optional
+            'ascending' (default): rounded, deduplicated, sorted.
+            'given': rounded, kept in the order passed, repeats allowed.
+            Needs k_positions.
+            'random': rounded and deduplicated, then shuffled once per run.
+            Positions must still sit on the ACR precomputed list.
+        seed : int or None, optional
+            Seed for k_order='random', so a shuffled run can be replayed.
 
         Returns
         -------
@@ -1833,10 +1847,20 @@ class Exafs:
                 -dccm_window_eV, dccm_window_eV + dccm_step_eV / 2, dccm_step_eV
             ), 1).tolist()
             dccm_offsets = sorted(set(dccm_offsets))
+        if pink:
+            dccm_offsets = [0.0]
+
+        if k_order not in ('ascending', 'given', 'random'):
+            raise ValueError(f"k_order must be 'ascending', 'given', or 'random', got '{k_order}'")
+        if k_order == 'given' and k_positions is None:
+            raise ValueError("k_order='given' needs k_positions")
 
         # Compute K positions
         if k_positions is not None:
-            k_positions_eV = sorted(set(np.round(k_positions, 1).tolist()))
+            if k_order == 'given':
+                k_positions_eV = np.round(k_positions, 1).tolist()
+            else:
+                k_positions_eV = sorted(set(np.round(k_positions, 1).tolist()))
         else:
             if start_eV is None or end_eV is None:
                 raise ValueError("Must provide either k_positions or both start_eV and end_eV")
@@ -1859,6 +1883,9 @@ class Exafs:
                     f"number of K positions ({n_k})"
                 )
 
+        rng = np.random.default_rng(seed)
+        e_lo, e_hi = min(k_positions_eV), max(k_positions_eV)
+
         # Total points
         total_points = n_k * len(dccm_offsets) * runs
 
@@ -1867,12 +1894,14 @@ class Exafs:
         print("K-PRIMARY XAS SCAN (k_xas_scan)")
         print("=" * 60)
         print(f"  Element:         {element}")
-        print(f"  Energy range:    {k_positions_eV[0]:.1f} - {k_positions_eV[-1]:.1f} eV")
+        print(f"  Energy range:    {e_lo:.1f} - {e_hi:.1f} eV")
         if k_step_eV is not None:
             print(f"  K step:          {k_step_eV:.1f} eV")
         else:
             print(f"  K step:          custom ({n_k} positions)")
-        print(f"  K positions:     {n_k} ({k_positions_eV[0]:.1f} to {k_positions_eV[-1]:.1f} eV)")
+        print(f"  K positions:     {n_k} ({e_lo:.1f} to {e_hi:.1f} eV)")
+        print(f"  K order:         {k_order}" + (f" (seed {seed})" if k_order == 'random' else ""))
+        print(f"  Pink beam:       {pink}")
         print(f"  K move mode:     {k_move_mode}")
         print(f"  DCCM offsets:    {dccm_offsets} eV")
         print(f"  DCCM points/K:   {len(dccm_offsets)}")
@@ -1901,8 +1930,11 @@ class Exafs:
             energy_start = 7.0  # dummy for sim
             k_energy_start = k_positions_eV[0]
         else:
-            energy_start = self.dccm.energy_with_vernier.energy()
             k_energy_start = self.acr_energy_k.get().setpoint
+            if pink:
+                energy_start = k_energy_start / 1000.0
+            else:
+                energy_start = self.dccm.energy_with_vernier.energy()
 
         # === Summary collector ===
         summary = []
@@ -1927,11 +1959,13 @@ class Exafs:
                     from mfx.undulator_timing import StepTimer
                     self._step_timer = StepTimer(k_move_mode)
 
-                for k_idx, k_target_eV in enumerate(k_positions_eV):
+                order = rng.permutation(n_k) if k_order == 'random' else range(n_k)
+                for n_done, k_idx in enumerate(order):
+                    k_target_eV = k_positions_eV[k_idx]
                     k_target_keV = k_target_eV / 1000.0
 
                     self.logger.warning(
-                        f"K position {k_idx + 1}/{len(k_positions_eV)}: "
+                        f"K position {n_done + 1}/{n_k}: "
                         f"{k_target_eV:.1f} eV [{k_move_mode}]"
                     )
 
@@ -1969,7 +2003,9 @@ class Exafs:
 
                         # Move DCCM (crystal only, no vernier)
                         t_dccm = time()
-                        if simulate:
+                        if pink:
+                            pass
+                        elif simulate:
                             self.sim.fast_motor1.mv(dccm_energy_keV)
                         else:
                             self.dccm.energy.move(dccm_energy_keV, wait=True)
@@ -2047,7 +2083,8 @@ class Exafs:
             self.sim.fast_motor1.mv(energy_start)
             self.sim.slow_motor1.mv(k_energy_start)
         else:
-            self.dccm.energy.move(energy_start, wait=True)
+            if not pink:
+                self.dccm.energy.move(energy_start, wait=True)
             if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
                 t_ret = time()
                 self.acr_energy_k.move(k_energy_start)
