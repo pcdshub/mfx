@@ -636,32 +636,47 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             k_positions=pos, k_order=order, k_move_mode=mode, sample=sample,
             dwell_time=dwell, pink=True, record=record, **opts, **extra)
 
-    def fe_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True):
+    def fe_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True,
+                dccm_offset=None):
         """
-        K-only scan over the Fe foil edge, pink, one DAQ run.
+        K scan over the Fe foil edge, one DAQ run.
 
-        DCCM out (never moved here). K requests lo..hi ascending,
-        concurrent_settled: the DAQ runs through each K move and dwell is the
-        total time per step, so a step holds max(0, dwell - K move) s at the
-        settled K. 9 steps at the defaults (5 eV); step=1 gives 41 but runs
-        much longer. step must be a multiple of 0.5 (ACR list). The per-step timing
-        table and CSV go to the elog at the end of the run; start and end go
-        to the elog with tag 'fe_scan'.
+        dccm_offset=None: pink, DCCM out (never moved). A number: DCCM
+        inserted and set to K request + dccm_offset eV at every step, e.g.
+        dccm_offset=x.offset_eV (-5.2) puts the DCCM on the SASE center. A
+        list gives several DCCM points per K step (dwell at each).
+
+        K requests lo..hi ascending, concurrent_settled: the DAQ runs through
+        each K move and dwell is the total time per step, so a step holds
+        max(0, dwell - K move) s at the settled K. 9 steps at the defaults
+        (5 eV); step=1 gives 41 but runs much longer. step must be a
+        multiple of 0.5 (ACR list). The per-step timing table and CSV go to
+        the elog at the end of the run; start and end go to the elog with
+        tag 'fe_scan'.
         """
         from mfx.macros import get_run
         pos = grid(lo, hi, step)
+        pink = dccm_offset is None
+        offsets = None if pink else [float(o) for o in np.atleast_1d(dccm_offset)]
         sample = f"und1026_fe_scan_{lo:.0f}_{hi:.0f}_{step:g}eV"
+        if pink:
+            beam = "pink, DCCM out"
+        else:
+            sample += "_dccm" + "_".join(f"{o:+g}" for o in offsets)
+            beam = f"DCCM in, DCCM = K {', '.join(f'{o:+g}' for o in offsets)} eV"
         run = get_run(station=0) + 1 if record else None
-        msg = (f"fe_scan run {run}: Fe foil, pink, K {pos[0]:.1f}-{pos[-1]:.1f} eV "
+        msg = (f"fe_scan run {run}: Fe foil, {beam}, K {pos[0]:.1f}-{pos[-1]:.1f} eV "
                f"in {step:g} eV ({len(pos)} steps), {K_MODE}, dwell {dwell:g} s")
         # run not open yet, so the start post carries no run number
         _post(msg, tag='fe_scan') if record else print(msg)
         exafs = _ns('exafs')
+        if not pink:
+            _ns('dccm').insert()
         request_k(exafs.acr_energy_k, pos[0])
         out = exafs.k_xas_scan(
             k_positions=pos, k_order='ascending', k_move_mode=K_MODE,
-            dwell_time=dwell, pink=True, record=record, sample=sample,
-            **self.xrt_opts())
+            dwell_time=dwell, pink=pink, dccm_offsets=offsets, record=record,
+            sample=sample, **self.xrt_opts())
         if record:
             _post(f"fe_scan run {run} done, {len(out)} points", tag='fe_scan',
                   run=run)
