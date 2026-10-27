@@ -14,7 +14,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from time import time
+from time import sleep, time
 
 import numpy as np
 
@@ -28,6 +28,95 @@ COLUMNS = [
 ]
 
 SLOW_STEP_WARN_S = 60.0
+# SET2 within this of the target counts as already requested
+K_SAME_EV = 0.05
+# done PV must read 1 this long after the last request finished before the
+# next SET2 write; a write that lands earlier can be dropped by the listener
+K_READY_S = 2.0
+# a write the listener acts on drops the done PV to 0 within this time
+K_START_S = 20.0
+# end of the last K request seen by request_k, for the K_READY_S hold-off
+_last_done = {'t': 0.0}
+
+
+def _wait_done(done, ok, what, warn_s):
+    t_warn = time() + warn_s
+    while done.get() != ok:
+        sleep(0.05)
+        if time() > t_warn:
+            logger.warning(f"{what} still not done after {warn_s:.0f} s. Ctrl+C, "
+                           f"caget SIOC:SYS0:ML07:AO805, call ACR.")
+            t_warn += warn_s
+
+
+def _wait_ready(done, ok, warn_s):
+    """Block until the done PV reads 1 and has done so for K_READY_S."""
+    while True:
+        _wait_done(done, ok, "previous K request", warn_s)
+        rest = K_READY_S - (time() - _last_done['t'])
+        if rest <= 0:
+            return
+        sleep(rest)
+        if done.get() == ok:
+            return
+
+
+def request_k(positioner, target_eV, wait=True, start_s=None,
+              warn_s=SLOW_STEP_WARN_S):
+    """
+    Write a K request to a BeamEnergyRequestACRWait and wait for the done PV.
+
+    ophyd's move() finishes only on a 0 -> 1 edge of the done PV, so it
+    blocks forever when the listener never starts: a request equal to the
+    current SET2 (no change for the listener to see), or a write that lands
+    while the listener is still finishing the last move. Here:
+
+    - a target already in SET2 (within K_SAME_EV) is not sent, returns 0;
+    - the write waits until the done PV has read 1 for K_READY_S;
+    - if the done PV does not leave 1 within start_s (K_START_S) of the
+      write, the request counts as done, with a warning (listener idle, or
+      nothing to move);
+    - once the PV has gone to 0, no timeout. A warning prints every warn_s;
+      Ctrl+C stops.
+
+    Returns seconds from the write to done.
+    """
+    start_s = K_START_S if start_s is None else start_s
+    current = positioner.setpoint.get()
+    if abs(current - target_eV) < K_SAME_EV:
+        logger.warning(f"K request already {current:.1f} eV, not sent")
+        return 0.0
+    done = getattr(positioner, 'done', None)
+    if done is None or not wait:
+        t0 = time()
+        positioner.move(target_eV, wait=wait)
+        return time() - t0
+    ok = getattr(positioner, 'done_value', 1)
+    _wait_ready(done, ok, warn_s)
+
+    left_done = threading.Event()
+
+    def _seen(value=None, **kwargs):
+        if value != ok:
+            left_done.set()
+
+    # subscribe before the write so a fast 1 -> 0 -> 1 is not missed
+    cid = done.subscribe(_seen, run=False)
+    try:
+        positioner.setpoint.put(target_eV, wait=True)
+        t0 = time()
+        while not left_done.wait(0.05) and done.get() == ok:
+            if time() - t0 > start_s:
+                logger.warning(
+                    f"AO805 stayed 1 for {start_s:.0f} s after the K request to "
+                    f"{target_eV:.1f} eV; taking it as done. If K did not move, "
+                    f"ask ACR whether the listener is running.")
+                return time() - t0
+        _wait_done(done, ok, f"K request to {target_eV:.1f} eV", warn_s)
+    finally:
+        done.unsubscribe(cid)
+        _last_done['t'] = time()
+    return time() - t0
 
 
 def ladder(start_eV, steps=(0.2, 1, 5, 25, 100), n=5):
@@ -136,25 +225,13 @@ class StepTimer:
             self._row[key] = value
 
     def timed_k_request(self, positioner, target_eV, **kwargs):
-        """Call positioner.move() and record request/done stamps."""
-        warn = threading.Timer(
-            SLOW_STEP_WARN_S,
-            lambda: logger.warning(
-                f"K request to {target_eV:.1f} eV still not done after "
-                f"{SLOW_STEP_WARN_S:.0f} s. If it passes 120 s: Ctrl+C, "
-                f"caget SIOC:SYS0:ML07:AO805, call ACR."))
-        warn.daemon = True
-        t0 = time()
-        self.set('t_k_request', t0)
-        warn.start()
-        try:
-            status = positioner.move(target_eV, **kwargs)
-        finally:
-            warn.cancel()
+        """request_k() with SET2-write and done stamps for this step."""
+        spent = request_k(positioner, target_eV, **kwargs)
         t1 = time()
+        self.set('t_k_request', t1 - spent)
         self.set('t_k_done', t1)
-        self.set('k_request_s', t1 - t0)
-        return status
+        self.set('k_request_s', spent)
+        return spent
 
     def end_step(self):
         """Call at dwell start."""

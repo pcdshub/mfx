@@ -24,8 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-from mfx.undulator_timing import (acr_list, check_on_list, grid, sweep,
-                                  window_ladder)
+from mfx.undulator_timing import (acr_list, check_on_list, grid, request_k,
+                                  sweep, window_ladder)
 
 logger = logging.getLogger(__name__)
 
@@ -360,7 +360,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         print(f"DCCM in, DCCM {real_eV:.1f} eV, K request {k:.1f} eV "
               f"(real {k + self.offset_eV:.1f})")
         dccm.insert()
-        _ns('exafs').acr_energy_k.move(k)
+        request_k(_ns('exafs').acr_energy_k, k)
         dccm.energy.move(real_eV / 1000.0, wait=True)
 
     def offset_check(self, k_points=(7120.0, 7100.0, 7140.0), dwell=2.0,
@@ -608,8 +608,10 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         if opts['track_feespec']:
             sample = f"{sample}_xrt"
         exafs = _ns('exafs')
+        print(f"x.timing('{name}'): XRT tracking "
+              f"{'ON' if opts['track_feespec'] else 'OFF'}, K pre-request {k0}")
         if k0 is not None:
-            exafs.acr_energy_k.move(k0)
+            request_k(exafs.acr_energy_k, k0)
         return exafs.k_xas_scan(
             k_positions=pos(), k_order=order, k_move_mode=mode, sample=sample,
             dwell_time=dwell, dccm_offsets=[self.offset_eV],
@@ -856,8 +858,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             pos = [PINK_PARK]
         else:
             pos = self.kx(step)
-            if round(exafs.acr_energy_k.get().setpoint, 1) != pos[0]:
-                exafs.acr_energy_k.move(pos[0])
+            request_k(exafs.acr_energy_k, pos[0])
         return exafs.k_xas_scan(k_positions=pos, k_order='given',
                                 dwell_time=dwell, sample=sample, **opts)
 

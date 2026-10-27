@@ -155,7 +155,8 @@ class Exafs:
         if self.simulate:
             self.sim.slow_motor1.mv(k_energy)
         else:
-            self.acr_energy_k.move(k_energy)
+            from mfx.undulator_timing import request_k
+            request_k(self.acr_energy_k, k_energy)
         self.k_energy = k_energy
 
     def _move_vernier_energy(self, vernier_energy):
@@ -2086,11 +2087,11 @@ class Exafs:
             if not pink:
                 self.dccm.energy.move(energy_start, wait=True)
             if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
-                t_ret = time()
-                self.acr_energy_k.move(k_energy_start)
+                from mfx.undulator_timing import request_k
+                t_ret = request_k(self.acr_energy_k, k_energy_start)
                 self.logger.warning(
                     f"Return K request to {k_energy_start:.1f} eV took "
-                    f"{time() - t_ret:.1f} s")
+                    f"{t_ret:.1f} s")
             if track_feespec:
                 self.xrtspec.move_feespec_energy(
                     energy_start, crystal_angle_offset=crystal_angle_offset)
@@ -2120,10 +2121,13 @@ class Exafs:
             timer.set(key, time() - t0)
 
     def _k_request(self, k_target_eV, **kwargs):
+        # request_k, not acr_energy_k.move: move() hangs when the target
+        # equals SET2 or the listener drops the write (no 0 -> 1 on AO805)
+        from mfx.undulator_timing import request_k
         timer = getattr(self, '_step_timer', None)
         if timer:
             return timer.timed_k_request(self.acr_energy_k, k_target_eV, **kwargs)
-        return self.acr_energy_k.move(k_target_eV, **kwargs)
+        return request_k(self.acr_energy_k, k_target_eV, **kwargs)
 
     def _k_xas_move_pause(self, k_target_eV, k_target_keV,
                           track_feespec, crystal_angle_offset):
