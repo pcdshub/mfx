@@ -619,6 +619,10 @@ def get_run(hutch='mfx', station: int = 0) -> int:
     ws_url = "https://pswww.slac.stanford.edu/ws/lgbk"
     exp = get_exp(hutch, station)
     rundoc = requests.get(ws_url + "/lgbk/" + exp  + "/ws/current_run").json()["value"]
+    # a new experiment has no runs yet and the logbook returns value null
+    if not rundoc:
+        logger.warning(f"No runs yet in {exp}; the next run will be 1")
+        return 0
     run=int(rundoc['num'])
     return run
 
