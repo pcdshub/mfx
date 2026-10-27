@@ -289,6 +289,8 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
               x.procedure('xrt') lists the notch commands
 19:00 timing  x.timing('T1') ... x.timing('T5')      (Fe foil, pink, DCCM out,
               K around x.edge_k = 7080, XRT parked, no tracking)
+edge scans    x.fe_foil_scan()  x.mb_scan()   K 7070-7110, 5 eV; pink by default,
+              dccm_offset=-5.2 for DCCM in
 XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r=)
               x.xrt_goto(E)  x.xrt_check(E)  x.xrt_cam_scan()
 21:00 focus   x.tfs_combo()  x.tfs_prep()  x.tfs_insert()  x.tfs_zscan()  x.tfs_fine(zmin)
@@ -636,10 +638,26 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             k_positions=pos, k_order=order, k_move_mode=mode, sample=sample,
             dwell_time=dwell, pink=True, record=record, **opts, **extra)
 
-    def fe_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True,
+    def fe_foil_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0,
+                     record=True, dccm_offset=None):
+        """K scan on the Fe foil; elog and sample name say Fe foil. See _edge_scan."""
+        return self._edge_scan('fe_foil', 'Fe foil', lo, hi, step, dwell, record,
+                               dccm_offset)
+
+    # name used before the split, kept so a loaded habit still works
+    fe_scan = fe_foil_scan
+
+    def mb_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True,
                 dccm_offset=None):
+        """K scan on myoglobin; elog and sample name say myoglobin. See _edge_scan."""
+        return self._edge_scan('mb', 'myoglobin', lo, hi, step, dwell, record,
+                               dccm_offset)
+
+    def _edge_scan(self, key, what, lo, hi, step, dwell, record, dccm_offset):
         """
-        K scan over the Fe foil edge, one DAQ run.
+        K scan across the Fe edge, one DAQ run. key goes into the sample name
+        and elog tag (und1026_{key}_scan_..., tag '{key}_scan'), what into the
+        elog text.
 
         dccm_offset=None: pink, DCCM out (never moved). A number: DCCM
         inserted and set to K request + dccm_offset eV at every step, e.g.
@@ -652,23 +670,25 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         (5 eV); step=1 gives 41 but runs much longer. step must be a
         multiple of 0.5 (ACR list). The per-step timing table and CSV go to
         the elog at the end of the run; start and end go to the elog with
-        tag 'fe_scan'.
+        the '{key}_scan' tag.
         """
         from mfx.macros import get_run
         pos = grid(lo, hi, step)
         pink = dccm_offset is None
         offsets = None if pink else [float(o) for o in np.atleast_1d(dccm_offset)]
-        sample = f"und1026_fe_scan_{lo:.0f}_{hi:.0f}_{step:g}eV"
+        name, tag = f"{key}_scan", f"{key}_scan"
+        sample = f"und1026_{name}_{lo:.0f}_{hi:.0f}_{step:g}eV"
         if pink:
             beam = "pink, DCCM out"
         else:
             sample += "_dccm" + "_".join(f"{o:+g}" for o in offsets)
             beam = f"DCCM in, DCCM = K {', '.join(f'{o:+g}' for o in offsets)} eV"
         run = get_run(station=0) + 1 if record else None
-        msg = (f"fe_scan run {run}: Fe foil, {beam}, K {pos[0]:.1f}-{pos[-1]:.1f} eV "
-               f"in {step:g} eV ({len(pos)} steps), {K_MODE}, dwell {dwell:g} s")
+        msg = (f"{name} run {run}: sample {what}, {beam}, K {pos[0]:.1f}-"
+               f"{pos[-1]:.1f} eV in {step:g} eV ({len(pos)} steps), {K_MODE}, "
+               f"dwell {dwell:g} s")
         # run not open yet, so the start post carries no run number
-        _post(msg, tag='fe_scan') if record else print(msg)
+        _post(msg, tag=tag) if record else print(msg)
         exafs = _ns('exafs')
         if not pink:
             _ns('dccm').insert()
@@ -678,7 +698,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             dwell_time=dwell, pink=pink, dccm_offsets=offsets, record=record,
             sample=sample, **self.xrt_opts())
         if record:
-            _post(f"fe_scan run {run} done, {len(out)} points", tag='fe_scan',
+            _post(f"{name} run {run} done ({what}), {len(out)} points", tag=tag,
                   run=run)
         return out
 
