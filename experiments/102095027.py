@@ -639,25 +639,29 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             dwell_time=dwell, pink=True, record=record, **opts, **extra)
 
     def fe_foil_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0,
-                     record=True, dccm_offset=None):
+                     record=True, dccm_offset=None, reverse=False):
         """K scan on the Fe foil; elog and sample name say Fe foil. See _edge_scan."""
         return self._edge_scan('fe_foil', 'Fe foil', lo, hi, step, dwell, record,
-                               dccm_offset)
+                               dccm_offset, reverse)
 
     # name used before the split, kept so a loaded habit still works
     fe_scan = fe_foil_scan
 
     def mb_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True,
-                dccm_offset=None):
+                dccm_offset=None, reverse=False):
         """K scan on myoglobin; elog and sample name say myoglobin. See _edge_scan."""
         return self._edge_scan('mb', 'myoglobin', lo, hi, step, dwell, record,
-                               dccm_offset)
+                               dccm_offset, reverse)
 
-    def _edge_scan(self, key, what, lo, hi, step, dwell, record, dccm_offset):
+    def _edge_scan(self, key, what, lo, hi, step, dwell, record, dccm_offset,
+                   reverse=False):
         """
         K scan across the Fe edge, one DAQ run. key goes into the sample name
         and elog tag (und1026_{key}_scan_..., tag '{key}_scan'), what into the
         elog text.
+
+        reverse=True runs hi -> lo (same points, descending; K is requested
+        to hi before the run). Sample name gets '_down'.
 
         The DCCM state is never changed here; insert or remove it by hand.
         dccm_offset=None: pink, the DCCM is not moved. A number: the DCCM
@@ -675,25 +679,31 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         """
         from mfx.macros import get_run
         pos = grid(lo, hi, step)
+        if reverse:
+            pos = pos[::-1]
         pink = dccm_offset is None
         offsets = None if pink else [float(o) for o in np.atleast_1d(dccm_offset)]
         name, tag = f"{key}_scan", f"{key}_scan"
         sample = f"und1026_{name}_{lo:.0f}_{hi:.0f}_{step:g}eV"
+        if reverse:
+            sample += "_down"
         if pink:
             beam = "pink, DCCM out"
         else:
             sample += "_dccm" + "_".join(f"{o:+g}" for o in offsets)
             beam = f"DCCM in, DCCM = K {', '.join(f'{o:+g}' for o in offsets)} eV"
         run = get_run(station=0) + 1 if record else None
-        msg = (f"{name} run {run}: sample {what}, {beam}, K {pos[0]:.1f}-"
-               f"{pos[-1]:.1f} eV in {step:g} eV ({len(pos)} steps), {K_MODE}, "
+        msg = (f"{name} run {run}: sample {what}, {beam}, K {pos[0]:.1f} -> "
+               f"{pos[-1]:.1f} eV in {step:g} eV ({len(pos)} steps, "
+               f"{'descending' if reverse else 'ascending'}), {K_MODE}, "
                f"dwell {dwell:g} s")
         # run not open yet, so the start post carries no run number
         _post(msg, tag=tag) if record else print(msg)
         exafs = _ns('exafs')
         request_k(exafs.acr_energy_k, pos[0])
         out = exafs.k_xas_scan(
-            k_positions=pos, k_order='ascending', k_move_mode=K_MODE,
+            # 'given' keeps the order; 'ascending' would re-sort a reversed list
+            k_positions=pos, k_order='given', k_move_mode=K_MODE,
             dwell_time=dwell, pink=pink, dccm_offsets=offsets, record=record,
             sample=sample, **self.xrt_opts())
         if record:
