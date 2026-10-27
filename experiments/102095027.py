@@ -255,13 +255,16 @@ class User:
     def __init__(self):
         # measured request-to-BLD offset; update after x.offset_check()
         self.offset_eV = REQ_OFFSET_EV
-        # False once x.spec_calib() shows one XRT image covers WINDOW_EV
-        self.xrt_track = True
+        # 10-26: no XRT tracking in any scan, the XRT stays parked. Every
+        # scan method reads this; x.xrt_on() / x.xrt_off() flip it
+        self.xrt_track = False
         # crystal-only offset (tth does not follow); retune at 18:00 if the
         # spectrum is off center, then every scan below picks it up
         self.xrt_offset = XRT_OFFSET_DEG
         self.tfs_zmin = TFS_Z_MM
         self.last_zscan = None
+        # run, energy, step, num of the last x.spec_calib(), for notch.output
+        self.last_calib = None
 
     # ---- overview ---------------------------------------------------------
 
@@ -270,8 +273,11 @@ class User:
         print("""
 before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
 18:00 align   x.mono(7115)  x.offset_check()  x.xrt_park()  x.spec_calib()
-              x.seer_table()  x.seer_check()
-19:00 timing  x.timing('T1') ... x.timing('T5')
+              x.spec_calib_output('user')  x.seer_table()  x.seer_check()
+              x.procedure('xrt') lists the notch commands
+19:00 timing  x.timing('T1') ... x.timing('T5')      (XRT parked, no tracking)
+XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r=)
+              x.xrt_goto(E)  x.xrt_check(E)  x.xrt_cam_scan()
 21:00 focus   x.tfs_combo()  x.tfs_prep()  x.tfs_insert()  x.tfs_zscan()  x.tfs_fine(zmin)
               x.tfs_park(zmin)  x.agbe_rings(D)  x.agbe_run(D)  x.tfs_minder()
 22:00 pink    x.pink_switch()  x.tfs_pink_check()  x.pink('P0a') ... x.pink('P', n=3, r=2)
@@ -373,8 +379,8 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
         return _ns('exafs').k_xas_scan(
             k_positions=list(k_points), k_order='given', k_move_mode='pause',
             dccm_offsets=list(np.arange(-15.0, 5.1, 1.0)), dwell_time=dwell,
-            crystal_angle_offset=self.xrt_offset, track_feespec=True,
-            record=record, sample='und1026_offset_check')
+            record=record, sample='und1026_offset_check',
+            **self.xrt_opts())
 
     # ---- XRT spectrometer ---------------------------------------------------
 
@@ -410,28 +416,111 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
         self.xrt_offset += delta_deg
         print(f"XRT th {xs.th.position:.3f}, x.xrt_offset {self.xrt_offset:+.3f} deg")
 
-    def spec_calib(self, step=5.0, dwell=5.0, record=True):
+    def xrt_opts(self, xrt=None):
         """
-        DCCM-referenced energy calibration of XRT and SEER in one run.
+        k_xas_scan keywords for XRT tracking; xrt=None uses x.xrt_track.
 
-        XRT stays parked (x.xrt_park() first) and SEER stays fixed. K and the
-        DCCM step together across WINDOW_EV with the DCCM on the SASE center
-        (DCCM = K request + self.offset_eV), so each step puts one narrow
-        line on both cameras. 16 steps at 5 eV, ~7 min in pause mode.
-
-        Analysis: centroid pixel per step on feespec/hproj (XRT, 2048 px)
-        and the SEER epix100 ROI projection, against the DCCM energy. Feed
-        two well-separated points to spec_window(). If the XRT window fits,
-        set x.xrt_track = False so the pink passes keep one XRT energy axis
-        for the whole data set.
+        Tracking on: before each K request the crystal, camera arm and camy
+        move to the new K (non-blocking in concurrent_settled), after K
+        settles check_feespec_crystal_angle runs (2.0 s per step on 10-09),
+        at every point the camera arm follows (blocking) and at the end the
+        XRT returns to the start energy. Off: none of these, XRT stays put.
         """
-        lo = k_for_real(WINDOW_EV[0], self.offset_eV)
-        hi = k_for_real(WINDOW_EV[1], self.offset_eV)
+        on = self.xrt_track if xrt is None else bool(xrt)
+        return dict(crystal_angle_offset=self.xrt_offset, track_feespec=on,
+                    track_feespec_cam=on, track_feespec_blocking=False)
+
+    def xrt_on(self):
+        """XRT follows K in every scan from here on (timing, offset, pink)."""
+        self.xrt_track = True
+        print("XRT tracking ON for all scans: ~2.7 s more per step (10-09), plus "
+              "the camera arm move per point. The XRT energy axis changes per step. "
+              "x.xrt_off() to stop.")
+
+    def xrt_off(self):
+        """XRT stays parked in every scan (default for 10-26)."""
+        self.xrt_track = False
+        print("XRT tracking OFF: scans never wait on the XRT. x.xrt_park() to "
+              "re-park at the window center.")
+
+    def xrt_goto(self, real_eV):
+        """
+        One-off XRT move to real_eV between scans, camera restarted.
+
+        Same as x.xrt_park(real_eV): use to look at one end of the window
+        when the full span does not fit in one image. Re-park with
+        x.xrt_park() before the next pink pass.
+        """
+        self.xrt_park(real_eV)
+
+    def xrt_check(self, real_eV=None):
+        """
+        Run the crystal-angle check that tracked scans do after each K move.
+
+        real_eV defaults to the current K request + x.offset_eV. Corrects th
+        if it is off the calculated angle. Use after a manual XRT move.
+        """
+        if real_eV is None:
+            real_eV = _ns('exafs').acr_energy_k.get().setpoint + self.offset_eV
+        _ns('xrtspec').check_feespec_crystal_angle(
+            real_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
+        print(f"XRT angle checked for {real_eV:.1f} eV")
+
+    def xrt_cam_scan(self, lo_eV=WINDOW_EV[0], hi_eV=WINDOW_EV[1], n=4,
+                     run_length=30):
+        """
+        Camera-arm angle scan across lo_eV..hi_eV (real eV), n points.
+
+        Wraps xrtspec.scan_feespec_camera_angle; checks for vignetting at the
+        window edges with the crystal fixed. DCCM in, K fixed.
+        """
+        return _ns('xrtspec').scan_feespec_camera_angle(
+            lo_eV / 1000.0, hi_eV / 1000.0, n, run_length=run_length)
+
+    def spec_calib(self, lo_eV=7080, hi_eV=7155, step=5, run_length=10,
+                   record=True):
+        """
+        XRT and SEER energy calibration: notch.series with K following.
+
+        One DAQ run per DCCM energy (integer real eV, sample = energy, tag
+        'dccm'). k_energy=True requests K = DCCM energy at each point, so the
+        series covers the full 75 eV window; with K fixed only the ~20 eV
+        SASE bandwidth gets flux. K = DCCM ignores x.offset_eV: the DCCM sits
+        ~5 eV above the SASE center, ~17% less flux at 8.5 eV sigma, fine for
+        a calibration. Every point 7080-7155 is on the ACR list. XRT parked
+        (x.xrt_park() first), SEER fixed. Default 16 runs of 10 s; with the
+        DCCM move, 5 s settle, K move and run start ~8 min (~11 min if the
+        list gives no gain).
+
+        notch.series asks at the end whether to return the DCCM and K and
+        whether to run notch.output (fee_calib.py on psana: XRT eV/px fit,
+        posted to the elog). x.spec_calib_output(user) runs the same later.
+        SEER: centroid of the epix100 ROI projection per run against the run
+        energy, then spec_window(..., n_px=ROI length).
+        """
+        from mfx.macros import get_run
+        lo, hi, step = int(lo_eV), int(hi_eV), int(step)
+        num = len(range(lo, hi + step, step))
+        check_on_list(list(range(lo, hi + step, step)))
         _ns('dccm').insert()
-        return _ns('exafs').k_xas_scan(
-            k_positions=grid(lo, hi, step), k_order='given', k_move_mode='pause',
-            dccm_offsets=[self.offset_eV], dwell_time=dwell, track_feespec=False,
-            record=record, sample='und1026_spec_calib')
+        self.last_calib = dict(run=get_run(station=0) + 1, energy=lo, step=step,
+                               num=num)
+        _ns('notch').series(lo, hi, step, run_length=run_length, tag='dccm',
+                            record=record, k_energy=True, daq_num=2, exp=EXP)
+        return self.last_calib
+
+    def spec_calib_output(self, user, calib=None):
+        """
+        fee_calib.py on psana for the last x.spec_calib() (or notch) series.
+
+        Wraps notch.output: sums up to 1000 feespec hproj events per run,
+        fits a Gaussian peak, fits pixel against energy and posts eV/px,
+        intercept and R^2 to the elog (needs a kinit token on psana).
+        """
+        c = calib or self.last_calib
+        if not c:
+            raise RuntimeError("no calibration series yet, run x.spec_calib()")
+        _ns('notch').output(user=user, facility='S3DF', exp=EXP, daq_num=2, **c)
 
     # ---- SEER ----------------------------------------------------------------
 
@@ -497,9 +586,16 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
 
     # ---- undulator timing ---------------------------------------------------
 
-    def timing(self, name, change=None, dwell=1.0, record=True):
+    def timing(self, name, change=None, dwell=1.0, record=True, xrt=None):
         """
-        Run timing scan T1..T5 (DCCM in, XRT tracking, no sample).
+        Run timing scan T1..T5 (DCCM in, no sample).
+
+        xrt=None follows x.xrt_track (False tonight): the XRT stays where
+        x.xrt_park() left it and the scan never waits on the FEE
+        spectrometer, so each step is K request + DCCM move + dwell. Lines
+        outside the parked window (T3 large steps) fall off the camera; the
+        timing numbers do not need them. xrt=True tracks for this run only
+        (see x.xrt_opts) and adds '_xrt' to the run name.
 
         Requests K to the start position first where the table defines one,
         so the first step costs no motion. For T5 give a short label for the
@@ -508,15 +604,26 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
         pos, mode, order, extra, sample, k0 = TIMING[name]
         if name == 'T5':
             sample = f"{sample}_{change or 'baseline'}"
+        opts = self.xrt_opts(xrt)
+        if opts['track_feespec']:
+            sample = f"{sample}_xrt"
         exafs = _ns('exafs')
         if k0 is not None:
             exafs.acr_energy_k.move(k0)
         return exafs.k_xas_scan(
             k_positions=pos(), k_order=order, k_move_mode=mode, sample=sample,
             dwell_time=dwell, dccm_offsets=[self.offset_eV],
-            crystal_angle_offset=self.xrt_offset, track_feespec=True,
-            track_feespec_cam=True, track_feespec_blocking=False,
-            record=record, **extra)
+            record=record, **opts, **extra)
+
+    def timing_xrt(self, name, change=None, dwell=1.0, record=True):
+        """
+        Timing scan with XRT tracking for this run only.
+
+        Repeating T1 as x.timing_xrt('T1') after x.timing('T1') measures the
+        XRT cost per step directly (feespec_s and feespec_check_s columns).
+        """
+        return self.timing(name, change=change, dwell=dwell, record=record,
+                           xrt=True)
 
     # ---- transfocator -------------------------------------------------------
 
@@ -722,20 +829,18 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
         print(f"Pink beam. Confirm on the DCCM screen and by the DG1/DG2 IPM jump. "
               f"xrt_track = {self.xrt_track}.")
 
-    def pink_opts(self):
-        return dict(pink=True, k_move_mode='concurrent_settled',
-                    crystal_angle_offset=self.xrt_offset,
-                    track_feespec=self.xrt_track, track_feespec_cam=self.xrt_track,
-                    track_feespec_blocking=False, record=True)
+    def pink_opts(self, xrt=None):
+        return dict(pink=True, k_move_mode='concurrent_settled', record=True,
+                    **self.xrt_opts(xrt))
 
-    def pink(self, name, n=None, r=None, dwell=None):
+    def pink(self, name, n=None, r=None, dwell=None, xrt=None):
         """
         Pink-beam run P0a, P0b, P1, P2, P (production) or Pend.
 
         Sweeps run concurrent_settled in visiting order; K is requested to
         the sweep start first. P2 parks K at 7120 eV. For production give the
         pass and reservoir numbers: x.pink('P', n=3, r=2). One call is one
-        DAQ run, so reservoir swaps fall between calls.
+        DAQ run, so reservoir swaps fall between calls. xrt as in x.timing.
         """
         step, dw, sample = PINK[name]
         dwell = dw if dwell is None else dwell
@@ -744,6 +849,9 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
             if n is None or r is None:
                 raise ValueError("production needs n= and r=")
             sample = sample.format(n=n, r=r)
+        opts = self.pink_opts(xrt)
+        if opts['track_feespec']:
+            sample = f"{sample}_xrt"
         if step is None:
             pos = [PINK_PARK]
         else:
@@ -751,7 +859,11 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
             if round(exafs.acr_energy_k.get().setpoint, 1) != pos[0]:
                 exafs.acr_energy_k.move(pos[0])
         return exafs.k_xas_scan(k_positions=pos, k_order='given',
-                                dwell_time=dwell, sample=sample, **self.pink_opts())
+                                dwell_time=dwell, sample=sample, **opts)
+
+    def pink_xrt(self, name, n=None, r=None, dwell=None):
+        """Pink-beam run with XRT tracking for this run only."""
+        return self.pink(name, n=n, r=r, dwell=dwell, xrt=True)
 
 
 # ---- procedures --------------------------------------------------------------
@@ -762,13 +874,25 @@ XRT (FEE) spectrometer, Si(111), one image must hold 7080-7155 eV real
  1. DCCM in at 7117.5 eV: x.mono(7117.5). Attenuate for the FEE camera.
  2. x.xrt_park(). CamViewer fee_spec, check the mono line is on the sensor.
  3. x.xrt_tune(+-0.05) until the line sits at the image center column.
- 4. x.spec_calib(): 16 K + DCCM steps, 7080-7155 eV real, one run.
- 5. From the run: centroid pixel at the two end steps, then
-    spec_window(px_a, e_a, px_b, e_b). Fits: x.xrt_track = False.
-    Does not fit: keep x.xrt_track = True (spectrometer follows K, energy
-    axis changes per step), note it in the elog.
- 6. Optional cross-check of the camera arm:
-    xrtspec.scan_feespec_camera_angle(7.08, 7.155, 4, run_length=30)
+ 4. x.spec_calib(): notch.series 7080-7155 eV in 5 eV, K = DCCM at each
+    point (k_energy=True), 16 runs of 10 s. Answer y to both prompts at
+    the end: return DCCM/K, then analyze (S3DF, your username).
+ 5. notch.output runs fee_calib.py on psana: eV/px, intercept, R^2 in the
+    elog. Later: x.spec_calib_output('user'). Then spec_window(px_a, e_a,
+    px_b, e_b) for the image range. Does not fit: log the covered range
+    in the elog. Tracking stays off tonight in both cases.
+ 6. Optional cross-check of the camera arm: x.xrt_cam_scan()
+ Notch commands (mfx3 namespace, DCCM in):
+    notch.set_energy(E)            DCCM to E eV, K stays
+    notch.series(lo, hi, step, run_length=30, record=True)
+                                   one run per DCCM energy, K fixed: covers
+                                   the ~20 eV SASE band only. Integer eV.
+    notch.series(..., k_energy=True)  K = DCCM at each point (x.spec_calib)
+    notch.output(user, exp=, run=, energy=, step=, num=)  fee_calib on psana
+ Tracking is off for every scan tonight (x.xrt_track = False). If needed:
+    x.timing_xrt('T1') / x.pink_xrt(...)  one run with tracking
+    x.xrt_on() / x.xrt_off()              all scans from here on
+    x.xrt_goto(E), x.xrt_check(E)         one-off move / angle check
 """,
     'seer': """
 SEER, swap Ge(660) -> Ge(620) for tonight, comparable Bragg angle
