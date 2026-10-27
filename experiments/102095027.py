@@ -659,8 +659,9 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         and elog tag (und1026_{key}_scan_..., tag '{key}_scan'), what into the
         elog text.
 
-        dccm_offset=None: pink, DCCM out (never moved). A number: DCCM
-        inserted and set to K request + dccm_offset eV at every step, e.g.
+        The DCCM state is never changed here; insert or remove it by hand.
+        dccm_offset=None: pink, the DCCM is not moved. A number: the DCCM
+        (already in) is set to K request + dccm_offset eV at every step, e.g.
         dccm_offset=x.offset_eV (-5.2) puts the DCCM on the SASE center. A
         list gives several DCCM points per K step (dwell at each).
 
@@ -690,8 +691,6 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         # run not open yet, so the start post carries no run number
         _post(msg, tag=tag) if record else print(msg)
         exafs = _ns('exafs')
-        if not pink:
-            _ns('dccm').insert()
         request_k(exafs.acr_energy_k, pos[0])
         out = exafs.k_xas_scan(
             k_positions=pos, k_order='ascending', k_move_mode=K_MODE,
