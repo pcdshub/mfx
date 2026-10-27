@@ -24,8 +24,9 @@ from pathlib import Path
 
 import numpy as np
 
-from mfx.undulator_timing import (K_MAX_EV, acr_list, check_on_list, grid,
-                                  request_k, sweep, window_ladder)
+from mfx.undulator_timing import (ACR_LIST_EV, K_MAX_EV, acr_list,
+                                  check_on_list, grid, request_k, sweep,
+                                  window_ladder)
 
 logger = logging.getLogger(__name__)
 
@@ -73,18 +74,22 @@ SEER_TONIGHT = {'hkl': (6, 2, 0), 'energy_eV': CENTER_EV}
 # ---- scan presets -------------------------------------------------------------
 # every K scan tonight runs concurrent_settled, K request never above K_MAX_EV
 K_MODE = 'concurrent_settled'
+# Fe foil K-edge found at K request 7080 eV on 10-26; the timing scans run
+# pink (DCCM out) across it. x.edge_k overrides
+EDGE_K_EV = 7080.0
 TIMING = {
-    # name: (positions, mode, k_order, extra kwargs, sample, K before start)
-    'T1': (lambda: grid(7100, 7120, 1), K_MODE, 'ascending', {},
-           'und1026_T1_cs_1eV', 7100.0),
-    'T2': (lambda: grid(7100, 7120, 0.5), K_MODE, 'ascending', {},
-           'und1026_T2_cs_0p5eV', 7100.0),
-    'T3': (lambda: window_ladder(6990), K_MODE, 'given', {},
-           'und1026_T3_cs_ladder', 6990.0),
-    'T4': (lambda: grid(7100, K_MAX_EV, 0.5), K_MODE, 'random',
-           {'seed': 1026}, 'und1026_T4_cs_random_0p5eV', None),
-    'T5': (lambda: grid(7100, 7120, 1), K_MODE, 'ascending', {},
-           'und1026_T5_cs_1eV', 7100.0),
+    # name: (positions(c), mode, k_order, extra kwargs, sample, K before start(c))
+    # c = x.edge_k, K request at the foil edge
+    'T1': (lambda c: grid(c - 10, c + 10, 1), K_MODE, 'ascending', {},
+           'und1026_T1_fe_cs_1eV', lambda c: c - 10),
+    'T2': (lambda c: grid(c - 10, c + 10, 0.5), K_MODE, 'ascending', {},
+           'und1026_T2_fe_cs_0p5eV', lambda c: c - 10),
+    'T3': (lambda c: window_ladder(), K_MODE, 'given', {},
+           'und1026_T3_fe_cs_ladder', lambda c: ACR_LIST_EV[0]),
+    'T4': (lambda c: grid(c - 12, c + 12, 0.5), K_MODE, 'random',
+           {'seed': 1026}, 'und1026_T4_fe_cs_random_0p5eV', lambda c: None),
+    'T5': (lambda c: grid(c - 10, c + 10, 1), K_MODE, 'ascending', {},
+           'und1026_T5_fe_cs_1eV', lambda c: c - 10),
 }
 
 PINK = {
@@ -260,6 +265,8 @@ class User:
     def __init__(self):
         # measured request-to-BLD offset; update after x.offset_check()
         self.offset_eV = REQ_OFFSET_EV
+        # K request at the Fe foil edge; x.timing scans center here
+        self.edge_k = EDGE_K_EV
         # 10-26: no XRT tracking in any scan, the XRT stays parked. Every
         # scan method reads this; x.xrt_on() / x.xrt_off() flip it
         self.xrt_track = False
@@ -280,7 +287,8 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
 18:00 align   x.mono(7115)  x.offset_check()  x.xrt_park()  x.spec_calib()
               x.spec_calib_output('user')  x.seer_table()  x.seer_check()
               x.procedure('xrt') lists the notch commands
-19:00 timing  x.timing('T1') ... x.timing('T5')      (XRT parked, no tracking)
+19:00 timing  x.timing('T1') ... x.timing('T5')      (Fe foil, pink, DCCM out,
+              K around x.edge_k = 7080, XRT parked, no tracking)
 XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r=)
               x.xrt_goto(E)  x.xrt_check(E)  x.xrt_cam_scan()
 21:00 focus   x.tfs_combo()  x.tfs_prep()  x.tfs_insert()  x.tfs_zscan()  x.tfs_fine(zmin)
@@ -341,11 +349,12 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         exafs = _ns('exafs')
         print(f"ACR list: {len(acr_list())} points")
         for name, (pos, *_rest) in TIMING.items():
-            print(f"  {name}: {len(pos())} positions")
+            p = pos(self.edge_k)
+            print(f"  {name}: {len(p)} positions, {min(p):.1f}-{max(p):.1f} eV")
         print(f"  pink pass: {len(self.kx())} positions, "
               f"{self.kx()[0]:.1f}-{self.kx().max():.1f} eV requested")
-        exafs.k_xas_scan(k_positions=window_ladder(6990), k_order='given',
-                         dccm_offsets=[0], dwell_time=0.1, simulate=True)
+        exafs.k_xas_scan(k_positions=window_ladder(), k_order='given', pink=True,
+                         k_move_mode=K_MODE, dwell_time=0.1, simulate=True)
         exafs.k_xas_scan(k_positions=self.kx(), k_order='given', pink=True,
                          k_move_mode='concurrent_settled', dwell_time=0.1,
                          simulate=True)
@@ -594,34 +603,68 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
 
     def timing(self, name, change=None, dwell=1.0, record=True, xrt=None):
         """
-        Run timing scan T1..T5 (DCCM in, no sample).
+        Run timing scan T1..T5 on the Fe foil, pink beam.
+
+        DCCM out (check before calling; this never moves the DCCM). K only,
+        centered on x.edge_k: T1/T5 +-10 eV in 1 eV, T2 +-10 eV in 0.5 eV,
+        T4 +-12 eV in 0.5 eV random, T3 the step-size ladder over the ACR
+        list up to K_MAX_EV. Each step is K request + dwell.
 
         xrt=None follows x.xrt_track (False tonight): the XRT stays where
         x.xrt_park() left it and the scan never waits on the FEE
-        spectrometer, so each step is K request + DCCM move + dwell. Lines
-        outside the parked window (T3 large steps) fall off the camera; the
-        timing numbers do not need them. xrt=True tracks for this run only
-        (see x.xrt_opts) and adds '_xrt' to the run name.
+        spectrometer. xrt=True tracks for this run only (see x.xrt_opts) and
+        adds '_xrt' to the run name.
 
         Requests K to the start position first where the table defines one,
         so the first step costs no motion. For T5 give a short label for the
         listener change, e.g. x.timing('T5', change='seg_skip').
         """
         pos, mode, order, extra, sample, k0 = TIMING[name]
+        pos, k0 = pos(self.edge_k), k0(self.edge_k)
         if name == 'T5':
             sample = f"{sample}_{change or 'baseline'}"
         opts = self.xrt_opts(xrt)
         if opts['track_feespec']:
             sample = f"{sample}_xrt"
         exafs = _ns('exafs')
-        print(f"x.timing('{name}'): XRT tracking "
+        print(f"x.timing('{name}'): pink, DCCM must be out, K {min(pos):.1f}-"
+              f"{max(pos):.1f} eV, XRT tracking "
               f"{'ON' if opts['track_feespec'] else 'OFF'}, K pre-request {k0}")
         if k0 is not None:
             request_k(exafs.acr_energy_k, k0)
         return exafs.k_xas_scan(
-            k_positions=pos(), k_order=order, k_move_mode=mode, sample=sample,
-            dwell_time=dwell, dccm_offsets=[self.offset_eV],
-            record=record, **opts, **extra)
+            k_positions=pos, k_order=order, k_move_mode=mode, sample=sample,
+            dwell_time=dwell, pink=True, record=record, **opts, **extra)
+
+    def fe_scan(self, lo=7070.0, hi=7110.0, step=1.0, dwell=10.0, record=True):
+        """
+        K-only scan over the Fe foil edge, pink, one DAQ run.
+
+        DCCM out (never moved here). K requests lo..hi ascending,
+        concurrent_settled: the DAQ runs through each K move and dwell is the
+        total time per step, so a step holds max(0, dwell - K move) s at the
+        settled K. 41 steps at the defaults, ~7 min. The per-step timing
+        table and CSV go to the elog at the end of the run; start and end go
+        to the elog with tag 'fe_scan'.
+        """
+        from mfx.macros import get_run
+        pos = grid(lo, hi, step)
+        sample = f"und1026_fe_scan_{lo:.0f}_{hi:.0f}_{step:g}eV"
+        run = get_run(station=0) + 1 if record else None
+        msg = (f"fe_scan run {run}: Fe foil, pink, K {pos[0]:.1f}-{pos[-1]:.1f} eV "
+               f"in {step:g} eV ({len(pos)} steps), {K_MODE}, dwell {dwell:g} s")
+        # run not open yet, so the start post carries no run number
+        _post(msg, tag='fe_scan') if record else print(msg)
+        exafs = _ns('exafs')
+        request_k(exafs.acr_energy_k, pos[0])
+        out = exafs.k_xas_scan(
+            k_positions=pos, k_order='ascending', k_move_mode=K_MODE,
+            dwell_time=dwell, pink=True, record=record, sample=sample,
+            **self.xrt_opts())
+        if record:
+            _post(f"fe_scan run {run} done, {len(out)} points", tag='fe_scan',
+                  run=run)
+        return out
 
     def timing_xrt(self, name, change=None, dwell=1.0, record=True):
         """
@@ -967,7 +1010,7 @@ PRE-EXPERIMENT (done by 17:30 unless marked)
  [ ] x.dry_run() passes; epicsArch include fixed (~683 aliases)
  [ ] python scripts/undulator_pv_check.py, NC lines to the elog
  [ ] DCCM state PVs (STATE:SET / State:SET) answer cainfo
- [ ] ACR: 6970-7160 eV, 0.5 eV list loaded in preset mode; tracking GUI will not pin K
+ [ ] ACR: 7064-7144 eV, 0.5 eV list loaded in preset mode; tracking GUI will not pin K
  SEER (hutch access, before beam)
  [ ] crystal-stack motors connected? (HERA IMS ch 2, 3, 4; not connected 10-24 to 10-26)
  [ ] confirm which PVs drive them; MFX:HRA:MMS:02-04 are named xlj_fast_rx/rz/ry in beamline.py

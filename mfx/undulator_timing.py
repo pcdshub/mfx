@@ -138,8 +138,9 @@ def ladder(start_eV, steps=(0.2, 1, 5, 25, 100), n=5):
     return np.round(e, 1)
 
 
-# precomputed list sent to ACR for the 2026-10-26 shift (requested eV)
-ACR_LIST_EV = (6970.0, 7160.0, 0.5)
+# precomputed list loaded by ACR for the 2026-10-26 shift (requested eV);
+# moved from 6970-7160 to 7064-7144 after the Fe foil edge turned up at 7080
+ACR_LIST_EV = (7064.0, 7144.0, 0.5)
 
 
 def acr_list(lo=ACR_LIST_EV[0], hi=ACR_LIST_EV[1], step=ACR_LIST_EV[2]):
@@ -194,14 +195,15 @@ def sweep(lo, hi, step, cycles=1):
     return check_on_list(e)
 
 
-def window_ladder(start_eV=6990.0, lo=ACR_LIST_EV[0], hi=K_MAX_EV):
+def window_ladder(start_eV=ACR_LIST_EV[0], lo=ACR_LIST_EV[0], hi=K_MAX_EV):
     """
     Step-size ladder that fits inside lo..hi, in visiting order.
 
     Up to five steps each of 0.5, 1, 5 and 25 eV going up (a size stops
-    early rather than pass hi), five 100 eV steps alternating down and up,
-    one move to the low end, then four full-window steps (154 eV for
-    6970-7124). Use with k_order='given'.
+    early rather than pass hi), up to five 100 eV steps alternating down
+    and up (none when the window is under 100 eV), one move to the low
+    end, then four full-window steps (60 eV for 7064-7124). Use with
+    k_order='given'.
     """
     e = [float(start_eV)]
     for s in (0.5, 1, 5, 25):
@@ -210,7 +212,10 @@ def window_ladder(start_eV=6990.0, lo=ACR_LIST_EV[0], hi=K_MAX_EV):
                 break
             e.append(e[-1] + s)
     for i in range(5):
-        e.append(e[-1] - 100 if i % 2 == 0 else e[-1] + 100)
+        nxt = e[-1] - 100 if i % 2 == 0 else e[-1] + 100
+        if not lo <= nxt <= hi:
+            break
+        e.append(nxt)
     e.append(lo)
     for i in range(4):
         e.append(hi if i % 2 == 0 else lo)
