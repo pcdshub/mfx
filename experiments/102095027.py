@@ -636,14 +636,15 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             k_positions=pos, k_order=order, k_move_mode=mode, sample=sample,
             dwell_time=dwell, pink=True, record=record, **opts, **extra)
 
-    def fe_scan(self, lo=7070.0, hi=7110.0, step=1.0, dwell=10.0, record=True):
+    def fe_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True):
         """
         K-only scan over the Fe foil edge, pink, one DAQ run.
 
         DCCM out (never moved here). K requests lo..hi ascending,
         concurrent_settled: the DAQ runs through each K move and dwell is the
         total time per step, so a step holds max(0, dwell - K move) s at the
-        settled K. 41 steps at the defaults, ~7 min. The per-step timing
+        settled K. 9 steps at the defaults (5 eV); step=1 gives 41 but runs
+        much longer. step must be a multiple of 0.5 (ACR list). The per-step timing
         table and CSV go to the elog at the end of the run; start and end go
         to the elog with tag 'fe_scan'.
         """
