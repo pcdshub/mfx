@@ -28,6 +28,8 @@ COLUMNS = [
 ]
 
 SLOW_STEP_WARN_S = 60.0
+# highest K request (SET2, eV) allowed for the 10-26 shift
+K_MAX_EV = 7124.0
 # SET2 within this of the target counts as already requested
 K_SAME_EV = 0.05
 # done PV must read 1 this long after the last request finished before the
@@ -82,6 +84,9 @@ def request_k(positioner, target_eV, wait=True, start_s=None,
     Returns seconds from the write to done.
     """
     start_s = K_START_S if start_s is None else start_s
+    if target_eV > K_MAX_EV + 1e-6:
+        raise ValueError(f"K request {target_eV:.1f} eV above K_MAX_EV "
+                         f"{K_MAX_EV:.1f} eV, not sent")
     current = positioner.setpoint.get()
     if abs(current - target_eV) < K_SAME_EV:
         logger.warning(f"K request already {current:.1f} eV, not sent")
@@ -145,7 +150,8 @@ def acr_list(lo=ACR_LIST_EV[0], hi=ACR_LIST_EV[1], step=ACR_LIST_EV[2]):
 
 def check_on_list(positions, allowed=None):
     """
-    Raise ValueError if any position is off the precomputed ACR list.
+    Raise ValueError if any position is off the precomputed ACR list or
+    above K_MAX_EV.
 
     The listener only has phase-shifter and balancing solutions for listed
     energies, so an off-list request falls back to the slow path or fails.
@@ -156,12 +162,21 @@ def check_on_list(positions, allowed=None):
     bad = sorted(set(pos[~np.isin(pos, allowed)].tolist()))
     if bad:
         raise ValueError(f"{len(bad)} positions off the ACR list: {bad[:10]}")
+    high = sorted(set(pos[pos > K_MAX_EV].tolist()))
+    if high:
+        raise ValueError(f"{len(high)} positions above K_MAX_EV {K_MAX_EV:.1f} eV: "
+                         f"{high[:10]}")
     return pos
 
 
 def grid(lo, hi, step):
-    """Ascending positions lo..hi inclusive, checked against the ACR list."""
-    n = int(round((hi - lo) / step))
+    """
+    Ascending positions lo..hi, checked against the ACR list.
+
+    hi is included when (hi - lo) is a whole number of steps; otherwise the
+    grid stops at the last step below hi, so it never passes hi.
+    """
+    n = int(np.floor((hi - lo) / step + 1e-6))
     return check_on_list(lo + step * np.arange(n + 1))
 
 
@@ -179,17 +194,20 @@ def sweep(lo, hi, step, cycles=1):
     return check_on_list(e)
 
 
-def window_ladder(start_eV=6990.0, lo=ACR_LIST_EV[0], hi=ACR_LIST_EV[1]):
+def window_ladder(start_eV=6990.0, lo=ACR_LIST_EV[0], hi=K_MAX_EV):
     """
-    Step-size ladder that fits inside the ACR list window, in visiting order.
+    Step-size ladder that fits inside lo..hi, in visiting order.
 
-    Five steps each of 0.5, 1, 5 and 25 eV going up, five 100 eV steps
-    alternating down and up, one move to the low end, then four full-window
-    steps (190 eV for the 10-26 list). Use with k_order='given'.
+    Up to five steps each of 0.5, 1, 5 and 25 eV going up (a size stops
+    early rather than pass hi), five 100 eV steps alternating down and up,
+    one move to the low end, then four full-window steps (154 eV for
+    6970-7124). Use with k_order='given'.
     """
     e = [float(start_eV)]
     for s in (0.5, 1, 5, 25):
         for _ in range(5):
+            if e[-1] + s > hi:
+                break
             e.append(e[-1] + s)
     for i in range(5):
         e.append(e[-1] - 100 if i % 2 == 0 else e[-1] + 100)

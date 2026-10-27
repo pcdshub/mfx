@@ -24,8 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-from mfx.undulator_timing import (acr_list, check_on_list, grid, request_k,
-                                  sweep, window_ladder)
+from mfx.undulator_timing import (K_MAX_EV, acr_list, check_on_list, grid,
+                                  request_k, sweep, window_ladder)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,9 @@ EXP = 'mfx102095027'
 # BLD photon energy = requested K energy + REQ_OFFSET_EV (measured 10-09)
 REQ_OFFSET_EV = -5.2
 # real photon energy the XRT and SEER images must cover in one frame: pink
-# centroid 7099.8-7134.8 eV, +-10 eV SASE half width, +-2 sigma of 6 eV jitter
+# centroid 7099.8-7134.8 eV, +-10 eV SASE half width, +-2 sigma of 6 eV jitter.
+# Set before the 7124 eV K cap (centroid now 7098.8-7118.8); kept so the XRT
+# setup already done stays valid
 WINDOW_EV = (7080.0, 7155.0)
 CENTER_EV = 7117.5
 # FEE spectrometer crystal offset that centers the 7.1 keV spectrum
@@ -69,17 +71,19 @@ SEER_HOME = {'hkl': (6, 6, 0), 'energy_eV': 9580.0}
 SEER_TONIGHT = {'hkl': (6, 2, 0), 'energy_eV': CENTER_EV}
 
 # ---- scan presets -------------------------------------------------------------
+# every K scan tonight runs concurrent_settled, K request never above K_MAX_EV
+K_MODE = 'concurrent_settled'
 TIMING = {
     # name: (positions, mode, k_order, extra kwargs, sample, K before start)
-    'T1': (lambda: grid(7100, 7120, 1), 'pause', 'ascending', {},
-           'und1026_T1_pause_1eV', 7100.0),
-    'T2': (lambda: grid(7100, 7120, 0.5), 'pause', 'ascending', {},
-           'und1026_T2_pause_0p5eV', 7100.0),
-    'T3': (lambda: window_ladder(6990), 'concurrent_settled', 'given', {},
+    'T1': (lambda: grid(7100, 7120, 1), K_MODE, 'ascending', {},
+           'und1026_T1_cs_1eV', 7100.0),
+    'T2': (lambda: grid(7100, 7120, 0.5), K_MODE, 'ascending', {},
+           'und1026_T2_cs_0p5eV', 7100.0),
+    'T3': (lambda: window_ladder(6990), K_MODE, 'given', {},
            'und1026_T3_cs_ladder', 6990.0),
-    'T4': (lambda: grid(7100, 7130, 0.5), 'concurrent_settled', 'random',
+    'T4': (lambda: grid(7100, K_MAX_EV, 0.5), K_MODE, 'random',
            {'seed': 1026}, 'und1026_T4_cs_random_0p5eV', None),
-    'T5': (lambda: grid(7100, 7120, 1), 'concurrent_settled', 'ascending', {},
+    'T5': (lambda: grid(7100, 7120, 1), K_MODE, 'ascending', {},
            'und1026_T5_cs_1eV', 7100.0),
 }
 
@@ -92,7 +96,8 @@ PINK = {
     'P': (2.5, 30, 'pink_P{n}_Mb_r{r}'),
     'Pend': (2.5, 20, 'pink_Pend_carrier'),
 }
-PINK_LO, PINK_HI, PINK_PARK = 7105.0, 7140.0, 7120.0
+# 7104 so both the 2.5 and 5 eV sweeps end on 7124 (K_MAX_EV)
+PINK_LO, PINK_HI, PINK_PARK = 7104.0, K_MAX_EV, 7120.0
 
 
 # ---- helpers that need no hardware -------------------------------------------
@@ -363,7 +368,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         request_k(_ns('exafs').acr_energy_k, k)
         dccm.energy.move(real_eV / 1000.0, wait=True)
 
-    def offset_check(self, k_points=(7120.0, 7100.0, 7140.0), dwell=2.0,
+    def offset_check(self, k_points=(7112.0, 7100.0, 7124.0), dwell=2.0,
                      record=True):
         """
         Measure the request-to-real offset at three K requests.
@@ -377,7 +382,8 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         """
         _ns('dccm').insert()
         return _ns('exafs').k_xas_scan(
-            k_positions=list(k_points), k_order='given', k_move_mode='pause',
+            k_positions=list(check_on_list(k_points)), k_order='given',
+            k_move_mode=K_MODE,
             dccm_offsets=list(np.arange(-15.0, 5.1, 1.0)), dwell_time=dwell,
             record=record, sample='und1026_offset_check',
             **self.xrt_opts())
@@ -477,20 +483,20 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         return _ns('xrtspec').scan_feespec_camera_angle(
             lo_eV / 1000.0, hi_eV / 1000.0, n, run_length=run_length)
 
-    def spec_calib(self, lo_eV=7080, hi_eV=7155, step=5, run_length=10,
+    def spec_calib(self, lo_eV=7080, hi_eV=7120, step=5, run_length=10,
                    record=True):
         """
         XRT and SEER energy calibration: notch.series with K following.
 
         One DAQ run per DCCM energy (integer real eV, sample = energy, tag
         'dccm'). k_energy=True requests K = DCCM energy at each point, so the
-        series covers the full 75 eV window; with K fixed only the ~20 eV
-        SASE bandwidth gets flux. K = DCCM ignores x.offset_eV: the DCCM sits
-        ~5 eV above the SASE center, ~17% less flux at 8.5 eV sigma, fine for
-        a calibration. Every point 7080-7155 is on the ACR list. XRT parked
-        (x.xrt_park() first), SEER fixed. Default 16 runs of 10 s; with the
-        DCCM move, 5 s settle, K move and run start ~8 min (~11 min if the
-        list gives no gain).
+        series covers lo..hi; with K fixed only the ~20 eV SASE bandwidth
+        gets flux. K = DCCM ignores x.offset_eV: the DCCM sits ~5 eV above
+        the SASE center, ~17% less flux at 8.5 eV sigma, fine for a
+        calibration. hi_eV stops at 7120 because K follows the DCCM and K
+        may not pass K_MAX_EV (7124). XRT parked (x.xrt_park() first), SEER
+        fixed. Default 9 runs of 10 s, ~5 min with the DCCM move, 5 s
+        settle, K move and run start.
 
         notch.series asks at the end whether to return the DCCM and K and
         whether to run notch.output (fee_calib.py on psana: XRT eV/px fit,
@@ -816,7 +822,8 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         """
         d = REQ_OFFSET_EV - self.offset_eV
         shift = np.round(d * 2) / 2 if abs(d) > 3 else 0.0
-        return sweep(PINK_LO + shift, PINK_HI + shift, step)
+        # an upward shift is clipped at K_MAX_EV, the sweep gets shorter
+        return sweep(PINK_LO + shift, min(PINK_HI + shift, K_MAX_EV), step)
 
     def pink_switch(self, att_t=1e-2):
         """
@@ -875,8 +882,8 @@ XRT (FEE) spectrometer, Si(111), one image must hold 7080-7155 eV real
  1. DCCM in at 7117.5 eV: x.mono(7117.5). Attenuate for the FEE camera.
  2. x.xrt_park(). CamViewer fee_spec, check the mono line is on the sensor.
  3. x.xrt_tune(+-0.05) until the line sits at the image center column.
- 4. x.spec_calib(): notch.series 7080-7155 eV in 5 eV, K = DCCM at each
-    point (k_energy=True), 16 runs of 10 s. Answer y to both prompts at
+ 4. x.spec_calib(): notch.series 7080-7120 eV in 5 eV, K = DCCM at each
+    point (k_energy=True, K max 7124), 9 runs of 10 s. Answer y to both prompts at
     the end: return DCCM/K, then analyze (S3DF, your username).
  5. notch.output runs fee_calib.py on psana: eV/px, intercept, R^2 in the
     elog. Later: x.spec_calib_output('user'). Then spec_window(px_a, e_a,
@@ -906,7 +913,7 @@ SEER, swap Ge(660) -> Ge(620) for tonight, comparable Bragg angle
  5. Beam: Kapton flag in (shutter 4), x.seer_check(). Find the elastic line.
  6. Off the ROI: Parker MMS:08 / MMS:09 by hand, <= 0.5 mm steps, one
     x.seer_check() per step. Crystal tilt only if the Kohzu motors are up.
- 7. x.spec_calib() puts the 7080-7155 eV scan on SEER too; read the span.
+ 7. x.spec_calib() puts the 7080-7120 eV scan on SEER too; read the span.
  8. x.seer_save('ge620'). Do not move SEER during a pink pass.
  After the shift: reverse 1-2 with Ge(660), x.seer_restore('ge660'),
  elastic line check at 9.58 keV on the first 1019410 shift.
