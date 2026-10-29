@@ -585,6 +585,8 @@ class MFXTransfocator(TransfocatorBase):
         pulsepicker=None,
         move_timeout=30.0,
         att_timeout=30.0,
+        pp_timeout=10.0,
+        pp_retries=3,
     ):
         """
         Keep the TFS lens y motors on their setpoints until stopped.
@@ -638,6 +640,15 @@ class MFXTransfocator(TransfocatorBase):
         0 / ``'IDLE'``         ``open()`` or ``close()``, from the blade state
         =====================  ========================
 
+        The pulse picker silently ignores commands sent while it is busy
+        (e.g. still in mode 8 / ``'RESET'`` finishing a close), and its mode
+        can read IDLE shortly before it accepts the next command. So after
+        ``pulsepicker.close()`` the method waits (up to ``pp_timeout``) for
+        the blade to read CLOSED and the mode to be IDLE before moving the
+        lens. On restore it waits for IDLE, sends the command, and checks
+        that the saved state was reached, retrying up to ``pp_retries``
+        times. An error is logged if the state cannot be restored.
+
         Motors that are moving (``.DMOV == 0``) are skipped, so the minder
         does not interfere with moves made by the user or other code.
 
@@ -668,6 +679,12 @@ class MFXTransfocator(TransfocatorBase):
         att_timeout : float, optional
             Maximum time in seconds to wait for each attenuator move, and for
             a previous attenuator move to finish. Default 30.0.
+        pp_timeout : float, optional
+            Maximum time in seconds to wait for the pulse picker to become
+            IDLE, to close, or to reach the restored state. Default 10.0.
+        pp_retries : int, optional
+            Number of attempts made to restore the pulse picker state.
+            Default 3.
 
         Returns
         -------
@@ -746,7 +763,36 @@ class MFXTransfocator(TransfocatorBase):
             except Exception:
                 return "CLOSED"
 
+        def _pp_idle():
+            """True if the pulse picker mode (:SD_SIMPLE) is 0 / IDLE."""
+            try:
+                mode = pulsepicker.mode.get()
+            except Exception:
+                return False
+            if isinstance(mode, str):
+                return mode.strip().upper() == "IDLE"
+            return mode == 0
+
+        def _pp_wait(cond, timeout=None):
+            """Poll ``cond()`` until True or ``timeout`` (default pp_timeout)."""
+            timeout = pp_timeout if timeout is None else timeout
+            t0 = _time.monotonic()
+            while True:
+                try:
+                    if cond():
+                        return True
+                except Exception:
+                    pass
+                if _time.monotonic() - t0 > timeout:
+                    return False
+                _time.sleep(0.1)
+
+        def _pp_closed():
+            """True if the blade reads CLOSED and the picker is IDLE."""
+            return pulsepicker.position == "CLOSED" and _pp_idle()
+
         def _pp_restore(state):
+            """Restore ``state``, retrying if the picker drops the command."""
             actions = {
                 "FLIP": pulsepicker.flipflop,
                 "BURST": pulsepicker.burst,
@@ -754,7 +800,24 @@ class MFXTransfocator(TransfocatorBase):
                 "OPEN": pulsepicker.open,
                 "CLOSED": pulsepicker.close,
             }
-            actions[state]()
+            for attempt in range(1, pp_retries + 1):
+                if not _pp_wait(_pp_idle):
+                    logger.warning(
+                        f"lens_minder: pulse picker not IDLE after {pp_timeout} s "
+                        f"(attempt {attempt}/{pp_retries}); sending {state} anyway")
+                actions[state]()
+                if _pp_wait(lambda: _pp_state() == state):
+                    if attempt > 1:
+                        logger.warning(
+                            f"lens_minder: pulse picker restored to {state} "
+                            f"on attempt {attempt}")
+                    return
+                logger.warning(
+                    f"lens_minder: pulse picker is {_pp_state()}, not {state}, "
+                    f"after attempt {attempt}/{pp_retries}")
+            raise RuntimeError(
+                f"pulse picker still {_pp_state()} after {pp_retries} attempts; "
+                f"restore it manually")
 
         # Attenuator transmissions below this are treated as fully blocked
         # (att(0) reads back values like 3.97e-76, not exactly 0).
@@ -828,7 +891,12 @@ class MFXTransfocator(TransfocatorBase):
                         _att_set(0.0)
                     except Exception as ex:
                         logger.error(f"lens_minder: could not set attenuator to 0: {ex}")
-                    if pulsepicker.position != "CLOSED" and not _att_at(0.0):
+                    pp_closed = _pp_wait(_pp_closed)
+                    if not pp_closed:
+                        logger.error(
+                            f"lens_minder: pulse picker not CLOSED and IDLE after "
+                            f"{pp_timeout} s")
+                    if not pp_closed and not _att_at(0.0):
                         logger.error(
                             f"lens_minder: beam not confirmed closed; skipping move of TFS:{n:02d} y")
                         return False
