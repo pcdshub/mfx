@@ -10,6 +10,7 @@ import logging
 import os
 import json
 import random
+from datetime import datetime
 from time import sleep, time
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,191 @@ def quote():
     except Exception as e:
         logger.warning(f"Failed to load quote: {e}")
         return {'quote': 'No quote available', 'author': 'Unknown'}
+
+
+# ---------------------------------------------------------------------------
+# Elog samples
+#
+# The elog attaches a run to a sample by itself: when a run starts, it copies
+# the experiment's *active* sample onto the run. autorun therefore only has to
+# make the right sample active before the DAQ starts. Only one sample can be
+# active per experiment (shared by everyone), and each activation posts an
+# elog entry, so a sample is only activated when it changes.
+# ---------------------------------------------------------------------------
+
+class SampleError(Exception):
+    """An elog sample request failed."""
+
+
+def _sample_ws(method, endpoint, **kwargs):
+    """
+    Call an experiment endpoint of the elog web service.
+
+    Reuses the login of the hutch-python ``elog`` object (Kerberos or
+    ws-auth), so it works wherever elog posts work.
+
+    The elog answers HTTP 200 with ``success: false`` on application errors
+    (locked experiment, missing rights, unknown sample...), so the JSON is
+    checked and not only the HTTP status.
+    """
+    import requests
+    from mfx.db import elog
+
+    service = elog.service
+    exp = elog.logbooks['experiment']
+    url = f"{service._lgbk_base_url}/lgbk/{exp}/ws/{endpoint}"
+    resp = requests.request(method, url, timeout=10, **service._auth,
+                            **kwargs)
+    resp.raise_for_status()
+    result = resp.json()
+    if not result.get('success', False):
+        reason = result.get('errormsg') or result.get('error_msg') or result
+        raise SampleError(f"{endpoint} failed: {reason}")
+    return result.get('value')
+
+
+def list_samples():
+    """
+    Return the names of all samples defined in the experiment elog.
+
+    Examples
+    --------
+    >>> list_samples()
+    ['Lyso', 'Thermolysin']
+    """
+    return [s['name'] for s in _sample_ws('GET', 'samples/')]
+
+
+def get_sample():
+    """
+    Return the name of the active elog sample, or None if none is active.
+
+    Runs started now are attached to this sample by the elog.
+
+    Examples
+    --------
+    >>> get_sample()
+    'Lyso'
+    """
+    return _sample_ws('GET', 'current_sample_name') or None
+
+
+def set_sample(name, description=None):
+    """
+    Make ``name`` the active elog sample, creating it if needed.
+
+    Every run started afterwards is attached to this sample by the elog,
+    until another sample is activated. Only one sample can be active per
+    experiment, so this applies to everyone taking data on it.
+
+    Parameters
+    ----------
+    name : str
+        Sample name. If a sample with the same name in a different case
+        exists (e.g. 'lyso' for 'Lyso'), that one is used rather than
+        creating a near-duplicate: samples with runs cannot be deleted.
+    description : str, optional
+        Description used if the sample is created.
+        Default is 'Created by autorun on <date>'.
+
+    Returns
+    -------
+    str
+        Name of the active sample (existing spelling if matched).
+
+    Examples
+    --------
+    >>> set_sample('Lyso', description='lysozyme 30 mg/ml')
+    >>> autorun(run_length=60, runs=5, record=True)   # runs go to Lyso
+
+    See Also
+    --------
+    get_sample, clear_sample, list_samples
+    """
+    existing = list_samples()
+    if name not in existing:
+        same = [s for s in existing if s.lower() == name.lower()]
+        if same:
+            logger.warning(f"Using existing elog sample '{same[0]}' "
+                           f"for '{name}'")
+            name = same[0]
+        else:
+            if not description:
+                description = (f"Created by autorun on "
+                               f"{datetime.now():%Y-%m-%d %H:%M}")
+            _sample_ws('POST', 'samples/', json={
+                'name': name, 'description': description, 'params': {}})
+            print(f"Created new elog sample '{name}'")
+
+    if get_sample() != name:
+        _sample_ws('GET', 'make_sample_current',
+                   params={'sample_name': name})
+        print(f"Elog sample '{name}' is now active")
+    return name
+
+
+def clear_sample():
+    """
+    Deactivate the active elog sample; runs started afterwards get none.
+    """
+    current = get_sample()
+    if current is not None:
+        _sample_ws('GET', 'stop_current_sample',
+                   params={'sample_name': current})
+        print(f"Elog sample '{current}' deactivated")
+
+
+def _activate_sample(sample):
+    """
+    Choose the elog sample for the coming runs and make it active.
+
+    - ``sample`` given: created if needed and activated.
+    - ``sample`` None: the active sample is kept; if none is active, the
+      runs get no sample.
+
+    Elog errors are logged and never stop the runs.
+
+    Returns
+    -------
+    str or None
+        Name of the sample the runs will be attached to.
+    """
+    try:
+        if sample is None:
+            sample = get_sample()
+            logger.info(f"Using active elog sample: {sample}")
+            return sample
+        return set_sample(sample)
+    except Exception as e:
+        logger.warning(f"Could not set elog sample ({e}); runs may not be "
+                       f"attached to a sample")
+        return sample
+
+
+def _check_run_sample(run_number, sample):
+    """
+    Make sure ``run_number`` is attached to ``sample`` in the elog.
+
+    The elog normally does it at run start from the active sample; this is
+    a safety net (``change_sample_for_run`` needs the elog 'edit' role).
+    Errors are only logged.
+    """
+    try:
+        run = _sample_ws('GET', f'runs/{run_number}')
+        if run is None:
+            logger.warning(f"Run {run_number} not found in elog, cannot "
+                           f"check its sample")
+            return
+        # ws/runs/<n> expands the sample into the full sample document
+        run_sample = run.get('sample')
+        if isinstance(run_sample, dict) and run_sample.get('name') == sample:
+            return
+        _sample_ws('GET', 'change_sample_for_run',
+                   params={'run_num': run_number, 'sample_name': sample})
+        logger.info(f"Run {run_number} attached to elog sample '{sample}'")
+    except Exception as e:
+        logger.warning(f"Could not check elog sample of run {run_number}: "
+                       f"{e}")
 
 
 def post(sample, tag, run_number, post=True, inspire=False,
@@ -141,7 +327,7 @@ def post(sample, tag, run_number, post=True, inspire=False,
     from mfx.db import elog
 
     # Build message
-    message = f"Run {run_number}: {sample}\n"
+    message = f"Run {run_number}: {sample or 'no sample'}\n"
     message += f"DAQ: Station {daq_num}\n"
 
     if spread:
@@ -240,7 +426,7 @@ def ioc_cam_recorder(cam_name, duration, tag):
 
 
 def _autorun(
-        sample: str = '?',
+        sample: str = None,
         tag: str = None,
         run_length: float = 60.0,
         inspire: bool = False,
@@ -251,7 +437,8 @@ def _autorun(
         close: bool = True,
         daq_num: int = 2,
         cam: str = None,
-        run_type: str ='data'):
+        run_type: str ='data',
+        elog_sample: bool = True):
     """
     Execute automated data acquisition runs.
 
@@ -261,8 +448,11 @@ def _autorun(
 
     Parameters
     ----------
-    sample : str
-        Sample name for identification and logging
+    sample : str, optional
+        Sample name. When recording, the runs are attached to this elog
+        sample: it is created if it does not exist yet, and made active.
+        If None, the currently active elog sample is used; if no sample
+        is active, the runs get no sample. Default is None.
     tag : str, optional
         Run tag for organization. If None, uses sample name.
         Default is None.
@@ -293,6 +483,9 @@ def _autorun(
     run_type : str, optional
         Run type identifier for organization: 'data', 'dark',
         'calibration', etc. Default is 'data'.
+    elog_sample : bool, optional
+        Create/activate the elog sample. Set False when ``sample`` is only
+        a label (e.g. an energy in a scan). Default is True.
 
     Returns
     -------
@@ -383,8 +576,12 @@ def _autorun(
         logger.error('daq_num must be 1 (LCLS-I) or 2 (LCLS-II)')
         raise ValueError('Invalid daq_num')
 
+    # Elog sample: the elog attaches each new run to the active sample
+    if record and elog_sample:
+        sample = _activate_sample(sample)
+
     # Auto-inspire for water samples
-    if sample.lower() in ['water', 'h2o']:
+    if sample and sample.lower() in ['water', 'h2o']:
         inspire = True
         logger.info("Water sample detected - inspiration enabled")
 
@@ -427,13 +624,14 @@ def _autorun(
             sample=sample, tag=tag, run_length=run_length,
             inspire=inspire, record=record, runs=runs,
             daq_delay=daq_delay, cam=cam, run_type=run_type,
-            close=close
+            close=close, check_sample=record and elog_sample
         )
     elif daq_num == 1:
         _autorun_daq1(
             sample=sample, tag=tag, run_length=run_length,
             inspire=inspire, record=record, runs=runs,
-            daq_delay=daq_delay, cam=cam, run_type=run_type
+            daq_delay=daq_delay, cam=cam, run_type=run_type,
+            check_sample=record and elog_sample
         )
 
     # Close pulse picker if requested
@@ -482,7 +680,7 @@ def _display_progress(run_length):
 
 
 def _autorun_daq1(sample, tag, run_length, inspire, record,
-                  runs, daq_delay, cam, run_type):
+                  runs, daq_delay, cam, run_type, check_sample=False):
     """
     Execute autorun with LCLS-I DAQ (internal helper).
 
@@ -556,6 +754,8 @@ def _autorun_daq1(sample, tag, run_length, inspire, record,
                     sample=sample, tag=tag, run_number=run_number,
                     post=record, inspire=inspire, daq_num=1
                 )
+                if check_sample and sample:
+                    _check_run_sample(run_number, sample)
 
             # Wait before next run
             if run_idx < runs - 1:
@@ -586,7 +786,8 @@ def _autorun_daq1(sample, tag, run_length, inspire, record,
 
 
 def _autorun_daq2(sample, tag, run_length, inspire, record,
-                  runs, daq_delay, close, cam, run_type):
+                  runs, daq_delay, close, cam, run_type,
+                  check_sample=False):
     """
     Execute autorun with LCLS-II DAQ (internal helper).
 
@@ -688,6 +889,8 @@ def _autorun_daq2(sample, tag, run_length, inspire, record,
                     post=record, inspire=inspire, daq_num=2,
                     add_note=f"Run type: {run_type}"
                 )
+                if check_sample and sample:
+                    _check_run_sample(run_number, sample)
 
             # Wait before next run
             if run_idx < runs - 1:
@@ -729,10 +932,39 @@ def autorun(**kwargs):
 
 
 def geomrun(**kwargs):
+    """
+    Geometry calibration runs, attached to the 'geometry-calibration'
+    elog sample.
+
+    When recording, the elog sample that was active before is restored
+    afterwards, so later autorun() calls keep going to the user's sample.
+    """
     kwargs['tag'] = "geom"
     kwargs['sample'] = "geometry-calibration"
     kwargs['run_type'] = "GEOM"
-    _autorun(**kwargs)
+    if not kwargs.get('record', False):
+        _autorun(**kwargs)
+        return
+
+    try:
+        previous = get_sample()
+    except Exception as e:
+        logger.warning(f"Could not read active elog sample ({e}); it will "
+                       f"not be restored after geomrun")
+        _autorun(**kwargs)
+        return
+
+    try:
+        _autorun(**kwargs)
+    finally:
+        try:
+            if previous is None:
+                clear_sample()
+            else:
+                set_sample(previous)
+        except Exception as e:
+            logger.warning(f"Could not restore elog sample "
+                           f"'{previous}': {e}")
 
 
 def quick_run(sample, duration=60, record=True):
