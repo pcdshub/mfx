@@ -139,7 +139,10 @@ class TFS_Calculator(object):
                     continue
 
             # Step 2
-            if lens_combo.nlens > n:
+            # n limits the number of TFS lenses only. The prefocus lens
+            # (if any) must not count toward n, otherwise enabling the
+            # prefocus silently removes all n-lens TFS stacks.
+            if combo.nlens > n:
                 continue
             image = lens_combo.image(z_obj, energy)
             diff.append(np.abs(image - target))

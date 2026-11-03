@@ -136,9 +136,12 @@ with safe_load('XLJ_Fast'):
     xlj_fast_rx = IMS("MFX:HRA:MMS:02", name="xlj_fast_rx")
     xlj_fast_ry = IMS("MFX:HRA:MMS:04", name="xlj_fast_ry")
     xlj_fast_rz = IMS("MFX:HRA:MMS:03", name="xlj_fast_rz")
-    xlj_fast_x = BypassPositionCheck("MFX:LJH:JET:X", name="xlj_fast_x")
-    xlj_fast_y = BypassPositionCheck("MFX:LJH:JET:Y", name="xlj_fast_y")
-    xlj_fast_z = BypassPositionCheck("MFX:LJH:JET:Z", name="xlj_fast_z")
+    # Deprecated: no readback, so relative moves (tweak/mvr/umvr) step from
+    # the last value written through them, not the real jet position, and can
+    # jump the jet. Use xlj_fast() instead. Kept so existing scripts still load.
+    xlj_fast_x = DeprecatedXLJFastMotor("MFX:LJH:JET:X", name="xlj_fast_x")
+    xlj_fast_y = DeprecatedXLJFastMotor("MFX:LJH:JET:Y", name="xlj_fast_y")
+    xlj_fast_z = DeprecatedXLJFastMotor("MFX:LJH:JET:Z", name="xlj_fast_z")
 
 with safe_load('Wolter_mirror_motion'):
     from pcdsdevices.epics_motor import IMS
