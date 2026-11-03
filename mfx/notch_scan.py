@@ -169,7 +169,8 @@ class NotchScan:
         if k_energy:
             if self.acr_energy_k is not None:
                 logger.warning(f"Moving K to {energy_eV:.0f} eV")
-                self.acr_energy_k.move(energy_eV)
+                from mfx.undulator_timing import request_k
+                request_k(self.acr_energy_k, energy_eV)
             else:
                 logger.error("k_energy requested but ACR device unavailable")
 
