@@ -28,7 +28,8 @@ COLUMNS = [
 ]
 
 SLOW_STEP_WARN_S = 60.0
-# highest K request (SET2, eV) allowed for the 10-26 shift
+# highest K request (SET2, eV) on the 10-26 shift ACR list; applied by the
+# list helpers below and by request_k(k_max=...), not by request_k itself
 K_MAX_EV = 7124.0
 # SET2 within this of the target counts as already requested
 K_SAME_EV = 0.05
@@ -37,8 +38,11 @@ K_SAME_EV = 0.05
 K_READY_S = 2.0
 # a write the listener acts on drops the done PV to 0 within this time
 K_START_S = 20.0
-# end of the last K request seen by request_k, for the K_READY_S hold-off
-_last_done = {'t': 0.0}
+# end of the last K request seen by request_k, for the K_READY_S hold-off.
+# 'seen' is True only when request_k watched that request finish; otherwise
+# (first call, interrupted move, request from elsewhere) the hold-off is
+# counted from when the done PV is next seen at 1.
+_last_done = {'t': 0.0, 'seen': False}
 
 
 def _wait_done(done, ok, what, warn_s):
@@ -52,19 +56,28 @@ def _wait_done(done, ok, what, warn_s):
 
 
 def _wait_ready(done, ok, warn_s):
-    """Block until the done PV reads 1 and has done so for K_READY_S."""
+    """Block until the done PV has read 1 continuously for K_READY_S."""
+    since = _last_done['t'] if _last_done['seen'] else None
+    t_warn = time() + warn_s
     while True:
-        _wait_done(done, ok, "previous K request", warn_s)
-        rest = K_READY_S - (time() - _last_done['t'])
-        if rest <= 0:
-            return
-        sleep(rest)
         if done.get() == ok:
-            return
+            if since is None:
+                since = time()
+            if time() - since >= K_READY_S:
+                return
+        else:
+            # busy again, restart the hold-off once it reads 1
+            since = None
+            if time() > t_warn:
+                logger.warning(f"previous K request still not done after "
+                               f"{warn_s:.0f} s. Ctrl+C, caget "
+                               f"SIOC:SYS0:ML07:AO805, call ACR.")
+                t_warn += warn_s
+        sleep(0.05)
 
 
 def request_k(positioner, target_eV, wait=True, start_s=None,
-              warn_s=SLOW_STEP_WARN_S):
+              warn_s=SLOW_STEP_WARN_S, k_max=None, on_no_ack='raise'):
     """
     Write a K request to a BeamEnergyRequestACRWait and wait for the done PV.
 
@@ -73,30 +86,41 @@ def request_k(positioner, target_eV, wait=True, start_s=None,
     current SET2 (no change for the listener to see), or a write that lands
     while the listener is still finishing the last move. Here:
 
-    - a target already in SET2 (within K_SAME_EV) is not sent, returns 0;
+    - a target above k_max (eV, None = no limit) raises ValueError, not sent;
+    - a target already in SET2 (within K_SAME_EV) is not sent again; with
+      wait=True it still waits for the done PV, in case the earlier request
+      is still moving;
     - the write waits until the done PV has read 1 for K_READY_S;
     - if the done PV does not leave 1 within start_s (K_START_S) of the
-      write, the request counts as done, with a warning (listener idle, or
-      nothing to move);
+      write, the request was not acknowledged (dropped write, listener
+      stopped). on_no_ack='raise' (default) raises RuntimeError;
+      'warn' logs and returns, for operators who confirm K by other means;
     - once the PV has gone to 0, no timeout. A warning prints every warn_s;
       Ctrl+C stops.
 
-    Returns seconds from the write to done.
+    Returns seconds from the write (or from the call, for a repeated target)
+    to done. With wait=False, seconds to dispatch the write.
     """
     start_s = K_START_S if start_s is None else start_s
-    if target_eV > K_MAX_EV + 1e-6:
-        raise ValueError(f"K request {target_eV:.1f} eV above K_MAX_EV "
-                         f"{K_MAX_EV:.1f} eV, not sent")
+    if on_no_ack not in ('raise', 'warn'):
+        raise ValueError(f"on_no_ack must be 'raise' or 'warn', not {on_no_ack!r}")
+    if k_max is not None and target_eV > k_max + 1e-6:
+        raise ValueError(f"K request {target_eV:.1f} eV above k_max "
+                         f"{k_max:.1f} eV, not sent")
+    done = getattr(positioner, 'done', None)
+    ok = getattr(positioner, 'done_value', 1)
     current = positioner.setpoint.get()
     if abs(current - target_eV) < K_SAME_EV:
         logger.warning(f"K request already {current:.1f} eV, not sent")
-        return 0.0
-    done = getattr(positioner, 'done', None)
+        if done is None or not wait:
+            return 0.0
+        t0 = time()
+        _wait_done(done, ok, f"K request to {current:.1f} eV", warn_s)
+        return time() - t0
     if done is None or not wait:
         t0 = time()
         positioner.move(target_eV, wait=wait)
         return time() - t0
-    ok = getattr(positioner, 'done_value', 1)
     _wait_ready(done, ok, warn_s)
 
     left_done = threading.Event()
@@ -107,17 +131,21 @@ def request_k(positioner, target_eV, wait=True, start_s=None,
 
     # subscribe before the write so a fast 1 -> 0 -> 1 is not missed
     cid = done.subscribe(_seen, run=False)
+    _last_done['seen'] = False
     try:
         positioner.setpoint.put(target_eV, wait=True)
         t0 = time()
         while not left_done.wait(0.05) and done.get() == ok:
             if time() - t0 > start_s:
-                logger.warning(
-                    f"AO805 stayed 1 for {start_s:.0f} s after the K request to "
-                    f"{target_eV:.1f} eV; taking it as done. If K did not move, "
-                    f"ask ACR whether the listener is running.")
+                msg = (f"AO805 stayed 1 for {start_s:.0f} s after the K request "
+                       f"to {target_eV:.1f} eV; the listener did not act on "
+                       f"it. Check K with ACR before taking data.")
+                if on_no_ack == 'raise':
+                    raise RuntimeError(msg)
+                logger.warning(msg)
                 return time() - t0
         _wait_done(done, ok, f"K request to {target_eV:.1f} eV", warn_s)
+        _last_done['seen'] = True
     finally:
         done.unsubscribe(cid)
         _last_done['t'] = time()
@@ -252,8 +280,10 @@ class StepTimer:
         spent = request_k(positioner, target_eV, **kwargs)
         t1 = time()
         self.set('t_k_request', t1 - spent)
-        self.set('t_k_done', t1)
-        self.set('k_request_s', spent)
+        # wait=False returns at dispatch, so there is no done stamp to record
+        if kwargs.get('wait', True):
+            self.set('t_k_done', t1)
+            self.set('k_request_s', spent)
         return spent
 
     def end_step(self):
@@ -340,8 +370,13 @@ def write_csv(rows, run_number, exp):
     return None
 
 
-def report(timer, run_number, post=True):
-    """Print table, write CSV, and post to elog. Never raises."""
+def report(timer, run_number, post=True, write=True):
+    """
+    Print table, write CSV (write=True), and post to elog (post=True).
+
+    Pass write=False for simulated or unrecorded scans: their run numbers
+    are not real and the CSV would overwrite a real run's file. Never raises.
+    """
     try:
         exp = None
         try:
@@ -350,7 +385,7 @@ def report(timer, run_number, post=True):
         except Exception as e:
             logger.warning(f"get_exp failed: {e}")
         table = format_table(timer.rows, run_number, timer.mode)
-        path = write_csv(timer.rows, run_number, exp)
+        path = write_csv(timer.rows, run_number, exp) if write else None
         msg = table + (f"\n\ncsv: {path}" if path else "\n\ncsv: not written")
         print("\n" + msg + "\n")
         if post:

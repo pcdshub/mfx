@@ -18,6 +18,10 @@ from tfs.utils import estimate_beam_fwhm, focal_length, MFX_prefocus_energy_rang
 logger = logging.getLogger(__name__)
 
 
+
+class _BeamLeftClosed(RuntimeError):
+    """lens_minder left the beam closed because a lens motor would not stop."""
+
 class TransfocatorInterlock(Device):
     """
     Device containing signals pertinent to the interlock system.
@@ -695,6 +699,9 @@ class MFXTransfocator(TransfocatorBase):
         ------
         ValueError
             If a lens number is not in 2-10.
+        RuntimeError
+            If a lens motor is still moving after a correction; the beam is
+            left closed and lens_minder stops.
 
         Notes
         -----
@@ -737,9 +744,10 @@ class MFXTransfocator(TransfocatorBase):
                 rbv=EpicsSignalRO(f"{pv}.RBV", name=f"tfs_{n:02d}_y_rbv"),
                 val=EpicsSignal(f"{pv}.VAL", name=f"tfs_{n:02d}_y_val"),
                 dmov=EpicsSignalRO(f"{pv}.DMOV", name=f"tfs_{n:02d}_y_dmov"),
+                stop=EpicsSignal(f"{pv}.STOP", name=f"tfs_{n:02d}_y_stop"),
             )
         for m in motors.values():
-            for sig in (m["rbv"], m["val"], m["dmov"]):
+            for sig in (m["rbv"], m["val"], m["dmov"], m["stop"]):
                 sig.wait_for_connection(timeout=5.0)
 
         # pulsepicker.mode (:SD_SIMPLE) values, as used by pcdsdevices
@@ -871,6 +879,20 @@ class MFXTransfocator(TransfocatorBase):
             att.move(target, wait=True, timeout=att_timeout)
             return True
 
+        def _lens_idle(n, m, stop):
+            """Wait for the lens y motor to be idle; stop it first if ``stop``.
+
+            stop=True for a move lens_minder sent (timed out or Ctrl+C);
+            stop=False for an operator move, which is left to finish.
+            """
+            if m["dmov"].get():
+                return True
+            if stop:
+                logger.warning(f"lens_minder: stopping TFS:{n:02d} y")
+                m["stop"].put(1)
+            return _pp_wait(lambda: bool(m["dmov"].get()),
+                            timeout=10.0 if stop else move_timeout)
+
         def _correct(n, m, setpoint, readback):
             # Read att and pulse picker now, immediately before this move (not
             # when the minder starts), so changes made while it runs are kept.
@@ -881,6 +903,7 @@ class MFXTransfocator(TransfocatorBase):
                 f"VAL={setpoint:.3f} (off by {readback - setpoint:+.3f} mm). "
                 f"Saved att={att_prev:.4g}, pulsepicker={pp_prev}."
             )
+            sent = False
             try:
                 if close_beam:
                     logger.warning(
@@ -900,6 +923,14 @@ class MFXTransfocator(TransfocatorBase):
                         logger.error(
                             f"lens_minder: beam not confirmed closed; skipping move of TFS:{n:02d} y")
                         return False
+                # closing the beam takes seconds; an operator may have moved
+                # the lens meanwhile, and writing the old setpoint would undo it
+                if not m["dmov"].get() or abs(m["val"].get() - setpoint) > 1e-6:
+                    logger.warning(
+                        f"lens_minder: TFS:{n:02d} y setpoint changed or motor "
+                        f"moving since the drift check; not correcting")
+                    return False
+                sent = True
                 m["val"].put(setpoint, wait=True)
                 t0 = _time.monotonic()
                 _time.sleep(0.2)
@@ -921,6 +952,13 @@ class MFXTransfocator(TransfocatorBase):
                     )
                 return True
             finally:
+                # never reopen the beam on a lens that is still moving
+                if close_beam and not _lens_idle(n, m, stop=sent):
+                    logger.error(
+                        f"lens_minder: TFS:{n:02d} y still moving; beam left "
+                        f"closed. Check the lens, then restore by hand: "
+                        f"att({att_prev:.4g}), pulsepicker {pp_prev}")
+                    raise _BeamLeftClosed(f"TFS:{n:02d} y not idle, beam left closed")
                 logger.warning(
                     f"lens_minder: restoring att={att_prev:.4g}, pulsepicker={pp_prev}"
                 )
@@ -948,6 +986,8 @@ class MFXTransfocator(TransfocatorBase):
                         try:
                             if _correct(n, m, setpoint, readback):
                                 n_fix += 1
+                        except _BeamLeftClosed:
+                            raise
                         except Exception:
                             logger.exception(
                                 f"lens_minder: correction of TFS:{n:02d} y failed; continuing")

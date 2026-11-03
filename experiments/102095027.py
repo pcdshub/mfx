@@ -376,7 +376,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         print(f"DCCM in, DCCM {real_eV:.1f} eV, K request {k:.1f} eV "
               f"(real {k + self.offset_eV:.1f})")
         dccm.insert()
-        request_k(_ns('exafs').acr_energy_k, k)
+        request_k(_ns('exafs').acr_energy_k, k, k_max=K_MAX_EV)
         dccm.energy.move(real_eV / 1000.0, wait=True)
 
     def offset_check(self, k_points=(7112.0, 7100.0, 7124.0), dwell=2.0,
@@ -573,8 +573,9 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         """
         Move SEER motors back to a saved set, after typing 'yes'.
 
-        Beam closed first. Prints current and saved readbacks for every
-        motor before asking.
+        Prints current and saved readbacks for every motor before asking. After
+        'yes', closes the pulse picker and sets att(0), and moves nothing until
+        the beam is confirmed blocked.
         """
         from epics import caget, caput
         rec = json.loads((SEER_SAVE / f'{tag}.json').read_text())
@@ -583,10 +584,30 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         if input(f"Move SEER to '{tag}' ({rec['time']})? yes/no: ").strip() != 'yes':
             print("not moved")
             return
+        if not self._close_beam():
+            print("beam not confirmed blocked, SEER not moved")
+            return
         for k, pv in rec['pvs'].items():
             if rec['rbv'][k] is not None:
                 caput(pv + '.VAL', rec['rbv'][k], wait=True, timeout=120)
         self.seer_save(f'{tag}_restored_{time.strftime("%m%d_%H%M")}')
+
+    def _close_beam(self, timeout=10.0):
+        """Close the pulse picker and set att(0); True once either is confirmed."""
+        from mfx.db import mfx_pulsepicker
+        att = _ns('att')
+        mfx_pulsepicker.close()
+        att(0)
+        t_end = time.time() + timeout
+        while time.time() < t_end:
+            try:
+                # att(0) reads back ~1e-76, not exactly 0
+                if mfx_pulsepicker.position == 'CLOSED' or att.position < 1e-9:
+                    return True
+            except Exception as e:
+                logger.warning(f'beam state read failed: {e}')
+            time.sleep(0.2)
+        return False
 
     def seer_check(self, run_length=60, record=True):
         """
@@ -633,7 +654,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
               f"{max(pos):.1f} eV, XRT tracking "
               f"{'ON' if opts['track_feespec'] else 'OFF'}, K pre-request {k0}")
         if k0 is not None:
-            request_k(exafs.acr_energy_k, k0)
+            request_k(exafs.acr_energy_k, k0, k_max=K_MAX_EV)
         return exafs.k_xas_scan(
             k_positions=pos, k_order=order, k_move_mode=mode, sample=sample,
             dwell_time=dwell, pink=True, record=record, **opts, **extra)
@@ -700,7 +721,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         # run not open yet, so the start post carries no run number
         _post(msg, tag=tag) if record else print(msg)
         exafs = _ns('exafs')
-        request_k(exafs.acr_energy_k, pos[0])
+        request_k(exafs.acr_energy_k, pos[0], k_max=K_MAX_EV)
         out = exafs.k_xas_scan(
             # 'given' keeps the order; 'ascending' would re-sort a reversed list
             k_positions=pos, k_order='given', k_move_mode=K_MODE,
@@ -808,10 +829,13 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         rows = []
         for pos in z:
             tfs.translation.umv(pos)
-            frames, t_end = [], time.time() + image_sec
-            while time.time() < t_end or len(frames) < 10:
-                frames.append(np.asarray(cam.get_image_roi(), float))
-            img = np.mean(frames, axis=0)
+            # running sum keeps memory at one frame however long image_sec is
+            total, n_frames, t_end = None, 0, time.time() + image_sec
+            while time.time() < t_end or n_frames < 10:
+                frame = np.asarray(cam.get_image_roi(), float)
+                total = frame if total is None else total + frame
+                n_frames += 1
+            img = total / n_frames
             cam.active_image = img - img.min()
             px, py = cam.get_projections()
             sx = abs(cam.fit_scan(np.arange(len(px)), px)[2]) * k
@@ -953,7 +977,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             pos = [PINK_PARK]
         else:
             pos = self.kx(step)
-            request_k(exafs.acr_energy_k, pos[0])
+            request_k(exafs.acr_energy_k, pos[0], k_max=K_MAX_EV)
         return exafs.k_xas_scan(k_positions=pos, k_order='given',
                                 dwell_time=dwell, sample=sample, **opts)
 

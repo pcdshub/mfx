@@ -62,12 +62,24 @@ class User:
     def int_to_bool_array(self, n, length=4):
         return [bool((n >> i) & 1) for i in range(length)]
 
-    def set_arbitrary_laser(self, number_of_shots=11, sync_marker=10):
-        seq = EventSequencer("ECS:SYS0:7", name="mfx_sequencer")
+    def set_arbitrary_laser(self, number_of_shots=11, sync_marker=10,
+                            beam_rate=120):
+        """beam_rate and sync_marker in Hz."""
         shot_label_evts = [205, 206, 207, 208, 209, 210, 211, 212]
         max_idx = 2 ** len(shot_label_evts) - 1
         if number_of_shots > max_idx:
             raise ValueError(f"number_of_shots must be <= {max_idx}")
+        if sync_marker not in self.sync_markers:
+            raise ValueError(f"sync_marker must be one of "
+                             f"{sorted(self.sync_markers)} Hz")
+        # total delta_beam (= number_of_shots) has to fit inside one sync
+        # period or the last 204 lands on the next loop's 203 bucket
+        buckets = int(round(beam_rate / sync_marker))
+        if number_of_shots >= buckets:
+            raise ValueError(
+                f"number_of_shots must be < {buckets} ({beam_rate} Hz beam, "
+                f"{sync_marker} Hz sync)")
+        seq = EventSequencer("ECS:SYS0:7", name="mfx_sequencer")
         # The sequence (re)starts on the sync marker bucket (code 43 at 10 Hz)
         # and each step's code fires delta_beam buckets after the previous
         # step. A first step with delta_beam=0 fires on the sync bucket itself

@@ -2056,7 +2056,8 @@ class Exafs:
                 if self._step_timer:
                     from mfx.undulator_timing import report
                     report(self._step_timer, run_number,
-                           post=post_timing and record and not simulate)
+                           post=post_timing and record and not simulate,
+                           write=record and not simulate)
 
                 if runs > 1 and run_idx < runs - 1:
                     self.logger.info("Inter-run delay (5s)")
@@ -2076,7 +2077,8 @@ class Exafs:
             if getattr(self, '_step_timer', None) and self._step_timer.rows:
                 from mfx.undulator_timing import report
                 report(self._step_timer, run_number,
-                       post=post_timing and record and not simulate)
+                       post=post_timing and record and not simulate,
+                       write=record and not simulate)
 
         # === Return to initial positions ===
         self.logger.info("Returning to initial positions")
