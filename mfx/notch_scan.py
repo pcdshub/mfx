@@ -116,7 +116,8 @@ class NotchScan:
         logger.info("DCCM energy range: 4000-25000 eV")
 
     def set_energy(self, energy_eV: float, vernier: bool = False,
-               k_energy: bool = False, wait: bool = True):
+               k_energy: bool = False, wait: bool = True,
+               k_offset_eV: float = 0.0):
         """
         Move DCCM to specified energy.
 
@@ -136,6 +137,10 @@ class NotchScan:
         wait : bool, optional
             Block until motion complete.
             Default is True.
+        k_offset_eV : float, optional
+            Real photon energy minus K request, eV. With k_energy=True, K
+            is requested at energy_eV - k_offset_eV so the SASE center
+            sits on the DCCM energy. Default is 0.0.
 
         Returns
         -------
@@ -168,9 +173,10 @@ class NotchScan:
         # Move undulator K to follow DCCM (pattern from exafs.py)
         if k_energy:
             if self.acr_energy_k is not None:
-                logger.warning(f"Moving K to {energy_eV:.0f} eV")
+                k_eV = energy_eV - k_offset_eV
+                logger.warning(f"Moving K to {k_eV:.1f} eV")
                 from mfx.undulator_timing import request_k
-                request_k(self.acr_energy_k, energy_eV)
+                request_k(self.acr_energy_k, k_eV)
             else:
                 logger.error("k_energy requested but ACR device unavailable")
 
@@ -189,7 +195,8 @@ class NotchScan:
             vernier: bool = False,
             k_energy: bool = False,
             daq_num: int = 2,
-            exp: Optional[str] = None):
+            exp: Optional[str] = None,
+            k_offset_eV: float = 0.0):
         """
         Execute automated DCCM energy scan series.
 
@@ -236,6 +243,9 @@ class NotchScan:
         exp : str, optional
             Experiment name. If None, auto-detects.
             Default is None.
+        k_offset_eV : float, optional
+            Real photon energy minus K request, eV, passed to set_energy
+            with k_energy=True. Default is 0.0.
 
         Returns
         -------
@@ -416,7 +426,8 @@ class NotchScan:
 
                 # Move to energy
                 logger.info(f"Setting energy: {energy_eV} eV")
-                self.set_energy(energy_eV, vernier=vernier, k_energy=k_energy, wait=True)
+                self.set_energy(energy_eV, vernier=vernier, k_energy=k_energy, wait=True,
+                                k_offset_eV=k_offset_eV)
 
                 # Wait for settling
                 logger.info(f"Settling for {daq_delay}s...")
@@ -480,7 +491,7 @@ class NotchScan:
         if answer.lower() == 'y':
             logger.info(f"Returning to initial energy: {original_energy_eV} eV")
             self.set_energy(original_energy_eV, vernier=vernier,
-                            k_energy=k_energy, wait=True)
+                            k_energy=k_energy, wait=True, k_offset_eV=k_offset_eV)
             logger.info("Returned to initial positions")
 
         # Prompt for analysis

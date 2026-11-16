@@ -40,10 +40,10 @@ TAG = 'shift_1116'
 PREFIX = 'und1116'
 
 # ---- energies ---------------------------------------------------------------
-# real photon energy = K request + offset. -5.2 eV measured on 10-09 (BLD);
-# 10-26 left "Offset found: 20 eV" with no sign, so measure it tonight
-# (x.offset_check) before any DCCM-in scan
-REQ_OFFSET_EV = -5.2
+# real photon energy = K request + offset. 10-26: the real energy was 20 eV
+# above the energy the machine reported (10-09 BLD gave -5.2 eV). Check it
+# tonight (x.offset_check) before any DCCM-in scan; x.set_offset() updates it
+REQ_OFFSET_EV = 20.0
 # K request at the Fe foil edge on 10-26 (pink edge scans); x.set_edge()
 EDGE_K_EV = 7080.0
 # list asked of ACR before the shift: (lo, hi, step, highest K), requested eV.
@@ -613,7 +613,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         """Set the request-to-real offset (real = K request + offset, eV)."""
         self.offset_eV = float(eV)
         _post(f"request-to-real offset set to {self.offset_eV:+.1f} eV "
-              f"(10-09: -5.2 eV; 10-26 log: 'Offset found: 20 eV', no sign)")
+              f"(10-26: +20 eV, real above the machine-reported energy; 10-09: -5.2 eV)")
 
     def mono(self, real_eV=TFS_E_EV):
         """
@@ -632,17 +632,18 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         request_k(_ns('exafs').acr_energy_k, k, k_max=ut.K_MAX_EV)
         dccm.energy.move(real_eV / 1000.0, wait=True)
 
-    def offset_check(self, k=None, lo=-30.0, hi=30.0, step=2.0, dwell=2.0,
+    def offset_check(self, k=None, lo=-20.0, hi=40.0, step=2.0, dwell=2.0,
                      record=True):
         """
         Find the request-to-real offset with the DCCM, at one K request.
 
         DCCM in. K at k (default x.edge_k + 10), the DCCM steps from K + lo
         to K + hi eV. The DG2 IPM against DCCM energy peaks at the real SASE
-        center. The window is wide because the 10-26 offset is not known
-        (unsigned "20 eV" in the log against -5.2 eV on 10-09). Then
-        x.offset_fine(c) around the peak offset c, and x.set_offset(c).
-        About 3 min at the defaults.
+        center. The window holds the 10-26 offset (+20 eV, real above the
+        machine-reported energy) and the 10-09 one (-5.2 eV) with the
+        ~22 eV FWHM SASE profile around either. Then x.offset_fine(c)
+        around the peak offset c, and x.set_offset(c). About 3 min at the
+        defaults.
         """
         k = self.edge_k + 10.0 if k is None else k
         k = float(check_on_list([k])[0])
@@ -821,14 +822,16 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         k_xas_scan keywords for XRT tracking; xrt=None uses x.xrt_track.
 
         Tracking on: before each K request the crystal, camera arm and camy
-        move to the new K (non-blocking in concurrent_settled), after K
-        settles check_feespec_crystal_angle runs (2.0 s per step on 10-09),
-        at every point the camera arm follows and at the end the XRT returns
-        to the start energy. Off: none of these, the XRT stays put.
+        move to the new real energy, K request + x.offset_eV (non-blocking
+        in concurrent_settled), after K settles check_feespec_crystal_angle
+        runs (2.0 s per step on 10-09), at every point the camera arm
+        follows and at the end the XRT returns to the start energy. Off:
+        none of these, the XRT stays put.
         """
         on = self.xrt_track if xrt is None else bool(xrt)
         return dict(crystal_angle_offset=self.xrt_offset, track_feespec=on,
-                    track_feespec_cam=on, track_feespec_blocking=False)
+                    track_feespec_cam=on, track_feespec_blocking=False,
+                    feespec_offset_eV=self.offset_eV)
 
     def xrt_on(self):
         """XRT follows K in every scan from here on (default tonight)."""
@@ -847,22 +850,20 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         """One-off XRT move to real_eV between scans, camera restarted."""
         self.xrt_park(real_eV)
 
-    def xrt_check(self, energy_eV=None):
+    def xrt_check(self, real_eV=None):
         """
         Run the crystal-angle check that tracked scans do after each K move.
 
-        energy_eV defaults to the current K request, the energy tracked
-        scans set the XRT for (real = K request + x.offset_eV, so the
-        spectrum sits ~5 eV off the image center, well inside the ~75 eV
-        image). Corrects th if it is off the calculated angle and restarts
-        the Zyla. Use after a manual XRT move.
+        real_eV defaults to the current K request + x.offset_eV, the energy
+        tracked scans set the XRT for. Corrects th if it is off the
+        calculated angle and restarts the Zyla. Use after a manual XRT move.
         """
-        if energy_eV is None:
-            energy_eV = _ns('exafs').acr_energy_k.get().setpoint
+        if real_eV is None:
+            real_eV = _ns('exafs').acr_energy_k.get().setpoint + self.offset_eV
         _ns('xrtspec').check_feespec_crystal_angle(
-            energy_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
+            real_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
         _zyla_on()
-        print(f"XRT angle checked for {energy_eV:.1f} eV")
+        print(f"XRT angle checked for {real_eV:.1f} eV")
 
     def xrt_cam_scan(self, lo_eV=WINDOW_EV[0], hi_eV=WINDOW_EV[1], n=4,
                      run_length=30):
@@ -881,9 +882,10 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         XRT and SEER energy calibration: notch.series with K following.
 
         One DAQ run per DCCM energy (integer real eV, sample = energy, tag
-        'dccm'). k_energy=True requests K = DCCM energy at each point, so the
-        series covers lo..hi; hi_eV must stay under the K cap in use. XRT
-        parked (x.xrt_park() first), SEER fixed. notch.series asks at the end
+        'dccm'). K follows at DCCM energy - x.offset_eV (rounded to the list
+        step), so the SASE center sits on the DCCM energy at every point;
+        the K values must be on the list and under the cap. XRT parked
+        (x.xrt_park() first), SEER fixed. notch.series asks at the end
         whether to return the DCCM and K: answer n. Its return sends K to
         the raw DCCM readback, off the list; spec_calib puts the DCCM and K
         back where they were itself.
@@ -891,7 +893,10 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         from mfx.macros import get_run
         lo, hi, step = int(lo_eV), int(hi_eV), int(step)
         num = len(range(lo, hi + step, step))
-        check_on_list(list(range(lo, hi + step, step)))
+        l_step = ut.ACR_LIST_EV[2]
+        k_off = float(np.round(self.offset_eV / l_step) * l_step)
+        check_on_list([e - k_off for e in range(lo, hi + step, step)])
+        print(f"DCCM {lo}-{hi} eV in {step} eV, K = DCCM - {k_off:g} eV")
         exafs, dccm = _ns('exafs'), _ns('dccm')
         k0 = float(exafs.acr_energy_k.get().setpoint)
         dccm.insert()
@@ -900,7 +905,8 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
                                num=num)
         try:
             _ns('notch').series(lo, hi, step, run_length=run_length, tag='dccm',
-                                record=record, k_energy=True, daq_num=2, exp=EXP)
+                                record=record, k_energy=True, daq_num=2, exp=EXP,
+                                k_offset_eV=k_off)
         finally:
             print(f"DCCM back to {e0 * 1000:.1f} eV, K back to {k0:.1f} eV")
             dccm.energy.move(e0, wait=True)

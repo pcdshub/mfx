@@ -1720,7 +1720,7 @@ class Exafs:
                    sample='?', simulate=False, runs=1,
                    step_timing=True, post_timing=True,
                    pink=False, k_order='ascending', seed=None,
-                   on_no_ack='raise'):
+                   on_no_ack='raise', feespec_offset_eV=0.0):
         """
         K-primary XAS scan: undulator K is the primary scan axis,
         DCCM steps within a small window around each K position.
@@ -1810,6 +1810,11 @@ class Exafs:
             'concurrent' and 'concurrent_settled': 'raise' (default) stops
             the scan through the error path, 'warn' logs and goes on.
             'pause' mode and the return move always raise.
+        feespec_offset_eV : float, optional
+            Real photon energy minus K request, eV (default 0.0). With FEE
+            spec tracking the crystal is set for K + feespec_offset_eV; in
+            pink mode the camera arm and the end-of-scan XRT return use it
+            too (with the DCCM in they follow the DCCM energy).
 
         Returns
         -------
@@ -1949,6 +1954,7 @@ class Exafs:
         print(f"  Track FEE spec:  {track_feespec}")
         print(f"  FEE spec block:  {track_feespec_blocking}")
         print(f"  Track FEE cam:   {track_feespec_cam}")
+        print(f"  FEE spec offset: {feespec_offset_eV:+.1f} eV (real - K request)")
         print(f"  Flux threshold:  {flux_threshold}")
         print(f"  Simulate:        {simulate}")
         print(f"  Sample:          {sample}")
@@ -2026,7 +2032,8 @@ class Exafs:
                 order = rng.permutation(n_k) if k_order == 'random' else range(n_k)
                 for n_done, k_idx in enumerate(order):
                     k_target_eV = k_positions_eV[k_idx]
-                    k_target_keV = k_target_eV / 1000.0
+                    # XRT energy for this step (the move helpers use it for the XRT only)
+                    xrt_keV = (k_target_eV + feespec_offset_eV) / 1000.0
 
                     self.logger.warning(
                         f"K position {n_done + 1}/{n_k}: "
@@ -2041,17 +2048,17 @@ class Exafs:
                     t_k_move = time()
                     if k_move_mode == 'pause':
                         self._k_xas_move_pause(
-                            k_target_eV, k_target_keV,
+                            k_target_eV, xrt_keV,
                             track_feespec, crystal_angle_offset
                         )
                     elif k_move_mode == 'concurrent':
                         self._k_xas_move_concurrent(
-                            k_target_eV, k_target_keV,
+                            k_target_eV, xrt_keV,
                             track_feespec, crystal_angle_offset
                         )
                     elif k_move_mode == 'concurrent_settled':
                         self._k_xas_move_concurrent_settled(
-                            k_target_eV, k_target_keV,
+                            k_target_eV, xrt_keV,
                             track_feespec, crystal_angle_offset,
                             track_feespec_blocking, on_no_ack=on_no_ack
                         )
@@ -2085,8 +2092,11 @@ class Exafs:
 
                         # Track FEE spectrometer camera
                         if track_feespec_cam:
+                            cam_keV = dccm_energy_keV
+                            if pink:
+                                cam_keV = (dccm_energy_eV + feespec_offset_eV) / 1000.0
                             self.xrtspec.track_feespec_camera(
-                                dccm_energy_keV, crystal_angle_offset)
+                                cam_keV, crystal_angle_offset)
 
                         if self._step_timer and i_off == 0:
                             self._step_timer.end_step()
@@ -2129,7 +2139,7 @@ class Exafs:
                     # next write (the next write then waits the hold-off)
                     if k_move_mode == 'concurrent':
                         t_k_done = self._k_xas_concurrent_done(
-                            k_target_keV, track_feespec,
+                            xrt_keV, track_feespec,
                             crystal_angle_offset, on_no_ack)
                         for p in self._k_step_points:
                             p['t_k_done'] = t_k_done
@@ -2197,8 +2207,11 @@ class Exafs:
                          energy_start, wait=True)
             _restore("K return", _return_k)
             if track_feespec:
+                xrt_start = energy_start
+                if pink:
+                    xrt_start = energy_start + feespec_offset_eV / 1000.0
                 _restore("XRT return", self.xrtspec.move_feespec_energy,
-                         energy_start, crystal_angle_offset=crystal_angle_offset)
+                         xrt_start, crystal_angle_offset=crystal_angle_offset)
 
         # === Print summary ===
         elapsed = time() - t_start
