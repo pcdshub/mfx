@@ -27,6 +27,10 @@ except ImportError:
     _HW_AVAILABLE = False
 
 
+# DCCM move for a 1 eV step (10-09 timers), for the fly-scan time estimate
+_DCCM_MOVE_S = 1.4
+
+
 class _SimMotor:
     """Minimal simulated motor for offline testing."""
     def __init__(self):
@@ -1715,7 +1719,8 @@ class Exafs:
                    crystal_angle_offset=0.0,
                    sample='?', simulate=False, runs=1,
                    step_timing=True, post_timing=True,
-                   pink=False, k_order='ascending', seed=None):
+                   pink=False, k_order='ascending', seed=None,
+                   on_no_ack='raise'):
         """
         K-primary XAS scan: undulator K is the primary scan axis,
         DCCM steps within a small window around each K position.
@@ -1740,7 +1745,11 @@ class Exafs:
             and sorted ascending.
         k_move_mode : str, optional
             'pause': Pause DAQ, move K, wait, resume DAQ (default)
-            'concurrent': Request K non-blocking, immediately step DCCM
+            'concurrent': Request K without waiting and step the DCCM
+            through the offsets while K moves (fly scan). After the last
+            offset the scan waits for the K done, and the next K write
+            also waits out the K_READY_S hold-off, so a step takes
+            max(DCCM points, K move)
             'concurrent_settled': DAQ stays running, move K blocking (wait for settle), then step DCCM
         dccm_window_eV : float, optional
             DCCM scans ±this around K center (default: 2.0)
@@ -1750,7 +1759,10 @@ class Exafs:
             Explicit list of DCCM offsets in eV relative to K center.
             If provided, overrides dccm_window_eV and dccm_step_eV.
         dwell_time : float, optional
-            Collection time per DCCM point in seconds (default: 3.0)
+            Collection time per DCCM point in seconds (default: 3.0).
+            In 'concurrent_settled' the first offset after each K move
+            gets dwell_time minus the K move time (the DAQ ran through
+            the move); later offsets get the full dwell_time.
         record : bool, optional
             Enable DAQ recording (default: False)
         picker : str or None, optional
@@ -1776,7 +1788,7 @@ class Exafs:
             Number of scan repetitions (default: 1)
         step_timing : bool, optional
             Record per-step wall-clock timing (default: True). See
-            mfx.undulator_timing.
+            mfx.undulator_timing. The per-point log is reported with it.
         post_timing : bool, optional
             Post the timing table to the elog after each run (default: True).
             Ignored when record is False or simulate is True.
@@ -1793,6 +1805,11 @@ class Exafs:
             Positions must still sit on the ACR precomputed list.
         seed : int or None, optional
             Seed for k_order='random', so a shuffled run can be replayed.
+        on_no_ack : str, optional
+            A K write the listener does not act on within K_START_S, in
+            'concurrent' and 'concurrent_settled': 'raise' (default) stops
+            the scan through the error path, 'warn' logs and goes on.
+            'pause' mode and the return move always raise.
 
         Returns
         -------
@@ -1808,7 +1825,7 @@ class Exafs:
         Default k_step_eV = 2*dccm_window_eV gives seamless energy tiling
         with no gaps between successive DCCM windows.
 
-        Uses dccm.energy (crystal-only) — no vernier requests are issued.
+        Uses dccm.energy (crystal-only); no vernier requests are issued.
         This is required for experiments where the vernier PV is rejected
         by the accelerator.
 
@@ -1816,16 +1833,29 @@ class Exafs:
         collected while the undulator is still settling. This allows
         evaluating data quality during transit vs. after settling.
 
+        With more than one DCCM offset, or in 'concurrent' mode, one row
+        per DCCM point (mfx.undulator_timing.POINT_COLUMNS) records the
+        DCCM and dwell times and the done PV at dwell start and end, so
+        each point can be tagged in move or settled. The rows go to
+        report(..., points=...) with the timing table (runNNNN_points.csv
+        when recording) and stay in self._k_points for the last run.
+
+        Ctrl+C or any error in the run loop: DAQ to configured, record
+        off, pulse picker closed, partial timing report, then the return
+        moves. After an error each return move is tried on its own (a
+        second failure is only logged) and the original error is raised
+        again after the summary.
+
         Examples
         --------
-        Mode 1 — K at every point (undulator moves at each energy):
+        Mode 1, K at every point (undulator moves at each energy):
 
         >>> roi_scan = [7095, 7098, 7101, 7104, 7106.3, 7106.6, ...]
         >>> summary = exafs.k_xas_scan(k_positions=roi_scan,
         ...     dccm_offsets=[0.0], dwell_time=1.0,
         ...     track_feespec=True, simulate=True)
 
-        Mode 2 — DCCM probes window around each K position:
+        Mode 2, DCCM probes window around each K position:
 
         >>> summary = exafs.k_xas_scan(start_eV=7095, end_eV=7195,
         ...     k_step_eV=4.0, dccm_window_eV=2.0, dccm_step_eV=1.0,
@@ -1842,6 +1872,8 @@ class Exafs:
         # === Parameter defaults and validation ===
         if k_move_mode not in ('pause', 'concurrent', 'concurrent_settled'):
             raise ValueError(f"k_move_mode must be 'pause', 'concurrent', or 'concurrent_settled', got '{k_move_mode}'")
+        if on_no_ack not in ('raise', 'warn'):
+            raise ValueError(f"on_no_ack must be 'raise' or 'warn', got '{on_no_ack}'")
 
         if dccm_offsets is None:
             dccm_offsets = np.round(np.arange(
@@ -1921,9 +1953,18 @@ class Exafs:
         print(f"  Simulate:        {simulate}")
         print(f"  Sample:          {sample}")
         est_time = float(np.sum(dwell_times) * len(dccm_offsets) * runs)
+        dccm_move_s = 0.0 if pink else _DCCM_MOVE_S
         if k_move_mode == 'pause':
             est_time += n_k * runs * 4  # ~4s per K move
+        elif k_move_mode == 'concurrent':
+            est_time += n_k * runs * len(dccm_offsets) * dccm_move_s
         print(f"  Est. time:       {est_time:.0f}s ({est_time/60:.1f} min)")
+        if k_move_mode == 'concurrent':
+            per_step = len(dccm_offsets) * (float(np.mean(dwell_times)) + dccm_move_s)
+            print(f"  Per K step:      {len(dccm_offsets)} x "
+                  f"({float(np.mean(dwell_times)):.1f} s dwell + "
+                  f"{dccm_move_s:.1f} s DCCM move) = {per_step:.1f} s; "
+                  f"a step takes max(points, K move)")
         print("=" * 60 + "\n")
 
         # === Store initial positions ===
@@ -1940,12 +1981,29 @@ class Exafs:
         # === Summary collector ===
         summary = []
         point_index = 0
+        # one row per DCCM point when points of a K step can differ in K
+        # state (in move or settled); one point per K step needs none
+        log_points = len(dccm_offsets) > 1 or k_move_mode == 'concurrent'
+        self._k_points = []
+        self._k_step_points = []
+        self._kwatch = None
+        self._step_timer = None
+        run_number = None
+        run_idx = 0
+        run_reported = False
+        stopped = None
+        scan_err = None
 
         # === Main scan loop ===
         t_start = time()
         try:
             for run_idx in range(runs):
                 self.logger.warning(f"Starting run {run_idx + 1}/{runs}")
+                # reset before DAQ setup so an abort there cannot report
+                # the previous run's rows again
+                self._step_timer = None
+                self._k_points = []
+                run_reported = False
 
                 # Setup DAQ
                 run_number, daq_success = self._setup_daq_and_start_recording(
@@ -1955,10 +2013,15 @@ class Exafs:
                     self.logger.error("DAQ setup failed, aborting")
                     break
 
-                self._step_timer = None
                 if step_timing:
                     from mfx.undulator_timing import StepTimer
-                    self._step_timer = StepTimer(k_move_mode)
+                    prev_eV = None
+                    if not simulate:
+                        try:
+                            prev_eV = float(self.acr_energy_k.get().setpoint)
+                        except Exception as e:
+                            self.logger.warning(f"SET2 not read for step 1 de_eV: {e}")
+                    self._step_timer = StepTimer(k_move_mode, prev_eV=prev_eV)
 
                 order = rng.permutation(n_k) if k_order == 'random' else range(n_k)
                 for n_done, k_idx in enumerate(order):
@@ -1972,6 +2035,8 @@ class Exafs:
 
                     if self._step_timer:
                         self._step_timer.start_step(k_target_eV)
+                    self._kwatch = None
+                    self._k_step_points = []
 
                     t_k_move = time()
                     if k_move_mode == 'pause':
@@ -1988,12 +2053,12 @@ class Exafs:
                         self._k_xas_move_concurrent_settled(
                             k_target_eV, k_target_keV,
                             track_feespec, crystal_angle_offset,
-                            track_feespec_blocking
+                            track_feespec_blocking, on_no_ack=on_no_ack
                         )
                     k_move_elapsed = time() - t_k_move
 
                     # Step DCCM through offsets
-                    for offset in dccm_offsets:
+                    for i_off, offset in enumerate(dccm_offsets):
                         dccm_energy_eV = k_target_eV + offset
                         dccm_energy_keV = dccm_energy_eV / 1000.0
 
@@ -2010,8 +2075,9 @@ class Exafs:
                             self.sim.fast_motor1.mv(dccm_energy_keV)
                         else:
                             self.dccm.energy.move(dccm_energy_keV, wait=True)
-                        if self._step_timer and offset == dccm_offsets[0]:
-                            self._step_timer.set('dccm_s', time() - t_dccm)
+                        t_dccm_done = time()
+                        if self._step_timer and i_off == 0:
+                            self._step_timer.set('dccm_s', t_dccm_done - t_dccm)
 
                         # Check beam
                         if flux_threshold:
@@ -2022,17 +2088,31 @@ class Exafs:
                             self.xrtspec.track_feespec_camera(
                                 dccm_energy_keV, crystal_angle_offset)
 
-                        # In concurrent_settled mode, dwell_time is a minimum
-                        # acquisition time — the K move already contributed
-                        # to acquisition since the DAQ stays running.
-                        if self._step_timer and offset == dccm_offsets[0]:
+                        if self._step_timer and i_off == 0:
                             self._step_timer.end_step()
 
-                        if k_move_mode == 'concurrent_settled':
-                            remaining_dwell = max(0, dwell_times[k_idx] - k_move_elapsed)
-                            self._wait(remaining_dwell)
+                        # concurrent_settled: the DAQ ran through the K move,
+                        # so the move counts toward the first offset's dwell
+                        # only; later offsets get the full dwell
+                        if k_move_mode == 'concurrent_settled' and i_off == 0:
+                            dwell = max(0.0, dwell_times[k_idx] - k_move_elapsed)
                         else:
-                            self._wait(dwell_times[k_idx])
+                            dwell = dwell_times[k_idx]
+
+                        point = None
+                        if log_points:
+                            point = self._k_point_row(
+                                run_number, n_done + 1, i_off + 1,
+                                k_target_eV, dccm_energy_eV, offset,
+                                t_dccm, t_dccm_done)
+                            self._k_points.append(point)
+                            self._k_step_points.append(point)
+
+                        self._wait(dwell)
+
+                        if point is not None:
+                            point['t_dwell_end'] = time()
+                            point['done_at_dwell_end'] = self._k_done_value()
 
                         # Record summary
                         summary.append({
@@ -2045,7 +2125,16 @@ class Exafs:
                         })
                         point_index += 1
 
-                # End of run — stop DAQ
+                    # concurrent: this K request must be done before the
+                    # next write (the next write then waits the hold-off)
+                    if k_move_mode == 'concurrent':
+                        t_k_done = self._k_xas_concurrent_done(
+                            k_target_keV, track_feespec,
+                            crystal_angle_offset, on_no_ack)
+                        for p in self._k_step_points:
+                            p['t_k_done'] = t_k_done
+
+                # End of run: stop DAQ
                 if not simulate:
                     from mfx.db import daq
                     daq.control.setState("configured")
@@ -2057,7 +2146,9 @@ class Exafs:
                     from mfx.undulator_timing import report
                     report(self._step_timer, run_number,
                            post=post_timing and record and not simulate,
-                           write=record and not simulate)
+                           write=record and not simulate,
+                           points=self._k_points or None)
+                    run_reported = True
 
                 if runs > 1 and run_idx < runs - 1:
                     self.logger.info("Inter-run delay (5s)")
@@ -2065,44 +2156,55 @@ class Exafs:
 
         except KeyboardInterrupt:
             self.logger.warning("Scan aborted by user (Ctrl+C)")
-            if not simulate:
-                from mfx.db import daq, mfx_pulsepicker
-                try:
-                    daq.control.setState("configured")
-                    daq.control.setRecord(False)
-                    mfx_pulsepicker.close()
-                except Exception:
-                    pass
-            # keep the steps that finished before the abort
-            if getattr(self, '_step_timer', None) and self._step_timer.rows:
-                from mfx.undulator_timing import report
-                report(self._step_timer, run_number,
-                       post=post_timing and record and not simulate,
-                       write=record and not simulate)
+            stopped = "SCAN ABORTED (Ctrl+C)"
+            self._k_xas_abort(run_number, record, simulate, post_timing,
+                              run_reported)
+        except Exception as err:
+            # keep the error and raise it after the return moves and summary
+            scan_err = err
+            stopped = f"SCAN STOPPED BY {type(err).__name__}"
+            self.logger.error(f"Scan stopped by {type(err).__name__}: {err}")
+            self._k_xas_abort(run_number, record, simulate, post_timing,
+                              run_reported)
 
         # === Return to initial positions ===
-        self.logger.info("Returning to initial positions")
-        if simulate:
-            self.sim.fast_motor1.mv(energy_start)
-            self.sim.slow_motor1.mv(k_energy_start)
-        else:
-            if not pink:
-                self.dccm.energy.move(energy_start, wait=True)
+        def _restore(what, fn, *args, **kwargs):
+            # after a scan error each move is tried on its own and a second
+            # failure is only logged, so the original error reaches the caller
+            if scan_err is None:
+                return fn(*args, **kwargs)
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                self.logger.error(f"{what} failed after the scan error: {e}")
+                return None
+
+        def _return_k():
             if round(k_energy_start, 1) != round(self.acr_energy_k.get().setpoint, 1):
                 from mfx.undulator_timing import request_k
                 t_ret = request_k(self.acr_energy_k, k_energy_start)
                 self.logger.warning(
                     f"Return K request to {k_energy_start:.1f} eV took "
                     f"{t_ret:.1f} s")
+
+        self.logger.info("Returning to initial positions")
+        if simulate:
+            _restore("DCCM return", self.sim.fast_motor1.mv, energy_start)
+            _restore("K return", self.sim.slow_motor1.mv, k_energy_start)
+        else:
+            if not pink:
+                _restore("DCCM return", self.dccm.energy.move,
+                         energy_start, wait=True)
+            _restore("K return", _return_k)
             if track_feespec:
-                self.xrtspec.move_feespec_energy(
-                    energy_start, crystal_angle_offset=crystal_angle_offset)
+                _restore("XRT return", self.xrtspec.move_feespec_energy,
+                         energy_start, crystal_angle_offset=crystal_angle_offset)
 
         # === Print summary ===
         elapsed = time() - t_start
         time_per_point = elapsed / len(summary) if summary else 0.0
         print("\n" + "=" * 60)
-        print("SCAN COMPLETE")
+        print(stopped or "SCAN COMPLETE")
         print("=" * 60)
         print(f"  Total points collected: {len(summary)}")
         print(f"  K positions visited:    {len(k_positions_eV) * min(runs, run_idx + 1)}")
@@ -2115,6 +2217,8 @@ class Exafs:
         print(f"  Time per point:         {time_per_point:.2f}s")
         print("=" * 60 + "\n")
 
+        if scan_err is not None:
+            raise scan_err
         return summary
 
     def _tset(self, key, t0):
@@ -2130,6 +2234,134 @@ class Exafs:
         if timer:
             return timer.timed_k_request(self.acr_energy_k, k_target_eV, **kwargs)
         return request_k(self.acr_energy_k, k_target_eV, **kwargs)
+
+    def _k_request_async(self, k_target_eV, **kwargs):
+        # request_k_async keeps the hand-shake: the write waits for the
+        # previous request's done PV and the K_READY_S hold-off
+        from mfx.undulator_timing import request_k_async
+        timer = getattr(self, '_step_timer', None)
+        if timer:
+            return timer.timed_k_request_async(
+                self.acr_energy_k, k_target_eV, **kwargs)
+        return request_k_async(self.acr_energy_k, k_target_eV, **kwargs)
+
+    def _k_done_value(self):
+        """Done PV (AO805) value now; nan in simulation or if unreadable."""
+        if self.simulate:
+            return np.nan
+        try:
+            return float(self.acr_energy_k.done.get())
+        except Exception:
+            return np.nan
+
+    def _k_point_row(self, run_number, step, point, k_target_eV,
+                     dccm_eV, offset, t_dccm_start, t_dccm_done):
+        """
+        Per-DCCM-point log row (POINT_COLUMNS), stamped at dwell start.
+
+        Parameters
+        ----------
+        run_number : int
+            DAQ run number
+        step : int
+            K step in the run, from 1 (matches the timing table)
+        point : int
+            DCCM point within the K step, from 1
+        k_target_eV : float
+            K request of this step in eV
+        dccm_eV : float
+            DCCM energy of this point in eV
+        offset : float
+            DCCM offset from the K request in eV
+        t_dccm_start, t_dccm_done : float
+            time.time() around the DCCM move
+
+        Returns
+        -------
+        dict
+            Row with t_dwell_start and done_at_dwell_start filled; the
+            caller fills t_dwell_end and done_at_dwell_end, and t_k_done
+            in 'concurrent' mode once the K request is done.
+
+        Notes
+        -----
+        t_k_write and t_k_done come from the step's timing row, so they
+        need step_timing; in 'concurrent' mode t_k_write falls back to
+        the KWatch.
+        """
+        from mfx.undulator_timing import POINT_COLUMNS
+        row = {c: np.nan for c in POINT_COLUMNS}
+        timer = getattr(self, '_step_timer', None)
+        last = timer.rows[-1] if timer and timer.rows else {}
+        t_k_write = last.get('t_k_request', np.nan)
+        watch = getattr(self, '_kwatch', None)
+        if np.isnan(t_k_write) and watch is not None:
+            t_k_write = watch.t_write
+        row.update(
+            run=run_number, step=step, point=point,
+            k_target_eV=k_target_eV, dccm_eV=dccm_eV, offset_eV=offset,
+            t_k_write=t_k_write, t_k_done=last.get('t_k_done', np.nan),
+            t_dccm_start=t_dccm_start, t_dccm_done=t_dccm_done,
+            t_dwell_start=time(),
+        )
+        row['done_at_dwell_start'] = self._k_done_value()
+        return row
+
+    def _k_xas_abort(self, run_number, record, simulate, post_timing,
+                     reported=False):
+        """
+        Cleanup inside k_xas_scan after Ctrl+C or an error.
+
+        Parameters
+        ----------
+        run_number : int or None
+            DAQ run number of the run that stopped
+        record : bool
+            Recording flag of the scan
+        simulate : bool
+            Simulation flag of the scan
+        post_timing : bool
+            Post the partial timing table to the elog
+        reported : bool, optional
+            True if this run's timing report already went out (the stop
+            came after the report), so the report is not posted twice
+            (default: False)
+
+        Notes
+        -----
+        DAQ to configured, record off, pulse picker closed (real mode),
+        the done PV subscription of a K request in flight dropped, then
+        the timing rows and DCCM points finished so far reported. Never
+        raises; the return moves are left to the caller.
+        """
+        if not simulate:
+            try:
+                from mfx.db import daq, mfx_pulsepicker
+                daq.control.setState("configured")
+                daq.control.setRecord(False)
+                mfx_pulsepicker.close()
+            except Exception as e:
+                self.logger.error(f"DAQ / pulse picker cleanup failed: {e}")
+        timer = getattr(self, '_step_timer', None)
+        points = getattr(self, '_k_points', None) or []
+        watch = getattr(self, '_kwatch', None)
+        if watch is not None:
+            watch.close()
+            # a fly step that finished before the stop keeps its done stamp
+            if not np.isnan(watch.t_done):
+                for p in getattr(self, '_k_step_points', []):
+                    if np.isnan(p['t_k_done']):
+                        p['t_k_done'] = watch.t_done
+        # keep the steps that finished before the abort
+        if timer and not reported and (timer.rows or points):
+            try:
+                from mfx.undulator_timing import report
+                report(timer, run_number,
+                       post=post_timing and record and not simulate,
+                       write=record and not simulate,
+                       points=points or None)
+            except Exception as e:
+                self.logger.error(f"Partial timing report failed: {e}")
 
     def _k_xas_move_pause(self, k_target_eV, k_target_keV,
                           track_feespec, crystal_angle_offset):
@@ -2199,7 +2431,7 @@ class Exafs:
     def _k_xas_move_concurrent(self, k_target_eV, k_target_keV,
                                track_feespec, crystal_angle_offset):
         """
-        Move K in 'concurrent' mode: request K non-blocking, don't wait.
+        Move K in 'concurrent' mode: write the K request, don't wait for the move.
 
         Parameters
         ----------
@@ -2214,28 +2446,86 @@ class Exafs:
 
         Notes
         -----
-        Issues acr_energy_k.move(wait=False) so data collection can
-        continue while the undulator settles. Early DCCM points in the
-        subsequent offset loop will be collected during K transit — useful
-        for evaluating whether in-transit data is scientifically usable.
+        Writes SET2 through request_k_async and keeps the KWatch in
+        self._kwatch, so data collection continues while the undulator
+        moves. Early DCCM points in the offset loop that follows are
+        collected during K transit, to evaluate whether in-transit data is
+        usable. The write itself waits until the previous request is done
+        and the K_READY_S hold-off has passed; _k_xas_concurrent_done()
+        waits for this request after the last DCCM point. Simulation moves
+        the sim motor only (no KWatch).
         """
         if self.simulate:
             self.sim.slow_motor1.mv(k_target_eV)
             self.k_energy = k_target_eV
             return
 
-        # Move FEE spec (fast, do before K)
+        # Move FEE spec before K without stopping the Zyla: the DCCM points
+        # follow at once and need spectra. The crystal check after K done
+        # (_k_xas_concurrent_done) does the angle and transmission check
         if track_feespec:
-            self.xrtspec.move_feespec_energy(
+            t0 = time()
+            self.xrtspec.move_feespec_energy_nonblocking(
                 k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._tset('feespec_s', t0)
 
-        # Request K move — non-blocking (don't wait for completion)
-        self._k_request(k_target_eV, wait=False)
+        # Request K move without waiting for completion
+        self._kwatch = self._k_request_async(k_target_eV)
         self.k_energy = k_target_eV
+
+    def _k_xas_concurrent_done(self, k_target_keV, track_feespec,
+                               crystal_angle_offset, on_no_ack='raise'):
+        """
+        End a 'concurrent' K step: wait for the K request, stamp it, check XRT.
+
+        Parameters
+        ----------
+        k_target_keV : float
+            Target K energy of the step in keV
+        track_feespec : bool
+            Track FEE spectrometer
+        crystal_angle_offset : float
+            FEE crystal angle offset in degrees
+        on_no_ack : str, optional
+            'raise' (default) or 'warn', passed to KWatch.wait()
+
+        Returns
+        -------
+        float
+            time.time() of the done PV 0 -> 1; nan in simulation, for a
+            repeated target, or for an unacknowledged write with
+            on_no_ack='warn'
+
+        Notes
+        -----
+        Called after the last DCCM point. Waiting here keeps the next K
+        write from landing while the listener is still busy with this one
+        (the runs 11-13 failure on 10-26), so a step takes
+        max(DCCM points, K move). Puts t_k_done and k_request_s on the
+        step's timing row (set_last, the row closed at dwell start) and,
+        with XRT tracking, runs check_feespec_crystal_angle (timed into
+        feespec_check_s).
+        """
+        watch = getattr(self, '_kwatch', None)
+        if self.simulate or watch is None:
+            return np.nan
+        timer = getattr(self, '_step_timer', None)
+        spent = watch.wait(on_no_ack=on_no_ack)
+        if timer:
+            timer.set_last('t_k_done', watch.t_done)
+            timer.set_last('k_request_s', spent)
+        if track_feespec:
+            t0 = time()
+            self.xrtspec.check_feespec_crystal_angle(
+                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            if timer:
+                timer.set_last('feespec_check_s', time() - t0)
+        return watch.t_done
 
     def _k_xas_move_concurrent_settled(self, k_target_eV, k_target_keV,
                                        track_feespec, crystal_angle_offset,
-                                       track_feespec_blocking=True):
+                                       track_feespec_blocking=True,
+                                       on_no_ack='raise'):
         """
         Move K in 'concurrent_settled' mode: DAQ stays running, block on K move.
 
@@ -2253,6 +2543,8 @@ class Exafs:
             If True (default), FEE spec moves complete before K move starts.
             If False, FEE spec move fires non-blocking and runs in parallel
             with the K move. Safety check still runs after K settles.
+        on_no_ack : str, optional
+            'raise' (default) or 'warn', passed to request_k()
 
         Notes
         -----
@@ -2266,7 +2558,7 @@ class Exafs:
             self.k_energy = k_target_eV
             return
 
-        # Move FEE spec — blocking or non-blocking
+        # Move FEE spec, blocking or non-blocking
         if track_feespec:
             t0 = time()
             if track_feespec_blocking:
@@ -2277,8 +2569,8 @@ class Exafs:
                     k_target_keV, crystal_angle_offset=crystal_angle_offset)
             self._tset('feespec_s', t0)
 
-        # Move K — blocking (wait for undulator to settle)
-        self._k_request(k_target_eV)
+        # Move K, blocking (wait for undulator to settle)
+        self._k_request(k_target_eV, on_no_ack=on_no_ack)
         self.k_energy = k_target_eV
 
         # Verify FEE spec crystal angle after K settles

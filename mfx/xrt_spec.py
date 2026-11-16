@@ -372,6 +372,10 @@ class XRTspec:
             energy_keV, crystal_angle_offset=crystal_angle_offset)
 
         if round(positions['crystal_angle'], 2) == round(ref_crystal_angle, 2):
+            # a blocking move_feespec_energy before K stopped the camera
+            cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
+            if cam_status == 'Done':
+                os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
             return
 
         # Stop camera
