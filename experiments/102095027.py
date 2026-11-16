@@ -1,22 +1,27 @@
 """
-Experiment mfx102095027, shift 2026-10-26 18:00 to 10-27 06:00.
+Experiment mfx102095027, shift 2026-11-16 18:00 to 11-17 06:00.
 
-Undulator timing with the precomputed ACR energy list, 7.1 keV focus with
-TFS 04,05,06 and no prefocus, silver behenate geometry, XRT and SEER
-alignment (SEER on Ge(620) for this shift only), then pink-beam SFX + XES +
-stochastic analysis on myoglobin from the HVE.
+Third undulator scanning night: girder dead band test with ACR, DCCM points
+while the undulator moves (fly scan) on the Fe foil, then pink-beam
+stochastic XANES on myoglobin microcrystals from the MESH (electrokinetic,
+horizontal, XLJ). The 10-26 results this builds on are in the second shift
+report; the shift plan PDF (shift_plan_20261116) gives the order of the
+blocks and the decisions between them.
 
 hutch-python loads this file when mfx102095027 is the active experiment and
 exposes the User instance as `x` (and `user`). If another experiment is
-active, load it by hand in mfx3:
+active, load it by hand in mfx3 from the repo root:
 
     exec(open('experiments/102095027.py').read()); x = User()
 
 Every method prints what it is about to do. Start with x.checklist_pre(),
-x.status() and x.dry_run(). The shift plan PDF (shift_plan_20261026) gives
-the order of the blocks and the decisions between them.
+x.status() and x.dry_run(). x.help() lists the methods in shift order.
+
+The ACR list and K cap are read from mfx.undulator_timing at call time, so
+x.acr_list_set(...) at 18:00 changes every grid built after it. Hutch python
+never writes the dead band: ACR / undulator controls set it, x.deadband(um)
+records the value they report, x.db_read() reads it back.
 """
-import json
 import logging
 import os
 import time
@@ -24,28 +29,77 @@ from pathlib import Path
 
 import numpy as np
 
-from mfx.undulator_timing import (ACR_LIST_EV, K_MAX_EV, acr_list,
-                                  check_on_list, grid, request_k, sweep,
-                                  window_ladder)
+import mfx.undulator_timing as ut
+from mfx.undulator_timing import check_on_list, grid, request_k, sweep
 
 logger = logging.getLogger(__name__)
 
 EXP = 'mfx102095027'
+SHIFT = '20261116'
+TAG = 'shift_1116'
+PREFIX = 'und1116'
 
 # ---- energies ---------------------------------------------------------------
-# BLD photon energy = requested K energy + REQ_OFFSET_EV (measured 10-09)
+# real photon energy = K request + offset. -5.2 eV measured on 10-09 (BLD);
+# 10-26 left "Offset found: 20 eV" with no sign, so measure it tonight
+# (x.offset_check) before any DCCM-in scan
 REQ_OFFSET_EV = -5.2
-# real photon energy the XRT and SEER images must cover in one frame: pink
-# centroid 7099.8-7134.8 eV, +-10 eV SASE half width, +-2 sigma of 6 eV jitter.
-# Set before the 7124 eV K cap (centroid now 7098.8-7118.8); kept so the XRT
-# setup already done stays valid
+# K request at the Fe foil edge on 10-26 (pink edge scans); x.set_edge()
+EDGE_K_EV = 7080.0
+# list asked of ACR before the shift: (lo, hi, step, highest K), requested eV.
+# Until ACR confirms at 18:00 the module keeps the last known list (10-26:
+# 7064-7144 eV in 0.5 eV, cap 7124 eV); x.acr_list_set() puts in the real one
+ACR_LIST_REQUEST = (7040.0, 7160.0, 0.5, 7160.0)
+# XRT image center and the range one image should hold, real eV
 WINDOW_EV = (7080.0, 7155.0)
 CENTER_EV = 7117.5
 # FEE spectrometer crystal offset that centers the 7.1 keV spectrum
 XRT_OFFSET_DEG = -1.3
 XRT_NPX = 2048
 
-# ---- transfocator -----------------------------------------------------------
+# every K scan tonight runs concurrent_settled (fly scans: concurrent)
+K_MODE = 'concurrent_settled'
+
+# ---- dead band test (19:00-21:00, with ACR) ----------------------------------
+# 1 eV scans start this far below x.edge_k; 40 positions end at edge + 24
+DB_START_BELOW_EV = 15.0
+DB_N = 40
+# concurrent_settled: a step takes max(dwell, K move); k_move is the measurement
+DB_DWELL_S = 12.0
+# pass rule, per scan leg: real-step median at most this, slow steps at most
+# one per 40 timed steps, at most this many leading null requests, none after
+DB_MEDIAN_MAX_S = 12.5
+DB_LEADING_NULL_MAX = 1
+# original band, restored at the 06:00 hand back when the energy GUI closes
+DB_RESTORE_UM = 0.125
+
+# ---- DCCM fly test (21:00-22:00) ----------------------------------------------
+FLY_HALF_EV = 20.0              # K grid edge - 20 .. edge + 20 eV
+FLY_STEP_EV = 5.0
+FLY_N = 5
+FLY_DWELL_S = 3.0
+# F0 dwell counts from the K write: ~11 s K move + ~2 s XRT check leaves
+# ~7 s at the new center with K settled
+FLY_REF_DWELL_S = 20.0
+# DCCM state readback (Beckhoff convention); confirm with cainfo at 17:00.
+# insert()/remove() write :STATE:SET / :State:SET, see mfx/dccm.py
+DCCM_STATE_RBV = 'SP1L0:DCCM:MMS:STATE:GET_RBV'
+
+# ---- MESH myoglobin production -------------------------------------------------
+MB_BELOW_EV = 15.0              # sweep edge - 15 .. edge + 35 eV
+MB_ABOVE_EV = 35.0
+MB_STEP_EV = 2.5
+MB_DWELL_S = 30.0
+MB_PARK_ABOVE_EV = 10.0
+MB_PARK_DWELL_S = 900.0
+# MESH high voltage: Acromag setpoint and readback in volts/1000
+MESH_SP = 'MFX:USR:ao1:0'
+MESH_RB = 'MFX:USR:ai1:1'
+MESH_SCALE_V = 1000.0
+MESH_MAX_KV = 5.0               # 3-5 kV operating range; the SED MESH lead sets it
+DOOR_PV = 'PPS:FEH1:45:DOORA'   # the door watcher zeroes MESH_SP when it opens
+
+# ---- transfocator (10-26 values; confirm the stack at 18:00) -------------------
 TFS_LENSES = (4, 5, 6)          # legal without prefocus (December focus report)
 TFS_R_UM = 58.8                 # effective radius of 04+05+06
 TFS_E_EV = 7115.0               # center of the XANES window, real eV
@@ -56,53 +110,19 @@ TFS_COARSE = np.arange(137.0, 218.1, 4.0)
 # Unconfirmed: check before the shift which camera views the IP YAG.
 IP_CAM = 'MFX:GIGE:LBL:01'
 
-# ---- geometry calibrant ------------------------------------------------------
-AGBE_D001_A = 58.38             # silver behenate long spacing
+# ---- geometry calibrants --------------------------------------------------------
+HC = 12398.42
+# d spacings in Angstrom. LaB6 (a = 4.15692 A) was the calibrant on 10-26
+# (the elog said silver behenate); AgBe kept for the long-spacing rings
+LAB6_A = 4.15692
+CALIBRANTS = {
+    'LaB6': [LAB6_A / np.sqrt(h * h + k * k + l * l) for h, k, l in
+             ((1, 0, 0), (1, 1, 0), (1, 1, 1), (2, 0, 0), (2, 1, 0),
+              (2, 1, 1), (2, 2, 0), (3, 0, 0), (3, 1, 0), (3, 1, 1))],
+    'AgBe': [58.38 / n for n in range(1, 13)],
+}
 JF16M_HALF_MM = 0.075 * 4400 / 2
 JF16M_BEAMSTOP_MM = 10.0
-
-# ---- SEER --------------------------------------------------------------------
-GE_A = 5.6579
-HC = 12398.42
-SEER_PARKER = {'z': 'MFX:USR:MMS:08', 'y': 'MFX:USR:MMS:09'}
-SEER_SAVE = Path(os.path.expanduser('~/seer_positions'))
-# Ge(660) at 9580 eV is the configuration of the 1019410 experiment shifts.
-# Restore it after tonight.
-SEER_HOME = {'hkl': (6, 6, 0), 'energy_eV': 9580.0}
-SEER_TONIGHT = {'hkl': (6, 2, 0), 'energy_eV': CENTER_EV}
-
-# ---- scan presets -------------------------------------------------------------
-# every K scan tonight runs concurrent_settled, K request never above K_MAX_EV
-K_MODE = 'concurrent_settled'
-# Fe foil K-edge found at K request 7080 eV on 10-26; the timing scans run
-# pink (DCCM out) across it. x.edge_k overrides
-EDGE_K_EV = 7080.0
-TIMING = {
-    # name: (positions(c), mode, k_order, extra kwargs, sample, K before start(c))
-    # c = x.edge_k, K request at the foil edge
-    'T1': (lambda c: grid(c - 10, c + 10, 1), K_MODE, 'ascending', {},
-           'und1026_T1_fe_cs_1eV', lambda c: c - 10),
-    'T2': (lambda c: grid(c - 10, c + 10, 0.5), K_MODE, 'ascending', {},
-           'und1026_T2_fe_cs_0p5eV', lambda c: c - 10),
-    'T3': (lambda c: window_ladder(), K_MODE, 'given', {},
-           'und1026_T3_fe_cs_ladder', lambda c: ACR_LIST_EV[0]),
-    'T4': (lambda c: grid(c - 12, c + 12, 0.5), K_MODE, 'random',
-           {'seed': 1026}, 'und1026_T4_fe_cs_random_0p5eV', lambda c: None),
-    'T5': (lambda c: grid(c - 10, c + 10, 1), K_MODE, 'ascending', {},
-           'und1026_T5_fe_cs_1eV', lambda c: c - 10),
-}
-
-PINK = {
-    # name: (step eV or None for parked, dwell s, sample)
-    'P0a': (2.5, 20, 'pink_P0a_beam_only_sweep2p5'),
-    'P0b': (5.0, 20, 'pink_P0b_beam_only_sweep5'),
-    'P1': (2.5, 20, 'pink_P1_carrier'),
-    'P2': (None, 900, 'pink_P2_Mb_r1_park7120'),
-    'P': (2.5, 30, 'pink_P{n}_Mb_r{r}'),
-    'Pend': (2.5, 20, 'pink_Pend_carrier'),
-}
-# 7104 so both the 2.5 and 5 eV sweeps end on 7124 (K_MAX_EV)
-PINK_LO, PINK_HI, PINK_PARK = 7104.0, K_MAX_EV, 7120.0
 
 
 # ---- helpers that need no hardware -------------------------------------------
@@ -122,8 +142,8 @@ def _ns(name):
 
 def _results_dir():
     """Shift output folder in the experiment results area, else in home."""
-    for folder in (Path(f'/sdf/data/lcls/ds/mfx/{EXP}/results/shift_20261026'),
-                   Path(os.path.expanduser('~/shift_20261026'))):
+    for folder in (Path(f'/sdf/data/lcls/ds/mfx/{EXP}/results/shift_{SHIFT}'),
+                   Path(os.path.expanduser(f'~/shift_{SHIFT}'))):
         try:
             folder.mkdir(parents=True, exist_ok=True)
             return folder
@@ -132,7 +152,7 @@ def _results_dir():
     return Path('.')
 
 
-def _post(msg, tag='shift_1026', run=None):
+def _post(msg, tag=TAG, run=None):
     print(msg)
     try:
         from mfx.db import elog
@@ -141,68 +161,201 @@ def _post(msg, tag='shift_1026', run=None):
         logger.warning(f'elog post failed: {e}')
 
 
-def bragg_deg(energy_eV, hkl, a=GE_A):
-    """Bragg angle in degrees for a cubic crystal, a in Angstrom."""
-    d = a / np.sqrt(sum(i * i for i in hkl))
-    return float(np.degrees(np.arcsin(HC / (2 * d * energy_eV))))
+def _caget(pv, as_string=False, timeout=1.0):
+    """caget that returns None instead of raising."""
+    try:
+        from epics import caget
+        return caget(pv, as_string=as_string, timeout=timeout)
+    except Exception as e:
+        logger.warning(f'caget {pv} failed: {e}')
+        return None
 
 
-def bragg_energy(theta_deg, hkl, a=GE_A):
-    """Photon energy in eV reflected at theta_deg."""
-    d = a / np.sqrt(sum(i * i for i in hkl))
-    return float(HC / (2 * d * np.sin(np.radians(theta_deg))))
+ZYLA_PV = 'XRT:ZYLA:CAM:01:Acquire'
 
 
-def seer_swap_table(radius_mm=250.0):
+def _zyla_on():
+    """Start the XRT Zyla. move_feespec_energy stops it and leaves it stopped."""
+    try:
+        from epics import caput
+        caput(ZYLA_PV, 1)
+    except Exception as e:
+        logger.warning(f'Zyla start failed: {e}')
+
+
+def _door_closed():
+    """True only when the hutch door PV reads 1 (closed)."""
+    d = _caget(DOOR_PV)
+    try:
+        return d is not None and int(d) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+def _next_run(record):
+    """Run number the next recorded scan gets, None when not recording."""
+    if not record:
+        return None
+    try:
+        from mfx.macros import get_run
+        return get_run(station=0) + 1
+    except Exception as e:
+        logger.warning(f'get_run failed: {e}')
+        return None
+
+
+def list_bounds():
+    """(lo, highest usable K, step) of the loaded ACR list, read at call time."""
+    lo, hi, step = ut.ACR_LIST_EV
+    return float(lo), float(min(hi, ut.K_MAX_EV)), float(step)
+
+
+def fit_window(lo, hi, step, margin_steps=1):
     """
-    Print the Ge(660) to Ge(620) comparison used for the SEER swap.
+    Clip lo..hi (eV, K request) to the loaded list and K cap.
 
-    Dispersion is dtheta/dE = tan(theta)/E. The axial source-to-image
-    distance 2R/tan(theta) assumes a von Hamos geometry with bending radius
-    radius_mm; confirm the SEER geometry and the Ge(660) radius before using
-    the mm column.
+    Leaves margin_steps * step free below lo and above hi for the approach
+    move, and snaps lo up to the list spacing. Returns (lo, hi). Raises
+    ValueError when fewer than two positions are left.
     """
-    h0, e0 = SEER_HOME['hkl'], SEER_HOME['energy_eV']
-    t0 = bragg_deg(e0, h0)
-    disp0 = np.degrees(np.tan(np.radians(t0)) / e0)
-    print(f"Ge{h0} at {e0:.0f} eV: theta {t0:.3f} deg, "
-          f"{disp0:.4f} deg/eV, 2R/tan {2 * radius_mm / np.tan(np.radians(t0)):.1f} mm")
-    h1 = SEER_TONIGHT['hkl']
-    print(f"Ge{h1} at the Ge{h0} angle reflects {bragg_energy(t0, h1):.1f} eV")
-    print(" E (eV)   theta    dtheta vs home   deg/eV   2R/tan (mm)")
-    for e in (WINDOW_EV[0], 7100.0, CENTER_EV, 7130.0, WINDOW_EV[1]):
-        t = bragg_deg(e, h1)
-        print(f"{e:7.1f}  {t:7.3f}   {t - t0:+7.3f}        "
-              f"{np.degrees(np.tan(np.radians(t)) / e):.4f}   "
-              f"{2 * radius_mm / np.tan(np.radians(t)):6.1f}")
-    span = bragg_deg(WINDOW_EV[0], h1) - bragg_deg(WINDOW_EV[1], h1)
-    disp1 = np.degrees(np.tan(np.radians(bragg_deg(CENTER_EV, h1))) / CENTER_EV)
-    print(f"Window {WINDOW_EV[0]:.0f}-{WINDOW_EV[1]:.0f} eV spans {span:.2f} deg "
-          f"on Ge{h1}. Dispersion is {disp1 / disp0:.2f}x the Ge{h0} value, so a "
-          f"detector window of N eV at {e0:.0f} eV covers N/{disp1 / disp0:.2f} eV tonight.")
+    l_lo, l_hi, l_step = list_bounds()
+    margin = margin_steps * step
+    lo2 = max(float(lo), l_lo + margin)
+    lo2 = l_lo + np.ceil((lo2 - l_lo) / l_step - 1e-6) * l_step
+    hi2 = min(float(hi), l_hi - margin)
+    if hi2 - lo2 < step - 1e-6:
+        raise ValueError(
+            f"window {lo:.1f}-{hi:.1f} eV in {step:g} eV steps does not fit the "
+            f"loaded list {l_lo:.1f}-{l_hi:.1f} eV (cap {ut.K_MAX_EV:.1f}) with "
+            f"{margin:g} eV for the approach move; set x.edge_k or the list")
+    return round(float(lo2), 1), round(float(hi2), 1)
 
 
-def agbe_rings(det_dist_mm, energy_eV=TFS_E_EV, n_max=12):
+def db_positions(edge_k, step=1.0, n=DB_N, direction='updown', start=None):
     """
-    Print silver behenate (00l) ring radii on the JF16M.
+    Dead band test grid. Returns (positions, approach K).
 
-    Rings inside the 10 mm beamstop or beyond the detector edge are marked.
-    Use the table to pick a detector distance with at least four orders on
-    the sensor before the geometry run.
+    n positions from start (default edge_k - 15 eV) in step eV, clipped to
+    the list and cap (a warning when fewer than n are left). direction 'up',
+    'down' or 'updown' (lo -> hi -> lo sweep). The approach K sits one step
+    outside the first position, so step 1 is a real move (report rec 10).
     """
-    lam = HC / energy_eV
-    print(f"AgBe d001 {AGBE_D001_A} A, {energy_eV:.1f} eV (lambda {lam:.4f} A), "
-          f"JF16M at {det_dist_mm:.1f} mm")
-    print("  l   2theta (deg)   r (mm)")
-    for n in range(1, n_max + 1):
-        s = lam * n / (2 * AGBE_D001_A)
-        if s >= 1:
-            break
-        tth = 2 * np.arcsin(s)
-        r = det_dist_mm * np.tan(tth)
-        flag = ('  behind beamstop' if r < JF16M_BEAMSTOP_MM else
-                '  off detector edge' if r > JF16M_HALF_MM else '')
-        print(f"{n:3d}   {np.degrees(tth):10.3f}   {r:7.1f}{flag}")
+    if direction not in ('up', 'down', 'updown'):
+        raise ValueError(f"direction must be 'up', 'down' or 'updown', not {direction!r}")
+    start = edge_k - DB_START_BELOW_EV if start is None else float(start)
+    lo, hi = fit_window(start, start + (n - 1) * step, step)
+    up = list(grid(lo, hi, step))
+    if len(up) < n:
+        logger.warning(f"dead band grid clipped to {len(up)} of {n} positions "
+                       f"({up[0]:.1f}-{up[-1]:.1f} eV) by the list or cap")
+    if direction == 'up':
+        pos, approach = up, up[0] - step
+    elif direction == 'down':
+        pos, approach = up[::-1], up[-1] + step
+    else:
+        pos, approach = list(sweep(lo, up[-1], step)), up[0] - step
+    approach = float(check_on_list([approach])[0])
+    return [float(p) for p in pos], approach
+
+
+def fly_positions(edge_k, step=FLY_STEP_EV, lo=None, hi=None, reverse=False):
+    """Fly test K grid edge - 20 .. edge + 20 eV, clipped. Returns (positions, approach)."""
+    lo = edge_k - FLY_HALF_EV if lo is None else float(lo)
+    hi = edge_k + FLY_HALF_EV if hi is None else float(hi)
+    lo, hi = fit_window(lo, hi, step)
+    up = [float(p) for p in grid(lo, hi, step)]
+    if reverse:
+        return up[::-1], float(check_on_list([up[-1] + step])[0])
+    return up, float(check_on_list([up[0] - step])[0])
+
+
+def fly_offsets(pattern='track', step=FLY_STEP_EV, n=FLY_N, going_up=True):
+    """
+    DCCM offsets in real eV from the new K center, in the order taken.
+
+    'track': from the old center to the new one, spacing step/n: -4, -3,
+    -2, -1, 0 for a +5 eV step and n=5; the signs flip going down.
+    'center': 1 eV spacing centered on the new K center: -2..+2 for n=5.
+    Add x.offset_eV to get offsets from the K request (what k_xas_scan
+    takes).
+    """
+    if pattern == 'track':
+        d = step / n
+        off = [-(n - 1 - i) * d for i in range(n)]
+        if not going_up:
+            off = [-o for o in off]
+    elif pattern == 'center':
+        half = (n - 1) / 2.0
+        off = [i - half for i in range(n)]
+    else:
+        raise ValueError(f"pattern must be 'track' or 'center', not {pattern!r}")
+    return [round(float(o), 3) + 0.0 for o in off]
+
+
+def mb_positions(edge_k, step=MB_STEP_EV):
+    """Production sweep edge - 15 -> edge + 35 -> edge - 15 eV, clipped to list and cap."""
+    lo, hi = fit_window(edge_k - MB_BELOW_EV, edge_k + MB_ABOVE_EV, step,
+                        margin_steps=0)
+    return [float(p) for p in sweep(lo, hi, step)]
+
+
+def split_legs(rows):
+    """
+    Split timing rows where the scan direction turns (sign of de_eV).
+
+    The first row of each leg is where null requests can pile up: after the
+    approach move, and after the turnaround of a sweep.
+    """
+    legs, cur, sign = [], [], 0
+    for r in rows:
+        de = r.get('de_eV', np.nan)
+        s = 0 if de is None or not np.isfinite(de) or de == 0 else int(np.sign(de))
+        if s and sign and s != sign and cur:
+            legs.append(cur)
+            cur = []
+        if s:
+            sign = s
+        cur.append(r)
+    if cur:
+        legs.append(cur)
+    return legs
+
+
+def db_verdict(rows):
+    """
+    Dead band pass rule on one scan's timing rows (StepTimer.rows).
+
+    Per leg: real-step median <= 12.5 s, slow real steps (> ut.SLOW_S) at
+    most one per 40 timed steps (one on a shorter leg), leading null requests <= 1 and no null
+    request after them. Returns (passed, list of leg summaries, text).
+    """
+    legs = [ut.summarize(leg) for leg in split_legs(rows)] if rows else []
+    if not legs or not sum(s['n_timed'] for s in legs):
+        return False, legs, "no timed steps: cannot judge the dead band"
+    problems = []
+    for i, s in enumerate(legs, 1):
+        if not s['n_real']:
+            problems.append(f"leg {i}: no real steps")
+            continue
+        if s['median_real'] > DB_MEDIAN_MAX_S:
+            problems.append(f"leg {i}: median {s['median_real']:.1f} s > "
+                            f"{DB_MEDIAN_MAX_S:g} s")
+        # one slow step allowed per 40 timed, and one on a shorter leg
+        allowed = max(1, s['n_timed'] // 40)
+        if s['n_slow'] > allowed:
+            problems.append(f"leg {i}: {s['n_slow']} slow steps (> {ut.SLOW_S:g} s)")
+        if s['leading_null'] > DB_LEADING_NULL_MAX:
+            problems.append(f"leg {i}: {s['leading_null']} leading null requests")
+        late = s['n_null'] - s['leading_null']
+        if late > 0:
+            problems.append(f"leg {i}: {late} null requests after the start")
+    text = "; ".join(
+        f"leg {i}: {s['n_real']} real, median {s['median_real']:.1f} s, "
+        f"{s['n_slow']} slow, {s['n_null']} null ({s['leading_null']} leading)"
+        for i, s in enumerate(legs, 1) if s['n_timed'])
+    passed = not problems
+    return passed, legs, ("PASS: " if passed else "FAIL: ") + (
+        text if passed else "; ".join(problems) + ". " + text)
 
 
 def spec_window(px_a, e_a, px_b, e_b, n_px=XRT_NPX, window=WINDOW_EV):
@@ -252,27 +405,61 @@ def fit_waist(z, w):
 
 
 def k_for_real(real_eV, offset_eV=REQ_OFFSET_EV):
-    """Nearest K request on the ACR list for a real photon energy."""
-    req = np.round((real_eV - offset_eV) * 2) / 2
+    """Nearest K request on the loaded ACR list for a real photon energy."""
+    step = ut.ACR_LIST_EV[2]
+    req = np.round((real_eV - offset_eV) / step) * step
     return float(check_on_list([req])[0])
+
+
+def geom_rings(det_dist_mm, calibrant='LaB6', energy_eV=TFS_E_EV, n_max=10):
+    """
+    Print calibrant ring radii on the JF16M for one detector distance.
+
+    Rings inside the 10 mm beamstop or beyond the detector edge are marked.
+    Pick a distance with at least four rings on the sensor before the
+    geometry run.
+    """
+    if calibrant not in CALIBRANTS:
+        raise ValueError(f"calibrant must be one of {list(CALIBRANTS)}")
+    lam = HC / energy_eV
+    print(f"{calibrant}, {energy_eV:.1f} eV (lambda {lam:.4f} A), "
+          f"JF16M at {det_dist_mm:.1f} mm")
+    print("  ring   d (A)   2theta (deg)   r (mm)")
+    for n, d in enumerate(CALIBRANTS[calibrant][:n_max], 1):
+        s = lam / (2 * d)
+        if s >= 1:
+            break
+        tth = 2 * np.arcsin(s)
+        r = det_dist_mm * np.tan(tth)
+        flag = ('  behind beamstop' if r < JF16M_BEAMSTOP_MM else
+                '  off detector edge' if r > JF16M_HALF_MM else '')
+        print(f"{n:5d}  {d:6.3f}   {np.degrees(tth):10.3f}   {r:7.1f}{flag}")
+
+
+def _um_tag(um):
+    """0.75 -> '0p75' for sample names."""
+    return f"{um:g}".replace('.', 'p')
 
 
 # ---- the experiment object ----------------------------------------------------
 
 class User:
-    """Shift 2026-10-26 procedures. Call x.help() for the method list."""
+    """Shift 2026-11-16 procedures. Call x.help() for the method list."""
 
     def __init__(self):
-        # measured request-to-BLD offset; update after x.offset_check()
+        # real = K request + offset; update after x.offset_check()
         self.offset_eV = REQ_OFFSET_EV
-        # K request at the Fe foil edge; x.timing scans center here
+        # K request at the Fe foil edge; every grid tonight centers here
         self.edge_k = EDGE_K_EV
-        # 10-26: no XRT tracking in any scan, the XRT stays parked. Every
-        # scan method reads this; x.xrt_on() / x.xrt_off() flip it
-        self.xrt_track = False
+        # report rec 12: XRT follows K in every scan where the spectrum is
+        # the measurement. x.xrt_off() parks it for the rest of the night
+        self.xrt_track = True
         # crystal-only offset (tth does not follow); retune at 18:00 if the
         # spectrum is off center, then every scan below picks it up
         self.xrt_offset = XRT_OFFSET_DEG
+        # dead band as ACR / undulator controls report it (x.deadband)
+        self.db_um = DB_RESTORE_UM
+        self.db_results = []
         self.tfs_zmin = TFS_Z_MM
         self.last_zscan = None
         # run, energy, step, num of the last x.spec_calib(), for notch.output
@@ -283,24 +470,26 @@ class User:
     def help(self):
         """Print the methods in shift order."""
         print("""
-before beam   x.checklist_pre()  x.status()  x.dry_run()  x.seer_save('ge660')
-18:00 align   x.mono(7115)  x.offset_check()  x.xrt_park()  x.spec_calib()
-              x.spec_calib_output('user')  x.seer_table()  x.seer_check()
-              x.procedure('xrt') lists the notch commands
-19:00 timing  x.timing('T1') ... x.timing('T5')      (Fe foil, pink, DCCM out,
-              K around x.edge_k = 7080, XRT parked, no tracking)
-edge scans    x.fe_foil_scan()  x.mb_scan()   K 7070-7110, 5 eV; pink by default,
-              dccm_offset=-5.2 for DCCM in
-XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r=)
-              x.xrt_goto(E)  x.xrt_check(E)  x.xrt_cam_scan()
-21:00 focus   x.tfs_combo()  x.tfs_prep()  x.tfs_insert()  x.tfs_zscan()  x.tfs_fine(zmin)
-              x.tfs_park(zmin)  x.agbe_rings(D)  x.agbe_run(D)  x.tfs_minder()
-22:00 pink    x.pink_switch()  x.tfs_pink_check()  x.pink('P0a') ... x.pink('P', n=3, r=2)
-06:00         x.checklist_post()  x.seer_restore('ge660') after the crystal swap back
+before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
+18:00         x.acr_list_set(lo, hi, step, k_max)   (list ACR confirms)
+              x.db_read()   (expect 0.125 um)   x.xrt_park()  x.xrt_tune(d)
+              DCCM in: x.offset_check()  x.offset_fine(c)  x.set_offset(v)
+              DCCM out: x.fe_foil_scan()  x.fe_foil_scan(reverse=True)  x.set_edge(k)
+19:00 ACR     x.deadband(um) after every change ACR makes, then
+              D0 x.db_baseline()    D1/D2 x.db_scan()    D3 x.db_scan(step=0.5)
+              D4 x.db_scan(n=20, label='nolist')    D5 x.db_table()
+21:00 fly     DCCM in: F0 x.fly_ref()  F1 x.fly('track')  F2 x.fly('center')
+              F3 x.fly('track', reverse=True)  F4 x.fly_ref(points=True)
+22:00 MESH    x.pink_switch()  x.mesh_set(kv)  x.mb_blank('start')  x.mb_park(r=1)
+23:15         x.mb_pass(n, r) ... one DAQ run per pass, reservoir changes between
+05:15         x.mb_blank('end')  x.mesh_off()  [DCCM-in foil: x.fe_foil_scan(dccm_offset=x.offset_eV)]
+06:00         x.db_read()  (0.125 um after the GUI closes)  x.checklist_post()
+any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
+              x.xrt_on()  x.xrt_off()  x.xrt_check()  x.tfs_*  x.geom_rings(D)
 """)
 
     def status(self):
-        """Print K, done PV, DCCM, XRT, TFS, prefocus, attenuator and SEER state."""
+        """Print K, done PV, list, dead band, DCCM, XRT, TFS, beam and MESH state."""
         from epics import caget
 
         def show(label, fn):
@@ -309,26 +498,38 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             except Exception as e:
                 print(f"  {label:22s} ? ({e.__class__.__name__})")
 
-        exafs, tfs = _ns('exafs'), _ns('tfs')
-        print(f"experiment file {EXP}, offset {self.offset_eV:+.1f} eV, "
-              f"xrt_track {self.xrt_track}, tfs_zmin {self.tfs_zmin:.1f} mm")
-        show('K request (eV)', lambda: f"{exafs.acr_energy_k.get().setpoint:.1f}")
+        def xrt_pos():
+            xs = _ns('xrtspec').hxrsss
+            return f"{xs.th.position:.3f} / {xs.tth.position:.3f} / {xs.camy.position:.3f}"
+
+        def tfs_in():
+            tfs = _ns('tfs')
+            return [n for n in range(2, 11) if getattr(tfs, f'tfs_{n:02d}').inserted]
+
+        lo, hi, step = ut.ACR_LIST_EV
+        print(f"experiment file {EXP} ({SHIFT}), offset {self.offset_eV:+.1f} eV, "
+              f"edge K {self.edge_k:.1f} eV, xrt_track {self.xrt_track}, "
+              f"xrt_offset {self.xrt_offset:+.3f} deg, dead band recorded {self.db_um:g} um")
+        show('K request (eV)', lambda: f"{_ns('exafs').acr_energy_k.get().setpoint:.1f}")
         show('done PV AO805', lambda: caget('SIOC:SYS0:ML07:AO805'))
+        show('ACR list in use', lambda: f"{lo:.1f}-{hi:.1f} eV in {step:g} eV, "
+             f"K cap {ut.K_MAX_EV:.1f} eV")
+        show('dead band readback', lambda: ut.deadband_text(ut.read_deadband(timeout=0.5)))
         show('DCCM energy (keV)', lambda: f"{_ns('dccm').energy.position}")
-        xs = _ns('xrtspec').hxrsss
-        show('XRT th/tth/camy', lambda: f"{xs.th.position:.3f} / "
-             f"{xs.tth.position:.3f} / {xs.camy.position:.3f}")
-        show('XRT camera', lambda: caget('XRT:ZYLA:CAM:01:Acquire', as_string=True))
-        show('TFS z (mm)', lambda: f"{tfs.translation.position:.2f}")
-        show('TFS lenses in', lambda: [n for n in range(2, 11)
-                                       if getattr(tfs, f'tfs_{n:02d}').inserted])
+        show('DCCM state', lambda: _caget(DCCM_STATE_RBV, as_string=True))
+        show('XRT th/tth/camy', xrt_pos)
+        show('XRT camera', lambda: caget(ZYLA_PV, as_string=True))
+        show('TFS z (mm)', lambda: f"{_ns('tfs').translation.position:.2f}")
+        show('TFS lenses in', tfs_in)
         show('prefocus', lambda: _ns('crl1').state.get())
         show('attenuator T', lambda: f"{_ns('att').position:.2e}")
-        for k, pv in SEER_PARKER.items():
-            show(f'SEER Parker {k}', lambda pv=pv: caget(pv + '.RBV'))
+        show('pulse picker', lambda: _ns('mfx_pulsepicker').position)
+        show('MESH SP / RB (V)', lambda: f"{caget(MESH_SP) * MESH_SCALE_V:.0f} / "
+             f"{caget(MESH_RB) * MESH_SCALE_V:.0f}")
+        show('hutch door', lambda: caget(DOOR_PV, as_string=True))
 
     def procedure(self, block=None):
-        """Print the step list for 'xrt', 'seer', 'tfs', 'agbe' or 'pink'."""
+        """Print the step list for 'deadband', 'fly', 'mesh', 'xrt', 'tfs' or 'geom'."""
         if block not in _PROC:
             print(f"blocks: {', '.join(_PROC)}")
             return
@@ -344,24 +545,75 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
 
     def dry_run(self):
         """
-        Simulate one timing scan and one pink pass, and print the lists.
+        Print every grid tonight against the loaded list, then simulate one
+        dead band scan, one fly scan and one Mb pass.
 
-        Moves nothing. Raises if any position is off the ACR list.
+        Moves nothing and writes no CSV (simulated scans never write).
+        Raises if a grid does not fit the list or cap.
         """
+        lo, hi, step = ut.ACR_LIST_EV
+        print(f"ACR list {lo:.1f}-{hi:.1f} eV in {step:g} eV "
+              f"({len(ut.acr_list())} points), K cap {ut.K_MAX_EV:.1f} eV, "
+              f"edge K {self.edge_k:.1f} eV")
+        db1, a1 = db_positions(self.edge_k, 1.0)
+        db05, a05 = db_positions(self.edge_k, 0.5)
+        fly, af = fly_positions(self.edge_k)
+        mb = mb_positions(self.edge_k)
+        rows = [('db 1 eV sweep', db1, a1), ('db 0.5 eV sweep', db05, a05),
+                ('fly 5 eV up', fly, af), ('Mb pass 2.5 eV', mb, None)]
+        for name, pos, app in rows:
+            print(f"  {name:16s} {len(pos):3d} visits, {min(pos):.1f}-{max(pos):.1f} eV"
+                  + (f", approach {app:.1f} eV" if app is not None else ""))
+        park = float(check_on_list([self.edge_k + MB_PARK_ABOVE_EV])[0])
+        print(f"  Mb park K {park:.1f} eV")
+        off = [self.offset_eV + o for o in fly_offsets('track')]
+        print(f"  fly 'track' DCCM offsets from the K request: {off}")
         exafs = _ns('exafs')
-        print(f"ACR list: {len(acr_list())} points")
-        for name, (pos, *_rest) in TIMING.items():
-            p = pos(self.edge_k)
-            print(f"  {name}: {len(p)} positions, {min(p):.1f}-{max(p):.1f} eV")
-        print(f"  pink pass: {len(self.kx())} positions, "
-              f"{self.kx()[0]:.1f}-{self.kx().max():.1f} eV requested")
-        exafs.k_xas_scan(k_positions=window_ladder(), k_order='given', pink=True,
+        exafs.k_xas_scan(k_positions=db1, k_order='given', pink=True,
                          k_move_mode=K_MODE, dwell_time=0.1, simulate=True)
-        exafs.k_xas_scan(k_positions=self.kx(), k_order='given', pink=True,
-                         k_move_mode='concurrent_settled', dwell_time=0.1,
-                         simulate=True)
+        exafs.k_xas_scan(k_positions=fly, k_order='given', dccm_offsets=off,
+                         k_move_mode='concurrent', dwell_time=0.1, simulate=True)
+        exafs.k_xas_scan(k_positions=mb, k_order='given', pink=True,
+                         k_move_mode=K_MODE, dwell_time=0.1, simulate=True)
 
-    # ---- alignment ----------------------------------------------------------
+    def _scan(self, **kw):
+        """
+        exafs.k_xas_scan with the XRT Zyla started before and after.
+
+        The XRT return at the end of a tracked scan stops the camera, and
+        scans without camera-arm tracking (fly, fly_ref) never restart it.
+        """
+        _zyla_on()
+        try:
+            return _ns('exafs').k_xas_scan(**kw)
+        finally:
+            _zyla_on()
+
+    # ---- list, edge, offset ---------------------------------------------------
+
+    def acr_list_set(self, lo, hi, step, k_max):
+        """
+        Put in the list and K cap ACR confirms are loaded (requested eV).
+
+        Asked before the shift: 7040-7160 eV in 0.5 eV, highest K 7160 eV.
+        Every grid built after this call is checked against it; x.dry_run()
+        shows whether tonight's grids fit.
+        """
+        res = ut.set_acr_list(lo, hi, step, k_max=k_max)
+        _post(f"ACR list confirmed: {res[0]:.1f}-{res[1]:.1f} eV in {res[2]:g} eV "
+              f"({len(ut.acr_list())} points), K cap {res[3]:.1f} eV")
+        return res
+
+    def set_edge(self, k_eV):
+        """Set the K request at the Fe foil edge; db, fly and Mb grids follow it."""
+        self.edge_k = float(check_on_list([k_eV])[0])
+        _post(f"edge K set to {self.edge_k:.1f} eV (10-26: 7080 eV)")
+
+    def set_offset(self, eV):
+        """Set the request-to-real offset (real = K request + offset, eV)."""
+        self.offset_eV = float(eV)
+        _post(f"request-to-real offset set to {self.offset_eV:+.1f} eV "
+              f"(10-09: -5.2 eV; 10-26 log: 'Offset found: 20 eV', no sign)")
 
     def mono(self, real_eV=TFS_E_EV):
         """
@@ -369,35 +621,162 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
 
         Uses self.offset_eV, so run x.offset_check() first if the offset is
         in doubt. The DCCM moves on its own energy axis, not with the
-        vernier.
+        vernier. DCCM energy from hutch python only (PLC motion code under
+        debug on 11-09; the PyDM screen is not trusted).
         """
         k = k_for_real(real_eV, self.offset_eV)
         dccm = _ns('dccm')
         print(f"DCCM in, DCCM {real_eV:.1f} eV, K request {k:.1f} eV "
               f"(real {k + self.offset_eV:.1f})")
         dccm.insert()
-        request_k(_ns('exafs').acr_energy_k, k, k_max=K_MAX_EV)
+        request_k(_ns('exafs').acr_energy_k, k, k_max=ut.K_MAX_EV)
         dccm.energy.move(real_eV / 1000.0, wait=True)
 
-    def offset_check(self, k_points=(7112.0, 7100.0, 7124.0), dwell=2.0,
+    def offset_check(self, k=None, lo=-30.0, hi=30.0, step=2.0, dwell=2.0,
                      record=True):
         """
-        Measure the request-to-real offset at three K requests.
+        Find the request-to-real offset with the DCCM, at one K request.
 
-        DCCM in. At each K the DCCM steps from -15 to +5 eV around the
-        request. The DG2 IPM against DCCM energy peaks at the real SASE
-        center; the BLD photon energy in the same run gives the BLD offset.
-        About 5 min. Afterwards set x.offset_eV to the measured value
-        (real = request + offset). If it differs from -5.2 eV by more than
-        3 eV, x.kx() shifts the pink sweep.
+        DCCM in. K at k (default x.edge_k + 10), the DCCM steps from K + lo
+        to K + hi eV. The DG2 IPM against DCCM energy peaks at the real SASE
+        center. The window is wide because the 10-26 offset is not known
+        (unsigned "20 eV" in the log against -5.2 eV on 10-09). Then
+        x.offset_fine(c) around the peak offset c, and x.set_offset(c).
+        About 3 min at the defaults.
         """
+        k = self.edge_k + 10.0 if k is None else k
+        k = float(check_on_list([k])[0])
+        offsets = [round(float(o), 2) for o in np.arange(lo, hi + step / 2, step)]
         _ns('dccm').insert()
-        return _ns('exafs').k_xas_scan(
-            k_positions=list(check_on_list(k_points)), k_order='given',
-            k_move_mode=K_MODE,
-            dccm_offsets=list(np.arange(-15.0, 5.1, 1.0)), dwell_time=dwell,
-            record=record, sample='und1026_offset_check',
+        print(f"offset check: K {k:.1f} eV, DCCM {k + offsets[0]:.1f}-{k + offsets[-1]:.1f} "
+              f"eV in {step:g} eV, dwell {dwell:g} s")
+        request_k(_ns('exafs').acr_energy_k, k, k_max=ut.K_MAX_EV)
+        return self._scan(
+            k_positions=[k], k_order='given', k_move_mode=K_MODE,
+            dccm_offsets=offsets, dwell_time=dwell, record=record,
+            sample=f'{PREFIX}_offset_check_k{k:.0f}', picker='open',
             **self.xrt_opts())
+
+    def offset_fine(self, center, half=6.0, step=0.5, k=None, dwell=2.0,
+                    record=True):
+        """Fine offset scan: DCCM offsets center +- half eV in step eV (center = offset from K)."""
+        return self.offset_check(k=k, lo=center - half, hi=center + half,
+                                 step=step, dwell=dwell, record=record)
+
+    # ---- dead band (19:00-21:00, with ACR) -------------------------------------
+
+    def db_read(self, post=True):
+        """
+        Read DeadbandHgEnc on every segment (read-only) and post one line.
+
+        Expect 0.125 um at 18:00 (restore after 10-27 never confirmed) and at
+        06:00 after the energy GUI closes. Returns {segment: value or None}.
+        """
+        values = ut.read_deadband()
+        text = (f"{ut.deadband_text(values)} (recorded {self.db_um:g} um, "
+                f"{time.strftime('%H:%M')})")
+        if post:
+            _post(text, tag='deadband')
+        else:
+            print(text)
+        return values
+
+    def deadband(self, um, note=''):
+        """
+        Record the dead band ACR / undulator controls just set, in um.
+
+        Hutch python never writes the band. Call this after every change so
+        sample names and elog lines carry it, e.g. x.deadband(0.75).
+        """
+        self.db_um = float(um)
+        rb = ut.deadband_text(ut.read_deadband(timeout=0.5))
+        _post(f"dead band set to {self.db_um:g} um by ACR / undulator controls at "
+              f"{time.strftime('%H:%M')}{(', ' + note) if note else ''}. Readback: {rb}",
+              tag='deadband')
+
+    def db_scan(self, step=1.0, n=DB_N, direction='updown', dwell=DB_DWELL_S,
+                start=None, label=None, record=True):
+        """
+        Dead band test scan on the Fe foil, pink beam, DCCM out.
+
+        n positions from start (default x.edge_k - 15 eV) in step eV, swept
+        up and back down by default ('up', 'down' or 'updown'). K is first
+        requested one step outside the start so step 1 is a real move.
+        concurrent_settled with dwell 12 s, so a step takes max(dwell, K
+        move) and the k_move column of the timing table is the measurement.
+        After the run the pass rule is applied per leg (x.db_table() keeps
+        the results): real-step median <= 12.5 s, at most one slow step
+        (stage-2 tail) per 40, at most one leading null request and none
+        after. The DCCM is never moved here; take it out first.
+        """
+        pos, approach = db_positions(self.edge_k, step, n, direction, start)
+        um = self.db_um
+        opts = self.xrt_opts()
+        sample = f"{PREFIX}_db{_um_tag(um)}um_{step:g}eV_{direction}"
+        sample = sample.replace('.', 'p') + (f"_{label}" if label else "")
+        if opts['track_feespec']:
+            sample += '_xrt'
+        run = _next_run(record)
+        msg = (f"dead band scan run {run}: band {um:g} um recorded; "
+               f"{ut.deadband_text(ut.read_deadband(timeout=0.5))}. K {min(pos):.1f}-"
+               f"{max(pos):.1f} eV in {step:g} eV, {direction}, {len(pos)} visits, "
+               f"approach {approach:.1f} eV, dwell {dwell:g} s, {K_MODE}, XRT "
+               f"tracking {'on' if opts['track_feespec'] else 'off'}"
+               f"{(', ' + label) if label else ''}")
+        _post(msg, tag='deadband') if record else print(msg)
+        exafs = _ns('exafs')
+        request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
+        out = self._scan(
+            k_positions=pos, k_order='given', k_move_mode=K_MODE,
+            dwell_time=dwell, pink=True, record=record, sample=sample,
+            picker='open', **opts)
+        timer = getattr(exafs, '_step_timer', None)
+        rows = list(getattr(timer, 'rows', None) or [])
+        passed, legs, text = db_verdict(rows)
+        # k_xas_scan returns normally after Ctrl+C; a partial sweep never
+        # counts toward the band choice
+        if len(rows) < len(pos):
+            passed = False
+            text = (f"INCOMPLETE, {len(rows)} of {len(pos)} visits (stopped), not "
+                    f"judged. {text}")
+        self.db_results.append(dict(
+            time=time.strftime('%H:%M'), run=run, um=um, step=step,
+            direction=direction, label=label or '', visits=len(pos),
+            done=len(rows), passed=passed, legs=legs, text=text))
+        line = (f"dead band {um:g} um, {step:g} eV {direction}"
+                f"{(' ' + label) if label else ''}, run {run}: {text}")
+        _post(line, tag='deadband', run=run) if record else print(line)
+        return out
+
+    def db_baseline(self, n=12, dwell=DB_DWELL_S):
+        """
+        D0: 1 eV up at the band in place at 19:00 (expect 0.125 um), list on.
+
+        Measures the girder start and step time with the list at the
+        original band, which separates the list from the dead band (report
+        rec 9). About 4 min.
+        """
+        if abs(self.db_um - DB_RESTORE_UM) > 1e-9:
+            logger.warning(f"recorded dead band is {self.db_um:g} um, not "
+                           f"{DB_RESTORE_UM:g}: x.deadband() first if ACR changed it")
+        return self.db_scan(step=1.0, n=n, direction='up', dwell=dwell,
+                            label='baseline')
+
+    def db_table(self):
+        """Print every dead band scan so far with its pass/fail line."""
+        if not self.db_results:
+            print("no dead band scans yet")
+            return []
+        print(" time   run    band    step  direction  label      visits   result")
+        for r in self.db_results:
+            print(f" {r['time']}  {str(r['run']):>5s}  {r['um']:5g} um  {r['step']:4g}  "
+                  f"{r['direction']:9s}  {r['label']:9s}  {r['done']:3d}/{r['visits']:<3d}  "
+                  f"{'PASS' if r['passed'] else 'FAIL'}")
+            print(f"        {r['text']}")
+        ok = sorted({r['um'] for r in self.db_results if r['passed'] and r['step'] == 1.0})
+        if ok:
+            print(f"narrowest band that passed at 1 eV: {ok[0]:g} um")
+        return self.db_results
 
     # ---- XRT spectrometer ---------------------------------------------------
 
@@ -408,6 +787,8 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         move_feespec_energy stops the Zyla and leaves it stopped, so the
         camera is restarted here. Moves th, tth and camy together and backs
         off if XRT:HXS:TRNS.SEVR alarms. offset_deg defaults to x.xrt_offset.
+        Check the filter wheel STEP:XRT1:446:MOTR.RBV first (it sat at 54 deg
+        for 60 h after 10-27).
         """
         from epics import caput
         offset_deg = self.xrt_offset if offset_deg is None else offset_deg
@@ -431,7 +812,9 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         xs = _ns('xrtspec').hxrsss
         xs.th.umv(xs.th.position + delta_deg)
         self.xrt_offset += delta_deg
-        print(f"XRT th {xs.th.position:.3f}, x.xrt_offset {self.xrt_offset:+.3f} deg")
+        # posted so the value survives a reload (a new User() starts at -1.3)
+        _post(f"XRT th {xs.th.position:.3f}, x.xrt_offset {self.xrt_offset:+.3f} deg",
+              tag='xrt')
 
     def xrt_opts(self, xrt=None):
         """
@@ -440,48 +823,46 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         Tracking on: before each K request the crystal, camera arm and camy
         move to the new K (non-blocking in concurrent_settled), after K
         settles check_feespec_crystal_angle runs (2.0 s per step on 10-09),
-        at every point the camera arm follows (blocking) and at the end the
-        XRT returns to the start energy. Off: none of these, XRT stays put.
+        at every point the camera arm follows and at the end the XRT returns
+        to the start energy. Off: none of these, the XRT stays put.
         """
         on = self.xrt_track if xrt is None else bool(xrt)
         return dict(crystal_angle_offset=self.xrt_offset, track_feespec=on,
                     track_feespec_cam=on, track_feespec_blocking=False)
 
     def xrt_on(self):
-        """XRT follows K in every scan from here on (timing, offset, pink)."""
+        """XRT follows K in every scan from here on (default tonight)."""
         self.xrt_track = True
-        print("XRT tracking ON for all scans: ~2.7 s more per step (10-09), plus "
-              "the camera arm move per point. The XRT energy axis changes per step. "
-              "x.xrt_off() to stop.")
+        print("XRT tracking ON for all scans (report rec 12): the crystal check "
+              "after each K move adds ~2 s per step. x.xrt_off() to stop.")
 
     def xrt_off(self):
-        """XRT stays parked in every scan (default for 10-26)."""
+        """XRT stays parked in every scan from here on."""
         self.xrt_track = False
-        print("XRT tracking OFF: scans never wait on the XRT. x.xrt_park() to "
-              "re-park at the window center.")
+        print("XRT tracking OFF: scans never wait on the XRT. A parked XRT loses "
+              "~9x throughput across 7080-7110 eV requested (10-26). x.xrt_park() "
+              "to re-park at the window center.")
 
     def xrt_goto(self, real_eV):
-        """
-        One-off XRT move to real_eV between scans, camera restarted.
-
-        Same as x.xrt_park(real_eV): use to look at one end of the window
-        when the full span does not fit in one image. Re-park with
-        x.xrt_park() before the next pink pass.
-        """
+        """One-off XRT move to real_eV between scans, camera restarted."""
         self.xrt_park(real_eV)
 
-    def xrt_check(self, real_eV=None):
+    def xrt_check(self, energy_eV=None):
         """
         Run the crystal-angle check that tracked scans do after each K move.
 
-        real_eV defaults to the current K request + x.offset_eV. Corrects th
-        if it is off the calculated angle. Use after a manual XRT move.
+        energy_eV defaults to the current K request, the energy tracked
+        scans set the XRT for (real = K request + x.offset_eV, so the
+        spectrum sits ~5 eV off the image center, well inside the ~75 eV
+        image). Corrects th if it is off the calculated angle and restarts
+        the Zyla. Use after a manual XRT move.
         """
-        if real_eV is None:
-            real_eV = _ns('exafs').acr_energy_k.get().setpoint + self.offset_eV
+        if energy_eV is None:
+            energy_eV = _ns('exafs').acr_energy_k.get().setpoint
         _ns('xrtspec').check_feespec_crystal_angle(
-            real_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
-        print(f"XRT angle checked for {real_eV:.1f} eV")
+            energy_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
+        _zyla_on()
+        print(f"XRT angle checked for {energy_eV:.1f} eV")
 
     def xrt_cam_scan(self, lo_eV=WINDOW_EV[0], hi_eV=WINDOW_EV[1], n=4,
                      run_length=30):
@@ -501,96 +882,383 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
 
         One DAQ run per DCCM energy (integer real eV, sample = energy, tag
         'dccm'). k_energy=True requests K = DCCM energy at each point, so the
-        series covers lo..hi; with K fixed only the ~20 eV SASE bandwidth
-        gets flux. K = DCCM ignores x.offset_eV: the DCCM sits ~5 eV above
-        the SASE center, ~17% less flux at 8.5 eV sigma, fine for a
-        calibration. hi_eV stops at 7120 because K follows the DCCM and K
-        may not pass K_MAX_EV (7124). XRT parked (x.xrt_park() first), SEER
-        fixed. Default 9 runs of 10 s, ~5 min with the DCCM move, 5 s
-        settle, K move and run start.
-
-        notch.series asks at the end whether to return the DCCM and K and
-        whether to run notch.output (fee_calib.py on psana: XRT eV/px fit,
-        posted to the elog). x.spec_calib_output(user) runs the same later.
-        SEER: centroid of the epix100 ROI projection per run against the run
-        energy, then spec_window(..., n_px=ROI length).
+        series covers lo..hi; hi_eV must stay under the K cap in use. XRT
+        parked (x.xrt_park() first), SEER fixed. notch.series asks at the end
+        whether to return the DCCM and K: answer n. Its return sends K to
+        the raw DCCM readback, off the list; spec_calib puts the DCCM and K
+        back where they were itself.
         """
         from mfx.macros import get_run
         lo, hi, step = int(lo_eV), int(hi_eV), int(step)
         num = len(range(lo, hi + step, step))
         check_on_list(list(range(lo, hi + step, step)))
-        _ns('dccm').insert()
+        exafs, dccm = _ns('exafs'), _ns('dccm')
+        k0 = float(exafs.acr_energy_k.get().setpoint)
+        dccm.insert()
+        e0 = float(dccm.energy.position)
         self.last_calib = dict(run=get_run(station=0) + 1, energy=lo, step=step,
                                num=num)
-        _ns('notch').series(lo, hi, step, run_length=run_length, tag='dccm',
-                            record=record, k_energy=True, daq_num=2, exp=EXP)
+        try:
+            _ns('notch').series(lo, hi, step, run_length=run_length, tag='dccm',
+                                record=record, k_energy=True, daq_num=2, exp=EXP)
+        finally:
+            print(f"DCCM back to {e0 * 1000:.1f} eV, K back to {k0:.1f} eV")
+            dccm.energy.move(e0, wait=True)
+            request_k(exafs.acr_energy_k, k0, k_max=ut.K_MAX_EV)
         return self.last_calib
 
     def spec_calib_output(self, user, calib=None):
-        """
-        fee_calib.py on psana for the last x.spec_calib() (or notch) series.
-
-        Wraps notch.output: sums up to 1000 feespec hproj events per run,
-        fits a Gaussian peak, fits pixel against energy and posts eV/px,
-        intercept and R^2 to the elog (needs a kinit token on psana).
-        """
+        """fee_calib.py on psana for the last x.spec_calib() (or notch) series."""
         c = calib or self.last_calib
         if not c:
             raise RuntimeError("no calibration series yet, run x.spec_calib()")
         _ns('notch').output(user=user, facility='S3DF', exp=EXP, daq_num=2, **c)
 
-    # ---- SEER ----------------------------------------------------------------
+    # ---- Fe foil edge scans --------------------------------------------------
 
-    def seer_table(self, radius_mm=250.0):
-        """Ge(660) vs Ge(620) angles, dispersion and window span."""
-        seer_swap_table(radius_mm)
-
-    def seer_save(self, tag, extra_pvs=()):
+    def fe_foil_scan(self, lo=None, hi=None, step=5.0, dwell=20.0, record=True,
+                     dccm_offset=None, reverse=False):
         """
-        Save SEER motor readbacks to ~/seer_positions/<tag>.json.
+        K scan across the Fe foil edge, one DAQ run.
 
-        Run before the crystal swap with tag 'ge660' so the 1019410 setup can
-        be restored, and after alignment tonight with tag 'ge620'. Add the
-        crystal-stack motor PVs in extra_pvs once their names are confirmed.
-        A copy goes to the shift results folder.
+        lo, hi default to x.edge_k - 20 and x.edge_k + 30 eV, clipped to the
+        list and cap. reverse=True runs hi -> lo. K is first requested one
+        step outside the start. dccm_offset=None: pink, the DCCM is not
+        moved. A number: the DCCM (put in by hand) sits at K request +
+        dccm_offset eV at every step, e.g. x.offset_eV for the SASE center.
+        concurrent_settled: a step holds max(0, dwell - K move) s settled.
         """
-        from epics import caget
-        pvs = dict(SEER_PARKER)
-        pvs.update({p: p for p in extra_pvs})
-        pos = {k: caget(pv + '.RBV') for k, pv in pvs.items()}
-        rec = {'tag': tag, 'time': time.strftime('%Y-%m-%d %H:%M:%S'),
-               'pvs': pvs, 'rbv': pos}
-        for folder in (SEER_SAVE, _results_dir()):
-            try:
-                folder.mkdir(parents=True, exist_ok=True)
-                (folder / f'{tag}.json').write_text(json.dumps(rec, indent=1))
-            except OSError as e:
-                logger.warning(f'Cannot write {folder}: {e}')
-        _post(f"SEER positions saved as {tag}: {pos}", tag='seer')
-        return rec
+        lo = self.edge_k - 20.0 if lo is None else lo
+        hi = self.edge_k + 30.0 if hi is None else hi
+        lo, hi = fit_window(lo, hi, step)
+        pos = [float(p) for p in grid(lo, hi, step)]
+        approach = pos[0] - step
+        if reverse:
+            pos, approach = pos[::-1], pos[-1] + step
+        approach = float(check_on_list([approach])[0])
+        pink = dccm_offset is None
+        offsets = None if pink else [float(o) for o in np.atleast_1d(dccm_offset)]
+        sample = f"{PREFIX}_fe_foil_{lo:.0f}_{hi:.0f}_{step:g}eV".replace('.', 'p')
+        if reverse:
+            sample += "_down"
+        if pink:
+            beam = "pink, DCCM out"
+        else:
+            sample += "_dccm" + "_".join(f"{o:+g}" for o in offsets).replace('.', 'p')
+            beam = f"DCCM in, DCCM = K {', '.join(f'{o:+g}' for o in offsets)} eV"
+        opts = self.xrt_opts()
+        run = _next_run(record)
+        msg = (f"Fe foil scan run {run}: {beam}, K {pos[0]:.1f} -> {pos[-1]:.1f} eV "
+               f"in {step:g} eV ({len(pos)} steps), {K_MODE}, dwell {dwell:g} s, "
+               f"dead band {self.db_um:g} um")
+        _post(msg, tag='fe_foil') if record else print(msg)
+        exafs = _ns('exafs')
+        request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
+        out = self._scan(
+            k_positions=pos, k_order='given', k_move_mode=K_MODE,
+            dwell_time=dwell, pink=pink, dccm_offsets=offsets, record=record,
+            sample=sample, picker='open', **opts)
+        if record:
+            _post(f"Fe foil scan run {run} done, {len(out)} points", tag='fe_foil',
+                  run=run)
+        return out
 
-    def seer_restore(self, tag):
-        """
-        Move SEER motors back to a saved set, after typing 'yes'.
+    # ---- DCCM fly test (21:00-22:00) -------------------------------------------
 
-        Prints current and saved readbacks for every motor before asking. After
-        'yes', closes the pulse picker and sets att(0), and moves nothing until
-        the beam is confirmed blocked.
+    def _dccm_in(self):
+        """False only if the DCCM state readback says OUT; unreadable warns."""
+        state = _caget(DCCM_STATE_RBV, as_string=True)
+        if state is None:
+            logger.warning(f"DCCM state not readable ({DCCM_STATE_RBV}): check the "
+                           f"DCCM screen; going on")
+            return True
+        if 'OUT' in str(state).upper():
+            print(f"DCCM reads {state}: put it in first (_ns('dccm').insert(), "
+                  f"or x.mono()), then repeat")
+            return False
+        return True
+
+    def fly(self, pattern='track', step=FLY_STEP_EV, n=FLY_N, dwell=FLY_DWELL_S,
+            lo=None, hi=None, reverse=False, record=True):
         """
-        from epics import caget, caput
-        rec = json.loads((SEER_SAVE / f'{tag}.json').read_text())
-        for k, pv in rec['pvs'].items():
-            print(f"  {k:6s} {pv}: now {caget(pv + '.RBV')}, saved {rec['rbv'][k]}")
-        if input(f"Move SEER to '{tag}' ({rec['time']})? yes/no: ").strip() != 'yes':
-            print("not moved")
-            return
-        if not self._close_beam():
-            print("beam not confirmed blocked, SEER not moved")
-            return
-        for k, pv in rec['pvs'].items():
-            if rec['rbv'][k] is not None:
-                caput(pv + '.VAL', rec['rbv'][k], wait=True, timeout=120)
-        self.seer_save(f'{tag}_restored_{time.strftime("%m%d_%H%M")}')
+        DCCM points while the undulator moves (fly scan), on the Fe foil.
+
+        K steps of step eV over x.edge_k - 20 .. x.edge_k + 20 (clipped), in
+        'concurrent' mode: each K write goes out and the DCCM steps through
+        n points of dwell s while the girders move. 'track' takes the DCCM
+        from the old SASE center to the new one (-4..0 eV from the new
+        center for +5 eV, +4..0 going down); 'center' puts the points
+        symmetric around the new center (-2..+2 eV). x.offset_eV is added,
+        so the points sit on the real SASE energy. The scan waits for each
+        K request to finish before the next write (the hold-off that keeps it
+        from running ahead), so a step takes max(n x (dwell + ~1.4 s DCCM
+        move), K move): ~22 s at the defaults against an ~11-12 s K move,
+        so the first 2-3 points fall inside the move. The per-point CSV
+        (runNNNN_points.csv) tags each point. XRT tracking per x.xrt_track
+        (crystal moved without stopping the Zyla, checked after K done),
+        camera-arm tracking off. Refuses if the DCCM state readback reads
+        OUT; runs with a warning if that PV does not answer.
+        """
+        if not self._dccm_in():
+            return None
+        pos, approach = fly_positions(self.edge_k, step, lo, hi, reverse)
+        off = fly_offsets(pattern, step, n, going_up=not reverse)
+        dccm_offsets = [round(self.offset_eV + o, 3) for o in off]
+        opts = self.xrt_opts()
+        opts['track_feespec_cam'] = False
+        sample = (f"{PREFIX}_fly_{pattern}_{min(pos):.0f}_{max(pos):.0f}_{step:g}eV_"
+                  f"{n}x{dwell:g}s").replace('.', 'p')
+        if reverse:
+            sample += '_down'
+        if opts['track_feespec']:
+            sample += '_xrt'
+        per_step = n * (dwell + 1.4)
+        run = _next_run(record)
+        msg = (f"fly scan run {run}: '{pattern}', K {pos[0]:.1f} -> {pos[-1]:.1f} eV "
+               f"in {step:g} eV ({len(pos)} positions), DCCM offsets {off} eV from the "
+               f"new SASE center (offset {self.offset_eV:+.1f} eV), {dwell:g} s each, "
+               f"~{per_step:.0f} s of DCCM points per step, dead band {self.db_um:g} um")
+        _post(msg, tag='fly') if record else print(msg)
+        exafs = _ns('exafs')
+        request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
+        out = self._scan(
+            k_positions=pos, k_order='given', k_move_mode='concurrent',
+            dccm_offsets=dccm_offsets, dwell_time=dwell, record=record,
+            sample=sample, picker='open', **opts)
+        if record:
+            _post(f"fly scan run {run} done, {len(out)} DCCM points", tag='fly', run=run)
+        return out
+
+    def fly_ref(self, step=FLY_STEP_EV, dwell=None, points=False, pattern='track',
+                n=FLY_N, lo=None, hi=None, reverse=False, record=True):
+        """
+        Reference for the fly scan, same K grid, K settled.
+
+        points=False (F0): concurrent_settled with one DCCM point at the K
+        center (K request + x.offset_eV). The DCCM moves to the new center
+        after K done and the XRT check; the dwell (20 s by default) counts
+        from the K write, so ~7 s per step sit at the new center with K
+        settled. The timing CSV marks the dwell start (t_dwell_start).
+        points=True (F4): the same n DCCM points as x.fly(pattern), all
+        taken after K settles: pause mode (DAQ paused during the K move), so
+        every point gets its full dwell (3 s by default).
+        """
+        if not self._dccm_in():
+            return None
+        pos, approach = fly_positions(self.edge_k, step, lo, hi, reverse)
+        if points:
+            dwell = FLY_DWELL_S if dwell is None else dwell
+            off = fly_offsets(pattern, step, n, going_up=not reverse)
+            mode = 'pause'
+        else:
+            dwell = FLY_REF_DWELL_S if dwell is None else dwell
+            off = [0.0]
+            mode = K_MODE
+        dccm_offsets = [round(self.offset_eV + o, 3) for o in off]
+        opts = self.xrt_opts()
+        opts['track_feespec_cam'] = False
+        kind = f"points_{pattern}" if points else "center"
+        sample = (f"{PREFIX}_flyref_{kind}_{min(pos):.0f}_{max(pos):.0f}_{step:g}eV_"
+                  f"{dwell:g}s").replace('.', 'p')
+        if reverse:
+            sample += '_down'
+        if opts['track_feespec']:
+            sample += '_xrt'
+        run = _next_run(record)
+        msg = (f"fly reference run {run}: {kind}, K {pos[0]:.1f} -> {pos[-1]:.1f} eV "
+               f"in {step:g} eV, DCCM offsets {off} eV from the K center, {mode}, "
+               f"dwell {dwell:g} s, dead band {self.db_um:g} um")
+        _post(msg, tag='fly') if record else print(msg)
+        exafs = _ns('exafs')
+        request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
+        out = self._scan(
+            k_positions=pos, k_order='given', k_move_mode=mode,
+            dccm_offsets=dccm_offsets, dwell_time=dwell, record=record,
+            sample=sample, picker='open', **opts)
+        if record:
+            _post(f"fly reference run {run} done, {len(out)} DCCM points", tag='fly',
+                  run=run)
+        return out
+
+    # ---- pink beam, MESH, myoglobin --------------------------------------------
+
+    def pink_switch(self, att_t=1e-2):
+        """
+        Mono to pink: attenuate, DCCM out, XRT parked at CENTER_EV.
+
+        Removing the DCCM raises the flux on every downstream detector by
+        about two orders of magnitude, hence the attenuator first: the DCCM
+        stays in unless the attenuator reads at most att_t (x2 for filter
+        steps). Never raises the transmission.
+        """
+        att = _ns('att')
+        t = min(float(att.position), float(att_t))
+        att(t, wait=True)
+        if float(att.position) > 2.0 * t:
+            raise RuntimeError(f"attenuator reads {att.position:.1e}, not {t:.1e}: "
+                               f"DCCM left in")
+        _ns('dccm').remove()
+        self.xrt_park(CENTER_EV)
+        print(f"Pink beam. Confirm on the DCCM screen and by the DG1/DG2 IPM jump. "
+              f"xrt_track = {self.xrt_track}.")
+
+    def mesh_status(self):
+        """Print MESH setpoint and readback (V) and the hutch door state."""
+        sp, rb = _caget(MESH_SP), _caget(MESH_RB)
+        door = _caget(DOOR_PV, as_string=True)
+        sp_v = None if sp is None else float(sp) * MESH_SCALE_V
+        rb_v = None if rb is None else float(rb) * MESH_SCALE_V
+        fmt = lambda v: '?' if v is None else f"{v:.0f} V"
+        print(f"MESH setpoint {fmt(sp_v)} ({MESH_SP}), readback {fmt(rb_v)} "
+              f"({MESH_RB}), door {door} ({DOOR_PV})")
+        return dict(sp_v=sp_v, rb_v=rb_v, door=door)
+
+    def mesh_set(self, kv, ramp_v=250.0, step_s=1.0, max_kv=MESH_MAX_KV, tol_v=150.0):
+        """
+        Ramp the MESH high voltage to kv (kilovolts) in ramp_v steps.
+
+        The SED MESH lead decides the value. Refuses above max_kv, refuses a
+        nonzero kv unless the hutch door reads closed (DOOR_PV = 1), and
+        refuses to start when setpoint and readback disagree by more than
+        tol_v (a trip: x.mesh_off() first). Waits step_s at each step and
+        stops, leaving the setpoint where it is, if the readback is more
+        than tol_v from the setpoint, the door opens (setpoint to 0), or
+        someone else wrote the setpoint (the door watcher). Returns True
+        when the target is reached. x.mesh_off() goes to 0 without any of
+        these checks.
+        """
+        if abs(kv) > max_kv + 1e-9:
+            raise ValueError(f"{kv} kV above the {max_kv} kV limit, not set")
+        target = float(kv) * 1000.0
+        if target and not _door_closed():
+            raise RuntimeError(f"hutch door {DOOR_PV} does not read closed (1): HV not set")
+        sp, rb = _caget(MESH_SP), _caget(MESH_RB)
+        if sp is None:
+            raise RuntimeError(f"MESH setpoint {MESH_SP} not readable, not set")
+        v0 = float(sp) * MESH_SCALE_V
+        if rb is not None and abs(float(rb) * MESH_SCALE_V - v0) > tol_v:
+            raise RuntimeError(f"MESH setpoint {v0:.0f} V and readback "
+                               f"{float(rb) * MESH_SCALE_V:.0f} V disagree (trip?): "
+                               f"x.mesh_off() first")
+        from epics import caput
+        n = max(1, int(np.ceil(abs(target - v0) / ramp_v)))
+        rb_v, last = None, v0
+        for v in np.linspace(v0, target, n + 1)[1:]:
+            now = _caget(MESH_SP)
+            if now is None or abs(float(now) * MESH_SCALE_V - last) > 5.0:
+                _post(f"MESH ramp stopped: setpoint changed outside mesh_set "
+                      f"({'?' if now is None else f'{float(now) * MESH_SCALE_V:.0f} V'}, "
+                      f"last written {last:.0f} V)", tag='mesh')
+                return False
+            if target and not _door_closed():
+                caput(MESH_SP, 0.0, wait=True)
+                _post("MESH ramp stopped, hutch door not closed: setpoint 0", tag='mesh')
+                return False
+            caput(MESH_SP, v / MESH_SCALE_V, wait=True)
+            last = v
+            time.sleep(step_s)
+            rb = _caget(MESH_RB)
+            rb_v = None if rb is None else float(rb) * MESH_SCALE_V
+            if rb_v is None or abs(rb_v - v) > tol_v:
+                _post(f"MESH ramp stopped at setpoint {v:.0f} V: readback "
+                      f"{'?' if rb_v is None else f'{rb_v:.0f} V'} (tolerance "
+                      f"{tol_v:.0f} V). Call the SED MESH lead.", tag='mesh')
+                return False
+        _post(f"MESH HV {target:.0f} V, readback {rb_v:.0f} V", tag='mesh')
+        return True
+
+    def mesh_off(self, timeout_s=30.0):
+        """
+        Write 0 V to the MESH setpoint at once and wait for the readback.
+
+        No ramp and no readback check before the write, so it works after a
+        trip or with the setpoint unreadable. Returns True once the setpoint
+        reads 0 and the readback is under 50 V within timeout_s.
+        """
+        from epics import caput
+        caput(MESH_SP, 0.0, wait=True)
+        rb_v, t_end = None, time.time() + timeout_s
+        while time.time() < t_end:
+            sp, rb = _caget(MESH_SP), _caget(MESH_RB)
+            rb_v = None if rb is None else float(rb) * MESH_SCALE_V
+            if sp is not None and abs(float(sp)) < 1e-6 and rb_v is not None                     and abs(rb_v) < 50.0:
+                _post(f"MESH off, readback {rb_v:.0f} V", tag='mesh')
+                return True
+            time.sleep(0.5)
+        _post(f"MESH off NOT confirmed after {timeout_s:.0f} s: setpoint written 0, "
+              f"readback {'?' if rb_v is None else f'{rb_v:.0f} V'}. Call the SED MESH "
+              f"lead.", tag='mesh')
+        return False
+
+    def mb_grid(self, step=MB_STEP_EV):
+        """Production sweep x.edge_k - 15 -> x.edge_k + 35 -> x.edge_k - 15 eV."""
+        return mb_positions(self.edge_k, step)
+
+    def _context(self):
+        """MESH, attenuation, dead band and offsets for the elog line of a run."""
+        sp, rb = _caget(MESH_SP), _caget(MESH_RB)
+        mesh = (f"MESH SP {float(sp) * MESH_SCALE_V:.0f} V RB "
+                f"{float(rb) * MESH_SCALE_V:.0f} V" if sp is not None and rb is not None
+                else "MESH ?")
+        try:
+            att = f"att {_ns('att').position:.1e}"
+        except Exception:
+            att = "att ?"
+        rb_db = ut.deadband_text(ut.read_deadband(timeout=0.5))
+        return (f"{mesh}, {att}, dead band {self.db_um:g} um recorded ({rb_db}), XRT "
+                f"tracking {'on' if self.xrt_track else 'off'}, offset "
+                f"{self.offset_eV:+.1f} eV, edge K {self.edge_k:.1f} eV")
+
+    def _pink_run(self, pos, dwell, sample, what, record=True):
+        exafs = _ns('exafs')
+        run = _next_run(record)
+        msg = (f"{what} run {run}: {self._context()}. K {pos[0]:.1f} eV start, "
+               f"{min(pos):.1f}-{max(pos):.1f} eV, {len(pos)} visits, dwell {dwell:g} s, "
+               f"{K_MODE}, pink")
+        _post(msg, tag='mb_mesh') if record else print(msg)
+        request_k(exafs.acr_energy_k, pos[0], k_max=ut.K_MAX_EV)
+        out = self._scan(
+            k_positions=pos, k_order='given', k_move_mode=K_MODE,
+            dwell_time=dwell, pink=True, record=record, sample=sample,
+            picker='open', **self.xrt_opts())
+        if record:
+            _post(f"{what} run {run} done, {len(out)} points", tag='mb_mesh', run=run)
+        return out
+
+    def mb_blank(self, label, step=5.0, dwell=20.0, record=True):
+        """
+        Mother-liquor blank pass on the MESH (no crystals), pink.
+
+        'start' before the first Mb reservoir, 'end' after the last: beam
+        and stream background, sigma(T/I0), epix100 and JF16M background.
+        """
+        pos = mb_positions(self.edge_k, step)
+        return self._pink_run(pos, dwell, f"{PREFIX}_mb_mesh_blank_{label}",
+                              f"MESH blank '{label}'", record)
+
+    def mb_park(self, r, k=None, dwell=MB_PARK_DWELL_S, record=True):
+        """
+        Mb reservoir r with K parked (default x.edge_k + 10 eV), one run.
+
+        Hit rate, indexing, emission per hit against the blank, first
+        hit-minus-miss transmission. Then the go/no-go table.
+        """
+        k = self.edge_k + MB_PARK_ABOVE_EV if k is None else k
+        k = float(check_on_list([k])[0])
+        return self._pink_run([k], dwell, f"{PREFIX}_mb_mesh_park_r{r}_k{k:.0f}",
+                              f"Mb park (reservoir {r})", record)
+
+    def mb_pass(self, n, r, step=MB_STEP_EV, dwell=MB_DWELL_S, record=True):
+        """
+        Production pass n on reservoir r: sweep up and down, 30 s per visit.
+
+        One call is one DAQ run, so reservoir changes, clog clears and HV
+        changes fall between calls. ~21 min at 2.5 eV for edge 7080 eV.
+        Rerun an aborted pass with the same n.
+        """
+        pos = mb_positions(self.edge_k, step)
+        return self._pink_run(pos, dwell, f"{PREFIX}_mb_mesh_P{n}_r{r}",
+                              f"Mb pass P{n} (reservoir {r})", record)
 
     def _close_beam(self, timeout=10.0):
         """Close the pulse picker and set att(0); True once either is confirmed."""
@@ -609,148 +1277,15 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
             time.sleep(0.2)
         return False
 
-    def seer_check(self, run_length=60, record=True):
-        """
-        One mono run for the SEER elastic line, DCCM at CENTER_EV.
-
-        Kapton flag (shutter 4) in, epix100 in the partition. Expect the
-        line near the middle of the ROI. If it is off the sensor, move the
-        Parker stages by hand in small steps and repeat; record each move in
-        the elog.
-        """
-        self.mono(CENTER_EV)
-        _ns('autorun')(sample='seer_ge620_elastic', tag='seer', run_length=run_length,
-                       record=record, runs=1, picker='open')
-
-    # ---- undulator timing ---------------------------------------------------
-
-    def timing(self, name, change=None, dwell=1.0, record=True, xrt=None):
-        """
-        Run timing scan T1..T5 on the Fe foil, pink beam.
-
-        DCCM out (check before calling; this never moves the DCCM). K only,
-        centered on x.edge_k: T1/T5 +-10 eV in 1 eV, T2 +-10 eV in 0.5 eV,
-        T4 +-12 eV in 0.5 eV random, T3 the step-size ladder over the ACR
-        list up to K_MAX_EV. Each step is K request + dwell.
-
-        xrt=None follows x.xrt_track (False tonight): the XRT stays where
-        x.xrt_park() left it and the scan never waits on the FEE
-        spectrometer. xrt=True tracks for this run only (see x.xrt_opts) and
-        adds '_xrt' to the run name.
-
-        Requests K to the start position first where the table defines one,
-        so the first step costs no motion. For T5 give a short label for the
-        listener change, e.g. x.timing('T5', change='seg_skip').
-        """
-        pos, mode, order, extra, sample, k0 = TIMING[name]
-        pos, k0 = pos(self.edge_k), k0(self.edge_k)
-        if name == 'T5':
-            sample = f"{sample}_{change or 'baseline'}"
-        opts = self.xrt_opts(xrt)
-        if opts['track_feespec']:
-            sample = f"{sample}_xrt"
-        exafs = _ns('exafs')
-        print(f"x.timing('{name}'): pink, DCCM must be out, K {min(pos):.1f}-"
-              f"{max(pos):.1f} eV, XRT tracking "
-              f"{'ON' if opts['track_feespec'] else 'OFF'}, K pre-request {k0}")
-        if k0 is not None:
-            request_k(exafs.acr_energy_k, k0, k_max=K_MAX_EV)
-        return exafs.k_xas_scan(
-            k_positions=pos, k_order=order, k_move_mode=mode, sample=sample,
-            dwell_time=dwell, pink=True, record=record, **opts, **extra)
-
-    def fe_foil_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0,
-                     record=True, dccm_offset=None, reverse=False):
-        """K scan on the Fe foil; elog and sample name say Fe foil. See _edge_scan."""
-        return self._edge_scan('fe_foil', 'Fe foil', lo, hi, step, dwell, record,
-                               dccm_offset, reverse)
-
-    # name used before the split, kept so a loaded habit still works
-    fe_scan = fe_foil_scan
-
-    def mb_scan(self, lo=7070.0, hi=7110.0, step=5.0, dwell=10.0, record=True,
-                dccm_offset=None, reverse=False):
-        """K scan on myoglobin; elog and sample name say myoglobin. See _edge_scan."""
-        return self._edge_scan('mb', 'myoglobin', lo, hi, step, dwell, record,
-                               dccm_offset, reverse)
-
-    def _edge_scan(self, key, what, lo, hi, step, dwell, record, dccm_offset,
-                   reverse=False):
-        """
-        K scan across the Fe edge, one DAQ run. key goes into the sample name
-        and elog tag (und1026_{key}_scan_..., tag '{key}_scan'), what into the
-        elog text.
-
-        reverse=True runs hi -> lo (same points, descending; K is requested
-        to hi before the run). Sample name gets '_down'.
-
-        The DCCM state is never changed here; insert or remove it by hand.
-        dccm_offset=None: pink, the DCCM is not moved. A number: the DCCM
-        (already in) is set to K request + dccm_offset eV at every step, e.g.
-        dccm_offset=x.offset_eV (-5.2) puts the DCCM on the SASE center. A
-        list gives several DCCM points per K step (dwell at each).
-
-        K requests lo..hi ascending, concurrent_settled: the DAQ runs through
-        each K move and dwell is the total time per step, so a step holds
-        max(0, dwell - K move) s at the settled K. 9 steps at the defaults
-        (5 eV); step=1 gives 41 but runs much longer. step must be a
-        multiple of 0.5 (ACR list). The per-step timing table and CSV go to
-        the elog at the end of the run; start and end go to the elog with
-        the '{key}_scan' tag.
-        """
-        from mfx.macros import get_run
-        pos = grid(lo, hi, step)
-        if reverse:
-            pos = pos[::-1]
-        pink = dccm_offset is None
-        offsets = None if pink else [float(o) for o in np.atleast_1d(dccm_offset)]
-        name, tag = f"{key}_scan", f"{key}_scan"
-        sample = f"und1026_{name}_{lo:.0f}_{hi:.0f}_{step:g}eV"
-        if reverse:
-            sample += "_down"
-        if pink:
-            beam = "pink, DCCM out"
-        else:
-            sample += "_dccm" + "_".join(f"{o:+g}" for o in offsets)
-            beam = f"DCCM in, DCCM = K {', '.join(f'{o:+g}' for o in offsets)} eV"
-        run = get_run(station=0) + 1 if record else None
-        msg = (f"{name} run {run}: sample {what}, {beam}, K {pos[0]:.1f} -> "
-               f"{pos[-1]:.1f} eV in {step:g} eV ({len(pos)} steps, "
-               f"{'descending' if reverse else 'ascending'}), {K_MODE}, "
-               f"dwell {dwell:g} s")
-        # run not open yet, so the start post carries no run number
-        _post(msg, tag=tag) if record else print(msg)
-        exafs = _ns('exafs')
-        request_k(exafs.acr_energy_k, pos[0], k_max=K_MAX_EV)
-        out = exafs.k_xas_scan(
-            # 'given' keeps the order; 'ascending' would re-sort a reversed list
-            k_positions=pos, k_order='given', k_move_mode=K_MODE,
-            dwell_time=dwell, pink=pink, dccm_offsets=offsets, record=record,
-            sample=sample, **self.xrt_opts())
-        if record:
-            _post(f"{name} run {run} done ({what}), {len(out)} points", tag=tag,
-                  run=run)
-        return out
-
-    def timing_xrt(self, name, change=None, dwell=1.0, record=True):
-        """
-        Timing scan with XRT tracking for this run only.
-
-        Repeating T1 as x.timing_xrt('T1') after x.timing('T1') measures the
-        XRT cost per step directly (feespec_s and feespec_check_s columns).
-        """
-        return self.timing(name, change=change, dwell=dwell, record=record,
-                           xrt=True)
-
     # ---- transfocator -------------------------------------------------------
 
     def tfs_combo(self):
         """
-        Print the lens combination for tonight and the per-lens radii.
+        Print the lens combination and the per-lens radii.
 
-        Prefocus OUT, TFS 04 + 05 + 06 IN, all other lenses out. Reads each
-        lens :RADIUS PV so the elog has the actual stack, then checks the
-        combined radius against TFS_R_UM.
+        Prefocus OUT, TFS 04 + 05 + 06 IN (10-26 stack, confirm at 18:00),
+        all other lenses out. Reads each lens :RADIUS PV so the elog has the
+        actual stack, then checks the combined radius against TFS_R_UM.
         """
         tfs = _ns('tfs')
         print(f"Prefocus (MFX:DIA:XFLS) OUT. TFS lenses {list(TFS_LENSES)} IN, "
@@ -773,12 +1308,7 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         return r
 
     def tfs_prep(self):
-        """
-        Prefocus out, TFS stage to 100 mm, check the 4,5,6 combination.
-
-        The calculator reads the current stage position, hence the 100 mm
-        move. A 'prefocus recommended' log line is expected tonight.
-        """
+        """Prefocus out, TFS stage to 100 mm, check the 4,5,6 combination."""
         tfs = _ns('tfs')
         _ns('crl1').remove()
         tfs.remove_all()
@@ -896,174 +1426,106 @@ XRT optional  x.xrt_on()  x.xrt_off()  x.timing_xrt('T1')  x.pink_xrt('P', n=, r
         return out
 
     def tfs_minder(self):
-        """Hold lenses 4, 5, 6 on their y setpoints. Blocks; run in a second mfx3."""
+        """Hold the lenses on their y setpoints. Blocks; run in a second mfx3."""
         return _ns('tfs').lens_minder(lenses=TFS_LENSES)
 
     # ---- geometry ------------------------------------------------------------
 
-    def agbe_rings(self, det_dist_mm, energy_eV=TFS_E_EV):
-        """Ring radii for the chosen JF16M distance."""
-        agbe_rings(det_dist_mm, energy_eV)
+    def geom_rings(self, det_dist_mm, calibrant='LaB6', energy_eV=TFS_E_EV):
+        """Calibrant ring radii for the chosen JF16M distance (LaB6 or AgBe)."""
+        geom_rings(det_dist_mm, calibrant, energy_eV)
 
-    def agbe_run(self, det_dist_mm, run_length=60, att_t=None, record=True):
+    def geom_run(self, det_dist_mm, calibrant='LaB6', run_length=60, att_t=None,
+                 record=True):
         """
-        Silver behenate geometry run on the JF16M (DCCM in, TFS focused).
+        Geometry run on the JF16M (DCCM in, TFS focused), calibrant at the IP.
 
-        Detector at its final distance for the shift, AgBe at the IP. Sets
-        the attenuator if att_t is given, prints the expected rings, then one
-        geomrun (tag geom, run type GEOM). Analysis: BayFAI / pyFAI with
-        calibrant 'AgBh' and the DCCM energy. Distance, beam center and tilt
-        go into the poni file in the results folder.
+        Detector at its final distance for the night. Sets the attenuator if
+        att_t is given, prints the expected rings, then one geomrun (tag
+        geom). Analysis: BayFAI / pyFAI with the same calibrant and the DCCM
+        energy. Redo it if the detector moves (10-26: moved ~25 mm after
+        the calibration).
         """
-        agbe_rings(det_dist_mm)
+        geom_rings(det_dist_mm, calibrant)
         if att_t is not None:
-            _ns('att')(att_t)
+            # wait: geomrun opens the pulse picker at once
+            _ns('att')(att_t, wait=True)
         _ns('geomrun')(run_length=run_length, record=record, runs=1, picker='open')
-        _post(f"AgBe geometry run: JF16M at {det_dist_mm} mm (nominal), "
+        _post(f"{calibrant} geometry run: JF16M at {det_dist_mm} mm (nominal), "
               f"DCCM {TFS_E_EV:.1f} eV, TFS {TFS_LENSES} at {self.tfs_zmin:.1f} mm, "
               f"att {att_t}", tag='geom')
-
-    # ---- pink beam -----------------------------------------------------------
-
-    def kx(self, step=2.5):
-        """
-        Pink sweep lo -> hi -> lo, shifted for the measured offset.
-
-        The shift applies only when the measured offset differs from -5.2 eV
-        by more than 3 eV, rounded to the 0.5 eV list spacing.
-        """
-        d = REQ_OFFSET_EV - self.offset_eV
-        shift = np.round(d * 2) / 2 if abs(d) > 3 else 0.0
-        # an upward shift is clipped at K_MAX_EV, the sweep gets shorter
-        return sweep(PINK_LO + shift, min(PINK_HI + shift, K_MAX_EV), step)
-
-    def pink_switch(self, att_t=1e-2):
-        """
-        Mono to pink: attenuate, DCCM out, XRT parked at CENTER_EV.
-
-        Removing the DCCM raises the flux on every downstream detector by
-        about two orders of magnitude, hence the attenuator first.
-        """
-        _ns('att')(att_t)
-        _ns('dccm').remove()
-        self.xrt_park(CENTER_EV)
-        print(f"Pink beam. Confirm on the DCCM screen and by the DG1/DG2 IPM jump. "
-              f"xrt_track = {self.xrt_track}.")
-
-    def pink_opts(self, xrt=None):
-        return dict(pink=True, k_move_mode='concurrent_settled', record=True,
-                    **self.xrt_opts(xrt))
-
-    def pink(self, name, n=None, r=None, dwell=None, xrt=None):
-        """
-        Pink-beam run P0a, P0b, P1, P2, P (production) or Pend.
-
-        Sweeps run concurrent_settled in visiting order; K is requested to
-        the sweep start first. P2 parks K at 7120 eV. For production give the
-        pass and reservoir numbers: x.pink('P', n=3, r=2). One call is one
-        DAQ run, so reservoir swaps fall between calls. xrt as in x.timing.
-        """
-        step, dw, sample = PINK[name]
-        dwell = dw if dwell is None else dwell
-        exafs = _ns('exafs')
-        if name == 'P':
-            if n is None or r is None:
-                raise ValueError("production needs n= and r=")
-            sample = sample.format(n=n, r=r)
-        opts = self.pink_opts(xrt)
-        if opts['track_feespec']:
-            sample = f"{sample}_xrt"
-        if step is None:
-            pos = [PINK_PARK]
-        else:
-            pos = self.kx(step)
-            request_k(exafs.acr_energy_k, pos[0], k_max=K_MAX_EV)
-        return exafs.k_xas_scan(k_positions=pos, k_order='given',
-                                dwell_time=dwell, sample=sample, **opts)
-
-    def pink_xrt(self, name, n=None, r=None, dwell=None):
-        """Pink-beam run with XRT tracking for this run only."""
-        return self.pink(name, n=n, r=r, dwell=dwell, xrt=True)
 
 
 # ---- procedures --------------------------------------------------------------
 
 _PROC = {
-    'xrt': """
-XRT (FEE) spectrometer, Si(111), one image must hold 7080-7155 eV real
- 1. DCCM in at 7117.5 eV: x.mono(7117.5). Attenuate for the FEE camera.
- 2. x.xrt_park(). CamViewer fee_spec, check the mono line is on the sensor.
- 3. x.xrt_tune(+-0.05) until the line sits at the image center column.
- 4. x.spec_calib(): notch.series 7080-7120 eV in 5 eV, K = DCCM at each
-    point (k_energy=True, K max 7124), 9 runs of 10 s. Answer y to both prompts at
-    the end: return DCCM/K, then analyze (S3DF, your username).
- 5. notch.output runs fee_calib.py on psana: eV/px, intercept, R^2 in the
-    elog. Later: x.spec_calib_output('user'). Then spec_window(px_a, e_a,
-    px_b, e_b) for the image range. Does not fit: log the covered range
-    in the elog. Tracking stays off tonight in both cases.
- 6. Optional cross-check of the camera arm: x.xrt_cam_scan()
- Notch commands (mfx3 namespace, DCCM in):
-    notch.set_energy(E)            DCCM to E eV, K stays
-    notch.series(lo, hi, step, run_length=30, record=True)
-                                   one run per DCCM energy, K fixed: covers
-                                   the ~20 eV SASE band only. Integer eV.
-    notch.series(..., k_energy=True)  K = DCCM at each point (x.spec_calib)
-    notch.output(user, exp=, run=, energy=, step=, num=)  fee_calib on psana
- Tracking is off for every scan tonight (x.xrt_track = False). If needed:
-    x.timing_xrt('T1') / x.pink_xrt(...)  one run with tracking
-    x.xrt_on() / x.xrt_off()              all scans from here on
-    x.xrt_goto(E), x.xrt_check(E)         one-off move / angle check
+    'deadband': """
+Dead band test with ACR, 19:00-21:00. Fe foil in, DCCM out, pink, XRT tracking on.
+ACR / undulator controls change USEG:UNDH:XX50:DeadbandHgEnc; MFX only asks and
+records. After EVERY change: x.deadband(um) (shift log line with time and value).
+ D0 x.db_baseline()            band as found (expect 0.125 um), list on, 1 eV up, 12 steps
+ D1 ask 0.75 um, x.deadband(0.75), x.db_scan()     1 eV, 40 up + 39 down, ~17 min
+ D2 ask 0.5 um,  x.deadband(0.5),  x.db_scan()
+ D3 chosen band (0.5, or 0.625 if 0.5 shows slow steps): x.db_scan(step=0.5)
+ D4 optional, only if the listener can run without the list, same band:
+    x.db_scan(n=20, label='nolist')
+ D5 x.db_table(): narrowest band that passes. It stays for the night; ACR
+    restores 0.125 um when the energy GUI closes at 06:00.
+ Pass rule per leg (printed after each run): real-step median <= 12.5 s, at most
+ one slow step (> 15 s) per 40, at most one leading null request, none after.
+ Ask during the block: the listener timing log for one step (the ~4 s unlabeled
+ block, the ~6.9 s before the girders move), archiving DeadbandHgEnc, and whether
+ the energy GUI can set the band and always restore 0.125 um on close.
 """,
-    'seer': """
-SEER, swap Ge(660) -> Ge(620) for tonight, comparable Bragg angle
- 1. Hutch access, beam off. x.seer_save('ge660'). Photos of the crystal mount.
- 2. Ge(660) out, Ge(620) in the same mount. Log both serials and radii.
- 3. Laser diode: reflection from the new crystal lands on the detector plate.
-    Ge(620) at 7117.5 eV sits 0.77 deg above the Ge(660) 9580 eV angle
-    (x.seer_table()), so expect a small crystal tilt and no stage move.
- 4. Power the epix100 (MPOD ch104, wait 5 s, ch105, ch206, ch2); in partition.
- 5. Beam: Kapton flag in (shutter 4), x.seer_check(). Find the elastic line.
- 6. Off the ROI: Parker MMS:08 / MMS:09 by hand, <= 0.5 mm steps, one
-    x.seer_check() per step. Crystal tilt only if the Kohzu motors are up.
- 7. x.spec_calib() puts the 7080-7120 eV scan on SEER too; read the span.
- 8. x.seer_save('ge620'). Do not move SEER during a pink pass.
- After the shift: reverse 1-2 with Ge(660), x.seer_restore('ge660'),
- elastic line check at 9.58 keV on the first 1019410 shift.
+    'fly': """
+DCCM fly test, 21:00-22:00, Fe foil, chosen dead band. DCCM IN (x.mono(7115) or
+dccm.insert()), DCCM energy from hutch python only. x.offset_eV measured first.
+ F0 x.fly_ref()                 DCCM at the K center, 5 eV K steps, 15 s
+ F1 x.fly('track')              5 points, old -> new center (-4..0 eV), 3 s each
+ F2 x.fly('center')             5 points around the new center (-2..+2 eV)
+ F3 x.fly('track', reverse=True)  same going down (+4..0 eV)
+ F4 x.fly_ref(points=True)      same 5 points, K settled (pause mode), 3 s each
+ A step takes max(5 x (3 s + ~1.4 s), K move) ~ 22 s: points 1-3 in the move.
+ Look at: runNNNN_points.csv (in move vs settled per point), flux per point
+ against the offset from the SASE centroid, foil spectrum in move vs reference,
+ DCCM readback within each dwell, per-shot I0 after the DCCM.
+""",
+    'mesh': """
+MESH myoglobin, pink, from 22:00. The SED MESH lead runs the MESH.
+ 1. x.pink_switch(); Fe foil out; x.mesh_status() (0 V reads 0 V, door state).
+ 2. Mother liquor (no crystals) loaded; SED MESH lead sets the HV: x.mesh_set(kv)
+    (ramps, refuses above 5 kV, stops if the readback drifts). Jet on the beam.
+ 3. Attenuation chosen and kept for the night (quick_att_scan if needed).
+ 4. x.mb_blank('start')
+ 5. Reservoir 1: x.mb_park(r=1) (900 s), then the go/no-go table in the plan.
+ 6. x.mb_pass(n, r) per pass, one DAQ run each; reservoir changes, clog clears
+    and HV changes between calls only. Rerun an aborted pass with the same n.
+ 7. x.mb_blank('end'), x.mesh_off(), capillary flush (SED MESH lead).
+ If the HV trips or arcs: x.mesh_off(), close the beam, call the SED MESH lead.
+""",
+    'xrt': """
+XRT (FEE) spectrometer, Si(111), tracking ON tonight (report rec 12)
+ 1. Filter wheel STEP:XRT1:446:MOTR.RBV as expected. DCCM in: x.mono(7117.5).
+ 2. x.xrt_park(); CamViewer fee_spec, mono line on the sensor.
+ 3. x.xrt_tune(+-0.05) until the line sits at the image center column.
+ 4. Optional: x.spec_calib(), then x.spec_calib_output('user'), spec_window(...).
+ x.xrt_on() / x.xrt_off() switch tracking for every scan; x.xrt_check() after a
+ manual move. Do not calibrate the XRT on the DCCM and then trust it in SASE
+ without a check: the DCCM shifts the pointing slightly.
 """,
     'tfs': """
-TFS 04,05,06 z scan, no prefocus, DCCM in at 7115 eV
- Combination: prefocus (MFX:DIA:XFLS) OUT, TFS lenses 04 + 05 + 06 in
- (MFX:LENS:TFS:04-06), nothing else. Effective radius 58.8 um, legal
- without prefocus. Stage MFX:TFS:MMS:21 ~177 mm at 7115 eV.
- 1. Beam closed or att 1e-4. x.tfs_combo(): combination and lens radii.
- 2. x.tfs_prep(): prefocus out, stage 100, combo check.
- 3. x.tfs_insert(): lenses in, stage 177 mm. DG2 centroid, IPM ratio ~0.2.
- 4. Second mfx3: x.tfs_minder() and leave it running.
- 5. IP YAG in, att 1e-3. Cross1/Cross2 around the spot with margin.
- 6. x.tfs_zscan(): 137-217 mm, 4 mm, 3 s per point (~3 min). Watch:
-    fwhm columns fall then rise; peak column below camera saturation;
-    'rejected' points mean beam off (lens_minder closes the picker).
- 7. x.tfs_fine(zmin): zmin +- 12 mm, 1.5 mm, 4 s per point (~2 min).
- 8. x.tfs_park(zmin). More than 15 mm from 177: x.offset_check() first.
- 9. After DCCM out: x.tfs_pink_check(), three points.
+TFS 04,05,06 z scan, no prefocus, DCCM in at 7115 eV (10-26 stack; confirm)
+ 1. Beam closed or att 1e-4. x.tfs_combo(); x.tfs_prep(); x.tfs_insert().
+ 2. Second mfx3: x.tfs_minder() and leave it running.
+ 3. IP YAG in, att 1e-3. Cross1/Cross2 around the spot.
+ 4. x.tfs_zscan(), x.tfs_fine(zmin), x.tfs_park(zmin).
+ 5. After DCCM out: x.tfs_pink_check().
 """,
-    'agbe': """
-Silver behenate geometry, JF16M at the shift distance
- 1. TFS parked, DCCM in at 7115 eV, AgBe at the IP plane, YAG out.
- 2. x.agbe_rings(D): >= 4 rings between the beamstop and the edge.
- 3. Start at att 1e-3 and raise until rings 4-8 are clear, below saturation.
- 4. x.agbe_run(D, run_length=60, att_t=T).
- 5. Geometry fit: BayFAI / pyFAI, calibrant AgBh, energy 7115 eV. poni to the
-    results folder. Refine later on indexed Mb hits (cctbx.geom_refine).
- 6. AgBe out before the HVE goes in.
-""",
-    'pink': """
-Pink beam
- 1. x.pink_switch() (att 1e-2, DCCM out, XRT parked).
- 2. x.tfs_pink_check().
- 3. x.pink('P0a'), x.pink('P0b'), HVE carrier: x.pink('P1').
- 4. Mb: x.pink('P2'), data check, then x.pink('P', n=3, r=1) ...
- 5. x.pink('Pend') on carrier.
+    'geom': """
+JF16M geometry, LaB6 (the 10-26 calibrant; the elog said silver behenate)
+ 1. TFS parked, DCCM in at 7115 eV, calibrant at the IP plane, YAG out.
+ 2. x.geom_rings(D): >= 4 rings between the beamstop and the edge.
+ 3. x.geom_run(D, att_t=T). Redo it if the detector moves later in the night.
 """,
 }
 
@@ -1071,60 +1533,55 @@ Pink beam
 # ---- checklists --------------------------------------------------------------
 
 _CHECK_PRE = """
-PRE-EXPERIMENT (done by 17:30 unless marked)
- code and controls
- [ ] branch 1020945-undulator-1026 pushed and checked out on the operator machine
- [ ] active experiment is mfx102095027; `x` exists in mfx3; x.status() runs
- [ ] results folder writable, kinit done (BayFAI failed on 10-23 on permissions)
- [ ] x.dry_run() passes; epicsArch include fixed (~683 aliases)
- [ ] python scripts/undulator_pv_check.py, NC lines to the elog
- [ ] DCCM state PVs (STATE:SET / State:SET) answer cainfo
- [ ] ACR: 7064-7144 eV, 0.5 eV list loaded in preset mode; tracking GUI will not pin K
- SEER (hutch access, before beam)
- [ ] crystal-stack motors connected? (HERA IMS ch 2, 3, 4; not connected 10-24 to 10-26)
- [ ] confirm which PVs drive them; MFX:HRA:MMS:02-04 are named xlj_fast_rx/rz/ry in beamline.py
- [ ] MMS:08 axis: Z or X (notes disagree); jog and check
- [ ] x.seer_save('ge660') plus photos of the mount, epix100 ROI and rotation noted
- [ ] Ge(660) out, Ge(620) in; radius of both crystals checked; swap logged in crystal tracking
- [ ] laser diode reflection lands on the detector; epix100 powered (ch104, 5 s, ch105, ch206, ch2)
- [ ] epix100 (SEER) in the DAQ partition
- XRT
- [ ] feespec/hproj saved in smalldata over the full 2048 px
- TFS and IP
- [ ] IP camera PV confirmed (x.tfs_zscan uses MFX:GIGE:LBL:01); Cross1/Cross2 set
- [ ] lens 4, 5, 6 x/y noted; TFS USB hub and encoder cables OK
- geometry
- [ ] AgBe sample mounted at the IP plane; JF16M distance for the shift decided
- [ ] x.agbe_rings(D) shows >= 4 orders on the sensor
- [ ] BayFAI/pyFAI config uses calibrant AgBh (the 1019410 setup used LaB6)
- sample, XES, analysis
- [ ] >= 3 Mb reservoirs + 1 carrier-only reservoir, carrier and salt recorded
- [ ] von Hamos untouched (3 Kb, 2+1 Ka); epix100 ROIs defined
- [ ] smalldata carries XRT and SEER projections, epix100 ROIs, IPMs, JF16M hits, BLD, SET2/AO805
- [ ] transmitted channel chosen (DG3 IPM assumed)
+PRE-EXPERIMENT, short form (the plan PDF has the full list)
+ code and controls (by 17:00)
+ [ ] branch 1020945-undulator-1116 pulled and checked out on the operator machine;
+     mfx3 restarted (or modules reloaded) so `x` is the 11-16 file; x.status() runs
+ [ ] active experiment mfx102095027; results folder writable; kinit done
+ [ ] x.dry_run() passes on the default list (grids clip until 18:00)
+ [ ] python scripts/undulator_pv_check.py; epicsArch undulator include (~683 aliases)
+ [ ] DCCM state PVs answer cainfo (SP1L0:DCCM:MMS:STATE:SET, :State:SET,
+     :STATE:GET_RBV used by x.fly); DCCM energy from hutch python only
+ [ ] mfx102095027 on the S3DF on-shift queue (pedestals waited ~30 min on 10-27)
+ [ ] XRT tracking ON (x.xrt_track True, report rec 12); XRT filter wheel
+     STEP:XRT1:446:MOTR.RBV read
+ ACR (before 18:00)
+ [ ] list sent and confirmed in writing: 7040-7160 eV in 0.5 eV (241 points),
+     highest K 7160 eV asked
+ [ ] dead band test 19:00-21:00 agreed with the ACR machine physicist and undulator
+     controls; DeadbandHgEnc archiving asked; the GUI restores 0.125 um on close
+ [ ] 10-26 girder start times (19:30, 19:31 steps) read from the archiver
+ [ ] x.db_read() at 18:00 before D0 (expect 0.125 um), again at 06:00
+ MESH (hutch access 17:00-18:00, SED MESH lead)
+ [ ] MESH horizontal at the XLJ IP; grounding; no metal inside the counter-electrode ring
+ [ ] BNC jumpers at the wall panel; x.mesh_status(): 0 V written reads 0 V
+ [ ] door watcher running; a door-open test zeroes the setpoint
+ [ ] helium on flight tubes and cones only (the MESH chamber stays in air)
+ [ ] shadowing checked on the JF16M, von Hamos and SEER lines of sight
+ [ ] Mb microcrystals: volume, ammonium sulfate concentration, crystal size and form
+     recorded; mother liquor (no crystals) for the blanks
+ foil, XES, analysis
+ [ ] Fe foil on the diagnostic stick at the YAG crosshair height; out-of-beam position known
+ [ ] von Hamos untouched; epix100 ROIs defined; SEER crystal noted
+ [ ] smalldata carries XRT and SEER projections, epix100 ROIs, IPMs, JF16M hits, BLD,
+     SET2/AO805
+ [ ] JF16M distance for the night fixed; geometry run in the DCCM-in hour if it changed
 """
 
 _CHECK_POST = """
 POST-EXPERIMENT
  at 06:00
- [ ] Ctrl+C lens_minder; tfs.remove_all() unless the next shift keeps the stack
- [ ] DCCM state and XRT energy for the next shift (9.58 keV for the 1019410 shifts)
- [ ] AgBe sample out; Kapton flag state as the next shift needs
+ [ ] x.mesh_off() confirmed; MESH cleaned by the SED MESH lead
+ [ ] ACR closes the energy GUI; x.db_read() shows 0.125 um on every segment
+     (if not: ACR / undulator controls restore it before anyone leaves); x.deadband(0.125)
+ [ ] Fe foil out of the beam path
+ [ ] Ctrl+C lens_minder; TFS and DCCM state as the next shift needs
  [ ] camonitor log copied next to the timing CSVs; per-run elog lines complete
- [ ] branch for the next shift checked out; active experiment switched back
- SEER swap back (hutch access, before the next 1019410 shift)
- [ ] x.seer_save('ge620') before touching the crystal
- [ ] Ge(620) out, Ge(660) back in the same mount; swap logged in crystal tracking
- [ ] x.seer_restore('ge660'); laser diode check
- [ ] first beam at 9.58 keV: elastic line at the pixel recorded for Ge(660)
+ [ ] active experiment and branch for the next shift
  within a day
- [ ] timing tables for T1-T4 and every pink pass posted; 1 eV k_move vs 18.3 s
- [ ] SASE-in-transit curves, up/down split, hysteresis, recovery vs AO805
- [ ] XRT and SEER eV/px from x.spec_calib() posted with the run number
- [ ] AgBe poni in the results folder; geometry used for Mb indexing
- [ ] waist position (mono and pink) posted
- [ ] stochastic data set and run list to the analysis lead
- [ ] transmission go / partial / no-go to the December planning thread
- [ ] timing results to the machine side
- [ ] plan and results into the notes and the project board once final
+ [ ] dead band tables (x.db_table()) and the chosen band to the machine side
+ [ ] fly runs: points CSVs, in move vs settled, against the F0/F4 references
+ [ ] Mb run list (passes, reservoirs, HV) to the analysis lead
+ [ ] MESH notes for the 11-19 MESH user experiment
+ [ ] plan and results into the notes once final
 """
