@@ -314,16 +314,19 @@ def _in_windows(lenses, delta):
     before = {lens: (caget(_in_record(lens) + ":IN_SET"), caget(_in_record(lens) + ":IN_DELTA")) for lens in lenses}
     for lens, (_, old) in before.items():
         caput(_in_record(lens) + ":IN_DELTA", max(old, delta), wait=True)
-    names = ", ".join(lens.attr_name for lens in lenses)
-    print(f"IN_DELTA {next(iter(before.values()))[1]:.1f} -> {delta:.1f}: {names}")
+    print(f"IN_DELTA {delta:g} while aligning; was {_deltas(before)}")
     return before
 
 
 def _restore_windows(before):
     for lens, (_, delta) in before.items():
         caput(_in_record(lens) + ":IN_DELTA", delta, wait=True)
-    names = ", ".join(lens.attr_name for lens in before)
-    print(f"IN_DELTA {ALIGN_DELTA:.1f} -> {next(iter(before.values()))[1]:.1f}: {names}")
+    print(f"IN_DELTA back: {_deltas(before)}")
+
+
+def _deltas(before):
+    """Each lens's IN_DELTA as saved, for the printout: "tfs_03 0.2, tfs_05 0.5"."""
+    return ", ".join(f"{lens.attr_name} {delta:g}" for lens, (_, delta) in before.items())
 
 
 def _finish(aligned, before, write_in_set):
