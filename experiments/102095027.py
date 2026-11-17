@@ -475,6 +475,7 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
               F3 x.fly('track', reverse=True)  F4 x.fly_ref(points=True)
 22:00 MESH    x.pink_switch()  x.mesh_set(kv)  x.mb_blank('start')  x.mb_park(r=1)
 23:15         x.mb_pass(n, r) ... one DAQ run per pass, reservoir changes between
+              x.mb_edge(n, r): real edge +- 30 eV in 5 eV (edge = x.edge_k + x.offset_eV)
 05:15         x.mb_blank('end')  x.mesh_off()  [DCCM-in foil: x.fe_foil_scan(dccm_offset=x.offset_eV)]
 06:00         x.db_read()  (0.125 um after the GUI closes)  x.checklist_post()
 any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
@@ -1240,6 +1241,40 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         pos = mb_positions(self.edge_k, step)
         return self._pink_run(pos, dwell, f"{PREFIX}_mb_mesh_P{n}_r{r}",
                               f"Mb pass P{n} (reservoir {r})", record)
+
+    def mb_edge(self, n, r, edge_eV=None, half=30.0, step=5.0, dwell=MB_DWELL_S,
+                updown=True, record=True):
+        """
+        Pass n on reservoir r over the real edge +- half eV in step eV, pink.
+
+        edge_eV is a real photon energy, default x.edge_k + x.offset_eV
+        (the foil edge as set tonight). Each K point is real - x.offset_eV,
+        rounded to the list step; points off the loaded list or above the
+        cap are dropped with a warning. updown=True sweeps up and back in
+        one DAQ run (no long return move), False goes up only. Defaults:
+        13 points, 25 visits at 30 s, ~13 min.
+        """
+        edge = self.edge_k + self.offset_eV if edge_eV is None else float(edge_eV)
+        lo, hi, l_step = list_bounds()
+        offs = np.arange(-half, half + step / 2, step)
+        k_all = [float(np.round((edge + o - self.offset_eV) / l_step) * l_step)
+                 for o in offs]
+        k_pts = [k for k in k_all if lo - 1e-6 <= k <= hi + 1e-6]
+        if len(k_pts) < len(k_all):
+            logger.warning(f"edge pass clipped to {len(k_pts)} of {len(k_all)} points "
+                           f"by the list or cap ({lo:.1f}-{hi:.1f} eV K)")
+        if len(k_pts) < 2:
+            raise ValueError(f"edge {edge:.1f} eV +- {half:g} eV does not fit the loaded "
+                             f"list {lo:.1f}-{hi:.1f} eV K with offset {self.offset_eV:+.1f}")
+        check_on_list(k_pts)
+        pos = k_pts + k_pts[-2::-1] if updown else k_pts
+        print(f"edge pass: real {k_pts[0] + self.offset_eV:.1f}-"
+              f"{k_pts[-1] + self.offset_eV:.1f} eV around {edge:.1f} eV, K "
+              f"{k_pts[0]:.1f}-{k_pts[-1]:.1f} eV in {step:g} eV, {len(pos)} visits")
+        return self._pink_run(
+            pos, dwell, f"{PREFIX}_mb_mesh_edge_P{n}_r{r}",
+            f"Mb edge pass P{n} (reservoir {r}), real edge {edge:.1f} eV +- {half:g} eV",
+            record)
 
     def _close_beam(self, timeout=10.0):
         """Close the pulse picker and set att(0); True once either is confirmed."""
