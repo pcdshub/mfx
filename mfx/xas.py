@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
-    dccm = DCCM(name='DCCM')
+    dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
 
 
 # ==================== Core XAS Functions ====================

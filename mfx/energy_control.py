@@ -97,7 +97,7 @@ class EnergyGet:
         Creates DCCM device instance for monochromator energy readback.
         """
         from mfx.dccm import DCCM
-        self.dccm = DCCM(name='DCCM')
+        self.dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
 
     def all(self):
         """
@@ -418,7 +418,7 @@ class EnergyPut:
         from mfx.dccm import DCCM
         from mfx.xrt_spec import XRTspec
         self.xrtspec = XRTspec()
-        self.dccm = DCCM(name='DCCM')
+        self.dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
 
     def all(self, energy, crystal_angle_offset=0.0):
         """

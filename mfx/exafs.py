@@ -114,7 +114,7 @@ class Exafs:
             from hutch_python import sim
             from mfx.xrt_spec import XRTspec
             self.xrtspec = XRTspec()
-            self.dccm = DCCM(name='DCCM')
+            self.dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
             self.sim = sim.get_hw()
 
     # ==================== Core Motion Methods ====================

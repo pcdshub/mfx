@@ -151,7 +151,7 @@ with safe_load('Wolter_mirror_motion'):
 
 with safe_load('DCCM'):
     from mfx.dccm import DCCM
-    dccm = DCCM(name='DCCM')
+    dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
 
 with safe_load('Notch_Scan'):
     from mfx.notch_scan import *
@@ -316,7 +316,7 @@ def mfx_reload(module_name):
 
     if module_name == 'mfx.dccm':
         from mfx.dccm import DCCM
-        dccm = DCCM(name='DCCM')
+        dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
 
     if module_name == 'mfx.yano':
         from mfx.yano import Yano

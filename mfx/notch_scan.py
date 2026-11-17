@@ -96,7 +96,7 @@ class NotchScan:
         """
         from mfx.dccm import DCCM
 
-        self.dccm = DCCM(name='dccm')
+        self.dccm = DCCM('SP1L0:DCCM', name='dccm', hutch='MFX')
         self.th1 = self.dccm.th1
         self.th2 = self.dccm.th2
 
