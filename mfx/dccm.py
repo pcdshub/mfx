@@ -24,7 +24,27 @@ from pcdsdevices.interface import (
 )
 from pcdsdevices.pmps import TwinCATStatePMPS
 from pcdsdevices.signal import PytmcSignal
-from pcdsdevices.utils import measure_time
+try:
+    from pcdsdevices.utils import measure_time
+except ImportError:
+    # pcdsdevices 8.6.0 (pcds-5.9.1, the MFX env) has no measure_time; same
+    # behaviour: log the call's duration at DEBUG
+    import functools
+    import logging
+    import time as _time
+
+    def measure_time(func):
+        log = logging.getLogger(func.__module__)
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start = _time.perf_counter()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                log.debug("%s took %.3f s", func.__qualname__,
+                          _time.perf_counter() - start)
+        return wrapper
 
 MovedCallback = Optional[Callable[..., None]]
 
@@ -643,7 +663,8 @@ class DCCMEnergy(DCCMCrystal):
             moved_cb=moved_cb,
         )
 
-    @staticmethod
+    # plain function, not @staticmethod: it is called in the class body
+    # below, and a staticmethod object is only callable from Python 3.10
     def _proxy_method(method_name, *fixed_args):
         """Proxy a signal method with predefined positional arguments."""
 
