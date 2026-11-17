@@ -8,7 +8,7 @@ automated pump-probe experiments with optional energy spread measurements.
 
 import os
 import logging
-from time import time, sleep
+from time import time
 from typing import Optional
 
 class XRTspec:
@@ -651,25 +651,15 @@ class XRTspec:
             'xrt_status': []
         }
 
-        # Get initial camera status
-        try:
+        # read only: starting or stopping the Zyla from here takes the IOC down
+        if record:
             cam_status = os.popen(
                 "caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'"
             ).read().strip()
-            camera_was_running = (cam_status == 'Acquire')
-        except Exception as e:
-            if record:
-                raise RuntimeError(f"Failed to query camera status: {e}")
-            camera_was_running = False
-
-        # Start camera if not running and we want to record
-        if record and cam_status != 'Acquire':
-            self.logger.info("Starting camera...")
-            try:
-                os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
-                sleep(2)  # Wait for camera to start
-            except Exception as e:
-                raise RuntimeError(f"Failed to start camera: {e}")
+            if cam_status != 'Acquire':
+                raise RuntimeError(
+                    f"XRT Zyla reads {cam_status or '?'}, not Acquire: start it from "
+                    f"its camera screen, then rerun")
 
         # Store initial camera angle
         original_cam_angle = self.hxrsss.tth.position
