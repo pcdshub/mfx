@@ -8,7 +8,7 @@ automated pump-probe experiments with optional energy spread measurements.
 
 import os
 import logging
-from time import time
+from time import time, sleep
 from typing import Optional
 
 class XRTspec:
@@ -355,21 +355,34 @@ class XRTspec:
 
         Notes
         -----
-        Only moves crystal if angle differs from target by >0.01°.
-        Uses user move (umv) which blocks until complete.
-        Performs XRT transmission safety check.
-        Leaves the camera acquiring.
+        Waits (up to 10 s) for th, tth and camy to stop, then moves the
+        crystal only if it is more than 0.01° (~1.5 eV at 7.1 keV) from
+        the target. Uses user move (umv) which blocks until complete; a
+        failed move is logged, not raised. Performs XRT transmission
+        safety check. Leaves the camera acquiring.
         """
+        # a non-blocking move sent before the K request can still be
+        # running; a second move on top of it ends the first as a failure
+        t_end = time() + 10.0
+        for motor in (self.hxrsss.th, self.hxrsss.tth, self.hxrsss.camy):
+            while getattr(motor, 'moving', False) and time() < t_end:
+                sleep(0.05)
+
         ref_crystal_angle = self.hxrsss.th.position
 
         # Calculate target positions
         positions = self.get_feespec_positions(
             energy_keV, crystal_angle_offset=crystal_angle_offset)
 
-        if round(positions['crystal_angle'], 2) == round(ref_crystal_angle, 2):
+        if abs(positions['crystal_angle'] - ref_crystal_angle) <= 0.01:
             return
 
-        self.hxrsss.th.umv(positions['crystal_angle'])
+        try:
+            self.hxrsss.th.umv(positions['crystal_angle'])
+        except Exception as e:
+            self.logger.error(
+                f"XRT crystal move to {positions['crystal_angle']:.3f} failed "
+                f"(th at {self.hxrsss.th.position:.3f}): {e}")
 
         # Safety check
         xrt_status = os.popen("caget XRT:HXS:TRNS.SEVR | awk '{print $2}'").read().strip()

@@ -2095,8 +2095,8 @@ class Exafs:
                             cam_keV = dccm_energy_keV
                             if pink:
                                 cam_keV = (dccm_energy_eV + feespec_offset_eV) / 1000.0
-                            self.xrtspec.track_feespec_camera(
-                                cam_keV, crystal_angle_offset)
+                            self._xrt('camera arm', self.xrtspec.track_feespec_camera,
+                                      cam_keV, crystal_angle_offset)
 
                         if self._step_timer and i_off == 0:
                             self._step_timer.end_step()
@@ -2210,7 +2210,8 @@ class Exafs:
                 xrt_start = energy_start
                 if pink:
                     xrt_start = energy_start + feespec_offset_eV / 1000.0
-                _restore("XRT return", self.xrtspec.move_feespec_energy,
+                _restore("XRT return", self._xrt, 'return',
+                         self.xrtspec.move_feespec_energy,
                          xrt_start, crystal_angle_offset=crystal_angle_offset)
 
         # === Print summary ===
@@ -2233,6 +2234,17 @@ class Exafs:
         if scan_err is not None:
             raise scan_err
         return summary
+
+    def _xrt(self, what, fn, *args, **kwargs):
+        """
+        Call an FEE spectrometer helper inside a K scan. The XRT is a
+        diagnostic: a failed move or check is logged and the scan goes on.
+        """
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            self.logger.error(f"XRT {what} failed, scan continues: {e}")
+            return None
 
     def _tset(self, key, t0):
         timer = getattr(self, '_step_timer', None)
@@ -2418,8 +2430,8 @@ class Exafs:
         # Move FEE spec before K
         if track_feespec:
             t0 = time()
-            self.xrtspec.move_feespec_energy(
-                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._xrt('move', self.xrtspec.move_feespec_energy,
+                      k_target_keV, crystal_angle_offset=crystal_angle_offset)
             self._tset('feespec_s', t0)
 
         # Move K (blocking)
@@ -2429,8 +2441,8 @@ class Exafs:
         # Verify FEE spec
         if track_feespec:
             t0 = time()
-            self.xrtspec.check_feespec_crystal_angle(
-                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._xrt('crystal check', self.xrtspec.check_feespec_crystal_angle,
+                      k_target_keV, crystal_angle_offset=crystal_angle_offset)
             self._tset('feespec_check_s', t0)
 
         # Resume DAQ
@@ -2478,8 +2490,8 @@ class Exafs:
         # does the angle and transmission check
         if track_feespec:
             t0 = time()
-            self.xrtspec.move_feespec_energy_nonblocking(
-                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._xrt('move', self.xrtspec.move_feespec_energy_nonblocking,
+                      k_target_keV, crystal_angle_offset=crystal_angle_offset)
             self._tset('feespec_s', t0)
 
         # Request K move without waiting for completion
@@ -2529,8 +2541,8 @@ class Exafs:
             timer.set_last('k_request_s', spent)
         if track_feespec:
             t0 = time()
-            self.xrtspec.check_feespec_crystal_angle(
-                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._xrt('crystal check', self.xrtspec.check_feespec_crystal_angle,
+                      k_target_keV, crystal_angle_offset=crystal_angle_offset)
             if timer:
                 timer.set_last('feespec_check_s', time() - t0)
         return watch.t_done
@@ -2575,11 +2587,11 @@ class Exafs:
         if track_feespec:
             t0 = time()
             if track_feespec_blocking:
-                self.xrtspec.move_feespec_energy(
-                    k_target_keV, crystal_angle_offset=crystal_angle_offset)
+                self._xrt('move', self.xrtspec.move_feespec_energy,
+                          k_target_keV, crystal_angle_offset=crystal_angle_offset)
             else:
-                self.xrtspec.move_feespec_energy_nonblocking(
-                    k_target_keV, crystal_angle_offset=crystal_angle_offset)
+                self._xrt('move', self.xrtspec.move_feespec_energy_nonblocking,
+                          k_target_keV, crystal_angle_offset=crystal_angle_offset)
             self._tset('feespec_s', t0)
 
         # Move K, blocking (wait for undulator to settle)
@@ -2589,8 +2601,8 @@ class Exafs:
         # Verify FEE spec crystal angle after K settles
         if track_feespec:
             t0 = time()
-            self.xrtspec.check_feespec_crystal_angle(
-                k_target_keV, crystal_angle_offset=crystal_angle_offset)
+            self._xrt('crystal check', self.xrtspec.check_feespec_crystal_angle,
+                      k_target_keV, crystal_angle_offset=crystal_angle_offset)
             self._tset('feespec_check_s', t0)
 
 
