@@ -61,9 +61,10 @@ XRT_NPX = 2048
 K_MODE = 'concurrent_settled'
 
 # ---- dead band test (19:00-21:00, with ACR) ----------------------------------
-# 1 eV scans start this far below x.edge_k; 40 positions end at edge + 24
+# 1 eV scans start this far below x.edge_k; 10 positions end at edge - 6, up
+# and back = 19 visits, ~4 min at 12 s per step, ~6.5 min at 20 s
 DB_START_BELOW_EV = 15.0
-DB_N = 40
+DB_N = 10
 # concurrent_settled: a step takes max(dwell, K move); k_move is the measurement
 DB_DWELL_S = 12.0
 # pass rule, per scan leg: real-step median at most this, slow steps at most
@@ -469,7 +470,7 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
               DCCM out: x.fe_foil_scan()  x.fe_foil_scan(reverse=True)  x.set_edge(k)
 19:00 ACR     x.deadband(um) after every change ACR makes, then
               D0 x.db_baseline()    D1/D2 x.db_scan()    D3 x.db_scan(step=0.5)
-              D4 x.db_scan(n=20, label='nolist')    D5 x.db_table()
+              D4 x.db_scan(label='nolist')    D5 x.db_table()
 21:00 fly     DCCM in: F0 x.fly_ref()  F1 x.fly('track')  F2 x.fly('center')
               F3 x.fly('track', reverse=True)  F4 x.fly_ref(points=True)
 22:00 MESH    x.pink_switch()  x.mesh_set(kv)  x.mb_blank('start')  x.mb_park(r=1)
@@ -1444,11 +1445,11 @@ Dead band test with ACR, 19:00-21:00. Fe foil in, DCCM out, pink, XRT tracking o
 ACR / undulator controls change USEG:UNDH:XX50:DeadbandHgEnc; MFX only asks and
 records. After EVERY change: x.deadband(um) (shift log line with time and value).
  D0 x.db_baseline()            band as found (expect 0.125 um), list on, 1 eV up, 12 steps
- D1 ask 0.75 um, x.deadband(0.75), x.db_scan()     1 eV, 40 up + 39 down, ~17 min
+ D1 ask 0.75 um, x.deadband(0.75), x.db_scan()     1 eV, 10 up + 9 down, ~4-6 min
  D2 ask 0.5 um,  x.deadband(0.5),  x.db_scan()
  D3 chosen band (0.5, or 0.625 if 0.5 shows slow steps): x.db_scan(step=0.5)
  D4 optional, only if the listener can run without the list, same band:
-    x.db_scan(n=20, label='nolist')
+    x.db_scan(label='nolist')
  D5 x.db_table(): narrowest band that passes. It stays for the night; ACR
     restores 0.125 um when the energy GUI closes at 06:00.
  Pass rule per leg (printed after each run): real-step median <= 12.5 s, at most
