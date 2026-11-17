@@ -118,7 +118,7 @@ class Exafs:
             from hutch_python import sim
             from mfx.xrt_spec import XRTspec
             self.xrtspec = XRTspec()
-            self.dccm = DCCM(name='DCCM')
+            self.dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
             self.sim = sim.get_hw()
 
     # ==================== Core Motion Methods ====================
@@ -1573,7 +1573,7 @@ class Exafs:
             energy_start = (energies_list[0] / 1000.0) if energies_list else start_eV / 1000.0
             k_energy_start = (energies_list[0] if energies_list else start_eV) + k_stepsize / 2 + k_offset
         else:
-            energy_start = self.dccm.energy_with_vernier.energy()
+            energy_start = self.dccm.energy_with_vernier.position
             k_energy_start = self.acr_energy_k.get().setpoint
 
         # Build energy arrays
@@ -1982,7 +1982,7 @@ class Exafs:
             if pink:
                 energy_start = k_energy_start / 1000.0
             else:
-                energy_start = self.dccm.energy_with_vernier.energy()
+                energy_start = self.dccm.energy_with_vernier.position
 
         # === Summary collector ===
         summary = []

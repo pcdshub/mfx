@@ -1,648 +1,970 @@
-"""
-Double Crystal Channel-cut Monochromator (DCCM) control for MFX beamline.
+from __future__ import annotations
 
-Provides device classes for DCCM energy control, including PseudoPositioners
-for energy-based motion with vernier integration and ACR (Automatic Crystal
-Rotation) status monitoring.
-"""
+import math
+import threading
+from operator import index
+from time import monotonic
+from typing import Callable, Optional
 
-import enum
-import logging
-import time
-import typing
-from collections import namedtuple
-
-import numpy as np
-from epics import caput
-from lightpath import LightpathState
 from ophyd.device import Component as Cpt
+from ophyd.device import Device
 from ophyd.device import FormattedComponent as FCpt
-from ophyd.signal import EpicsSignal, EpicsSignalRO, Signal
-from ophyd.status import MoveStatus
+from ophyd.pv_positioner import PVPositioner
+from ophyd.signal import EpicsSignal, EpicsSignalRO, InternalSignal, Signal
+from ophyd.status import MoveStatus, SubscriptionStatus
 
-from pcdsdevices.analog_signals import FDQ
 from pcdsdevices.beam_stats import BeamEnergyRequest
 from pcdsdevices.device import GroupDevice
 from pcdsdevices.device import UpdateComponent as UpCpt
-from pcdsdevices.epics_motor import (IMS, BeckhoffAxis,
-                                      BeckhoffAxisNoOffset,
-                                      EpicsMotorInterface)
-from pcdsdevices.interface import BaseInterface, FltMvInterface
-from pcdsdevices.pseudopos import (PseudoPositioner, PseudoSingleInterface,
-                                    SyncAxis, SyncAxisOffsetMode)
-from pcdsdevices.pv_positioner import PVPositionerIsClose
-from pcdsdevices.signal import InternalSignal
-from pcdsdevices.utils import doc_format_decorator, get_status_float
+from pcdsdevices.epics_motor import BeckhoffAxis
+from pcdsdevices.interface import (
+    BaseInterface,
+    FltMvInterface,
+    LightpathInOutCptMixin,
+)
+from pcdsdevices.pmps import TwinCATStatePMPS
+from pcdsdevices.signal import PytmcSignal
+from pcdsdevices.utils import measure_time
 
-logger = logging.getLogger(__name__)
-
-# Constants
-si_111_dspacing = 3.1356011499587773  # Silicon (111) d-spacing in Angstroms
-
-# Defaults
-default_dspacing = si_111_dspacing
+MovedCallback = Optional[Callable[..., None]]
 
 
-class DCCMEnergy(FltMvInterface, PseudoPositioner):
+_HUTCH_NAMES = ("XCS", "CXI", "MEC", "MFX", "XPP")
+
+
+def resolve_hutch(prefix: str, hutch: Optional[str] = None) -> str:
+    """Resolve and validate a hutch name.
+
+    An explicit hutch takes precedence. Otherwise, inspect colon-delimited
+    tokens in the PV prefix.
+
+    Raises
+    ------
+    ValueError
+        If the explicit hutch is invalid, or the prefix does not identify
+        a known hutch.
     """
-    DCCM energy pseudo-motor.
+    if hutch is not None and str(hutch).strip():
+        name = str(hutch).strip().upper()
+        if name not in _HUTCH_NAMES:
+            raise ValueError(f"Unknown hutch {hutch!r}; choose one of {_HUTCH_NAMES}")
+        return name
 
-    Converts between X-ray energy (keV) and crystal Bragg angle,
-    enabling energy-based positioning of the DCCM monochromator.
+    prefix_tokens = {token.upper() for token in prefix.strip(":").split(":")}
 
-    Components
-    ----------
-    energy : PseudoSingle
-        Energy setpoint in keV (pseudo axis)
-    theta : Motor
-        Crystal Bragg angle in degrees (real axis)
+    for candidate in _HUTCH_NAMES:
+        if candidate in prefix_tokens:
+            return candidate
 
-    Attributes
-    ----------
-    d_spacing : float
-        Crystal d-spacing in Angstroms (default: Si 111 = 3.136 Å)
+    raise ValueError(f"Cannot determine ACR hutch from prefix {prefix!r}; pass hutch explicitly")
 
-    Methods
-    -------
-    forward(pseudo_pos)
-        Convert energy to Bragg angle
-    inverse(real_pos)
-        Convert Bragg angle to energy
 
-    Notes
-    -----
-    Bragg's Law:
-    E (keV) = 12.398 / (2 * d * sin(θ))
+class HutchSelectionSignal(Signal):
+    """Writable enum signal for a Typhos hutch dropdown.
 
-    Where:
-    - E is photon energy in keV
-    - d is crystal d-spacing in Angstroms
-    - θ is Bragg angle in degrees
+    The stored value is an integer enum index. Python callers may write
+    either a hutch name or its index.
 
-    Silicon (111) Crystal:
-    - d-spacing: 3.1356 Å
-    - Typical energy range: 4-25 keV
-    - High reflectivity
-    - Good energy resolution
-
-    Energy Range:
-    - Minimum: ~4 keV (θ ≈ 45°)
-    - Maximum: ~25 keV (θ ≈ 7°)
-    - Limited by crystal geometry
-
-    Examples
-    --------
-    Create energy motor:
-    >>> dccm_energy = DCCMEnergy('SP1L0:DCCM', name='dccm_energy')
-
-    Move to 9 keV:
-    >>> dccm_energy.move(9.0)
-
-    Read current energy:
-    >>> current_energy = dccm_energy.position
-    >>> print(f"Energy: {current_energy:.3f} keV")
-
-    See Also
-    --------
-    DCCM : Full DCCM assembly class
-    DCCMEnergyWithVernier : Energy control with vernier integration
+    This is an operator-selected destination, not a readback of physical
+    beam routing. Its value is local to this Python process.
     """
 
-    # Pseudo motor and real motor
-    energy = Cpt(
-        PseudoSingleInterface,
-        egu='keV',
-        kind='hinted',
-        limits=(4, 25),
-        verbose_name='DCCM Photon Energy',
-        doc=(
-            'PseudoSingle that moves the calculated DCCM '
-            'selected energy in keV.'
-        ),
+    enum_strs = _HUTCH_NAMES
+
+    def __init__(self, *args, value=0, **kwargs):
+        metadata = dict(kwargs.pop("metadata", None) or {})
+        metadata["enum_strs"] = self.enum_strs
+
+        super().__init__(
+            *args,
+            value=self._normalize(value),
+            metadata=metadata,
+            **kwargs,
+        )
+
+    @classmethod
+    def _normalize(cls, value) -> int:
+        if isinstance(value, str):
+            name = value.strip().upper()
+            try:
+                return cls.enum_strs.index(name)
+            except ValueError as exc:
+                raise ValueError(f"Unknown hutch {value!r}; choose one of {cls.enum_strs}") from exc
+
+        try:
+            value = index(value)
+        except TypeError as exc:
+            raise ValueError("Hutch must be a hutch name or an integer enum index") from exc
+
+        if not 0 <= value < len(cls.enum_strs):
+            raise ValueError(f"Invalid hutch index: {value}")
+
+        return value
+
+    def check_value(self, value):
+        self._normalize(value)
+
+    def put(self, value, **kwargs):
+        return super().put(self._normalize(value), **kwargs)
+
+    @property
+    def selected_name(self) -> str:
+        """Currently selected hutch name."""
+        return self.enum_strs[int(self.get())]
+
+    def describe(self):
+        description = super().describe()
+        description[self.name]["enum_strs"] = self.enum_strs
+        return description
+
+
+class DCCMACRRequests(Device):
+    """ACR request devices indexed by destination hutch.
+
+    Individual devices are lazy: selecting a hutch creates its request
+    device on first access.
+
+    Keeping separate devices avoids attempting to retarget the EPICS
+    signals of an already-created BeamEnergyRequest.
+    """
+
+    cxi = FCpt(BeamEnergyRequest, "CXI", lazy=True, kind="normal")
+    mec = FCpt(BeamEnergyRequest, "MEC", lazy=True, kind="normal")
+    mfx = FCpt(BeamEnergyRequest, "MFX", lazy=True, kind="normal")
+    xcs = FCpt(BeamEnergyRequest, "XCS", lazy=True, kind="normal")
+    xpp = FCpt(BeamEnergyRequest, "XPP", lazy=True, kind="normal")
+
+    def __init__(
+        self,
+        prefix="",
+        *,
+        pv_index=2,
+        acr_status_suffix="AO805",
+        **kwargs,
+    ):
+        self.pv_index = int(pv_index)
+        self.acr_status_suffix = acr_status_suffix
+        super().__init__(prefix, **kwargs)
+
+    def for_hutch(self, hutch: str):
+        """Return the request device for a validated hutch name."""
+        name = resolve_hutch("", hutch)
+        return getattr(self, name.lower())
+
+
+_ACR_STATUS_COMPONENT_KWARGS = {
+    "pv_index": "{self.pv_index}",
+    "acr_status_suffix": "{self.acr_status_suffix}",
+    "add_prefix": ("suffix", "pv_index", "acr_status_suffix"),
+}
+
+
+class DCCMACRRequestsWithStatus(DCCMACRRequests):
+    """Hutch-specific ACR request devices that monitor completion."""
+
+    cxi = UpCpt(**_ACR_STATUS_COMPONENT_KWARGS)
+    mec = UpCpt(**_ACR_STATUS_COMPONENT_KWARGS)
+    mfx = UpCpt(**_ACR_STATUS_COMPONENT_KWARGS)
+    xcs = UpCpt(**_ACR_STATUS_COMPONENT_KWARGS)
+    xpp = UpCpt(**_ACR_STATUS_COMPONENT_KWARGS)
+
+
+class DCCMCrystal(FltMvInterface, PVPositioner):
+    """Energy positioner interface for a single DCCM crystal.
+
+    Controls and monitors energy, state, coefficients, and tracking
+    metrics associated with an individual crystal.
+    """
+
+    DEFAULT_MOVE_TIMEOUT = 300.0
+    DONE_HIGH_VALUE = 1
+    DONE_LOW_VALUE = 0
+    RESET_VALUE = 1
+    ACTUATE_VALUE = 1
+    STOP_VALUE = 1
+
+    _extra_sig_md = {
+        "precision": 9,
+        "units": "keV",
+    }
+
+    high_limit_travel = Cpt(
+        InternalSignal,
+        metadata=_extra_sig_md,
+        kind="config",
     )
 
-    th1 = Cpt(BeckhoffAxis, ":MMS:TH1", doc="Bragg Upstream/TH1 Axis", kind="normal", name='th1')
-    th2 = Cpt(BeckhoffAxis, ":MMS:TH2", doc="Bragg Upstream/TH2 Axis", kind="normal", name='th2')
+    low_limit_travel = Cpt(
+        InternalSignal,
+        metadata=_extra_sig_md,
+        kind="config",
+    )
 
-    tab_component_names = True
+    setpoint = Cpt(
+        PytmcSignal,
+        ":CmdkeV",
+        io="io",
+        kind="normal",
+        doc="The target energy setpoint signal in keV.",
+    )
 
-    def forward(self, pseudo_pos: namedtuple) -> namedtuple:
+    readback = Cpt(
+        EpicsSignalRO,
+        ":EstEnergy_RBV",
+        kind="hinted",
+        doc="The current estimated energy readback signal in keV.",
+    )
+
+    user_readback = Cpt(
+        EpicsSignalRO,
+        ":EstEnergy_RBV",
+        kind="omitted",
+    )
+
+    actuate = Cpt(
+        PytmcSignal,
+        ":CmdMoveEnergy",
+        io="io",
+        kind="omitted",
+        doc="Command signal to initiate the energy move sequence.",
+    )
+
+    done = Cpt(
+        EpicsSignalRO,
+        ":Done_RBV",
+        kind="normal",
+        doc="PLC completion acknowledgement used by the move handshake.",
+    )
+
+    stop_signal = Cpt(
+        EpicsSignal,
+        ":CmdStop",
+        kind="omitted",
+        doc="Command signal to abort current energy adjustments.",
+    )
+
+    reset = Cpt(
+        PytmcSignal,
+        ":CmdReset",
+        io="io",
+        kind="omitted",
+        doc="Command signal to reset faults or clear movement cycles.",
+    )
+
+    angle_offset = Cpt(
+        PytmcSignal,
+        ":AngleOffset",
+        io="io",
+        kind="config",
+        doc="Angular offset adjustment value for tuning crystal geometry.",
+    )
+
+    ctrl_velo_bias_gain = Cpt(
+        PytmcSignal,
+        ":CtrlVeloBiasGain",
+        io="io",
+        kind="config",
+        doc="Velocity bias gain modifier for the underlying controller.",
+    )
+
+    lat_const_scaler = Cpt(
+        PytmcSignal,
+        ":LatConstScaler",
+        io="io",
+        kind="config",
+        doc="Lattice constant scaling modifier.",
+    )
+
+    crystal_type = Cpt(
+        PytmcSignal,
+        ":Type",
+        io="io",
+        kind="config",
+        doc="The identifier string or type index for the crystal material/cut.",
+    )
+
+    coeff = Cpt(
+        EpicsSignalRO,
+        ":Coeff_RBV",
+        kind="normal",
+        doc="Calculated tracking coefficient.",
+    )
+
+    est_pos_delta = Cpt(
+        EpicsSignalRO,
+        ":EstPosDelta_RBV",
+        kind="hinted",
+        doc="Difference between estimated position and goal.",
+    )
+
+    est_energy_delta = Cpt(
+        EpicsSignalRO,
+        ":EstEnergyDelta_RBV",
+        kind="hinted",
+        doc="Difference between estimated energy and goal.",
+    )
+
+    est_energy = Cpt(
+        EpicsSignalRO,
+        ":EstEnergy_RBV",
+        kind="omitted",
+        doc="Alias of the estimated energy readback.",
+    )
+
+    state = Cpt(
+        EpicsSignalRO,
+        ":State_RBV",
+        kind="normal",
+        doc="Current operational state enum from EPICS.",
+    )
+
+    error = Cpt(
+        EpicsSignalRO,
+        ":Error_RBV",
+        kind="normal",
+        doc="Boolean indicating an error status.",
+    )
+
+    warning = Cpt(
+        EpicsSignalRO,
+        ":Warning_RBV",
+        kind="normal",
+        doc="Boolean indicating a warning status.",
+    )
+
+    error_msg = Cpt(
+        EpicsSignalRO,
+        ":ErrorMsg_RBV",
+        string=True,
+        kind="normal",
+        doc="Diagnostic string explaining the current error state.",
+    )
+
+    warning_msg = Cpt(
+        EpicsSignalRO,
+        ":WarningMsg_RBV",
+        string=True,
+        kind="normal",
+        doc="Diagnostic string explaining the current warning state.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.DEFAULT_MOVE_TIMEOUT
+
+        super().__init__(*args, **kwargs)
+
+        self._move_lock = threading.RLock()
+        self._active_move_status = None
+        self._moving_from_this_device = False
+
+        if self.limits is not None:
+            low, high = self.limits
+            self.low_limit_travel.put(low, force=True, internal=True)
+            self.high_limit_travel.put(high, force=True, internal=True)
+
+    @property
+    def moving(self) -> bool:
+        """Whether this Python device currently has an active move.
+
+        Done_RBV uses zero for both idle and moving states, so this
+        property tracks only moves initiated through this instance.
         """
-        PseudoPositioner interface function for calculating the setpoint.
+        return self._moving_from_this_device
 
-        Converts the requested energy to theta 1 and theta 2 (Bragg angle).
-        """
-        pseudo_pos = self.PseudoPosition(*pseudo_pos)
-        energy = pseudo_pos.energy
-        theta = self.energyToSi111BraggAngle(energy)
-        return self.RealPosition(th1=theta, th2=theta)
+    def check_value(self, position):
+        """Validate a requested energy and enforce configured soft limits."""
+        try:
+            position = float(position)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Energy must be a finite number; received {position!r}") from exc
 
-    def inverse(self, real_pos: namedtuple) -> namedtuple:
-        """
-        PseudoPositioner interface function for calculating the readback.
+        if not math.isfinite(position):
+            raise ValueError(f"Energy must be finite; received {position!r}")
 
-        Converts the real position of the DCCM theta motor to the calculated energy.
-        """
-        real_pos = self.RealPosition(*real_pos)
-        theta = real_pos.th1
-        energy = self.thetaToSi111energy(theta)
-        return self.PseudoPosition(energy=energy)
+        return super().check_value(position)
 
-    def energyToSi111BraggAngle(self, energy: float) -> float:
-        """
-        Converts energy to Bragg angle theta
+    def check_error(self) -> None:
+        """Raise if the PLC currently reports an error."""
+        if bool(self.error.get()):
+            message = self.error_msg.get() or "DCCM PLC reports an error"
+            raise RuntimeError(str(message))
+
+    @staticmethod
+    def _stage_exception(stage_status, message: str) -> Exception:
+        """Get a failed stage's exception, with a fallback message."""
+        try:
+            exc = stage_status.exception(timeout=0)
+        except Exception as exc_from_status:
+            return exc_from_status
+
+        return exc or RuntimeError(message)
+
+    def _resolve_timeout(self, timeout: Optional[float]) -> float:
+        """Resolve and validate the total move timeout."""
+        if timeout is None:
+            timeout = self.timeout
+        if timeout is None:
+            timeout = self.DEFAULT_MOVE_TIMEOUT
+
+        timeout = float(timeout)
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError(f"Move timeout must be a positive finite number, got {timeout!r}")
+
+        return timeout
+
+    def _add_moved_callback(self, status, moved_cb: MovedCallback) -> None:
+        """Attach the legacy moved_cb(obj=self) callback convention."""
+        if moved_cb is not None:
+            status.add_callback(lambda _status: moved_cb(obj=self))
+
+    def move(self, position, wait=True, timeout=None, moved_cb=None):
+        """Request an energy move and return its complete handshake status.
+
+        With wait=False, return after issuing the command writes. The
+        returned status completes only after Done_RBV transitions high
+        and then low following reset acknowledgement.
 
         Parameters
         ----------
-        energy : float
-            The photon energy (color) in keV.
+        position : float
+            Target energy in keV.
+        wait : bool, optional
+            Wait for the returned status before returning.
+        timeout : float, optional
+            Total timeout for both PLC handshake phases.
+        moved_cb : callable, optional
+            Called as moved_cb(obj=self) when the overall status completes.
 
         Returns
-        ---------
-        Bragg angle: float
-            The angle in degrees
+        -------
+        ophyd.status.MoveStatus
+            Status representing the entire PLC handshake.
         """
-        dspacing = 3.13560114
-        energy = energy * 1000
-        bragg_angle = np.rad2deg(np.arcsin(12398.419/energy/(2*dspacing)))
-        return bragg_angle
+        self.check_value(position)
+        position = float(position)
+        self.check_error()
+        timeout = self._resolve_timeout(timeout)
 
-    def thetaToSi111energy(self, theta):
-        """
-        Converts dccm theta angle to energy.
+        with self._move_lock:
+            if self._active_move_status is not None and not self._active_move_status.done:
+                raise RuntimeError(f"{self.name} already has an active move")
 
-        Parameters
-        ----------
-        energy : float
-            The Bragg angle theta in degrees
+            move_status = MoveStatus(self, position, timeout=timeout)
+            self._active_move_status = move_status
+            self._moving_from_this_device = True
 
-        Returns:
-        ----------
-        energy: float
-             The photon energy (color) in keV.
-        """
-        dspacing = 3.13560114
-        energy = 12398.419/(2*dspacing*np.sin(np.deg2rad(theta)))
-        return energy/1000
+        deadline = monotonic() + timeout
+        stage_statuses = []
+        error_callback = None
+
+        def set_move_exception(exc: Exception) -> None:
+            if not move_status.done:
+                move_status.set_exception(exc)
+
+        def remaining_time() -> float:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"{self.name} move timed out during PLC handshake")
+            return remaining
+
+        def on_error(*, value, **kwargs):
+            if bool(value) and not move_status.done:
+                try:
+                    message = self.error_msg.get()
+                except Exception:
+                    message = ""
+
+                set_move_exception(
+                    RuntimeError(str(message) if message else "DCCM PLC reported an error during motion")
+                )
+
+        def finalize(_status):
+            # Remove error monitoring and unfinished handshake subscriptions.
+            if error_callback is not None:
+                try:
+                    self.error.clear_sub(error_callback)
+                except Exception:
+                    pass
+
+            for stage_status in tuple(stage_statuses):
+                if not stage_status.done:
+                    try:
+                        stage_status.set_exception(
+                            RuntimeError("Overall DCCM move ended before this handshake stage completed")
+                        )
+                    except Exception:
+                        pass
+
+            with self._move_lock:
+                if self._active_move_status is move_status:
+                    self._active_move_status = None
+                    self._moving_from_this_device = False
+
+        move_status.add_callback(finalize)
+
+        def on_done_low(stage_status):
+            if move_status.done:
+                return
+
+            if not stage_status.success:
+                set_move_exception(
+                    self._stage_exception(
+                        stage_status,
+                        "DCCM acknowledgement-clear phase failed",
+                    )
+                )
+                return
+
+            try:
+                self.check_error()
+            except Exception as exc:
+                set_move_exception(exc)
+                return
+
+            move_status.set_finished()
+
+        def on_done_high(stage_status):
+            if move_status.done:
+                return
+
+            if not stage_status.success:
+                set_move_exception(
+                    self._stage_exception(
+                        stage_status,
+                        "DCCM move-completion phase failed",
+                    )
+                )
+                return
+
+            try:
+                self.check_error()
+
+                # Subscribe before reset to avoid missing a fast transition.
+                done_low_status = SubscriptionStatus(
+                    self.done,
+                    lambda *, value, **kwargs: value == self.DONE_LOW_VALUE,
+                    run=False,
+                    timeout=remaining_time(),
+                )
+                stage_statuses.append(done_low_status)
+                done_low_status.add_callback(on_done_low)
+
+                self.reset.put(self.RESET_VALUE, wait=True)
+            except Exception as exc:
+                set_move_exception(exc)
+
+        error_callback = on_error
+        self.error.subscribe(error_callback, run=True)
+        if move_status.done:
+            if wait:
+                move_status.wait()
+            return move_status
+
+        try:
+            # Subscribe before commands to avoid missing Done=1.
+            done_high_status = SubscriptionStatus(
+                self.done,
+                lambda *, value, **kwargs: value == self.DONE_HIGH_VALUE,
+                run=False,
+                timeout=timeout,
+            )
+            stage_statuses.append(done_high_status)
+            done_high_status.add_callback(on_done_high)
+
+            # Preserve the established PLC command sequence.
+            # Confirm reset edge/level semantics in TwinCAT.
+            self.reset.put(self.RESET_VALUE, wait=True)
+            self.setpoint.put(position, wait=True)
+            self.actuate.put(self.ACTUATE_VALUE, wait=True)
+        except Exception as exc:
+            set_move_exception(exc)
+
+        self._add_moved_callback(move_status, moved_cb)
+
+        if wait:
+            move_status.wait()
+
+        return move_status
+
+    def stop(self, *, success=False):
+        """Issue PLC stop and finish any active software move status."""
+        active_status = self._active_move_status
+
+        try:
+            self.stop_signal.put(self.STOP_VALUE, wait=True)
+        except Exception as exc:
+            if active_status is not None and not active_status.done:
+                active_status.set_exception(exc)
+            raise
+
+        if active_status is not None and not active_status.done:
+            if success:
+                active_status.set_finished()
+            else:
+                active_status.set_exception(RuntimeError(f"{self.name} move stopped"))
+
+
+class DCCMEnergy(DCCMCrystal):
+    """DCCM crystal energy positioner with theta-axis coupling."""
+
+    axis_coupling_enable = FCpt(
+        PytmcSignal,
+        "{self._base_prefix}:CTC:Coupled",
+        io="io",
+        kind="omitted",
+        doc="Command to enable/disable crystal-axis coupling.",
+    )
+
+    def __init__(self, prefix, *, crystal="01", **kwargs):
+        self._base_prefix = prefix.rstrip(":")
+        self.crystal = int(crystal)
+
+        super().__init__(
+            f"{self._base_prefix}:CTC:CRYS:{self.crystal:02d}",
+            **kwargs,
+        )
+
+    def _prepare_move(self, position):
+        """Validate the move and enable coupling before issuing motion."""
+        self.check_value(position)
+        self.check_error()
+
+        # This waits for the write, not a separate PLC coupling readback.
+        self.couple_axis(wait=True)
+
+    @measure_time
+    def move(self, position, wait=True, timeout=None, moved_cb=None):
+        self._prepare_move(position)
+        return super().move(
+            position,
+            wait=wait,
+            timeout=timeout,
+            moved_cb=moved_cb,
+        )
+
+    @staticmethod
+    def _proxy_method(method_name, *fixed_args):
+        """Proxy a signal method with predefined positional arguments."""
+
+        def method_selector(self, *args, **kwargs):
+            return getattr(self.axis_coupling_enable, method_name)(
+                *fixed_args,
+                *args,
+                **kwargs,
+            )
+
+        return method_selector
+
+    couple_axis = _proxy_method("put", 1)
+    decouple_axis = _proxy_method("put", 0)
 
 
 class DCCMEnergyWithVernier(DCCMEnergy):
-    """
-    DCCM energy control with vernier integration.
+    """DCCM energy motor that also requests a Vernier/ACR energy change.
 
-    Extends DCCMEnergy to simultaneously request vernier energy
-    changes via Machine Control Center (MCC) when moving DCCM.
+    The hutch component is an enum dropdown selecting the ACR destination.
 
-    Components
-    ----------
-    vernier : BeamEnergyRequest
-        Interface to MCC vernier energy request system
+    DCCM energy is specified in keV; the ACR request is specified in eV.
+    Both move statuses are combined. For the no-wait ACR variant, the ACR
+    status may complete once the request is accepted, rather than when
+    the physical beam-energy change has completed.
 
-    Methods
-    -------
-    move(position, wait, timeout)
-        Move DCCM energy and request vernier change
-
-    Notes
-    -----
-    Coordinated Motion:
-    - DCCM crystal angle changes via Bragg motion
-    - Vernier (undulator K) requested via MCC
-    - Both systems move to match energy
-
-    Benefits:
-    - Maintains beam position during energy changes
-    - Optimizes undulator harmonics
-    - Improves energy stability
-    - Reduces need for manual vernier adjustment
-
-    MCC Integration:
-    - Automatic vernier energy request
-    - No manual PV writing needed
-    - MCC handles undulator control
-    - Synchronized motion completion
-
-    Typical Workflow:
-    1. Request new energy
-    2. DCCM begins crystal rotation
-    3. MCC receives vernier request
-    4. Undulator K parameter adjusts
-    5. Both complete simultaneously
-
-    Examples
-    --------
-    Create energy motor with vernier:
-    >>> dccm = DCCMEnergyWithVernier('SP1L0:DCCM',
-    ...                              hutch='mfx',
-    ...                              name='dccm_vernier')
-
-    Move to 9 keV (both DCCM and vernier):
-    >>> dccm.move(9.0, wait=True)
-    # DCCM rotates AND vernier adjusts
-
-    See Also
-    --------
-    DCCMEnergy : Base energy control without vernier
-    BeamEnergyRequest : MCC vernier interface
+    Changing the selection affects subsequent requests only. It does not
+    redirect an in-progress request or change physical beam routing.
     """
 
-    acr_energy = FCpt(BeamEnergyRequest, '{hutch}', kind='normal',
-                      doc='Requests ACR to move the Vernier.')
+    hutch = Cpt(
+        HutchSelectionSignal,
+        value=0,
+        kind="config",
+        doc="Selected beam destination / ACR request hutch.",
+    )
 
-    # These are duplicate warnings with main energy motor
+    acr_requests = Cpt(
+        DCCMACRRequests,
+        "",
+        kind="normal",
+        doc="ACR request devices for the available hutches.",
+    )
+
     _enable_warn_constants: bool = False
-    hutch: str
 
-    def __init__(
-        self,
-        prefix: str,
-        hutch = 'MFX',
-        **kwargs
-    ):
-        self.hutch=hutch
+    def __init__(self, prefix: str, hutch: Optional[str] = None, **kwargs):
+        initial_hutch = resolve_hutch(prefix, hutch)
         super().__init__(prefix, **kwargs)
+        self.hutch.put(initial_hutch)
 
-    def forward(self, pseudo_pos: namedtuple) -> namedtuple:
-        """
-        PseudoPositioner interface function for calculating the setpoint.
-        Converts the requested energy to theta 1 and theta 2 (Bragg angle).
-        """
-        pseudo_pos = self.PseudoPosition(*pseudo_pos)
-        energy = pseudo_pos.energy
-        theta = self.energyToSi111BraggAngle(energy)
-        vernier = energy * 1000
-        return self.RealPosition(th1=theta,th2=theta, acr_energy=vernier)
+    @property
+    def hutch_name(self) -> str:
+        """Currently selected destination."""
+        return self.hutch.selected_name
 
-    def inverse(self, real_pos: namedtuple) -> namedtuple:
-        """
-        PseudoPositioner interface function for calculating the readback.
-        Converts the real position of the DCCM theta motor to the calculated energy.
-        """
-        real_pos = self.RealPosition(*real_pos)
-        theta = real_pos.th1
-        energy = self.thetaToSi111energy(theta)
-        return self.PseudoPosition(energy=energy)
+    @property
+    def acr_energy(self):
+        """ACR request device for the currently selected hutch."""
+        return self.acr_requests.for_hutch(self.hutch_name)
+
+    def move(self, position, wait=True, timeout=None, moved_cb=None):
+        self._prepare_move(position)
+        position = float(position)
+        timeout = self._resolve_timeout(timeout)
+
+        # Capture the selected request device once for this move.
+        # Later dropdown changes cannot retarget this request.
+        acr_energy = self.acr_energy
+
+        # Request ACR first, preserving the original command ordering.
+        acr_status = acr_energy.move(
+            position * 1000.0,
+            wait=False,
+            timeout=timeout,
+        )
+
+        try:
+            dccm_status = DCCMCrystal.move(
+                self,
+                position,
+                wait=False,
+                timeout=timeout,
+                moved_cb=None,
+            )
+        except Exception as exc:
+            # There is no generic cancellation command for an ACR request
+            # that has already been accepted.
+            raise RuntimeError("DCCM move failed to start after the ACR energy request was issued") from exc
+
+        combined_status = acr_status & dccm_status
+        self._add_moved_callback(combined_status, moved_cb)
+
+        if wait:
+            combined_status.wait()
+
+        return combined_status
 
 
 class DCCMEnergyWithACRStatus(DCCMEnergyWithVernier):
-    """
-    DCCM energy control with ACR status monitoring.
+    """DCCM energy positioner that waits for ACR completion.
 
-    Extends DCCMEnergyWithVernier to monitor Automatic Crystal Rotation
-    (ACR) completion status via SIOC PV.
-
-    Components
-    ----------
-    acr_status : BeamEnergyRequest with status monitoring
-        Extended vernier interface with ACR status feedback
-
-    Attributes
-    ----------
-    acr_status_suffix : str
-        PV suffix for ACR status (e.g., 'AO805')
-    acr_status_pv_index : int
-        Index for ACR status PV selection
-
-    Methods
-    -------
-    move(position, wait, timeout)
-        Move with ACR completion verification
-
-    Notes
-    -----
-    ACR (Automatic Crystal Rotation):
-    - MCC service for coordinated energy changes
-    - Adjusts multiple beamline components
-    - Reports completion via status PV
-    - Ensures system-wide energy matching
-
-    Status Monitoring:
-    - ACR sets status PV when complete
-    - Move waits for ACR confirmation
-    - Prevents premature completion
-    - Ensures full system synchronization
-
-    Typical Components Adjusted by ACR:
-    - Undulator K parameter (vernier)
-    - Upstream crystal monochromators
-    - Beam position monitors
-    - Focus optimization
-
-    Status PV Location:
-    - SIOC:SYS0:ML00:{acr_status_suffix}
-    - Typically AO805 for HXR
-    - May vary by beamline
-
-    Examples
-    --------
-    Create with ACR monitoring:
-    >>> dccm = DCCMEnergyWithACRStatus(
-    ...     'SP1L0:DCCM',
-    ...     hutch='mfx',
-    ...     acr_status_suffix='AO805',
-    ...     pv_index=2,
-    ...     name='dccm_acr'
-    ... )
-
-    Move and wait for ACR:
-    >>> dccm.move(9.0, wait=True)
-    # Waits for both DCCM motion AND ACR completion
-
-    See Also
-    --------
-    DCCMEnergyWithVernier : Without ACR monitoring
-    BeamEnergyRequest : Vernier/ACR interface
+    acr_status_suffix selects the SIOC completion PV used by
+    BeamEnergyRequest. That PV is expected to be zero while moving and
+    one when complete.
     """
 
-    acr_energy = FCpt(BeamEnergyRequest, '{hutch}',
-                      pv_index='{pv_index}',
-                      acr_status_suffix='{acr_status_suffix}',
-                      add_prefix=('suffix', 'write_pv', 'pv_index',
-                                  'acr_status_suffix'),
-                      kind='normal',
-                      doc='Requests ACR to move the energy.')
+    acr_requests = FCpt(
+        DCCMACRRequestsWithStatus,
+        "{self.prefix}",
+        pv_index="{self.pv_index}",
+        acr_status_suffix="{self.acr_status_suffix}",
+        add_prefix=("suffix", "pv_index", "acr_status_suffix"),
+        kind="normal",
+        doc="Hutch-specific ACR requests with completion monitoring.",
+    )
 
     def __init__(
         self,
         prefix: str,
-        hutch: typing.Optional[str] = None,
-        acr_status_suffix='AO805',
-        pv_index=2,
-        **kwargs
+        hutch: Optional[str] = None,
+        acr_status_suffix: str = "AO805",
+        pv_index: int = 2,
+        **kwargs,
     ):
         self.acr_status_suffix = acr_status_suffix
-        self.pv_index = pv_index
-        super().__init__(prefix, **kwargs)
+        self.pv_index = int(pv_index)
+        super().__init__(prefix, hutch=hutch, **kwargs)
 
 
-class DCCM(BaseInterface, GroupDevice):
-    """
-    Complete Double Crystal Channel-cut Monochromator assembly.
+class DCCMTarget(TwinCATStatePMPS):
+    """PMPS target state for the DCCM translation axis."""
 
-    Controls all DCCM axes including crystal rotation, translation,
-    and diagnostic YAG positioning. Provides multiple energy control
-    interfaces.
+    config = UpCpt(state_count=2)
+    _in_if_not_out = True
 
-    Components
-    ----------
-    th1 : BeckhoffAxis
-        Upstream crystal theta (Bragg angle)
-    th2 : BeckhoffAxis
-        Downstream crystal theta (Bragg angle)
-    tx : BeckhoffAxis
-        Chamber translation in X
-    txd : BeckhoffAxis
-        YAG diagnostic translation in X
-    tyd : BeckhoffAxis
-        YAG diagnostic translation in Y
-    energy : DCCMEnergy
-        Basic energy control via Bragg angle
-    energy_with_vernier : DCCMEnergyWithVernier
-        Energy control with vernier coordination
-    energy_with_acr_status : DCCMEnergyWithACRStatus
-        Energy control with ACR status monitoring
 
-    Attributes
-    ----------
-    tab_component_names : bool
-        Enable tab completion for components
+class DCCM(BaseInterface, GroupDevice, LightpathInOutCptMixin):
+    """Full DCCM assembly with a selectable ACR destination.
 
-    Methods
-    -------
-    All standard motor and PseudoPositioner methods available
-    through energy components
+    The assembly includes two crystal manipulation axes, chamber
+    translation, and two YAG diagnostic axes.
 
-    Notes
-    -----
-    DCCM Configuration:
-    - Two matched Si(111) crystals
-    - Channel-cut design for stability
-    - Temperature controlled
-    - Vacuum chamber enclosed
+    The hutch dropdown is synchronized with both ACR-enabled energy
+    interfaces. Editing any of those dropdowns updates the others.
 
-    Axes Description:
-
-    TH1/TH2 (Crystal Angles):
-    - Typically move together
-    - TH1: Upstream crystal
-    - TH2: Downstream crystal
-    - Energy determined by angle
-
-    TX (Chamber Translation):
-    - Moves entire DCCM assembly
-    - Compensates for beam offset
-    - Required for some energy changes
-
-    TXD/TYD (YAG Diagnostics):
-    - Position YAG for beam viewing
-    - Independent of crystal motion
-    - Used for alignment
-
-    Energy Control Modes:
-
-    1. Basic (energy):
-       - Moves crystals only
-       - Manual vernier adjustment needed
-       - Simple, direct control
-
-    2. With Vernier (energy_with_vernier):
-       - Automatic vernier request
-       - Better energy stability
-       - Recommended for scans
-
-    3. With ACR Status (energy_with_acr_status):
-       - Full system coordination
-       - Status verification
-       - Safest for large changes
-
-    Typical Operations:
-    - Energy scans: Use energy_with_vernier
-    - Large changes: Use energy_with_acr_status
-    - Alignment: Use individual motors
-    - Diagnostics: Use txd/tyd for YAG
-
-    Examples
-    --------
-    Create DCCM device:
-    >>> dccm = DCCM('SP1L0:DCCM', name='dccm')
-
-    Move to 9 keV (basic):
-    >>> dccm.energy.move(9.0)
-
-    Move with vernier (recommended):
-    >>> dccm.energy_with_vernier.move(9.0, wait=True)
-
-    Move with ACR status (safest):
-    >>> dccm.energy_with_acr_status.move(9.0, wait=True, timeout=60)
-
-    Access individual motors:
-    >>> dccm.th1.move(14.5)  # Move upstream crystal
-    >>> dccm.tx.move(10.0)   # Translate chamber
-
-    Position YAG for alignment:
-    >>> dccm.txd.move(5.0)   # YAG X position
-    >>> dccm.tyd.move(2.0)   # YAG Y position
-
-    Read current energy:
-    >>> energy = dccm.energy.position
-    >>> print(f"Current energy: {energy:.3f} keV")
-
-    See Also
-    --------
-    DCCMEnergy : Basic energy control
-    DCCMEnergyWithVernier : With vernier integration
-    DCCMEnergyWithACRStatus : With ACR monitoring
+    This selection records the operator-selected destination; it neither
+    detects nor changes physical beam routing.
     """
 
-    th1 = Cpt(BeckhoffAxis, ":MMS:TH1", doc="Bragg Upstream/TH1 Axis", kind="normal")
-    th2 = Cpt(BeckhoffAxis, ":MMS:TH2", doc="Bragg Downstream/TH2 Axis", kind="normal")
-    tx = Cpt(BeckhoffAxis, ":MMS:TX", doc="Translation X Axis", kind="normal")
-    txd = Cpt(BeckhoffAxis, ":MMS:TXD", doc="YAG Diagnostic X Axis", kind="normal")
-    tyd = Cpt(BeckhoffAxis, ":MMS:TYD", doc="YAG Diagnostic Y Axis", kind="normal")
+    tab_component_names = True
+    energy_limits = (4.0, 25.0)
 
+    hutch = Cpt(
+        HutchSelectionSignal,
+        value=0,
+        kind="config",
+        doc="Selected beam destination / ACR request hutch.",
+    )
+
+    tx_state = Cpt(
+        DCCMTarget,
+        ":MMS:STATE",
+        kind="hinted",
+        doc="Control of TX axis via saved positions.",
+    )
+
+    tx = Cpt(
+        BeckhoffAxis,
+        ":MMS:TX",
+        doc="Translation X Axis",
+        kind="normal",
+    )
 
     energy = Cpt(
-        DCCMEnergy, '', kind='hinted',
+        DCCMEnergy,
+        "",
+        kind="hinted",
+        limits=energy_limits,
+        doc="Moves the theta motors in terms of calculated DCCM energy.",
+    )
+
+    energy_with_vernier = FCpt(
+        DCCMEnergyWithVernier,
+        "{self.prefix}",
+        kind="normal",
+        limits=energy_limits,
+        hutch="{self._initial_hutch}",
+        add_prefix=("suffix", "write_pv", "hutch"),
         doc=(
-            'PseudoPositioner that moves the theta motors in '
-            'terms of the calculated DCCM energy.'
+            "Moves the DCCM theta motor in terms of calculated energy "
+            "while also requesting a Vernier move for the selected hutch."
         ),
     )
 
-    energy_with_vernier = Cpt(
-        DCCMEnergyWithVernier, '', kind='normal',
-        doc=(
-            'PseudoPositioner that moves the theta motor in '
-            'terms of the calculated DCCM energy while '
-            'also requesting a vernier move.'
-        ),
-    )
     energy_with_acr_status = FCpt(
-        DCCMEnergyWithACRStatus, '{prefix}', kind='normal',
-        acr_status_suffix='{acr_status_suffix}',
-        add_prefix=('suffix', 'write_pv', 'acr_status_suffix'),
+        DCCMEnergyWithACRStatus,
+        "{self.prefix}",
+        kind="normal",
+        limits=energy_limits,
+        hutch="{self._initial_hutch}",
+        pv_index="{self.acr_status_pv_index}",
+        acr_status_suffix="{self.acr_status_suffix}",
+        add_prefix=(
+            "suffix",
+            "write_pv",
+            "acr_status_suffix",
+            "pv_index",
+            "hutch",
+        ),
         doc=(
-            'PseudoPositioner that moves the alio in '
-            'terms of the calculated CCM energy while '
-            'also requesting an energy change to ACR. '
-            'This will wait on ACR to complete the move.'
+            "Moves the DCCM energy while requesting an ACR energy "
+            "change for the selected hutch and waiting for completion."
         ),
     )
+
+    crys_01 = Cpt(
+        DCCMCrystal,
+        ":CTC:CRYS:01",
+        kind="normal",
+        limits=energy_limits,
+    )
+
+    crys_02 = Cpt(
+        DCCMCrystal,
+        ":CTC:CRYS:02",
+        kind="normal",
+        limits=energy_limits,
+    )
+
+    th1 = Cpt(
+        BeckhoffAxis,
+        ":MMS:TH1",
+        doc="Bragg Upstream/TH1 Axis",
+        kind="normal",
+    )
+
+    th2 = Cpt(
+        BeckhoffAxis,
+        ":MMS:TH2",
+        doc="Bragg Downstream/TH2 Axis",
+        kind="normal",
+    )
+
+    yag_txd = Cpt(
+        BeckhoffAxis,
+        ":MMS:TXD",
+        doc="YAG Diagnostic X Axis",
+        kind="normal",
+    )
+
+    yag_tyd = Cpt(
+        BeckhoffAxis,
+        ":MMS:TYD",
+        doc="YAG Diagnostic Y Axis",
+        kind="normal",
+    )
+
+    lightpath_cpts = ["tx_state"]
 
     def __init__(
         self,
-        prefix:str = "SP1L0:DCCM",
-        **kwargs
+        prefix: str,
+        hutch: Optional[str] = None,
+        acr_status_suffix: str = "AO805",
+        acr_status_pv_index: int = 2,
+        **kwargs,
     ):
+        # These values must exist before formatted components are created.
+        self._initial_hutch = resolve_hutch(prefix, hutch)
+        self.acr_status_suffix = acr_status_suffix
+        self.acr_status_pv_index = int(acr_status_pv_index)
 
-        self.acr_status_suffix = kwargs.get('acr_status_suffix', 'AO805')
-        self.acr_status_pv_index = kwargs.get('acr_status_suffix', 2)
         super().__init__(prefix, **kwargs)
 
-        logger.info(f"DCCM initialized: {self.name}")
-        logger.info(f"  Energy control modes: 3")
-        logger.info(f"  Crystal motors: th1, th2")
-        logger.info(f"  Translation: tx")
-        logger.info(f"  Diagnostics: txd, tyd")
+        self._hutch_sync_lock = threading.RLock()
 
-    def insert(self):
-        caput('SP1L0:DCCM:MMS:STATE:SET','IN',wait=True)
-
-    def remove(self):
-        caput('SP1L0:DCCM:MMS:State:SET','OUT',wait=True)
-
-
-def calculate_bragg_angle(energy_kev, d_spacing=default_dspacing):
-    """
-    Calculate Bragg angle for given energy.
-
-    Utility function for quick Bragg angle calculation without
-    creating device instance.
-
-    Parameters
-    ----------
-    energy_kev : float
-        Photon energy in keV
-    d_spacing : float, optional
-        Crystal d-spacing in Angstroms.
-        Default is Si(111) = 3.1356 Å
-
-    Returns
-    -------
-    float
-        Bragg angle in degrees
-
-    Notes
-    -----
-    Uses Bragg's law: θ = arcsin(12.398 / (2 * d * E))
-
-    Examples
-    --------
-    Calculate angle for 9 keV with Si(111):
-    >>> angle = calculate_bragg_angle(9.0)
-    >>> print(f"Bragg angle: {angle:.3f}°")
-
-    Different crystal:
-    >>> angle = calculate_bragg_angle(9.0, d_spacing=2.7)
-
-    See Also
-    --------
-    calculate_energy : Inverse calculation
-    DCCMEnergy.forward : PseudoPositioner implementation
-    """
-    wavelength = 12.398 / energy_kev
-    sin_theta = wavelength / (2.0 * d_spacing)
-
-    if not -1.0 <= sin_theta <= 1.0:
-        raise ValueError(
-            f"Energy {energy_kev} keV out of range for "
-            f"d-spacing {d_spacing} Å"
+        self._hutch_signals = (
+            self.hutch,
+            self.energy_with_vernier.hutch,
+            self.energy_with_acr_status.hutch,
         )
 
-    theta_rad = np.arcsin(sin_theta)
-    theta_deg = np.degrees(theta_rad)
-    return theta_deg
+        # Initialize all selectors before installing synchronization.
+        for signal in self._hutch_signals:
+            signal.put(self._initial_hutch)
 
+        for signal in self._hutch_signals:
+            signal.subscribe(self._sync_hutch_selection, run=False)
 
-def calculate_energy(angle_deg, d_spacing=default_dspacing):
-    """
-    Calculate energy for given Bragg angle.
+    @property
+    def hutch_name(self) -> str:
+        """Currently selected beam destination."""
+        return self.hutch.selected_name
 
-    Utility function for quick energy calculation without
-    creating device instance.
+    def _sync_hutch_selection(self, *, value, **kwargs):
+        with self._hutch_sync_lock:
+            for signal in self._hutch_signals:
+                # Avoid unnecessary writes and recursive update loops.
+                if signal.get() != value:
+                    signal.put(value)
 
-    Parameters
-    ----------
-    angle_deg : float
-        Bragg angle in degrees
-    d_spacing : float, optional
-        Crystal d-spacing in Angstroms.
-        Default is Si(111) = 3.1356 Å
+    def _proxy_method(method_name):
+        """Proxy a method from tx_state."""
 
-    Returns
-    -------
-    float
-        Photon energy in keV
+        def method_selector(self, *args, **kwargs):
+            return getattr(self.tx_state, method_name)(*args, **kwargs)
 
-    Notes
-    -----
-    Uses Bragg's law: E = 12.398 / (2 * d * sin(θ))
+        return method_selector
 
-    Examples
-    --------
-    Calculate energy for 14° with Si(111):
-    >>> energy = calculate_energy(14.0)
-    >>> print(f"Energy: {energy:.3f} keV")
+    def _proxy_property(prop_name):
+        """Create a read-only property proxy to tx_state."""
 
-    Different crystal:
-    >>> energy = calculate_energy(14.0, d_spacing=2.7)
+        def getter(self):
+            return getattr(self.tx_state, prop_name)
 
-    See Also
-    --------
-    calculate_bragg_angle : Inverse calculation
-    DCCMEnergy.inverse : PseudoPositioner implementation
-    """
-    theta_rad = np.radians(angle_deg)
-    wavelength = 2.0 * d_spacing * np.sin(theta_rad)
-    energy_kev = 12.398 / wavelength
-    return energy_kev
+        return property(getter)
+
+    inserted = _proxy_property("inserted")
+    check_inserted = _proxy_method("check_inserted")
+    removed = _proxy_property("removed")
+    check_removed = _proxy_method("check_removed")
+    insert = _proxy_method("insert")
+    remove = _proxy_method("remove")

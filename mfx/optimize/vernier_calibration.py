@@ -309,8 +309,8 @@ class VernierCalibration:
         if not is_simulation:
             try:
                 from mfx.dccm import DCCM
-                dccm = DCCM(name='DCCM')
-                dccm_motor = dccm.energy_with_vernier.energy  # This moves BOTH DCCM and vernier
+                dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
+                dccm_motor = dccm.energy_with_vernier  # This moves BOTH DCCM and vernier
                 # Convert eV to keV for DCCM
                 energy_start_keV = energy_start_eV / 1000.0
                 energy_end_keV = energy_end_eV / 1000.0

@@ -535,7 +535,7 @@ def read_dccm_energy() -> float:
     # Real hardware path: use DCCM device
     try:
         from mfx.dccm import DCCM
-        dccm = DCCM(name="DCCM")
+        dccm = DCCM('SP1L0:DCCM', name='DCCM', hutch='MFX')
         # dccm.energy is in keV; convert to eV
         keV = float(dccm.energy())
         return keV * 1000.0

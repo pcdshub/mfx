@@ -96,7 +96,7 @@ class NotchScan:
         """
         from mfx.dccm import DCCM
 
-        self.dccm = DCCM(name='dccm')
+        self.dccm = DCCM('SP1L0:DCCM', name='dccm', hutch='MFX')
         self.th1 = self.dccm.th1
         self.th2 = self.dccm.th2
 
@@ -392,7 +392,7 @@ class NotchScan:
         # Store initial crystal positions
         original_th1 = self.th1.position
         original_th2 = self.th2.position
-        original_energy_eV = self.dccm.energy_with_vernier.energy() * 1000
+        original_energy_eV = self.dccm.energy_with_vernier.position * 1000
 
         # Store initial K energy if tracking (pattern from exafs.py)
         original_k_energy_eV = None
