@@ -2473,9 +2473,9 @@ class Exafs:
             self.k_energy = k_target_eV
             return
 
-        # Move FEE spec before K without stopping the Zyla: the DCCM points
-        # follow at once and need spectra. The crystal check after K done
-        # (_k_xas_concurrent_done) does the angle and transmission check
+        # Move FEE spec before K, non-blocking: the DCCM points follow at
+        # once. The crystal check after K done (_k_xas_concurrent_done)
+        # does the angle and transmission check
         if track_feespec:
             t0 = time()
             self.xrtspec.move_feespec_energy_nonblocking(

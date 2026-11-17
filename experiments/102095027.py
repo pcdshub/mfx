@@ -171,16 +171,8 @@ def _caget(pv, as_string=False, timeout=1.0):
         return None
 
 
+# XRT Zyla: left acquiring all night, nothing here starts or stops it
 ZYLA_PV = 'XRT:ZYLA:CAM:01:Acquire'
-
-
-def _zyla_on():
-    """Start the XRT Zyla. move_feespec_energy stops it and leaves it stopped."""
-    try:
-        from epics import caput
-        caput(ZYLA_PV, 1)
-    except Exception as e:
-        logger.warning(f'Zyla start failed: {e}')
 
 
 def _door_closed():
@@ -576,19 +568,6 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         exafs.k_xas_scan(k_positions=mb, k_order='given', pink=True,
                          k_move_mode=K_MODE, dwell_time=0.1, simulate=True)
 
-    def _scan(self, **kw):
-        """
-        exafs.k_xas_scan with the XRT Zyla started before and after.
-
-        The XRT return at the end of a tracked scan stops the camera, and
-        scans without camera-arm tracking (fly, fly_ref) never restart it.
-        """
-        _zyla_on()
-        try:
-            return _ns('exafs').k_xas_scan(**kw)
-        finally:
-            _zyla_on()
-
     # ---- list, edge, offset ---------------------------------------------------
 
     def acr_list_set(self, lo, hi, step, k_max):
@@ -652,7 +631,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         print(f"offset check: K {k:.1f} eV, DCCM {k + offsets[0]:.1f}-{k + offsets[-1]:.1f} "
               f"eV in {step:g} eV, dwell {dwell:g} s")
         request_k(_ns('exafs').acr_energy_k, k, k_max=ut.K_MAX_EV)
-        return self._scan(
+        return _ns('exafs').k_xas_scan(
             k_positions=[k], k_order='given', k_move_mode=K_MODE,
             dccm_offsets=offsets, dwell_time=dwell, record=record,
             sample=f'{PREFIX}_offset_check_k{k:.0f}', picker='open',
@@ -727,7 +706,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         _post(msg, tag='deadband') if record else print(msg)
         exafs = _ns('exafs')
         request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
-        out = self._scan(
+        out = exafs.k_xas_scan(
             k_positions=pos, k_order='given', k_move_mode=K_MODE,
             dwell_time=dwell, pink=True, record=record, sample=sample,
             picker='open', **opts)
@@ -783,19 +762,15 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
 
     def xrt_park(self, real_eV=CENTER_EV, offset_deg=None):
         """
-        Park the FEE (XRT) spectrometer at real_eV and restart the camera.
+        Park the FEE (XRT) spectrometer at real_eV.
 
-        move_feespec_energy stops the Zyla and leaves it stopped, so the
-        camera is restarted here. Moves th, tth and camy together and backs
-        off if XRT:HXS:TRNS.SEVR alarms. offset_deg defaults to x.xrt_offset.
-        Check the filter wheel STEP:XRT1:446:MOTR.RBV first (it sat at 54 deg
-        for 60 h after 10-27).
+        Moves th, tth and camy together and backs off if XRT:HXS:TRNS.SEVR
+        alarms. offset_deg defaults to x.xrt_offset. Check the filter wheel
+        STEP:XRT1:446:MOTR.RBV first (it sat at 54 deg for 60 h after 10-27).
         """
-        from epics import caput
         offset_deg = self.xrt_offset if offset_deg is None else offset_deg
         xrt = _ns('xrtspec')
         xrt.move_feespec_energy(real_eV / 1000.0, crystal_angle_offset=offset_deg)
-        caput('XRT:ZYLA:CAM:01:Acquire', 1)
         p = xrt.get_feespec_positions(real_eV / 1000.0, offset_deg)
         print(f"XRT parked for {real_eV:.1f} eV: th {p['crystal_angle']:.3f}, "
               f"tth {p['camera_angle']:.3f}, camy {p['camera_y']:.3f}")
@@ -856,13 +831,12 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
 
         real_eV defaults to the current K request + x.offset_eV, the energy
         tracked scans set the XRT for. Corrects th if it is off the
-        calculated angle and restarts the Zyla. Use after a manual XRT move.
+        calculated angle. Use after a manual XRT move.
         """
         if real_eV is None:
             real_eV = _ns('exafs').acr_energy_k.get().setpoint + self.offset_eV
         _ns('xrtspec').check_feespec_crystal_angle(
             real_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
-        _zyla_on()
         print(f"XRT angle checked for {real_eV:.1f} eV")
 
     def xrt_cam_scan(self, lo_eV=WINDOW_EV[0], hi_eV=WINDOW_EV[1], n=4,
@@ -960,7 +934,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         _post(msg, tag='fe_foil') if record else print(msg)
         exafs = _ns('exafs')
         request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
-        out = self._scan(
+        out = exafs.k_xas_scan(
             k_positions=pos, k_order='given', k_move_mode=K_MODE,
             dwell_time=dwell, pink=pink, dccm_offsets=offsets, record=record,
             sample=sample, picker='open', **opts)
@@ -1001,7 +975,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         move), K move): ~22 s at the defaults against an ~11-12 s K move,
         so the first 2-3 points fall inside the move. The per-point CSV
         (runNNNN_points.csv) tags each point. XRT tracking per x.xrt_track
-        (crystal moved without stopping the Zyla, checked after K done),
+        (crystal moved non-blocking before each K write, checked after K done),
         camera-arm tracking off. Refuses if the DCCM state readback reads
         OUT; runs with a warning if that PV does not answer.
         """
@@ -1027,7 +1001,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         _post(msg, tag='fly') if record else print(msg)
         exafs = _ns('exafs')
         request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
-        out = self._scan(
+        out = exafs.k_xas_scan(
             k_positions=pos, k_order='given', k_move_mode='concurrent',
             dccm_offsets=dccm_offsets, dwell_time=dwell, record=record,
             sample=sample, picker='open', **opts)
@@ -1077,7 +1051,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         _post(msg, tag='fly') if record else print(msg)
         exafs = _ns('exafs')
         request_k(exafs.acr_energy_k, approach, k_max=ut.K_MAX_EV)
-        out = self._scan(
+        out = exafs.k_xas_scan(
             k_positions=pos, k_order='given', k_move_mode=mode,
             dccm_offsets=dccm_offsets, dwell_time=dwell, record=record,
             sample=sample, picker='open', **opts)
@@ -1223,7 +1197,7 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
                f"{K_MODE}, pink")
         _post(msg, tag='mb_mesh') if record else print(msg)
         request_k(exafs.acr_energy_k, pos[0], k_max=ut.K_MAX_EV)
-        out = self._scan(
+        out = exafs.k_xas_scan(
             k_positions=pos, k_order='given', k_move_mode=K_MODE,
             dwell_time=dwell, pink=True, record=record, sample=sample,
             picker='open', **self.xrt_opts())
@@ -1550,7 +1524,7 @@ PRE-EXPERIMENT, short form (the plan PDF has the full list)
      :STATE:GET_RBV used by x.fly); DCCM energy from hutch python only
  [ ] mfx102095027 on the S3DF on-shift queue (pedestals waited ~30 min on 10-27)
  [ ] XRT tracking ON (x.xrt_track True, report rec 12); XRT filter wheel
-     STEP:XRT1:446:MOTR.RBV read
+     STEP:XRT1:446:MOTR.RBV read; Zyla acquiring (left on all night)
  ACR (before 18:00)
  [ ] list sent and confirmed in writing: 7040-7160 eV in 0.5 eV (241 points),
      highest K 7160 eV asked

@@ -287,14 +287,9 @@ class XRTspec:
 
         Performs safety check on XRT transmission after move.
         Returns to previous position if alarm detected.
-        Stops/starts camera acquisition as needed.
+        Leaves the camera acquiring.
         """
         self.logger.warning(f'Calibrating XRT-Spec for {energy_keV:.3f} keV')
-
-        # Stop camera if running
-        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Acquire':
-            os.system('caput XRT:ZYLA:CAM:01:Acquire Done')
 
         # Store current positions
         ref_crystal_angle = self.hxrsss.th.position
@@ -363,7 +358,7 @@ class XRTspec:
         Only moves crystal if angle differs from target by >0.01°.
         Uses user move (umv) which blocks until complete.
         Performs XRT transmission safety check.
-        Manages camera acquisition state.
+        Leaves the camera acquiring.
         """
         ref_crystal_angle = self.hxrsss.th.position
 
@@ -372,16 +367,7 @@ class XRTspec:
             energy_keV, crystal_angle_offset=crystal_angle_offset)
 
         if round(positions['crystal_angle'], 2) == round(ref_crystal_angle, 2):
-            # a blocking move_feespec_energy before K stopped the camera
-            cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
-            if cam_status == 'Done':
-                os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
             return
-
-        # Stop camera
-        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Acquire':
-            os.system('caput XRT:ZYLA:CAM:01:Acquire Done')
 
         self.hxrsss.th.umv(positions['crystal_angle'])
 
@@ -390,11 +376,6 @@ class XRTspec:
         if xrt_status != 'NO_ALARM':
             self.logger.error('XRT transmission alarm after move')
             self.hxrsss.th.mv(ref_crystal_angle)
-
-        # Restart camera
-        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Done':
-            os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
 
     def track_feespec_camera(self, energy_keV, crystal_angle_offset=0.0):
         """
@@ -409,13 +390,8 @@ class XRTspec:
         -----
         Moves only camera angle (tth), not crystal or Y position.
         Used to compensate for vignetting during energy scans.
-        Starts camera if currently stopped.
         Performs XRT transmission safety check.
         """
-        cam_status = os.popen("caget XRT:ZYLA:CAM:01:Acquire | awk '{print $2}'").read().strip()
-        if cam_status == 'Done':
-            os.system('caput XRT:ZYLA:CAM:01:Acquire Acquire')
-
         ref_camera_angle = self.hxrsss.tth.position
 
         # Calculate target positions
