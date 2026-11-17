@@ -475,7 +475,7 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
               F3 x.fly('track', reverse=True)  F4 x.fly_ref(points=True)
 22:00 MESH    x.pink_switch()  x.mesh_set(kv)  x.mb_blank('start')  x.mb_park(r=1)
 23:15         x.mb_pass(n, r) ... one DAQ run per pass, reservoir changes between
-              x.mb_edge(n, r): real edge +- 30 eV in 5 eV (edge = x.edge_k + x.offset_eV)
+              x.mb_edge(n, r): real edge +- 30 eV in 5 eV, up only (edge = x.edge_k + x.offset_eV)
 05:15         x.mb_blank('end')  x.mesh_off()  [DCCM-in foil: x.fe_foil_scan(dccm_offset=x.offset_eV)]
 06:00         x.db_read()  (0.125 um after the GUI closes)  x.checklist_post()
 any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
@@ -1230,29 +1230,32 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         return self._pink_run([k], dwell, f"{PREFIX}_mb_mesh_park_r{r}_k{k:.0f}",
                               f"Mb park (reservoir {r})", record)
 
-    def mb_pass(self, n, r, step=MB_STEP_EV, dwell=MB_DWELL_S, record=True):
+    def mb_pass(self, n, r, step=MB_STEP_EV, dwell=MB_DWELL_S, updown=True,
+                record=True):
         """
         Production pass n on reservoir r: sweep up and down, 30 s per visit.
 
         One call is one DAQ run, so reservoir changes, clog clears and HV
         changes fall between calls. ~21 min at 2.5 eV for edge 7080 eV.
-        Rerun an aborted pass with the same n.
+        updown=False goes up only (21 visits, ~11 min). Rerun an aborted
+        pass with the same n.
         """
         pos = mb_positions(self.edge_k, step)
+        if not updown:
+            pos = pos[:pos.index(max(pos)) + 1]
         return self._pink_run(pos, dwell, f"{PREFIX}_mb_mesh_P{n}_r{r}",
                               f"Mb pass P{n} (reservoir {r})", record)
 
     def mb_edge(self, n, r, edge_eV=None, half=30.0, step=5.0, dwell=MB_DWELL_S,
-                updown=True, record=True):
+                updown=False, record=True):
         """
         Pass n on reservoir r over the real edge +- half eV in step eV, pink.
 
         edge_eV is a real photon energy, default x.edge_k + x.offset_eV
         (the foil edge as set tonight). Each K point is real - x.offset_eV,
         rounded to the list step; points off the loaded list or above the
-        cap are dropped with a warning. updown=True sweeps up and back in
-        one DAQ run (no long return move), False goes up only. Defaults:
-        13 points, 25 visits at 30 s, ~13 min.
+        cap are dropped with a warning. Goes up only by default (13 points
+        at 30 s, ~7 min); updown=True sweeps up and back in one DAQ run.
         """
         edge = self.edge_k + self.offset_eV if edge_eV is None else float(edge_eV)
         lo, hi, l_step = list_bounds()
