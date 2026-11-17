@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 
+import mfx.energy_calib as ec
 import mfx.undulator_timing as ut
 from mfx.undulator_timing import check_on_list, grid, request_k, sweep
 
@@ -59,6 +60,24 @@ XRT_NPX = 2048
 
 # every K scan tonight runs concurrent_settled (fly scans: concurrent)
 K_MODE = 'concurrent_settled'
+
+# ---- SASE / XRT calibration (DCCM in) ------------------------------------------
+# x.sase_cal(): K grid edge - 15 .. edge + 35 eV (the Mb sweep) in 10 eV; at
+# each K the DCCM steps K-center +- 20 eV in 2 eV across the ~22 eV FWHM SASE
+SASE_BELOW_EV = 15.0
+SASE_ABOVE_EV = 35.0
+SASE_K_STEP_EV = 10.0
+SASE_HALF_EV = 20.0
+SASE_DCCM_STEP_EV = 2.0
+SASE_READ_S = 1.0               # IPM / GDET average per DCCM point
+SASE_APPROACH_EV = 5.0          # approach move so every point is a real step
+SASE_DIAG = 'dg2'               # ec.SIGNAL_PVS key or a PV name
+# x.xrt_cal(): crystal rocked +- XRT_ROCK_DEG at each energy (xrt_tune uses
+# 0.05 deg steps), line on the Zyla columns
+XRT_CAL_N = 5
+XRT_ROCK_DEG = 0.03
+XRT_CAL_FRAMES = 5
+DCCM_MOVE_S = 1.4               # 1 eV DCCM move, 10-09 timers
 
 # ---- dead band test (19:00-21:00, with ACR) ----------------------------------
 # 1 eV scans start this far below x.edge_k; 10 positions end at edge - 6, up
@@ -457,6 +476,14 @@ class User:
         self.last_zscan = None
         # run, energy, step, num of the last x.spec_calib(), for notch.output
         self.last_calib = None
+        # SASE center against K (x.sase_cal) and XRT crystal correction
+        # (x.xrt_cal). Scans use them only after x.sase_on() / x.xrt_cal_on()
+        # (both cal methods switch them on); a new User() starts without
+        # them: x.cal_load() reads the last saved ones
+        self.sase = None
+        self.use_sase = False
+        self.xrtcal = None
+        self.use_xrtcal = False
 
     # ---- overview ---------------------------------------------------------
 
@@ -467,6 +494,8 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
 18:00         x.acr_list_set(lo, hi, step, k_max)   (list ACR confirms)
               x.db_read()   (expect 0.125 um)   x.xrt_park()  x.xrt_tune(d)
               DCCM in: x.offset_check()  x.offset_fine(c)  x.set_offset(v)
+              DCCM in: x.sase_cal()  (SASE center vs K, ~10 min)  x.xrt_cal()  (XRT line
+                       on the center column vs energy, ~5 min)   x.procedure('calib')
               DCCM out: x.fe_foil_scan()  x.fe_foil_scan(reverse=True)  x.set_edge(k)
 19:00 ACR     x.deadband(um) after every change ACR makes, then
               D0 x.db_baseline()    D1/D2 x.db_scan()    D3 x.db_scan(step=0.5)
@@ -479,7 +508,10 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
 05:15         x.mb_blank('end')  x.mesh_off()  [DCCM-in foil: x.fe_foil_scan(dccm_offset=x.offset_eV)]
 06:00         x.db_read()  (0.125 um after the GUI closes)  x.checklist_post()
 any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20 eV and back)
-              x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
+              x.sase_check()  (DCCM in: one K, measured vs predicted center; rezero=True)
+              x.xrt_line()  (line column vs target now)   x.cal_show()  x.cal_load()
+              x.sase_on/off()  x.xrt_cal_on/off()  x.real(k)  x.k_for(real)
+              x.procedure('deadband'|'fly'|'mesh'|'xrt'|'calib'|'tfs'|'geom')
               x.xrt_on()  x.xrt_off()  x.xrt_check()  x.tfs_*  x.geom_rings(D)
 """)
 
@@ -505,6 +537,7 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         print(f"experiment file {EXP} ({SHIFT}), offset {self.offset_eV:+.1f} eV, "
               f"edge K {self.edge_k:.1f} eV, xrt_track {self.xrt_track}, "
               f"xrt_offset {self.xrt_offset:+.3f} deg, dead band recorded {self.db_um:g} um")
+        print(f"  {self._cal_state()}")
         show('K request (eV)', lambda: f"{_ns('exafs').acr_energy_k.get().setpoint:.1f}")
         show('done PV AO805', lambda: caget('SIOC:SYS0:ML07:AO805'))
         show('ACR list in use', lambda: f"{lo:.1f}-{hi:.1f} eV in {step:g} eV, "
@@ -561,13 +594,17 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
                   + (f", approach {app:.1f} eV" if app is not None else ""))
         park = float(check_on_list([self.edge_k + MB_PARK_ABOVE_EV])[0])
         print(f"  Mb park K {park:.1f} eV")
-        off = [self.offset_eV + o for o in fly_offsets('track')]
-        print(f"  fly 'track' DCCM offsets from the K request: {off}")
+        off = self._center_offsets(fly_offsets('track'))
+        print(f"  {self._cal_state()}")
+        print(f"  fly 'track' DCCM offsets from the "
+              f"{'calibrated SASE center' if self.use_sase else 'K request'}: {off}")
+        center = {k: v for k, v in self.xrt_opts().items() if k == 'energy_center'}
         exafs = _ns('exafs')
         exafs.k_xas_scan(k_positions=db1, k_order='given', pink=True,
                          k_move_mode=K_MODE, dwell_time=0.1, simulate=True)
         exafs.k_xas_scan(k_positions=fly, k_order='given', dccm_offsets=off,
-                         k_move_mode='concurrent', dwell_time=0.1, simulate=True)
+                         k_move_mode='concurrent', dwell_time=0.1, simulate=True,
+                         **center)
         exafs.k_xas_scan(k_positions=mb, k_order='given', pink=True,
                          k_move_mode=K_MODE, dwell_time=0.1, simulate=True)
 
@@ -601,15 +638,16 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         """
         DCCM in and set to real_eV, K requested to the matching list point.
 
-        Uses self.offset_eV, so run x.offset_check() first if the offset is
-        in doubt. The DCCM moves on its own energy axis, not with the
-        vernier. DCCM energy from hutch python only (PLC motion code under
-        debug on 11-09; the PyDM screen is not trusted).
+        K from the SASE calibration when it is on (x.sase_on), else from
+        self.offset_eV (run x.offset_check() first if it is in doubt). The
+        DCCM moves on its own energy axis, not with the vernier. DCCM
+        energy from hutch python only (PLC motion code under debug on
+        11-09; the PyDM screen is not trusted).
         """
-        k = k_for_real(real_eV, self.offset_eV)
+        k = self.k_for(real_eV)
         dccm = _ns('dccm')
         print(f"DCCM in, DCCM {real_eV:.1f} eV, K request {k:.1f} eV "
-              f"(real {k + self.offset_eV:.1f})")
+              f"(SASE center {self.real(k):.1f})")
         dccm.insert()
         request_k(_ns('exafs').acr_energy_k, k, k_max=ut.K_MAX_EV)
         dccm.energy.move(real_eV / 1000.0, wait=True)
@@ -778,13 +816,364 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             k_positions=[k], k_order='given', k_move_mode=K_MODE,
             dccm_offsets=offsets, dwell_time=dwell, record=record,
             sample=f'{PREFIX}_offset_check_k{k:.0f}', picker='open',
-            **self.xrt_opts())
+            dccm_from_center=False, **self.xrt_opts())
 
     def offset_fine(self, center, half=6.0, step=0.5, k=None, dwell=2.0,
                     record=True):
         """Fine offset scan: DCCM offsets center +- half eV in step eV (center = offset from K)."""
         return self.offset_check(k=k, lo=center - half, hi=center + half,
                                  step=step, dwell=dwell, record=record)
+
+    # ---- SASE center and XRT calibration (DCCM in) -----------------------------
+
+    def real(self, k_eV, prev_k_eV=None):
+        """Real SASE center (eV) for a K request: calibration when on, else K + x.offset_eV."""
+        if self.use_sase and self.sase is not None:
+            return self.sase.center(k_eV, prev_k_eV)
+        return float(k_eV) + self.offset_eV
+
+    def k_for(self, real_eV, check=True):
+        """K request (list step) whose SASE center is closest to real_eV."""
+        if self.use_sase and self.sase is not None:
+            k = self.sase.k_for(real_eV)
+        else:
+            k = float(real_eV) - self.offset_eV
+        step = ut.ACR_LIST_EV[2]
+        k = float(np.round(k / step) * step)
+        return float(check_on_list([k])[0]) if check else k
+
+    def _center_offsets(self, off):
+        """DCCM offsets (eV from the SASE center) as k_xas_scan wants them."""
+        if self.use_sase and self.sase is not None:
+            return [round(float(o), 3) for o in off]
+        return [round(self.offset_eV + float(o), 3) for o in off]
+
+    def _cal_state(self, short=False):
+        if self.use_sase and self.sase is not None and self.sase.ready:
+            ref = self.sase.models['all']['ref']
+            c = self.sase.center(ref)
+            s = (f"SASE cal ON (center {c:.1f} eV at K {ref:.1f}, "
+                 f"{self.sase.center(ref + 1.0) - c:.3f} eV per eV of K)")
+        else:
+            s = (f"offset {self.offset_eV:+.1f} eV (SASE cal "
+                 f"{'loaded, off' if self.sase is not None else 'none'})")
+        if short:
+            return s
+        if self.use_xrtcal and self.xrtcal is not None and self.xrtcal.ready:
+            x = (f"XRT cal ON (corr {self.xrtcal.correction(self.real(self.edge_k) / 1000):+.4f}"
+                 f" deg at the edge)")
+        else:
+            x = f"XRT cal {'loaded, off' if self.xrtcal is not None else 'none'}"
+        return f"{s}, {x}"
+
+    def _install_xrt(self):
+        """Put the XRT correction on every XRTspec instance (beamline and exafs)."""
+        fn = None
+        if self.use_xrtcal and self.xrtcal is not None and self.xrtcal.ready:
+            fn = self.xrtcal.correction
+        seen = set()
+        for name, get in (('xrtspec', lambda: _ns('xrtspec')),
+                          ('exafs.xrtspec', lambda: _ns('exafs').xrtspec)):
+            try:
+                xs = get()
+            except Exception as e:
+                logger.warning(f"{name} not found for the XRT calibration: {e}")
+                continue
+            if xs is None or id(xs) in seen:
+                continue
+            seen.add(id(xs))
+            xs.th_correction = fn
+
+    def sase_on(self):
+        """DCCM points, XRT tracking, x.mono and x.k_for use the SASE calibration."""
+        if self.sase is None or not self.sase.ready:
+            raise RuntimeError("no SASE calibration: x.sase_cal() or x.cal_load() first")
+        self.use_sase = True
+        _post("SASE calibration ON for every scan: " + self.sase.model_text(), tag='calib')
+
+    def sase_off(self):
+        """Back to the constant x.offset_eV."""
+        self.use_sase = False
+        _post(f"SASE calibration OFF, constant offset {self.offset_eV:+.1f} eV", tag='calib')
+
+    def xrt_cal_on(self):
+        """XRT crystal angle includes the measured correction (every scan and xrt_park)."""
+        if self.xrtcal is None or not self.xrtcal.ready:
+            raise RuntimeError("no XRT calibration: x.xrt_cal() or x.cal_load() first")
+        off = self.xrtcal.meta.get('offset_deg')
+        if off is not None and abs(off - self.xrt_offset) > 1e-6:
+            logger.warning(f"XRT calibration was taken with x.xrt_offset {off:+.3f} deg, "
+                           f"now {self.xrt_offset:+.3f}: the correction adds on top")
+        self.use_xrtcal = True
+        self._install_xrt()
+        _post("XRT calibration ON: " + self.xrtcal.summary().splitlines()[-1].strip(),
+              tag='calib')
+
+    def xrt_cal_off(self):
+        """XRT crystal angle from the polynomial and x.xrt_offset only."""
+        self.use_xrtcal = False
+        self._install_xrt()
+        _post("XRT calibration OFF", tag='calib')
+
+    def _cal_dir(self):
+        d = _results_dir() / 'calib'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _save_cal(self, cal, name):
+        """Write cal as <name>_<time>.json and <name>_latest.json, plus a PNG."""
+        d, ts = self._cal_dir(), time.strftime('%Y%m%d_%H%M%S')
+        path = cal.save(d / f"{name}_{ts}.json")
+        cal.save(d / f"{name}_latest.json")
+        try:
+            plot = ec.plot_sase if name == 'sase' else ec.plot_xrt
+            plot(cal, d / f"{name}_{ts}.png")
+        except Exception as e:
+            logger.warning(f"{name} plot not written: {e}")
+        return path
+
+    def sase_cal(self, k=None, step=SASE_K_STEP_EV, half=SASE_HALF_EV,
+                 dccm_step=SASE_DCCM_STEP_EV, read_s=SASE_READ_S, direction='up',
+                 deg=1, by_direction=None, diag=SASE_DIAG, add=False, use=True):
+        """
+        Calibrate the real SASE center against the K request. DCCM in.
+
+        At each K (default x.edge_k - 15 .. + 35 eV in 10 eV, the Mb sweep,
+        clipped to the list) K is requested and settles, then the DCCM steps
+        center +- half eV in dccm_step eV and the IPM (diag: 'dg2', 'dg1'
+        or a PV) over the gas detector is averaged read_s s per point. A
+        Gaussian fit gives the center; if the peak sits at the window edge
+        the window moves once. The window follows the fit so far, starting
+        from K + x.offset_eV.
+
+        center - K is fit against K, degree deg (1: offset and slope; 0:
+        constant offset like x.offset_eV). direction 'up' visits K
+        ascending after an approach move 5 eV below, like every scan here;
+        'down' descending; 'both' does both and, unless by_direction=False,
+        fits up and down steps separately. add=True adds the points to the
+        calibration in memory instead of starting over.
+
+        Live EPICS reads, no DAQ run. The DCCM and K go back where they
+        were. Saves JSON + PNG under results/shift_<date>/calib, posts the
+        table, and with use=True switches the calibration on (x.sase_on).
+        About 1.5 min per K at the defaults.
+        """
+        if direction not in ('up', 'down', 'both'):
+            raise ValueError("direction must be 'up', 'down' or 'both'")
+        if k is None:
+            lo, hi = fit_window(self.edge_k - SASE_BELOW_EV, self.edge_k + SASE_ABOVE_EV, step)
+            k = list(grid(lo, hi, step))
+        ks = sorted(float(v) for v in check_on_list(list(np.atleast_1d(k))))
+        appr = []
+        if direction in ('up', 'both'):
+            appr.append(ks[0] - SASE_APPROACH_EV)
+        if direction in ('down', 'both'):
+            appr.append(ks[-1] + SASE_APPROACH_EV)
+        check_on_list(appr)
+        if by_direction is None:
+            by_direction = direction == 'both'
+        if add and self.sase is not None:
+            cal = self.sase
+            cal.by_direction = cal.by_direction or by_direction
+        else:
+            cal = ec.SaseCalibration(deg=deg, by_direction=by_direction)
+        cal.meta.update(diag=diag, half_eV=half, dccm_step_eV=dccm_step, read_s=read_s,
+                        dead_band_um=self.db_um, offset_guess_eV=self.offset_eV)
+        n_pts = int(round(2 * half / dccm_step)) + 1
+        legs = 2 if direction == 'both' else 1
+        est = legs * len(ks) * (12.0 + n_pts * (DCCM_MOVE_S + read_s + 0.2))
+        print(f"SASE calibration: K {ks[0]:.1f}-{ks[-1]:.1f} eV ({len(ks)} points, "
+              f"{direction}), DCCM center +- {half:g} eV in {dccm_step:g} eV ({n_pts} points), "
+              f"{read_s:g} s each on {diag}, ~{est / 60:.0f} min. Ctrl+C keeps what is done.")
+        exafs, dccm = _ns('exafs'), _ns('dccm')
+        reader = ec.MeanReader(ec.SIGNAL_PVS.get(diag, diag))
+        k0 = float(exafs.acr_energy_k.get().setpoint)
+        dccm.insert()
+        e0 = float(dccm.energy.position)
+        try:
+            ec.calibrate_sase(
+                cal, ks, lambda kk: request_k(exafs.acr_energy_k, kk, k_max=ut.K_MAX_EV),
+                dccm, reader, self.offset_eV, direction=direction,
+                approach_eV=SASE_APPROACH_EV, half_eV=half, step_eV=dccm_step,
+                read_s=read_s)
+        except KeyboardInterrupt:
+            print("SASE calibration stopped (Ctrl+C); keeping the points so far")
+        finally:
+            getattr(reader, 'close', lambda: None)()
+            print(f"DCCM back to {e0 * 1000:.1f} eV, K back to {k0:.1f} eV")
+            dccm.energy.move(e0, wait=True)
+            request_k(exafs.acr_energy_k, k0, k_max=ut.K_MAX_EV)
+        self.sase = cal
+        path = self._save_cal(cal, 'sase')
+        _post(f"{cal.summary()}\ndead band {self.db_um:g} um recorded. saved {path}",
+              tag='calib')
+        if use and cal.ready:
+            self.sase_on()
+        elif not cal.ready:
+            print("no usable point: calibration not switched on")
+        return cal
+
+    def sase_check(self, k=None, half=12.0, dccm_step=1.5, read_s=SASE_READ_S,
+                   diag=SASE_DIAG, rezero=False, add=False, approach=True):
+        """
+        One-K check of the SASE calibration (drift). DCCM in.
+
+        K at k (default: the present K request), always reached from 5 eV
+        below like the calibration and the scans: the center depends on the
+        side K came from (-3.6 eV for down steps on 10-26), so a check at a
+        K of unknown history would re-zero onto the wrong side. approach=
+        False skips the approach move (K must have come up). DCCM scan
+        predicted center +- half eV, fit. Prints measured minus predicted.
+        rezero=True shifts the whole calibration by that amount (slope
+        kept); add=True adds the point and refits. DCCM goes back.
+        """
+        if self.sase is None or not self.sase.ready:
+            raise RuntimeError("no SASE calibration: x.sase_cal() or x.cal_load() first")
+        exafs, dccm = _ns('exafs'), _ns('dccm')
+        k = float(exafs.acr_energy_k.get().setpoint) if k is None else float(k)
+        k = float(check_on_list([k])[0])
+        prev = float(check_on_list([k - SASE_APPROACH_EV])[0])
+        if approach:
+            request_k(exafs.acr_energy_k, prev, k_max=ut.K_MAX_EV)
+        request_k(exafs.acr_energy_k, k, k_max=ut.K_MAX_EV)
+        direction = 'up'
+        pred = k + self.sase.offset(k, direction)
+        reader = ec.MeanReader(ec.SIGNAL_PVS.get(diag, diag))
+        dccm.insert()
+        e0 = float(dccm.energy.position)
+        try:
+            fit, es, rs = ec.measure_sase_center(dccm, reader, pred, half, dccm_step, read_s)
+        finally:
+            getattr(reader, 'close', lambda: None)()
+            dccm.energy.move(e0, wait=True)
+        if not fit['ok']:
+            print(f"K {k:.1f} eV: no usable fit ({fit['reason']}); calibration unchanged")
+            return fit
+        d = fit['center'] - pred
+        msg = (f"SASE check K {k:.1f} eV: center {fit['center']:.1f} eV, predicted "
+               f"{pred:.1f} eV, measured - predicted {d:+.2f} eV, FWHM {fit['fwhm']:.1f} eV")
+        if add:
+            self.sase.add(k, fit, direction=direction, energies=es, signals=rs)
+            self.sase.fit()
+            msg += "; point added, refit: " + self.sase.model_text()
+        elif rezero:
+            sh = self.sase.rezero(k, fit['center'], direction)
+            msg += f"; calibration shifted {sh:+.2f} eV"
+        if add or rezero:
+            self._save_cal(self.sase, 'sase')
+        _post(msg, tag='calib')
+        return fit
+
+    def _zyla(self):
+        return ec.ZylaLine(ZYLA_PV.rsplit(':', 1)[0])
+
+    def xrt_line(self, frames=XRT_CAL_FRAMES, target_px=None):
+        """Where the line sits on the Zyla now (column) against the target; no motion."""
+        line = self._zyla()
+        target = line.width() / 2.0 if target_px is None else float(target_px)
+        r = line.read(frames)
+        if not r['ok']:
+            print(f"line not found: {r['reason']}")
+        else:
+            print(f"line at {r['px']:.1f} px (FWHM {r['fwhm_px']:.1f} px), target "
+                  f"{target:.1f}: {r['px'] - target:+.1f} px")
+        return r
+
+    def xrt_cal(self, energies=None, n=XRT_CAL_N, delta=XRT_ROCK_DEG,
+                frames=XRT_CAL_FRAMES, target_px=None, deg=1, use=True):
+        """
+        Calibrate the XRT crystal angle so the DCCM line sits on the target
+        column (default the image center) at every energy. DCCM in, Zyla
+        acquiring.
+
+        energies (real eV) default to n points over the SASE centers of the
+        Mb sweep (x.edge_k - 15 .. + 35 eV). At each: K to x.k_for(E) (run
+        x.sase_cal first so the SASE sits on E), DCCM to E, XRT to E with
+        the present correction, th rocked +- delta deg (3 points), line
+        column fit against th and solved for the target. The correction
+        (best - model th) is fit against energy, degree deg, saved and with
+        use=True installed (x.xrt_cal_on). The XRT is then parked at the
+        SASE center of the K it started at; K and the DCCM go back.
+        th steps go straight to the motor, like x.xrt_tune; a solution more
+        than 0.5 deg away is not applied.
+        """
+        exafs, dccm, xrt = _ns('exafs'), _ns('dccm'), _ns('xrtspec')
+        if energies is None:
+            lo = self.real(self.edge_k - SASE_BELOW_EV)
+            hi = self.real(self.edge_k + SASE_ABOVE_EV)
+            energies = [round(float(e) * 2) / 2 for e in np.linspace(lo, hi, n)]
+        energies = [float(e) for e in energies]
+        for e in energies:
+            self.k_for(e)   # raises if the K for an energy is off the list
+        line = self._zyla()
+        target = line.width() / 2.0 if target_px is None else float(target_px)
+        cal = ec.XrtCalibration(deg=deg)
+        cal.meta.update(offset_deg=self.xrt_offset, target_px=target, delta_deg=delta,
+                        frames=frames, sase_on=self.use_sase)
+        print(f"XRT calibration: {len(energies)} energies {energies[0]:.1f}-{energies[-1]:.1f} "
+              f"eV, th +- {delta:g} deg, line to column {target:.1f}, "
+              f"~{len(energies) * 50 / 60:.0f} min. Ctrl+C keeps what is done.")
+        k0 = float(exafs.acr_energy_k.get().setpoint)
+        dccm.insert()
+        e0 = float(dccm.energy.position)
+
+        def set_energy(e):
+            request_k(exafs.acr_energy_k, self.k_for(e), k_max=ut.K_MAX_EV)
+            dccm.energy.move(e / 1000.0, wait=True)
+
+        try:
+            ec.calibrate_xrt(cal, energies, set_energy, xrt, line, self.xrt_offset, target,
+                             delta_deg=delta, frames=frames)
+        except KeyboardInterrupt:
+            print("XRT calibration stopped (Ctrl+C); keeping the points so far")
+        finally:
+            print(f"DCCM back to {e0 * 1000:.1f} eV, K back to {k0:.1f} eV")
+            dccm.energy.move(e0, wait=True)
+            request_k(exafs.acr_energy_k, k0, k_max=ut.K_MAX_EV)
+        self.xrtcal = cal
+        path = self._save_cal(cal, 'xrt')
+        _post(f"{cal.summary()}\nsaved {path}", tag='calib')
+        if use and cal.ready:
+            self.xrt_cal_on()
+        elif not cal.ready:
+            print("no usable point: XRT calibration not switched on")
+        try:
+            self.xrt_park(self.real(k0))
+        except Exception as e:
+            logger.warning(f"XRT park after the calibration failed: {e}")
+        return cal
+
+    def cal_show(self):
+        """Print both calibrations and whether scans use them."""
+        print(self._cal_state())
+        for cal in (self.sase, self.xrtcal):
+            if cal is not None:
+                print(cal.summary())
+
+    def cal_load(self, sase=True, xrt=True, folder=None, use=True):
+        """
+        Load the last saved calibrations (<name>_latest.json, or a folder /
+        file given) and with use=True switch them on. For a new User() after
+        a reload.
+        """
+        d = Path(folder) if folder is not None else self._cal_dir()
+        for want, name, cls in ((sase, 'sase', ec.SaseCalibration),
+                                (xrt, 'xrt', ec.XrtCalibration)):
+            if not want:
+                continue
+            path = d if d.suffix == '.json' else d / f"{name}_latest.json"
+            if not path.exists():
+                print(f"no {name} calibration at {path}")
+                continue
+            try:
+                cal = cls.load(path)
+            except ValueError:
+                continue    # a single file of the other kind
+            setattr(self, 'sase' if name == 'sase' else 'xrtcal', cal)
+            print(f"loaded {path}")
+            print(cal.summary())
+            if use and cal.ready:
+                self.sase_on() if name == 'sase' else self.xrt_cal_on()
 
     # ---- dead band (19:00-21:00, with ACR) -------------------------------------
 
@@ -937,19 +1326,26 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
 
     def xrt_opts(self, xrt=None):
         """
-        k_xas_scan keywords for XRT tracking; xrt=None uses x.xrt_track.
+        k_xas_scan keywords for XRT tracking and the SASE center; xrt=None
+        uses x.xrt_track.
 
         Tracking on: before each K request the crystal, camera arm and camy
-        move to the new real energy, K request + x.offset_eV (non-blocking
-        in concurrent_settled), after K settles check_feespec_crystal_angle
-        runs (2.0 s per step on 10-09), at every point the camera arm
-        follows and at the end the XRT returns to the start energy. Off:
-        none of these, the XRT stays put.
+        move to the new real energy (non-blocking in concurrent_settled),
+        after K settles check_feespec_crystal_angle runs (2.0 s per step on
+        10-09), at every point the camera arm follows and at the end the
+        XRT returns to the start energy. Off: none of these, the XRT stays
+        put. The real energy is the calibrated SASE center when x.sase_on()
+        (then DCCM offsets count from it too), else K request + x.offset_eV.
+        With x.xrt_cal_on() the crystal angle includes the measured
+        correction (installed on the spectrometer, not passed here).
         """
         on = self.xrt_track if xrt is None else bool(xrt)
-        return dict(crystal_angle_offset=self.xrt_offset, track_feespec=on,
+        opts = dict(crystal_angle_offset=self.xrt_offset, track_feespec=on,
                     track_feespec_cam=on, track_feespec_blocking=False,
                     feespec_offset_eV=self.offset_eV)
+        if self.use_sase and self.sase is not None:
+            opts['energy_center'] = self.sase.center
+        return opts
 
     def xrt_on(self):
         """XRT follows K in every scan from here on (default tonight)."""
@@ -972,12 +1368,12 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         """
         Run the crystal-angle check that tracked scans do after each K move.
 
-        real_eV defaults to the current K request + x.offset_eV, the energy
-        tracked scans set the XRT for. Corrects th if it is off the
-        calculated angle. Use after a manual XRT move.
+        real_eV defaults to the SASE center at the current K request
+        (x.real()), the energy tracked scans set the XRT for. Corrects th if
+        it is off the calculated angle. Use after a manual XRT move.
         """
         if real_eV is None:
-            real_eV = _ns('exafs').acr_energy_k.get().setpoint + self.offset_eV
+            real_eV = self.real(_ns('exafs').acr_energy_k.get().setpoint)
         _ns('xrtspec').check_feespec_crystal_angle(
             real_eV / 1000.0, crystal_angle_offset=self.xrt_offset)
         print(f"XRT angle checked for {real_eV:.1f} eV")
@@ -1011,7 +1407,16 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         lo, hi, step = int(lo_eV), int(hi_eV), int(step)
         num = len(range(lo, hi + step, step))
         l_step = ut.ACR_LIST_EV[2]
-        k_off = float(np.round(self.offset_eV / l_step) * l_step)
+        offset = self.offset_eV
+        if self.use_sase and self.sase is not None:
+            # notch takes one constant K offset: the calibrated one at the
+            # middle of the range, with the worst error over the range shown
+            offs = [e - self.sase.k_for(e) for e in range(lo, hi + step, step)]
+            offset = float(np.mean(offs))
+            print(f"SASE calibration on: constant K offset {offset:+.1f} eV for notch, "
+                  f"calibration varies {min(offs):+.1f} to {max(offs):+.1f} eV over "
+                  f"{lo}-{hi} eV")
+        k_off = float(np.round(offset / l_step) * l_step)
         check_on_list([e - k_off for e in range(lo, hi + step, step)])
         print(f"DCCM {lo}-{hi} eV in {step} eV, K = DCCM - {k_off:g} eV")
         exafs, dccm = _ns('exafs'), _ns('dccm')
@@ -1047,8 +1452,10 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         lo, hi default to x.edge_k - 20 and x.edge_k + 30 eV, clipped to the
         list and cap. reverse=True runs hi -> lo. K is first requested one
         step outside the start. dccm_offset=None: pink, the DCCM is not
-        moved. A number: the DCCM (put in by hand) sits at K request +
-        dccm_offset eV at every step, e.g. x.offset_eV for the SASE center.
+        moved. 'center': the DCCM (put in by hand) sits on the SASE center
+        at every step (the calibrated center with x.sase_on(), else K
+        request + x.offset_eV). A number: the DCCM sits at K request +
+        dccm_offset eV at every step, as before.
         concurrent_settled: a step holds max(0, dwell - K move) s settled.
         """
         lo = self.edge_k - 20.0 if lo is None else lo
@@ -1060,16 +1467,28 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             pos, approach = pos[::-1], pos[-1] + step
         approach = float(check_on_list([approach])[0])
         pink = dccm_offset is None
-        offsets = None if pink else [float(o) for o in np.atleast_1d(dccm_offset)]
+        opts = self.xrt_opts()
+        on_center = isinstance(dccm_offset, str)
+        if on_center and dccm_offset != 'center':
+            raise ValueError("dccm_offset must be None, 'center' or eV from the K request")
+        if pink:
+            offsets = None
+        elif on_center:
+            offsets = self._center_offsets([0.0])
+        else:
+            offsets = [float(o) for o in np.atleast_1d(dccm_offset)]
+            opts['dccm_from_center'] = False
         sample = f"{PREFIX}_fe_foil_{lo:.0f}_{hi:.0f}_{step:g}eV".replace('.', 'p')
         if reverse:
             sample += "_down"
         if pink:
             beam = "pink, DCCM out"
+        elif on_center:
+            sample += "_dccm_center"
+            beam = f"DCCM in, DCCM on the SASE center ({self._cal_state(short=True)})"
         else:
             sample += "_dccm" + "_".join(f"{o:+g}" for o in offsets).replace('.', 'p')
             beam = f"DCCM in, DCCM = K {', '.join(f'{o:+g}' for o in offsets)} eV"
-        opts = self.xrt_opts()
         run = _next_run(record)
         msg = (f"Fe foil scan run {run}: {beam}, K {pos[0]:.1f} -> {pos[-1]:.1f} eV "
                f"in {step:g} eV ({len(pos)} steps), {K_MODE}, dwell {dwell:g} s, "
@@ -1111,8 +1530,9 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         n points of dwell s while the girders move. 'track' takes the DCCM
         from the old SASE center to the new one (-4..0 eV from the new
         center for +5 eV, +4..0 going down); 'center' puts the points
-        symmetric around the new center (-2..+2 eV). x.offset_eV is added,
-        so the points sit on the real SASE energy. The scan waits for each
+        symmetric around the new center (-2..+2 eV). The center is the
+        calibrated one with x.sase_on(), else K request + x.offset_eV, so
+        the points sit on the real SASE energy. The scan waits for each
         K request to finish before the next write (the hold-off that keeps it
         from running ahead), so a step takes max(n x (dwell + ~1.4 s DCCM
         move), K move): ~22 s at the defaults against an ~11-12 s K move,
@@ -1126,7 +1546,7 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             return None
         pos, approach = fly_positions(self.edge_k, step, lo, hi, reverse)
         off = fly_offsets(pattern, step, n, going_up=not reverse)
-        dccm_offsets = [round(self.offset_eV + o, 3) for o in off]
+        dccm_offsets = self._center_offsets(off)
         opts = self.xrt_opts()
         opts['track_feespec_cam'] = False
         sample = (f"{PREFIX}_fly_{pattern}_{min(pos):.0f}_{max(pos):.0f}_{step:g}eV_"
@@ -1139,7 +1559,7 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         run = _next_run(record)
         msg = (f"fly scan run {run}: '{pattern}', K {pos[0]:.1f} -> {pos[-1]:.1f} eV "
                f"in {step:g} eV ({len(pos)} positions), DCCM offsets {off} eV from the "
-               f"new SASE center (offset {self.offset_eV:+.1f} eV), {dwell:g} s each, "
+               f"new SASE center ({self._cal_state(short=True)}), {dwell:g} s each, "
                f"~{per_step:.0f} s of DCCM points per step, dead band {self.db_um:g} um")
         _post(msg, tag='fly') if record else print(msg)
         exafs = _ns('exafs')
@@ -1158,7 +1578,8 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         Reference for the fly scan, same K grid, K settled.
 
         points=False (F0): concurrent_settled with one DCCM point at the K
-        center (K request + x.offset_eV). The DCCM moves to the new center
+        center (calibrated with x.sase_on(), else K request + x.offset_eV).
+        The DCCM moves to the new center
         after K done and the XRT check; the dwell (20 s by default) counts
         from the K write, so ~7 s per step sit at the new center with K
         settled. The timing CSV marks the dwell start (t_dwell_start).
@@ -1177,7 +1598,7 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             dwell = FLY_REF_DWELL_S if dwell is None else dwell
             off = [0.0]
             mode = K_MODE
-        dccm_offsets = [round(self.offset_eV + o, 3) for o in off]
+        dccm_offsets = self._center_offsets(off)
         opts = self.xrt_opts()
         opts['track_feespec_cam'] = False
         kind = f"points_{pattern}" if points else "center"
@@ -1329,8 +1750,8 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             att = "att ?"
         rb_db = ut.deadband_text(ut.read_deadband(timeout=0.5))
         return (f"{mesh}, {att}, dead band {self.db_um:g} um recorded ({rb_db}), XRT "
-                f"tracking {'on' if self.xrt_track else 'off'}, offset "
-                f"{self.offset_eV:+.1f} eV, edge K {self.edge_k:.1f} eV")
+                f"tracking {'on' if self.xrt_track else 'off'}, "
+                f"{self._cal_state(short=True)}, edge K {self.edge_k:.1f} eV")
 
     def _pink_run(self, pos, dwell, sample, what, record=True):
         exafs = _ns('exafs')
@@ -1392,28 +1813,28 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         """
         Pass n on reservoir r over the real edge +- half eV in step eV, pink.
 
-        edge_eV is a real photon energy, default x.edge_k + x.offset_eV
-        (the foil edge as set tonight). Each K point is real - x.offset_eV,
-        rounded to the list step; points off the loaded list or above the
-        cap are dropped with a warning. Goes up only by default (13 points
-        at 30 s, ~7 min); updown=True sweeps up and back in one DAQ run.
+        edge_eV is a real photon energy, default x.real(x.edge_k) (the foil
+        edge as set tonight). Each K point is x.k_for(real): the calibrated
+        inverse with x.sase_on(), else real - x.offset_eV, rounded to the
+        list step; points off the loaded list or above the cap are dropped
+        with a warning. Goes up only by default (13 points at 30 s, ~7 min);
+        updown=True sweeps up and back in one DAQ run.
         """
-        edge = self.edge_k + self.offset_eV if edge_eV is None else float(edge_eV)
+        edge = self.real(self.edge_k) if edge_eV is None else float(edge_eV)
         lo, hi, l_step = list_bounds()
         offs = np.arange(-half, half + step / 2, step)
-        k_all = [float(np.round((edge + o - self.offset_eV) / l_step) * l_step)
-                 for o in offs]
+        k_all = [self.k_for(edge + o, check=False) for o in offs]
         k_pts = [k for k in k_all if lo - 1e-6 <= k <= hi + 1e-6]
         if len(k_pts) < len(k_all):
             logger.warning(f"edge pass clipped to {len(k_pts)} of {len(k_all)} points "
                            f"by the list or cap ({lo:.1f}-{hi:.1f} eV K)")
         if len(k_pts) < 2:
             raise ValueError(f"edge {edge:.1f} eV +- {half:g} eV does not fit the loaded "
-                             f"list {lo:.1f}-{hi:.1f} eV K with offset {self.offset_eV:+.1f}")
+                             f"list {lo:.1f}-{hi:.1f} eV K ({self._cal_state(short=True)})")
         check_on_list(k_pts)
         pos = k_pts + k_pts[-2::-1] if updown else k_pts
-        print(f"edge pass: real {k_pts[0] + self.offset_eV:.1f}-"
-              f"{k_pts[-1] + self.offset_eV:.1f} eV around {edge:.1f} eV, K "
+        print(f"edge pass: real {self.real(k_pts[0]):.1f}-"
+              f"{self.real(k_pts[-1]):.1f} eV around {edge:.1f} eV, K "
               f"{k_pts[0]:.1f}-{k_pts[-1]:.1f} eV in {step:g} eV, {len(pos)} visits")
         return self._pink_run(
             pos, dwell, f"{PREFIX}_mb_mesh_edge_P{n}_r{r}",
@@ -1670,8 +2091,31 @@ XRT (FEE) spectrometer, Si(111), tracking ON tonight (report rec 12)
  3. x.xrt_tune(+-0.05) until the line sits at the image center column.
  4. Optional: x.spec_calib(), then x.spec_calib_output('user'), spec_window(...).
  x.xrt_on() / x.xrt_off() switch tracking for every scan; x.xrt_check() after a
- manual move. Do not calibrate the XRT on the DCCM and then trust it in SASE
- without a check: the DCCM shifts the pointing slightly.
+manual move. Do not calibrate the XRT on the DCCM and then trust it in SASE
+without a check: the DCCM shifts the pointing slightly.
+Measured correction instead of step 3: x.procedure('calib').
+""",
+    'calib': """
+SASE center and XRT calibration, DCCM in, Fe foil out, ~15 min. Run after the
+dead band is chosen (the center moves with the band) and repeat after a band change.
+ 1. Beam at 7.1 keV, x.mono() (DCCM in), Zyla acquiring, att so DG2 is not saturated.
+ 2. x.sase_cal()       K edge-15..edge+35 in 10 eV, DCCM scan +-20 eV at each K, live
+                       DG2/GDET, Gaussian center. Prints center-K per K and the fit:
+                       'center = K +a +b x (K - Kref)'. Check: FWHM ~15-30 eV, resid
+                       < ~2 eV (girder scatter at a wide band), slope b near 0 means a
+                       constant offset was fine. Switched on (x.sase_on) when done.
+                       x.sase_cal(direction='both') measures up and down steps apart.
+ 3. x.xrt_cal()        5 energies over the same range; at each the crystal is rocked
+                       +-0.03 deg and solved for the line on the center column. Switched
+                       on (x.xrt_cal_on). x.xrt_line() any time: line column vs target.
+ 4. x.cal_show()       both tables; files in results/shift_<date>/calib (json + png).
+ From here every scan uses them: fly/fly_ref points sit on the calibrated center,
+ x.fe_foil_scan(dccm_offset='center') follows it, x.mono(E)/x.k_for(E) invert it,
+ XRT tracking goes to the calibrated center with the measured crystal angle.
+ Drift during the night: x.sase_check() at the present K (DCCM in); rezero=True
+ shifts the calibration by the measured difference. Pink check of the XRT: DCCM
+ out, x.xrt_line() fits the SASE spectrum itself, expect a few px from target.
+ After a reload: x.cal_load(). Back to constants: x.sase_off(), x.xrt_cal_off().
 """,
     'tfs': """
 TFS 04,05,06 z scan, no prefocus, DCCM in at 7115 eV (10-26 stack; confirm)

@@ -113,6 +113,12 @@ class XRTspec:
             raise RuntimeError(f"Failed to initialize HXRSpectrometer: {e}")
 
         self.logger = logging.getLogger(__name__)
+        # Optional measured crystal-angle correction, deg, as a function of
+        # energy in keV (mfx.energy_calib.XrtCalibration.correction). Added
+        # to the crystal angle on top of crystal_angle_offset in every
+        # position calculation, so tracking, parking and the angle check all
+        # use it. None: the polynomial alone.
+        self.th_correction = None
 
     def get_feespec_positions(self, energy_keV, crystal_angle_offset=0.0, debug=False):
         """
@@ -245,13 +251,21 @@ class XRTspec:
             crystal_angle = (140.08 - (21.2 * energy_keV) +
                             (1.02 * energy_keV ** 2) + crystal_angle_offset)
 
+        # Measured energy-dependent correction (crystal only, like the offset)
+        th_corr = 0.0
+        corr = getattr(self, 'th_correction', None)
+        if corr is not None:
+            th_corr = float(corr(energy_keV))
+            crystal_angle += th_corr
+
         # Return dictionary of positions
         positions = {
             'energy_keV': energy_keV,
             'crystal_angle': crystal_angle,
             'camera_angle': camera_angle,
             'camera_y': camera_y,
-            'crystal_angle_offset': crystal_angle_offset
+            'crystal_angle_offset': crystal_angle_offset,
+            'th_correction': th_corr,
         }
         if debug:
             # Log the calculated positions
@@ -259,6 +273,8 @@ class XRTspec:
             self.logger.info(f"  Crystal angle (θ):  {crystal_angle:.4f}°")
             if crystal_angle_offset != 0.0:
                 self.logger.info(f"    (includes offset: {crystal_angle_offset:+.4f}°)")
+            if th_corr != 0.0:
+                self.logger.info(f"    (includes calibration: {th_corr:+.4f}°)")
             self.logger.info(f"  Camera angle (2θ):  {camera_angle:.4f}°")
             self.logger.info(f"  Camera Y position:  {camera_y:.4f} mm")
 

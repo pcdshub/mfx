@@ -1720,7 +1720,8 @@ class Exafs:
                    sample='?', simulate=False, runs=1,
                    step_timing=True, post_timing=True,
                    pink=False, k_order='ascending', seed=None,
-                   on_no_ack='raise', feespec_offset_eV=0.0):
+                   on_no_ack='raise', feespec_offset_eV=0.0,
+                   energy_center=None, dccm_from_center=True):
         """
         K-primary XAS scan: undulator K is the primary scan axis,
         DCCM steps within a small window around each K position.
@@ -1815,6 +1816,18 @@ class Exafs:
             spec tracking the crystal is set for K + feespec_offset_eV; in
             pink mode the camera arm and the end-of-scan XRT return use it
             too (with the DCCM in they follow the DCCM energy).
+        energy_center : callable or None, optional
+            Calibrated SASE center, ``energy_center(k_eV, prev_k_eV) -> real
+            eV`` (e.g. ``mfx.energy_calib.SaseCalibration.center``).
+            prev_k_eV is the K request before this step (None if unknown),
+            so a calibration can tell up and down steps apart. When given,
+            DCCM offsets are taken from this center instead of from the K
+            request, the FEE spec crystal is set for it, and
+            feespec_offset_eV is ignored. None (default): unchanged.
+        dccm_from_center : bool, optional
+            With energy_center: True (default) takes dccm_offsets from the
+            calibrated center; False keeps them from the K request (raw
+            DCCM scans) while the FEE spec still follows the center.
 
         Returns
         -------
@@ -1879,6 +1892,14 @@ class Exafs:
             raise ValueError(f"k_move_mode must be 'pause', 'concurrent', or 'concurrent_settled', got '{k_move_mode}'")
         if on_no_ack not in ('raise', 'warn'):
             raise ValueError(f"on_no_ack must be 'raise' or 'warn', got '{on_no_ack}'")
+        if energy_center is not None and not callable(energy_center):
+            raise TypeError("energy_center must be callable (k_eV, prev_k_eV) -> eV")
+
+        def _center_eV(k_eV, prev_k_eV):
+            # real SASE center for one K request: calibration, else constant offset
+            if energy_center is not None:
+                return float(energy_center(k_eV, prev_k_eV))
+            return k_eV + feespec_offset_eV
 
         if dccm_offsets is None:
             dccm_offsets = np.round(np.arange(
@@ -1954,7 +1975,14 @@ class Exafs:
         print(f"  Track FEE spec:  {track_feespec}")
         print(f"  FEE spec block:  {track_feespec_blocking}")
         print(f"  Track FEE cam:   {track_feespec_cam}")
-        print(f"  FEE spec offset: {feespec_offset_eV:+.1f} eV (real - K request)")
+        if energy_center is not None:
+            c_lo, c_hi = _center_eV(e_lo, None), _center_eV(e_hi, None)
+            print(f"  SASE center:     calibrated, K {e_lo:.1f} -> {c_lo:.1f} eV, "
+                  f"K {e_hi:.1f} -> {c_hi:.1f} eV ("
+                  + ("DCCM offsets and XRT from it)" if dccm_from_center and not pink
+                     else "XRT from it, DCCM offsets from K)"))
+        else:
+            print(f"  FEE spec offset: {feespec_offset_eV:+.1f} eV (real - K request)")
         print(f"  Flux threshold:  {flux_threshold}")
         print(f"  Simulate:        {simulate}")
         print(f"  Sample:          {sample}")
@@ -2029,15 +2057,25 @@ class Exafs:
                             self.logger.warning(f"SET2 not read for step 1 de_eV: {e}")
                     self._step_timer = StepTimer(k_move_mode, prev_eV=prev_eV)
 
+                # K request before step 1, for direction-aware calibrations
+                prev_k_eV = None if simulate else k_energy_start
                 order = rng.permutation(n_k) if k_order == 'random' else range(n_k)
                 for n_done, k_idx in enumerate(order):
                     k_target_eV = k_positions_eV[k_idx]
-                    # XRT energy for this step (the move helpers use it for the XRT only)
-                    xrt_keV = (k_target_eV + feespec_offset_eV) / 1000.0
+                    # real SASE center for this step: the XRT is set for it and,
+                    # with energy_center, the DCCM offsets are taken from it
+                    center_eV = _center_eV(k_target_eV, prev_k_eV)
+                    # pink: the summary's dccm_energy_eV keeps the K target
+                    dccm_base_eV = (center_eV if energy_center is not None and dccm_from_center
+                                    and not pink else k_target_eV)
+                    prev_k_eV = k_target_eV
+                    xrt_keV = center_eV / 1000.0
 
                     self.logger.warning(
                         f"K position {n_done + 1}/{n_k}: "
                         f"{k_target_eV:.1f} eV [{k_move_mode}]"
+                        + (f", SASE center {center_eV:.1f} eV"
+                           if energy_center is not None else "")
                     )
 
                     if self._step_timer:
@@ -2066,7 +2104,7 @@ class Exafs:
 
                     # Step DCCM through offsets
                     for i_off, offset in enumerate(dccm_offsets):
-                        dccm_energy_eV = k_target_eV + offset
+                        dccm_energy_eV = dccm_base_eV + offset
                         dccm_energy_keV = dccm_energy_eV / 1000.0
 
                         self.logger.info(
@@ -2094,7 +2132,7 @@ class Exafs:
                         if track_feespec_cam:
                             cam_keV = dccm_energy_keV
                             if pink:
-                                cam_keV = (dccm_energy_eV + feespec_offset_eV) / 1000.0
+                                cam_keV = center_eV / 1000.0
                             self._xrt('camera arm', self.xrtspec.track_feespec_camera,
                                       cam_keV, crystal_angle_offset)
 
@@ -2129,6 +2167,7 @@ class Exafs:
                             'k_target_eV': k_target_eV,
                             'dccm_energy_eV': dccm_energy_eV,
                             'dccm_offset_eV': offset,
+                            'center_eV': center_eV,
                             'k_move_mode': k_move_mode,
                             'run_index': run_idx,
                             'point_index': point_index,
@@ -2209,7 +2248,7 @@ class Exafs:
             if track_feespec:
                 xrt_start = energy_start
                 if pink:
-                    xrt_start = energy_start + feespec_offset_eV / 1000.0
+                    xrt_start = _center_eV(k_energy_start, None) / 1000.0
                 _restore("XRT return", self._xrt, 'return',
                          self.xrtspec.move_feespec_energy,
                          xrt_start, crystal_angle_offset=crystal_angle_offset)
