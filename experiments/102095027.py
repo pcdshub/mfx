@@ -478,7 +478,8 @@ before beam   x.checklist_pre()  x.status()  x.dry_run()  x.mesh_status()
               x.mb_edge(n, r): real edge +- 30 eV in 5 eV, up only (edge = x.edge_k + x.offset_eV)
 05:15         x.mb_blank('end')  x.mesh_off()  [DCCM-in foil: x.fe_foil_scan(dccm_offset=x.offset_eV)]
 06:00         x.db_read()  (0.125 um after the GUI closes)  x.checklist_post()
-any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
+any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20 eV and back)
+              x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
               x.xrt_on()  x.xrt_off()  x.xrt_check()  x.tfs_*  x.geom_rings(D)
 """)
 
@@ -612,6 +613,146 @@ any time      x.procedure('deadband'|'fly'|'mesh'|'xrt'|'tfs'|'geom')
         dccm.insert()
         request_k(_ns('exafs').acr_energy_k, k, k_max=ut.K_MAX_EV)
         dccm.energy.move(real_eV / 1000.0, wait=True)
+
+    def dccm_test(self, delta_eV=20.0, move=True, timeout=60.0, settle=3.0):
+        """
+        Short DCCM check, six lines to read out by hand.
+
+        CODE: which dccm.py is loaded (CTC = PLC energy controller,
+        DIRECT = TH1/TH2 motor records). CAL: crystal offsets in the motor
+        records (.OFF) and in the PLC (AngleOffset). NOW: energy readback,
+        CTC setpoint and state, thetas. With move=True, UP and BACK move
+        dccm.energy by +delta_eV and back (the call x.mono and the scans
+        use) and sample the PLC State/Done every 0.05 s until settle s
+        after the move returns. VERDICT: one line. Energies in eV, angles
+        in degrees.
+        """
+        P, C = 'SP1L0:DCCM:', 'SP1L0:DCCM:CTC:CRYS:01:'
+        d_si, hc = 3.13560114, 12398.419
+
+        def g(pv):
+            v = _caget(pv, timeout=0.5)
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        def f(v, fmt='.4f'):
+            return '?' if v is None else format(v, fmt)
+
+        def bragg(e_eV):
+            return float(np.degrees(np.arcsin(hc / (2 * d_si * e_eV))))
+
+        def seq(vals):
+            return '>'.join('?' if v is None else str(int(v)) for v in vals) or '?'
+
+        en = _ns('dccm').energy
+        code = ('CTC' if 'actuate' in getattr(type(en), 'component_names', ())
+                else 'DIRECT')
+        lines = [f"CODE {code} prefix={getattr(en, 'prefix', '?')}"]
+
+        off1, off2 = g(P + 'MMS:TH1.OFF'), g(P + 'MMS:TH2.OFF')
+        ao1, ao2 = g(C + 'AngleOffset'), g('SP1L0:DCCM:CTC:CRYS:02:AngleOffset')
+        if None in (off1, ao1):
+            where = '?'
+        else:
+            key = (abs(off1) > 1e-4, abs(ao1) > 1e-4)
+            where = {(True, False): 'OFF', (False, True): 'PLC',
+                     (True, True): 'BOTH', (False, False): 'NONE'}[key]
+        lines.append(f"CAL  OFF1={f(off1, '.5f')} OFF2={f(off2, '.5f')} "
+                     f"AO1={f(ao1, '.5f')} AO2={f(ao2, '.5f')} calib={where}")
+
+        def now():
+            e, cmd = g(C + 'EstEnergy_RBV'), g(C + 'CmdkeV')
+            return dict(e=None if e is None else e * 1000,
+                        cmd=None if cmd is None else cmd * 1000,
+                        st=g(C + 'State_RBV'), dn=g(C + 'Done_RBV'),
+                        err=g(C + 'Error_RBV'), cp=g('SP1L0:DCCM:CTC:Coupled_RBV'),
+                        th1=g(P + 'MMS:TH1.RBV'), th2=g(P + 'MMS:TH2.RBV'))
+
+        n0 = now()
+        par = None if None in (n0['th1'], n0['th2']) else n0['th1'] - n0['th2']
+        lines.append(f"NOW  E={f(n0['e'], '.1f')} cmd={f(n0['cmd'], '.1f')} "
+                     f"state={f(n0['st'], '.0f')} done={f(n0['dn'], '.0f')} "
+                     f"err={f(n0['err'], '.0f')} coupled={f(n0['cp'], '.0f')} "
+                     f"TH1={f(n0['th1'])} TH2={f(n0['th2'])} TH1-TH2={f(par)}")
+
+        def finish(lines):
+            for line in lines:
+                print(line)
+            _post("dccm_test\n" + "\n".join(lines), tag='dccm')
+            return lines
+
+        if not move:
+            return finish(lines)
+        try:
+            e0_keV = float(en.position)
+        except Exception:
+            e0_keV = None if n0['e'] is None else n0['e'] / 1000.0
+        if e0_keV is None:
+            lines.append("VERDICT no start energy readable, not moved")
+            return finish(lines)
+
+        def run(target_keV):
+            st_seq, dn_seq = [], []
+            b = now()
+            t0, t_ret, err, status = time.time(), None, None, None
+            try:
+                status = en.move(target_keV, wait=False)
+            except Exception as e:
+                err = e
+            while time.time() < t0 + timeout:
+                for sq, v in ((st_seq, g(C + 'State_RBV')), (dn_seq, g(C + 'Done_RBV'))):
+                    if not sq or sq[-1] != v:
+                        sq.append(v)
+                done = status is None or getattr(status, 'done', True)
+                if done and t_ret is None:
+                    t_ret = time.time() - t0
+                if t_ret is not None and time.time() > t0 + t_ret + settle:
+                    break
+                time.sleep(0.05)
+            ok = None
+            if status is not None and getattr(status, 'done', False):
+                ok = getattr(status, 'success', None)
+                if ok is False and err is None:
+                    try:
+                        err = status.exception()
+                    except Exception as e:
+                        err = e
+            a = now()
+            d = {k: (None if None in (a[k], b[k]) else a[k] - b[k]) for k in ('th1', 'th2')}
+            return dict(t=t_ret, st=st_seq, dn=dn_seq, ok=ok, err=err, a=a, d=d)
+
+        e0 = e0_keV * 1000
+        res, exp_up = {}, bragg(e0 + delta_eV) - bragg(e0)
+        for name, tgt, exp in (('UP', e0 + delta_eV, exp_up), ('BACK', e0, -exp_up)):
+            r = run(tgt / 1000.0)
+            res[name] = r
+            lines.append(
+                f"{name:4s} {tgt:.1f}: ret={f(r['t'], '.1f')}s ok={r['ok']} "
+                f"state {seq(r['st'])} done {seq(r['dn'])} dTH1={f(r['d']['th1'])} "
+                f"dTH2={f(r['d']['th2'])} exp={exp:+.4f} E={f(r['a']['e'], '.1f')} "
+                f"cmd={f(r['a']['cmd'], '.1f')}"
+                + (f" ERR {str(r['err'])[:60]}" if r['err'] else ""))
+
+        up = res['UP']
+        moved = (up['d']['th1'] is not None and abs(up['d']['th1']) > 0.3 * abs(exp_up))
+        if not moved:
+            states = [int(v) for v in up['st'] if v is not None]
+            if code == 'CTC' and 4 not in states:
+                verdict = "NO MOTION, PLC state never 4 (MOVING)"
+            elif code == 'CTC':
+                verdict = "NO MOTION, PLC went MOVING but thetas did not change"
+            else:
+                verdict = "NO MOTION, direct TH1/TH2 move did not move the axes"
+        else:
+            verdict = "MOVED"
+            if code == 'CTC' and where == 'OFF':
+                verdict += ", but calib is in .OFF: CTC path uncalibrated"
+            if code == 'DIRECT' and where == 'PLC':
+                verdict += ", but calib is in the PLC: direct path uncalibrated"
+        lines.append(f"VERDICT {verdict}")
+        return finish(lines)
 
     def offset_check(self, k=None, lo=-20.0, hi=40.0, step=2.0, dwell=2.0,
                      record=True):
