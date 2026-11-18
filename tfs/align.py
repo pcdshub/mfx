@@ -384,6 +384,10 @@ def _finish(aligned, before, write_in_set):
     else:
         _together(_insert, list(aligned))
         print(f"in: {', '.join(lens.attr_name for lens in aligned)} at their aligned x and old IN_SET")
+        moves = [f"tfs.{lens.attr_name}.y.mv({y:.4f})" for lens, (_, y) in aligned.items()
+                 if round(y, 4) != round(before[lens][0], 4)]
+        if moves:
+            print("to put them at their aligned y without writing IN_SET:\n  " + "\n  ".join(moves))
 
 
 # -- centroid method ----------------------------------------------------------------------------
