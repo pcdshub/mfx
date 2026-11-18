@@ -18,7 +18,18 @@ Ring method: the edge of a lens's aperture casts a thin dark ring on DG2. The
 ring moves with the lens, much more than the centroid does (tfs_06 x: about
 190 px/mm against 4 px/mm). Move the lens until the ring is centered on the
 spot. A lens with no ring (a beam narrower than its aperture), or whose ring does
-not converge, goes back to where it was and is aligned with the centroid method.
+not converge, goes back to where it was and its IN_SET is left as it is: the centroid moves
+about 4 px per mm of lens against 10 px of frame-to-frame jitter at the hutch, too little to
+align on.
+The ring is found in the image divided by one with all lenses out, which leaves only what the
+lens changed, as the circle through the most thin dark pixels (RANSAC): the lens body's texture
+and the holder's edge don't pull it. The spot is measured once, from many frames (the centroid
+jumps 10 px from frame to frame), and every lens is centred on it.
+
+A lens illegal alone is aligned with a partner in: its own edge doesn't show behind the
+partner's, but it focuses the light through the partner's aperture, which shrinks the partner's
+ring and moves it with the lens (about L/f of the lens's offset). It is moved until the
+partner's shrunk ring is centred where the partner's ring is without it.
 
 Both assume camera x/y are along motor x/y.
 
@@ -45,6 +56,7 @@ __all__ = ["gigE_camera_accessor", "align_lens", "align_lenses"]
 INTERLOCK = "MFX:LENS:BEAM"
 BLADE = "MFX:ATT:11"  # the attenuator blade the interlock puts in
 ALIGN_DELTA = 1.0  # mm, IN_DELTA while a lens is being aligned
+SPOT_FRAMES = 50  # frames averaged for the spot and the all-lenses-out image (10 s at 5 Hz)
 
 
 # -- image analysis -----------------------------------------------------------------------------
@@ -70,23 +82,49 @@ def _ring_pixels(image, line_width=9, contrast=0.3):
     return (filled > 0.1 * filled.max()) & (filled - smooth > contrast * filled)
 
 
-def _find_ring(image, exclude=None, min_pixels=40):
+def _circle(cols, rows):
+    """Least-squares circle (col, row, radius) through points: x^2 + y^2 + D x + E y + F = 0."""
+    A = np.column_stack([cols, rows, np.ones_like(cols)])
+    (D, E, F), *_ = np.linalg.lstsq(A, -(cols ** 2 + rows ** 2), rcond=None)
+    col, row = -D / 2, -E / 2
+    return np.array([col, row, np.sqrt(max(col ** 2 + row ** 2 - F, 0.0))])
+
+
+def _find_ring(image, reference, centre=None, radii=(15, 300), tolerance_px=2.0, tries=400, min_pixels=100,
+               min_arc=0.25):
     """
-    The thin dark ring in the beam, as (col, row, radius) in pixels, or None; a circle is fitted to its
-    pixels. Pixels in `exclude` are left out: a partner lens's ring, which stays where it is.
+    A lens aperture's ring in image / reference, as (col, row, radius) px, or None: the circle through
+    the most thin dark pixels within `tolerance_px` (RANSAC), refined by least squares on them, with a
+    radius in `radii` and, given a `centre` (col, row), within 80 px of it. It needs `min_pixels` of
+    them, spread over at least `min_arc` of the circle.
     """
-    ring = _ring_pixels(image)  # True where a dark line is
-    if exclude is not None:
-        ring &= ~exclude  # unmark the partner's ring pixels
-    rows, cols = np.nonzero(ring)  # only the remaining pixels go into the circle fit
+    image = ndimage.gaussian_filter(image.astype(float), 1)
+    reference = ndimage.gaussian_filter(reference.astype(float), 1)
+    lit = reference > 0.2 * reference.max()  # the ratio is noise where the reference is dark
+    ratio = np.where(lit, image / np.maximum(reference, 1e-9), 0.0)
+    rows, cols = np.nonzero(_ring_pixels(ratio) & ndimage.binary_erosion(lit, iterations=4))
     if len(rows) < min_pixels:
         return None
-    # circle x^2 + y^2 + D x + E y + F = 0, least squares
-    A = np.column_stack([cols, rows, np.ones_like(cols)])
-    b = -(cols.astype(float) ** 2 + rows.astype(float) ** 2)
-    (D, E, F), *_ = np.linalg.lstsq(A, b, rcond=None)
-    col, row = -D / 2, -E / 2
-    return np.array([col, row, np.sqrt(max(col ** 2 + row ** 2 - F, 0))])
+    cols, rows = cols.astype(float), rows.astype(float)
+    rng, best = np.random.default_rng(0), None
+    for _ in range(tries):
+        pick = rng.choice(len(cols), 3, replace=False)
+        circle = _circle(cols[pick], rows[pick])
+        if not radii[0] < circle[2] < radii[1] or (centre is not None and np.hypot(*(circle[:2] - centre)) > 80):
+            continue
+        on = np.abs(np.hypot(cols - circle[0], rows - circle[1]) - circle[2]) < tolerance_px
+        if best is None or on.sum() > best.sum():
+            best = on
+    if best is None or best.sum() < min_pixels:
+        return None
+    for _ in range(2):  # refit on the pixels near the circle
+        circle = _circle(cols[best], rows[best])
+        best = np.abs(np.hypot(cols - circle[0], rows - circle[1]) - circle[2]) < tolerance_px
+    angles = np.arctan2(rows[best] - circle[1], cols[best] - circle[0])
+    arc = len(np.unique(np.floor((angles + np.pi) / (2 * np.pi) * 36))) / 36
+    if best.sum() < min_pixels or arc < min_arc or not radii[0] < circle[2] < radii[1]:
+        return None
+    return circle
 
 
 def _check_bright(image, min_counts=20):
@@ -374,7 +412,7 @@ def _centroid_steps(motor, axis, camera, spot, step=0.02, iterations=3, max_move
             return
 
 
-def _align_centroid(lens, camera, spot, step=0.02, iterations=3, max_move=0.2, exclude=None):
+def _align_centroid(lens, camera, spot, step=0.02, iterations=3, max_move=0.2, find=None):
     """Move `lens` until the centroid is on `spot`, with only that lens in. Distances in mm."""
     _centroid_steps(lens.x, 0, camera, spot, step, iterations, max_move)
     _centroid_steps(lens.y, 1, camera, spot, step, iterations, max_move)
@@ -384,7 +422,7 @@ def _align_centroid(lens, camera, spot, step=0.02, iterations=3, max_move=0.2, e
 # -- ring method --------------------------------------------------------------------------------
 
 
-def _ring_gains(lens, camera, step=0.05, max_resize_px=4.0, exclude=None):
+def _ring_gains(lens, camera, step=0.05, max_resize_px=4.0, find=None):
     """
     The ring (col, row, radius), and how many px it moves per mm of x and of y,
     from a `step` mm move of each (moved back after). (None, None) if there is
@@ -393,21 +431,21 @@ def _ring_gains(lens, camera, step=0.05, max_resize_px=4.0, exclude=None):
     aperture and keeps its size, while a circle fitted to something else (the
     corners of a beam narrower than the aperture) does not.
     """
-    ring = _find_ring(_fresh_image(camera), exclude)
+    ring = find(_fresh_image(camera))
     if ring is None:
         return None, None
     gains = []
     for axis, motor in enumerate([lens.x, lens.y]):
         start = _readback(motor)
         moved = _step_by(motor, step)
-        shifted = _find_ring(_fresh_image(camera), exclude)
+        shifted = find(_fresh_image(camera))
         _move(motor, start)
         same = shifted is not None and abs(shifted[2] - ring[2]) <= max_resize_px
         gains.append((shifted[axis] - ring[axis]) / moved if same else None)
     return ring, gains
 
 
-def _ring_steps(lens, camera, spot, ring, gains, iterations=6, max_move=0.2, tolerance_px=1.0, exclude=None):
+def _ring_steps(lens, camera, spot, ring, gains, iterations=6, max_move=0.2, tolerance_px=1.0, find=None):
     """
     Move the lens until the ring is centered on `spot` within `tolerance_px`,
     each move at most `max_move` mm. Returns the last ring, or None if lost.
@@ -422,23 +460,23 @@ def _ring_steps(lens, camera, spot, ring, gains, iterations=6, max_move=0.2, tol
             break
         for axis, motor in enumerate([lens.x, lens.y]):
             _move(motor, _readback(motor) + np.clip(error[axis] / gains[axis], -max_move, max_move))
-        ring = _find_ring(_fresh_image(camera), exclude)
+        ring = find(_fresh_image(camera))
     return ring
 
 
 def _align_ring(lens, camera, spot, step=0.05, iterations=6, max_move=0.2, tolerance_px=1.0, accept_px=3.0,
-                exclude=None):
+                find=None):
     """
     Move `lens` until its ring is centered on `spot`, with only that lens in. Distances in mm. Returns True
     if the ring ends within `accept_px` of the spot. Otherwise (no ring, or one that does not
     converge) the lens goes back to where it started and it returns False.
     """
     start = _readback(lens.x), _readback(lens.y)
-    ring, gains = _ring_gains(lens, camera, step, exclude=exclude)
+    ring, gains = _ring_gains(lens, camera, step, find=find)
     if ring is None or None in gains or 0 in gains:
         print(f"{lens.attr_name}: no ring")
         return False
-    ring = _ring_steps(lens, camera, spot, ring, gains, iterations, max_move, tolerance_px, exclude)
+    ring = _ring_steps(lens, camera, spot, ring, gains, iterations, max_move, tolerance_px, find)
     if ring is None or np.any(np.abs(spot - ring[:2]) > accept_px):
         _move(lens.x, start[0])
         _move(lens.y, start[1])
@@ -449,14 +487,7 @@ def _align_ring(lens, camera, spot, step=0.05, iterations=6, max_move=0.2, toler
     return True
 
 
-def _align_ring_or_centroid(lens, camera, spot, exclude=None, **kwargs):
-    """Align `lens` with its ring, or with the centroid if it has no usable ring."""
-    if not _align_ring(lens, camera, spot, exclude=exclude, **kwargs):
-        print(f"{lens.attr_name}: centroid method instead")
-        _align_centroid(lens, camera, spot)
-
-
-_METHODS = {"ring": _align_ring_or_centroid, "centroid": _align_centroid}
+_METHODS = {"ring": _align_ring, "centroid": _align_centroid}
 
 
 def align_lens(tfs, lens, camera, method="ring", write_in_set=None, **kwargs):
@@ -481,8 +512,8 @@ def align_lens(tfs, lens, camera, method="ring", write_in_set=None, **kwargs):
 def align_lenses(tfs, lenses, camera, method="ring", write_in_set=None, partners=True, **kwargs):
     """
     Align each TFS lens in `lenses` (a combo's lenses) and leave exactly them in, with the combo's
-    prefocus lens, if any. `method` "ring": each lens's ring, or the centroid if it has no usable
-    ring; "centroid": the centroid.
+    prefocus lens, if any. `method` "ring": each lens's ring (a lens with no usable ring keeps
+    its IN_SET); "centroid": the centroid.
 
     It prints the plan, checked against the interlock's rules at the beam energy, and stops there if
     a step would fault it. Then the prefocus lenses and every TFS lens come out, IN_DELTA goes to 1 mm,
@@ -512,24 +543,32 @@ def align_lenses(tfs, lenses, camera, method="ring", write_in_set=None, partners
             if not lens.removed:
                 lens.remove(wait=True)
         _together(_remove, [lens for lens in tfs.tfs_lenses if not lens.removed])
+        reference = _fresh_image(camera, SPOT_FRAMES, timeout=SPOT_FRAMES)  # all lenses out
+        _check_bright(reference)
+        spot = _centroid(reference)
+        print(f"all lenses out; spot ({spot[0]:.1f}, {spot[1]:.1f}) from {SPOT_FRAMES} frames, for every lens")
         aligned = {}
         for lens, partner in plan:
+            find, target, options = (lambda image: _find_ring(image, reference)), spot, {}
             if partner is not None:
                 _put_back({partner: aligned[partner]})
-            image = _fresh_image(camera)
-            _check_bright(image)
-            spot = _centroid(image)
-            if partner is None:
-                print(f"all lenses out; spot ({spot[0]:.1f}, {spot[1]:.1f})")
-                exclude = None
-            else:
-                print(f"{partner.attr_name} in for {lens.attr_name}; spot with {partner.attr_name} in "
-                      f"({spot[0]:.1f}, {spot[1]:.1f})")
-                # the partner's ring stays put: left out of the lens's ring, a few px wider for the noise
-                exclude = ndimage.binary_dilation(_ring_pixels(image), iterations=3)
+                ring = _find_ring(_fresh_image(camera, SPOT_FRAMES // 5), reference)
+                if ring is None:  # not aligned: its x as it is and its old IN_SET
+                    print(f"{lens.attr_name}: no {partner.attr_name} ring to align on")
+                    aligned[lens] = _readback(lens.x), before[lens][0]
+                    _remove(partner)
+                    continue
+                print(f"{partner.attr_name} in for {lens.attr_name}; its ring at ({ring[0]:.1f}, {ring[1]:.1f})")
+                # the lens shrinks the partner's ring and moves it about L/f as much as the lens, so a
+                # bigger step and a tighter tolerance than a ring of its own
+                def find(image, ring=ring):
+                    return _find_ring(image, reference, ring[:2], (0.4 * ring[2], 1.02 * ring[2]))
+                target = ring[:2]
+                if method == "ring":
+                    options = dict(step=0.2, tolerance_px=0.5, accept_px=1.5)
             _insert(lens)
-            align(lens, camera, spot, exclude=exclude, **kwargs)
-            aligned[lens] = _readback(lens.x), _readback(lens.y)
+            ok = align(lens, camera, target, find=find, **{**options, **kwargs}) is not False
+            aligned[lens] = _readback(lens.x), _readback(lens.y) if ok else before[lens][0]  # not aligned: old IN_SET
             _remove(lens)
             if partner is not None:
                 _remove(partner)
