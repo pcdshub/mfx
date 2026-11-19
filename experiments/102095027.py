@@ -41,12 +41,24 @@ TAG = 'shift_1116'
 PREFIX = 'und1116'
 
 # ---- energies ---------------------------------------------------------------
-# real photon energy = K request + offset. 10-26: the real energy was 20 eV
-# above the energy the machine reported (10-09 BLD gave -5.2 eV). Check it
-# tonight (x.offset_check) before any DCCM-in scan; x.set_offset() updates it
-REQ_OFFSET_EV = 20.0
-# K request at the Fe foil edge on 10-26 (pink edge scans); x.set_edge()
-EDGE_K_EV = 7080.0
+# real photon energy (SASE center) = K request + offset.
+# This file is the calibration of record: a new User() (new session) starts
+# from these values, nothing measured in a session survives a restart.
+# Update them here after a new Fe-foil measurement, then reload.
+# 2026-11-16 Fe foil, DCCM out, XRT Si(400) 0.0593 eV/px, edge 7112.0 eV:
+#   run 202 +7.2 eV (+-0.2), run 200 +6.6 eV; up/down hysteresis 0.6-1.5 eV.
+# History: 10-09 BLD -5.2 eV; 10-26 assumed +20 eV. Every 11-16 scan ran with
+# +20 (session restarted after the +7.2 update), so the fly-scan DCCM points sat
+# 6-17 eV above the SASE center and the Mb edge passes ~13 eV below the
+# intended real energies.
+REQ_OFFSET_EV = 7.2
+# x.set_offset() and x.sase_on() refuse an offset this far from REQ_OFFSET_EV
+# (force=True overrides); the check that stops a stale or bad offset
+OFFSET_TOL_EV = 2.0
+# Fe K edge (real) and the K request (0.5 eV list) that puts the SASE on it:
+# 7112.0 - 7.2 = 7104.8 -> 7105.0. Every grid centers on EDGE_K_EV; x.set_edge()
+FE_EDGE_EV = 7112.0
+EDGE_K_EV = 7105.0
 # list asked of ACR before the shift: (lo, hi, step, highest K), requested eV.
 # Until ACR confirms at 18:00 the module keeps the last known list (10-26:
 # 7064-7144 eV in 0.5 eV, cap 7124 eV); x.acr_list_set() puts in the real one
@@ -416,6 +428,23 @@ def fit_waist(z, w):
     return float(z[i])
 
 
+class OffsetError(ValueError):
+    """Offset too far from the file calibration REQ_OFFSET_EV."""
+
+
+def _check_offset(offset_eV, what, force=False):
+    """Raise OffsetError if offset_eV is more than OFFSET_TOL_EV from REQ_OFFSET_EV."""
+    d = float(offset_eV) - REQ_OFFSET_EV
+    if abs(d) <= OFFSET_TOL_EV:
+        return
+    msg = (f"{what}: offset {offset_eV:+.1f} eV is {d:+.1f} eV from the file calibration "
+           f"REQ_OFFSET_EV {REQ_OFFSET_EV:+.1f} eV (tolerance {OFFSET_TOL_EV:g} eV)")
+    if not force:
+        raise OffsetError(msg + ". If this is a new Fe-foil calibration, edit REQ_OFFSET_EV "
+                          "in experiments/102095027.py and reload; else force=True")
+    logger.warning(msg + " (forced)")
+
+
 def k_for_real(real_eV, offset_eV=REQ_OFFSET_EV):
     """Nearest K request on the loaded ACR list for a real photon energy."""
     step = ut.ACR_LIST_EV[2]
@@ -534,7 +563,8 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             return [n for n in range(2, 11) if getattr(tfs, f'tfs_{n:02d}').inserted]
 
         lo, hi, step = ut.ACR_LIST_EV
-        print(f"experiment file {EXP} ({SHIFT}), offset {self.offset_eV:+.1f} eV, "
+        print(f"experiment file {EXP} ({SHIFT}), offset {self.offset_eV:+.1f} eV "
+              f"(file {REQ_OFFSET_EV:+.1f}), "
               f"edge K {self.edge_k:.1f} eV, xrt_track {self.xrt_track}, "
               f"xrt_offset {self.xrt_offset:+.3f} deg, dead band recorded {self.db_um:g} um")
         print(f"  {self._cal_state()}")
@@ -626,13 +656,23 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
     def set_edge(self, k_eV):
         """Set the K request at the Fe foil edge; db, fly and Mb grids follow it."""
         self.edge_k = float(check_on_list([k_eV])[0])
-        _post(f"edge K set to {self.edge_k:.1f} eV (10-26: 7080 eV)")
+        _post(f"edge K set to {self.edge_k:.1f} eV (file EDGE_K_EV {EDGE_K_EV:.1f} eV, "
+              f"Fe edge {FE_EDGE_EV:.1f} eV at offset {REQ_OFFSET_EV:+.1f} eV)")
 
-    def set_offset(self, eV):
-        """Set the request-to-real offset (real = K request + offset, eV)."""
-        self.offset_eV = float(eV)
-        _post(f"request-to-real offset set to {self.offset_eV:+.1f} eV "
-              f"(10-26: +20 eV, real above the machine-reported energy; 10-09: -5.2 eV)")
+    def set_offset(self, eV, force=False):
+        """
+        Set the request-to-real offset (real = K request + offset, eV).
+
+        Session only: a new User() goes back to REQ_OFFSET_EV in this file.
+        Refuses a value more than OFFSET_TOL_EV from REQ_OFFSET_EV unless
+        force=True; for a new calibration edit REQ_OFFSET_EV and reload.
+        """
+        eV = float(eV)
+        _check_offset(eV, 'x.set_offset', force)
+        self.offset_eV = eV
+        _post(f"request-to-real offset set to {self.offset_eV:+.1f} eV for this session "
+              f"(file REQ_OFFSET_EV {REQ_OFFSET_EV:+.1f} eV"
+              + (", forced" if force and abs(eV - REQ_OFFSET_EV) > OFFSET_TOL_EV else "") + ")")
 
     def mono(self, real_eV=TFS_E_EV):
         """
@@ -884,10 +924,18 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             seen.add(id(xs))
             xs.th_correction = fn
 
-    def sase_on(self):
-        """DCCM points, XRT tracking, x.mono and x.k_for use the SASE calibration."""
+    def sase_on(self, force=False):
+        """
+        DCCM points, XRT tracking, x.mono and x.k_for use the SASE calibration.
+
+        Refuses a calibration whose center - K at x.edge_k is more than
+        OFFSET_TOL_EV from REQ_OFFSET_EV (force=True overrides), e.g. one
+        measured on the mono line instead of the SASE.
+        """
         if self.sase is None or not self.sase.ready:
             raise RuntimeError("no SASE calibration: x.sase_cal() or x.cal_load() first")
+        _check_offset(self.sase.center(self.edge_k) - self.edge_k,
+                      f"SASE calibration (center - K at K {self.edge_k:.1f} eV)", force)
         self.use_sase = True
         _post("SASE calibration ON for every scan: " + self.sase.model_text(), tag='calib')
 
@@ -1008,7 +1056,10 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
         _post(f"{cal.summary()}\ndead band {self.db_um:g} um recorded. saved {path}",
               tag='calib')
         if use and cal.ready:
-            self.sase_on()
+            try:
+                self.sase_on()
+            except OffsetError as e:
+                print(f"saved, NOT switched on: {e}")
         elif not cal.ready:
             print("no usable point: calibration not switched on")
         return cal
@@ -1173,7 +1224,10 @@ any time      x.dccm_test()  (six-line DCCM check: code, calibration, state, +20
             print(f"loaded {path}")
             print(cal.summary())
             if use and cal.ready:
-                self.sase_on() if name == 'sase' else self.xrt_cal_on()
+                try:
+                    self.sase_on() if name == 'sase' else self.xrt_cal_on()
+                except OffsetError as e:
+                    print(f"loaded, NOT switched on: {e}")
 
     # ---- dead band (19:00-21:00, with ACR) -------------------------------------
 
