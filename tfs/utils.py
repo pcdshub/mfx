@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import numpy as np
 import periodictable as pt
 import logging
@@ -20,6 +22,7 @@ MFX_prefocus_energy_range = {
 }
 
 
+@lru_cache(maxsize=None)  # each call queries xraydb's database: find_best_combo makes thousands
 def focal_length(radius, energy,N=1):
     """
     Calculate focal length using the pcds version of the focal length calculator
