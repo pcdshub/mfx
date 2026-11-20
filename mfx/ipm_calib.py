@@ -50,7 +50,6 @@ def ipm_diode_scan(
         events_per_step: int = 120,
         back_and_forth: bool = False,
         record: bool = False,
-        daq_num: int = 1,
         picker: str = None,
         insert: bool = True,
         sample: str = 'ipm_calib',
@@ -82,8 +81,6 @@ def ipm_diode_scan(
         (useful for checking backlash). Default False.
     record : bool, optional
         Record the runs (default: False -- set True for real calibration).
-    daq_num : int, optional
-        1 for LCLS-I DAQ (default; DG1/DG2 wave8 BMMON BLD), 2 for LCLS-II.
     picker : str or None, optional
         'open' or 'flip' to set the pulse picker first; it is closed at the
         end only if this function opened it. None leaves it alone.
@@ -117,12 +114,9 @@ def ipm_diode_scan(
 
     >>> ipm_diode_scan('dg1', axes='x', back_and_forth=True, record=True)
     """
+    import bluesky.plans as bp
     from mfx.db import RE, daq, mfx_pulsepicker
     from mfx.macros import get_run
-
-    if daq_num not in (1, 2):
-        raise ValueError("daq_num must be 1 (LCLS-I) or 2 (LCLS-II)")
-    station = 1 if daq_num == 1 else 0
 
     if isinstance(ipm, str):
         names = list(_IPMS) if ipm.lower() == 'both' else [ipm]
@@ -176,22 +170,16 @@ def ipm_diode_scan(
     try:
         for i, job in enumerate(jobs):
             motor, pts = job['motor'], job['positions']
-            run_number = get_run(station=station) + 1
+            run_number = get_run(station=0) + 1
             logger.warning(
                 f"[{i + 1}/{len(jobs)}] run {run_number}: {job['ipm']} diode "
                 f"{job['axis']} ({motor.name}) {pts[0]:.3f} -> {max(pts):.3f}"
                 f" mm, {len(pts)} steps x {events_per_step} events "
                 f"(center {job['center']:.3f})")
             try:
-                if daq_num == 1:
-                    from nabs.plans import daq_list_scan
-                    RE(daq_list_scan([], motor, pts,
-                                     events=events_per_step, record=record))
-                else:
-                    import bluesky.plans as bp
-                    daq.configure(motors=[motor], group_mask=0x1,
-                                  events=events_per_step, record=record)
-                    RE(bp.list_scan([daq], motor, pts))
+                daq.configure(motors=[motor], group_mask=0x1,
+                              events=events_per_step, record=record)
+                RE(bp.list_scan([daq], motor, pts))
             finally:
                 logger.info(f"Returning {motor.name} to {job['center']:.3f}")
                 motor.move(job['center'], wait=True, timeout=60)
@@ -203,7 +191,7 @@ def ipm_diode_scan(
             if record and post_elog:
                 from mfx.autorun import post
                 post(sample=f"{sample}_{job['ipm']}_{job['axis']}", tag=tag,
-                     run_number=run_number, post=True, daq_num=daq_num,
+                     run_number=run_number, post=True, daq_num=2,
                      add_note=(f"IPM diode calib: {job['ipm']} "
                                f"{job['axis']} ({motor.name}) center "
                                f"{job['center']:.3f} mm, +/-{span} mm, "
@@ -218,14 +206,11 @@ def ipm_diode_scan(
     finally:
         if opened_picker:
             mfx_pulsepicker.close()
-        if daq_num == 2:
-            daq.control.setState("configured")
-            while daq.control.getState() != "configured":
-                sleep(0.01)
-            daq.control.setRecord(False)
-            daq.control.setState("running")
-        else:
-            daq.disconnect()
+        daq.control.setState("configured")
+        while daq.control.getState() != "configured":
+            sleep(0.01)
+        daq.control.setRecord(False)
+        daq.control.setState("running")
 
     for r in results:
         logger.warning(f"  run {r['run']}: {r['ipm']} {r['axis']} "
