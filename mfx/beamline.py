@@ -185,6 +185,9 @@ with safe_load('Wire_Scan'):
     from mfx.wire import *
     wire = Wire(x_pv = 'MFX:USR:MMN:42', y_pv = 'MFX:USR:MMN:41')
 
+with safe_load('IPM_Diode_Calib'):
+    from mfx.ipm_calib import ipm_diode_scan
+
 with safe_load('EXAFS'):
     from mfx.exafs import *
     exafs = Exafs()
